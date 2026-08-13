@@ -231,7 +231,7 @@ public class MemberImportRowProcessor {
         // place (MemberStatusTransitionService), even on this batching path
         // that saves the entity itself rather than calling a transition
         // method -- see applyStatusFieldsForImport's Javadoc for why.
-        if (member.getStatus() != importedStatus) {
+        if (existingMember == null || member.getStatus() != importedStatus) {
             statusTransitionService.applyStatusFieldsForImport(member, importedStatus, "استيراد Excel");
         }
 

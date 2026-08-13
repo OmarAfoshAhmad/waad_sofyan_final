@@ -113,6 +113,7 @@ class MemberExcelImportServiceTest {
                 rowProcessor,
                 barcodeGeneratorService,
                 auditRecorder,
+                statusTransitionService,
                 visitRepository,
                 claimRepository,
                 preAuthorizationRepository);

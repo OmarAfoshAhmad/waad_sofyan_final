@@ -69,15 +69,20 @@ public class MemberStatusTransitionService {
      * transition service": the status->active derivation and the tracking
      * fields are computed in exactly one place, just not flushed here.
      */
-    public void applyStatusFieldsForImport(Member member, Member.MemberStatus newStatus, String reason) {
+    public void initializeStatus(Member member, Member.MemberStatus newStatus, StatusSource source, String reason) {
+        requireReason(reason, "سبب تهيئة حالة المستفيد إلزامي");
         Member.MemberStatus previous = member.getStatus();
         member.setPreviousStatus(previous);
         member.setStatus(newStatus);
         member.setActive(activeFor(newStatus));
-        member.setStatusSource(StatusSource.IMPORT);
-        member.setStatusReason(reason);
+        member.setStatusSource(source);
+        member.setStatusReason(reason.trim());
         member.setStatusChangedAt(LocalDateTime.now());
         member.setStatusTransitionId(UUID.randomUUID().toString());
+    }
+
+    public void applyStatusFieldsForImport(Member member, Member.MemberStatus newStatus, String reason) {
+        initializeStatus(member, newStatus, StatusSource.IMPORT, reason);
     }
 
     /**
@@ -90,6 +95,7 @@ public class MemberStatusTransitionService {
     @Transactional
     public Member transitionTo(Member member, Member.MemberStatus newStatus, String reason, StatusSource source,
             String transitionId, Long actingUserId) {
+        requireReason(reason, "سبب تغيير حالة المستفيد إلزامي");
         Member.MemberStatus previous = member.getStatus();
         if (previous == newStatus) {
             throw new BusinessRuleException("العضو بالفعل في هذه الحالة: " + newStatus);
@@ -102,7 +108,7 @@ public class MemberStatusTransitionService {
         member.setStatus(newStatus);
         member.setActive(activeFor(newStatus));
         member.setStatusSource(source);
-        member.setStatusReason(reason);
+        member.setStatusReason(reason.trim());
         member.setStatusChangedAt(LocalDateTime.now());
         member.setStatusChangedBy(actingUserId);
         member.setStatusTransitionId(transitionId);
@@ -111,9 +117,11 @@ public class MemberStatusTransitionService {
 
         historyRepository.save(MemberStatusHistory.builder()
                 .memberId(saved.getId())
+                .memberFullName(saved.getFullName())
+                .memberCardNumber(saved.getCardNumber())
                 .fromStatus(previous)
                 .toStatus(newStatus)
-                .reason(reason)
+                .reason(reason.trim())
                 .source(source)
                 .transitionId(transitionId)
                 .changedAt(LocalDateTime.now())
@@ -152,23 +160,15 @@ public class MemberStatusTransitionService {
     }
 
     /**
-     * End membership permanently. Blocked if the member (or any of their
-     * dependents, when the member is a principal) has any financial/medical
-     * footprint -- same check UnifiedMemberService.deleteMember always used,
-     * now centralized here. Cascades to currently-ACTIVE dependents only,
-     * same rule as suspend.
+     * End coverage without deleting history. Financial/medical history is
+     * deliberately allowed and remains attached to the terminated member.
+     * Only physical hardDelete applies the footprint guard.
      */
     @Transactional
     public Member terminateMembership(Long memberId, String reason, Long actingUserId, StatusSource source) {
+        requireReason(reason, "سبب إنهاء العضوية إلزامي");
         Member member = memberRepository.findById(memberId)
                 .orElseThrow(() -> new ResourceNotFoundException("Member not found: " + memberId));
-
-        List<Long> allIds = new ArrayList<>();
-        allIds.add(memberId);
-        if (member.isPrincipal()) {
-            memberRepository.findByParentId(memberId).forEach(d -> allIds.add(d.getId()));
-        }
-        assertNoFinancialFootprint(allIds, "لا يمكن إنهاء عضوية المستفيد");
 
         String transitionId = UUID.randomUUID().toString();
         Member saved = transitionTo(member, Member.MemberStatus.TERMINATED, reason, source, transitionId, actingUserId);
@@ -179,6 +179,7 @@ public class MemberStatusTransitionService {
     /** SUSPENDED (or PENDING) -> ACTIVE. Ordinary operational action, no elevated permission. */
     @Transactional
     public Member restoreFromSuspended(Long memberId, String reason, Long actingUserId) {
+        requireReason(reason, "سبب استعادة المستفيد إلزامي");
         Member member = memberRepository.findById(memberId)
                 .orElseThrow(() -> new ResourceNotFoundException("Member not found: " + memberId));
         if (member.getStatus() == Member.MemberStatus.TERMINATED) {
@@ -310,6 +311,7 @@ public class MemberStatusTransitionService {
             memberRepository.deleteByParentId(memberId);
         }
         memberRepository.delete(member);
+        memberRepository.flush();
     }
 
     private void cascadeToActiveDependents(Member principal, Member.MemberStatus newStatus, String principalReason,
@@ -327,22 +329,6 @@ public class MemberStatusTransitionService {
             }
             String cascadeReason = "تتالٍ تلقائي بسبب " + actionAr + " الموظف الرئيسي: " + principalReason;
             transitionTo(dependent, newStatus, cascadeReason, StatusSource.FAMILY_CASCADE, transitionId, actingUserId);
-        }
-    }
-
-    private void assertNoFinancialFootprint(List<Long> memberIds, String messagePrefix) {
-        String idList = memberIds.stream().map(String::valueOf).collect(Collectors.joining(","));
-        long claimsCount = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM claims WHERE member_id IN (" + idList + ")", Long.class);
-        long preAuthCount = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM preauthorization_requests WHERE member_id IN (" + idList + ")", Long.class);
-        long visitsCount = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM visits WHERE member_id IN (" + idList + ")", Long.class);
-        if (claimsCount > 0 || preAuthCount > 0 || visitsCount > 0) {
-            throw new BusinessRuleException(messagePrefix + String.format(
-                    " لأن له معاملات مالية مرتبطة (مطالبات: %d، موافقات مسبقة: %d، زيارات: %d). "
-                            + "يُرجى إيقاف/إنهاء المستفيد بدلاً من ذلك.",
-                    claimsCount, preAuthCount, visitsCount));
         }
     }
 
@@ -385,5 +371,11 @@ public class MemberStatusTransitionService {
                     "لا يمكن تفعيل المستفيد لعدم وجود وثيقة تأمين سارية لجهة العمل. يرجى ربط وثيقة تأمين أولاً.");
         }
         member.setBenefitPolicy(autoPolicy);
+    }
+
+    private void requireReason(String reason, String message) {
+        if (reason == null || reason.trim().isEmpty()) {
+            throw new BusinessRuleException(message);
+        }
     }
 }

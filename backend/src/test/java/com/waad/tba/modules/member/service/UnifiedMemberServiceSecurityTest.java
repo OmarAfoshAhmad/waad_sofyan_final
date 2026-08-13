@@ -147,7 +147,7 @@ class UnifiedMemberServiceSecurityTest {
     void restoreMemberDeniedWhenCallerCannotAccessMember() {
         when(authorizationService.canAccessMember(currentUser, 500L)).thenReturn(false);
 
-        assertThrows(AccessDeniedException.class, () -> service.restoreMember(500L));
+        assertThrows(AccessDeniedException.class, () -> service.restoreMember(500L, "سبب الاستعادة"));
 
         verify(memberRepository, never()).save(org.mockito.ArgumentMatchers.any());
     }

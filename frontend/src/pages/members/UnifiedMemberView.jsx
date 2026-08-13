@@ -83,7 +83,7 @@ import MemberAvatar from 'components/tba/MemberAvatar';
 import DependentModal from './DependentModal';
 import {
   getMember,
-  deleteMember,
+  terminateMembership,
   hardDeleteMember,
   restoreMember,
   changeMemberStatus,
@@ -95,6 +95,7 @@ import { openSnackbar } from 'api/snackbar';
 
 import { RELATIONSHIP_AR } from './member.shared';
 import api from 'utils/axios';
+import MemberLifecycleDialog from './MemberLifecycleDialog';
 
 const unwrapApi = (response) => response?.data?.data ?? response?.data ?? response;
 
@@ -184,6 +185,7 @@ const UnifiedMemberView = () => {
   const [deletingMember, setDeletingMember] = useState(null);
   const [hardDeleteDepDialogOpen, setHardDeleteDepDialogOpen] = useState(false);
   const [hardDeletingDep, setHardDeletingDep] = useState(null);
+  const [restoreTarget, setRestoreTarget] = useState(null);
   const [photoDialogOpen, setPhotoDialogOpen] = useState(false);
   const [statusMenuAnchor, setStatusMenuAnchor] = useState(null);
   const [statusMenuTargetId, setStatusMenuTargetId] = useState(null);
@@ -401,14 +403,21 @@ const UnifiedMemberView = () => {
     setModalOpen(false);
   };
 
-  const handleRestore = async (id) => {
+  const handleRestore = (id) => {
+    const target = id === member?.id ? member : dependents.find((item) => item.id === id);
+    setRestoreTarget(target || { id, fullName: 'المستفيد' });
+  };
+
+  const executeRestore = async (reason) => {
     try {
-      await restoreMember(id);
+      await restoreMember(restoreTarget.id, reason);
       openSnackbar({ open: true, message: 'تم استعادة التابع بنجاح', variant: 'alert', alert: { color: 'success' } });
       fetchMemberData();
     } catch (error) {
       console.error('Error restoring member:', error);
       openSnackbar({ open: true, message: 'خطأ في استعادة التابع', variant: 'alert', alert: { color: 'error' } });
+    } finally {
+      setRestoreTarget(null);
     }
   };
 
@@ -417,16 +426,8 @@ const UnifiedMemberView = () => {
     setHardDeleteDepDialogOpen(true);
   };
 
-  const handleHardDeleteDepExecute = async () => {
+  const handleHardDeleteDepExecute = async (reason) => {
     if (!hardDeletingDep) return;
-    // TODO(UX follow-up): replace with a proper reason-input dialog field.
-    const reason = window.prompt(`سبب الحذف النهائي لـ ${hardDeletingDep.fullName} (إلزامي):`);
-    if (reason === null || reason.trim() === '') {
-      if (reason !== null) {
-        openSnackbar({ open: true, message: 'سبب الحذف النهائي إلزامي', variant: 'alert', alert: { color: 'error' } });
-      }
-      return;
-    }
     try {
       await hardDeleteMember(hardDeletingDep.id, reason);
       openSnackbar({ open: true, message: 'تم الحذف النهائي للتابع بنجاح', variant: 'alert', alert: { color: 'success' } });
@@ -450,17 +451,17 @@ const UnifiedMemberView = () => {
     setDeleteDialogOpen(true);
   };
 
-  const handleDeleteExecute = async () => {
+  const handleDeleteExecute = async (reason) => {
     if (!deletingMember) return;
 
     try {
-      await deleteMember(deletingMember.id);
+      await terminateMembership(deletingMember.id, reason);
 
       const isPrincipal = deletingMember.type === MEMBER_TYPES.PRINCIPAL;
 
       openSnackbar({
         open: true,
-        message: isPrincipal ? 'تم حذف الموظف وجميع تابعيه بنجاح' : 'تم حذف المنتفع التابع بنجاح',
+        message: isPrincipal ? 'تم إنهاء عضوية الموظف والتابعين العاملين' : 'تم إنهاء عضوية المنتفع التابع',
         variant: 'alert',
         alert: { color: 'success' }
       });
@@ -1240,51 +1241,13 @@ const UnifiedMemberView = () => {
         </DialogActions>
       </Dialog>
 
-      {/* Hard Delete Dependent Confirmation Dialog */}
-      <Dialog open={hardDeleteDepDialogOpen} onClose={() => setHardDeleteDepDialogOpen(false)}>
-        <DialogTitle sx={{ fontWeight: 600 }}>حذف نهائي؟</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            سيتم حذف التابع <strong>{hardDeletingDep?.fullName}</strong> نهائياً من قاعدة البيانات. هذا الإجراء لا يمكن التراجع عنه!
-            <Alert severity="error" sx={{ mt: '1.0rem' }}>
-              <strong>تنبيه:</strong> إذا كان للتابع مطالبات أو زيارات مرتبطة سيفشل الحذف.
-            </Alert>
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setHardDeleteDepDialogOpen(false)}>إلغاء</Button>
-          <Button onClick={handleHardDeleteDepExecute} color="error" variant="contained" autoFocus>
-            تأكيد الحذف النهائي
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Delete Confirmation Dialog */}
-      <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>
-        <DialogTitle sx={{ fontWeight: 600 }}>تأكيد الحذف</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            {deletingMember?.type === MEMBER_TYPES.PRINCIPAL ? (
-              <>
-                هل أنت متأكد من حذف الموظف <strong>{deletingMember?.fullName}</strong>؟
-                <Alert severity="warning" sx={{ mt: '1.0rem' }}>
-                  <strong>تنبيه:</strong> سيتم حذف جميع التابعين ({member.dependentsCount || 0}) تلقائياً (CASCADE DELETE).
-                </Alert>
-              </>
-            ) : (
-              <>
-                هل أنت متأكد من حذف التابع <strong>{deletingMember?.fullName}</strong>؟
-              </>
-            )}
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteDialogOpen(false)}>إلغاء</Button>
-          <Button onClick={handleDeleteExecute} color="error" variant="contained" autoFocus>
-            تأكيد الحذف
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <MemberLifecycleDialog open={hardDeleteDepDialogOpen} action="HARD_DELETE" member={hardDeletingDep}
+        onClose={() => setHardDeleteDepDialogOpen(false)} onConfirm={handleHardDeleteDepExecute} />
+      <MemberLifecycleDialog open={deleteDialogOpen} action="TERMINATE" member={deletingMember}
+        affectedDependents={deletingMember?.type === MEMBER_TYPES.PRINCIPAL ? member?.dependentsCount || 0 : 0}
+        onClose={() => setDeleteDialogOpen(false)} onConfirm={handleDeleteExecute} />
+      <MemberLifecycleDialog open={Boolean(restoreTarget)} action="RESTORE" member={restoreTarget}
+        onClose={() => setRestoreTarget(null)} onConfirm={executeRestore} />
     </>
   );
 };

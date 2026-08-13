@@ -76,6 +76,7 @@ public class MemberExcelImportService {
     private final MemberImportRowProcessor rowProcessor;
     private final BarcodeGeneratorService barcodeGeneratorService;
     private final MemberImportAuditRecorder auditRecorder;
+    private final MemberStatusTransitionService statusTransitionService;
 
     private final VisitRepository visitRepository;
     private final ClaimRepository claimRepository;
@@ -720,11 +721,12 @@ public class MemberExcelImportService {
                 .policyNumber(policyNumber != null && !policyNumber.isBlank()
                         ? policyNumber
                         : resolvedPolicy.getPolicyCode())
-                .status(Member.MemberStatus.ACTIVE)
                 .cardStatus(Member.CardStatus.ACTIVE)
-                .active(true)
                 .barcode(parentCardNumber)
                 .build();
+        statusTransitionService.initializeStatus(parent, Member.MemberStatus.ACTIVE,
+                com.waad.tba.modules.member.entity.StatusSource.IMPORT,
+                "تهيئة موظف رئيسي افتراضي أثناء استيراد Excel");
         return memberRepository.save(parent);
     }
 }

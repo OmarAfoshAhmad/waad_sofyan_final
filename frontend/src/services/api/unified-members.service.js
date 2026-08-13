@@ -323,9 +323,9 @@ export const bulkDeleteMembers = async (ids) => {
  * @param {number} id - Member ID
  * @returns {Promise<Object>} Response
  */
-export const restoreMember = async (id) => {
+export const restoreMember = async (id, reason) => {
   try {
-    const response = await api.put(`${UNIFIED_MEMBERS_BASE_URL}/${id}/restore`);
+    const response = await api.put(`${UNIFIED_MEMBERS_BASE_URL}/${id}/restore`, null, { params: { reason } });
     return response.data;
   } catch (error) {
     console.error('Error restoring member:', error);

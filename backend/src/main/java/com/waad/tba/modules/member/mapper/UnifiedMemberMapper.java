@@ -82,12 +82,10 @@ public class UnifiedMemberMapper {
                 .employeeNumber(dto.getEmployeeNumber())
                 .joinDate(dto.getJoinDate())
                 .occupation(dto.getOccupation())
-                .status(dto.getStatus() != null ? dto.getStatus() : Member.MemberStatus.ACTIVE)
                 .startDate(dto.getStartDate())
                 .endDate(dto.getEndDate())
                 .cardStatus(dto.getCardStatus() != null ? dto.getCardStatus() : Member.CardStatus.ACTIVE)
                 .notes(dto.getNotes())
-                .active(dto.getActive() != null ? dto.getActive() : true)
                 .build();
     }
 
@@ -108,8 +106,6 @@ public class UnifiedMemberMapper {
                 .email(dto.getEmail())
                 .occupation(dto.getOccupation())
                 .notes(dto.getNotes())
-                .active(dto.getActive() != null ? dto.getActive() : true)
-                .status(Member.MemberStatus.ACTIVE) // Default
                 .cardStatus(Member.CardStatus.ACTIVE) // Default
                 .build();
     }
@@ -176,9 +172,8 @@ public class UnifiedMemberMapper {
         if (dto.getNotes() != null) {
             entity.setNotes(dto.getNotes());
         }
-        if (dto.getActive() != null) {
-            entity.setActive(dto.getActive());
-        }
+        // active/status are deliberately ignored here. Lifecycle endpoints are
+        // the only supported way to change them after creation.
 
         // Relationship can be updated for dependents only
         if (dto.getRelationship() != null && entity.isDependent()) {

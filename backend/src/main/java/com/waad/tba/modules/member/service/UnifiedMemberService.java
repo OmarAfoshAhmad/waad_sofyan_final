@@ -137,10 +137,11 @@ public class UnifiedMemberService {
         principal.setBenefitPolicy(benefitPolicy);
         principal.setParent(null); // PRINCIPAL
         principal.setRelationship(null); // PRINCIPAL has no relationship
-        // Sync status with active flag on creation
-        if (Boolean.FALSE.equals(dto.getActive())) {
-            principal.setStatus(Member.MemberStatus.TERMINATED);
-        }
+        Member.MemberStatus initialStatus = Boolean.FALSE.equals(dto.getActive())
+                ? Member.MemberStatus.TERMINATED
+                : (dto.getStatus() != null ? dto.getStatus() : Member.MemberStatus.ACTIVE);
+        statusTransitionService.initializeStatus(principal, initialStatus, StatusSource.MANUAL,
+                "تهيئة حالة المستفيد عند الإنشاء اليدوي");
 
         // 3. Generate CARD NUMBER (formula: EMPLOYER_CODE + EMPLOYEE_NUMBER)
         String cardNumber = dto.getCardNumber();
@@ -293,10 +294,9 @@ public class UnifiedMemberService {
         dependent.setBenefitPolicy(principal.getBenefitPolicy());
         dependent.setPolicyNumber(principal.getPolicyNumber());
 
-        // Sync status with active flag on creation
-        if (Boolean.FALSE.equals(dto.getActive())) {
-            dependent.setStatus(Member.MemberStatus.TERMINATED);
-        }
+        statusTransitionService.initializeStatus(dependent,
+                Boolean.FALSE.equals(dto.getActive()) ? Member.MemberStatus.TERMINATED : Member.MemberStatus.ACTIVE,
+                StatusSource.MANUAL, "تهيئة حالة التابع عند الإنشاء اليدوي");
 
         // 4. Save
         dependent = memberRepository.save(dependent);
@@ -668,13 +668,12 @@ public class UnifiedMemberService {
      * called "delete" here, but nothing is deleted: this sets
      * status=TERMINATED (active becomes false as a consequence, never
      * independently) via {@link MemberStatusTransitionService}, which
-     * blocks the transition entirely if the member (or, for a principal,
-     * any dependent) has financial/medical history, cascades to currently-
+     * preserves all financial/medical history, cascades to currently-
      * ACTIVE dependents only, and records the transition in the append-only
-     * status history.
+     * status history. Existing financial and medical records are retained.
      *
      * @param id     Member ID
-     * @param reason Optional reason recorded on the transition
+     * @param reason Mandatory reason recorded on the transition
      */
     @Transactional
     public void terminateMembership(Long id, String reason) {
@@ -700,7 +699,12 @@ public class UnifiedMemberService {
     @Deprecated
     @Transactional
     public void deleteMember(Long id) {
-        terminateMembership(id, null);
+        User currentUser = authorizationService.getCurrentUser();
+        if (!authorizationService.canAccessMember(currentUser, id)) {
+            throw new AccessDeniedException("Access denied to this member");
+        }
+        statusTransitionService.terminateMembership(id, "LEGACY_TERMINATE_ENDPOINT",
+                currentUser != null ? currentUser.getId() : null, StatusSource.SYSTEM);
     }
 
     // ==================== ADDITIONAL METHODS FOR UNIFIED CONTROLLER
@@ -1282,7 +1286,7 @@ public class UnifiedMemberService {
      * @return Restored member view DTO
      */
     @Transactional
-    public MemberViewDto restoreMember(Long memberId) {
+    public MemberViewDto restoreMember(Long memberId, String reason) {
         log.info("♻️ Restoring member: memberId={}", memberId);
 
         if (!authorizationService.canAccessMember(authorizationService.getCurrentUser(), memberId)) {
@@ -1290,7 +1294,7 @@ public class UnifiedMemberService {
         }
         User currentUser = authorizationService.getCurrentUser();
 
-        Member saved = statusTransitionService.restoreFromSuspended(memberId, null,
+        Member saved = statusTransitionService.restoreFromSuspended(memberId, reason,
                 currentUser != null ? currentUser.getId() : null);
 
         log.info("✅ Member restored to ACTIVE: memberId={}", memberId);

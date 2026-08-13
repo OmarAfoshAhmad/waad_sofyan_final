@@ -973,8 +973,7 @@ public class UnifiedMemberController {
                         + "ACTIVE dependent (a dependent already suspended/terminated for their own reason keeps "
                         + "that history). DEPENDENT termination affects only that dependent. Nothing is physically "
                         + "removed -- status becomes TERMINATED, recorded in the append-only status history. "
-                        + "Blocked entirely if the member (or, for a principal, any dependent) has financial/"
-                        + "medical history.", parameters = {
+                        + "Existing financial and medical history remains intact.", parameters = {
                                         @Parameter(name = "id", description = "Member ID", required = true)
                         })
         @ApiResponses(value = {
@@ -984,7 +983,7 @@ public class UnifiedMemberController {
         })
         public ResponseEntity<ApiResponse<Void>> terminateMembership(
                         @PathVariable("id") Long id,
-                        @RequestParam(name = "reason", required = false) String reason) {
+                        @RequestParam(name = "reason") String reason) {
 
                 log.info("Terminating membership: id={}", id);
 
@@ -1009,7 +1008,8 @@ public class UnifiedMemberController {
         @Operation(summary = "[Deprecated] Terminate membership -- use POST /{id}/terminate", description = "Deprecated alias for POST /{id}/terminate. Nothing is deleted; this ends membership (status=TERMINATED).")
         public ResponseEntity<ApiResponse<Void>> deleteMember(
                         @PathVariable("id") Long id) {
-                return terminateMembership(id, null);
+                unifiedMemberService.deleteMember(id);
+                return ResponseEntity.ok(ApiResponse.success("تم إنهاء العضوية عبر واجهة التوافق القديمة", null));
         }
 
         @PostMapping("/bulk-delete")
@@ -1383,11 +1383,13 @@ public class UnifiedMemberController {
         @PutMapping("/{id}/restore")
         @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY', 'EMPLOYER_ADMIN')")
         @Operation(summary = "Restore Deleted Member", description = "Restore a soft-deleted member (unset deleted flag)")
-        public ResponseEntity<ApiResponse<MemberViewDto>> restoreMember(@PathVariable("id") Long id) {
+        public ResponseEntity<ApiResponse<MemberViewDto>> restoreMember(
+                        @PathVariable("id") Long id,
+                        @RequestParam(name = "reason") String reason) {
                 log.info("♻️ Restore request: memberId={}", id);
 
                 try {
-                        MemberViewDto restored = unifiedMemberService.restoreMember(id);
+                        MemberViewDto restored = unifiedMemberService.restoreMember(id, reason);
 
                         log.info("✅ Member restored: memberId={}", id);
 

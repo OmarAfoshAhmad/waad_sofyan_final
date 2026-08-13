@@ -77,16 +77,18 @@ import DataExportWizard from 'components/tba/DataExportWizard';
 import {
   searchMembers,
   exportMembers,
-  deleteMember,
+  terminateMembership,
   bulkDeleteMembers,
   restoreMember,
   hardDeleteMember,
+  toggleMemberActive,
   MEMBER_TYPES,
   MEMBER_STATUSES
 } from 'services/api/unified-members.service';
 import axiosClient from 'utils/axios';
 import { RELATIONSHIP_CONFIG } from 'components/insurance/MemberTypeIndicator';
 import { formatDate } from 'utils/formatters';
+import MemberLifecycleDialog from './MemberLifecycleDialog';
 
 const MIN_MEMBER_SEARCH_LENGTH = 3;
 const MAX_SELECT_ALL_MEMBERS = 5000;
@@ -137,6 +139,8 @@ const UnifiedMembersList = () => {
     cancelText: 'إلغاء',
     onConfirm: null
   });
+  const [lifecycleDialog, setLifecycleDialog] = useState({ open: false, action: 'SUSPEND', member: null });
+  const [lifecycleLoading, setLifecycleLoading] = useState(false);
 
   // Selection
   const [selectedMembers, setSelectedMembers] = useState([]);
@@ -351,77 +355,39 @@ const UnifiedMembersList = () => {
   };
 
   const handleDeleteClick = (member) => {
-    setConfirmDialog({
-      open: true,
-      title: 'هل أنت متأكد؟',
-      content:
-        member.type === 'PRINCIPAL'
-          ? `سيتم حذف المستفيد ${member.fullName}. سيتم حذف جميع التابعين المرتبطين به أيضاً!`
-          : `سيتم حذف المستفيد ${member.fullName}.`,
-      severity: 'error',
-      confirmText: 'نعم، احذفه',
-      onConfirm: () => handleConfirmAction(() => deleteMember(member.id), 'تم حذف المستفيد بنجاح', 'خطأ في حذف المستفيد')
-    });
+    setLifecycleDialog({ open: true, action: 'TERMINATE', member });
   };
 
   const handleRestoreClick = (member) => {
-    setConfirmDialog({
-      open: true,
-      title: 'استعادة المستفيد؟',
-      content: `سيتم استعادة المستفيد ${member.fullName} وإعادته للقائمة النشطة.`,
-      severity: 'success',
-      confirmText: 'نعم، استعده',
-      onConfirm: () => handleConfirmAction(() => restoreMember(member.id), 'تم استعادة المستفيد بنجاح', 'خطأ في استعادة المستفيد')
-    });
+    setLifecycleDialog({ open: true, action: 'RESTORE', member });
   };
 
   const handleHardDeleteClick = (member) => {
-    // TODO(UX follow-up): replace with a proper reason-input dialog field --
-    // window.prompt is a stopgap so the backend's now-mandatory reason
-    // (member lifecycle closure) doesn't just start silently failing here.
-    const reason = window.prompt(`سبب الحذف النهائي لـ ${member.fullName} (إلزامي):`);
-    if (reason === null || reason.trim() === '') {
-      if (reason !== null) {
-        enqueueSnackbar('سبب الحذف النهائي إلزامي', { variant: 'error' });
-      }
-      return;
-    }
-    setConfirmDialog({
-      open: true,
-      title: 'حذف نهائي؟',
-      content: `سيتم حذف المستفيد ${member.fullName} نهائياً من قاعدة البيانات. هذا الإجراء لا يمكن التراجع عنه!`,
-      severity: 'error',
-      confirmText: 'نعم، احذف نهائياً',
-      onConfirm: () => handleConfirmAction(() => hardDeleteMember(member.id, reason), 'تم الحذف النهائي بنجاح', 'خطأ في الحذف النهائي')
-    });
+    setLifecycleDialog({ open: true, action: 'HARD_DELETE', member });
   };
 
   const handleToggleActiveClick = (member) => {
     const newActive = member.active === false ? true : false;
-    let reason;
-    if (!newActive) {
-      // TODO(UX follow-up): replace with a proper reason-input dialog field.
-      reason = window.prompt(`سبب إيقاف ${member.fullName} (إلزامي):`);
-      if (reason === null || reason.trim() === '') {
-        if (reason !== null) {
-          enqueueSnackbar('سبب الإيقاف إلزامي', { variant: 'error' });
-        }
-        return;
-      }
+    setLifecycleDialog({ open: true, action: newActive ? 'RESTORE' : 'SUSPEND', member });
+  };
+
+  const executeLifecycleAction = async (reason) => {
+    const { action, member } = lifecycleDialog;
+    if (!member) return;
+    setLifecycleLoading(true);
+    try {
+      if (action === 'TERMINATE') await terminateMembership(member.id, reason);
+      else if (action === 'HARD_DELETE') await hardDeleteMember(member.id, reason);
+      else if (action === 'RESTORE') await restoreMember(member.id, reason);
+      else await toggleMemberActive(member.id, false, reason);
+      enqueueSnackbar('تم تنفيذ العملية بنجاح', { variant: 'success' });
+      setLifecycleDialog((prev) => ({ ...prev, open: false }));
+      await fetchMembers();
+    } catch (error) {
+      enqueueSnackbar(error?.response?.data?.message || 'تعذر تنفيذ العملية', { variant: 'error' });
+    } finally {
+      setLifecycleLoading(false);
     }
-    setConfirmDialog({
-      open: true,
-      title: newActive ? 'تفعيل المستفيد؟' : 'إيقاف المستفيد؟',
-      content: `سيتم ${newActive ? 'تفعيل' : 'إيقاف'} المستفيد ${member.fullName}.`,
-      severity: newActive ? 'success' : 'warning',
-      confirmText: newActive ? 'نعم، فعّله' : 'نعم، أوقفه',
-      onConfirm: () =>
-        handleConfirmAction(
-          () => toggleMemberActive(member.id, newActive, reason),
-          newActive ? 'تم تفعيل المستفيد بنجاح' : 'تم إيقاف المستفيد بنجاح',
-          'خطأ في تغيير حالة المستفيد'
-        )
-    });
   };
 
   // ════════════════════════════════════════════════════════════════════════
@@ -898,6 +864,15 @@ const UnifiedMembersList = () => {
         cancelText={confirmDialog.cancelText}
         onConfirm={confirmDialog.onConfirm}
         onClose={closeDialog}
+      />
+      <MemberLifecycleDialog
+        open={lifecycleDialog.open}
+        action={lifecycleDialog.action}
+        member={lifecycleDialog.member}
+        affectedDependents={lifecycleDialog.member?.dependentsCount || 0}
+        loading={lifecycleLoading}
+        onClose={() => setLifecycleDialog((prev) => ({ ...prev, open: false }))}
+        onConfirm={executeLifecycleAction}
       />
     </Box>
   );

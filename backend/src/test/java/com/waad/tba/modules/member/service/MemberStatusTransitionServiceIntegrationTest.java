@@ -311,14 +311,13 @@ class MemberStatusTransitionServiceIntegrationTest extends PostgresIntegrationTe
         assertThat(audits).hasSize(1);
         assertThat(audits.get(0).getReason()).isEqualTo("بيانات اختبار مكررة");
         assertThat(audits.get(0).getPerformedBy()).isEqualTo(5L);
-        // member_status_history for this member (there IS none here since the
-        // member was never transitioned) would CASCADE with the row -- separately
-        // verified by test #16's real-row check.
+        // There is no transition history in this case. The separate preservation
+        // test below proves that existing history survives a physical delete.
     }
 
-    // 12. Physical delete with any history/footprint is forbidden.
+    // 12. Physical delete with a financial/medical footprint is forbidden.
     @Test
-    void hardDeleteBlockedWhenMemberHasStatusOrFinancialFootprint() throws Exception {
+    void hardDeleteBlockedWhenMemberHasFinancialFootprint() throws Exception {
         String s = suffix();
         Employer employer = newEmployer(s);
         BenefitPolicy policy = newPolicy(employer, s);
@@ -354,15 +353,9 @@ class MemberStatusTransitionServiceIntegrationTest extends PostgresIntegrationTe
         assertThat(memberRepository.findById(principal.getId())).isPresent();
     }
 
-    // 13. Mid-cascade failure rolls back the whole family (already proven at the
-    // import layer for saveAll batches; here the equivalent property for the
-    // transition service is that terminateMembership's financial-footprint
-    // check runs BEFORE any write, so a blocked termination changes nothing --
-    // proven together with #12's "member still present" assertion. This test
-    // additionally proves a partially-blocked family (one dependent has
-    // history) blocks the WHOLE operation, not just that one dependent.
+    // 13. Logical termination must remain available when history exists.
     @Test
-    void terminateBlockedForWholeFamilyIfAnyDependentHasFinancialFootprint() throws Exception {
+    void terminateFamilyWithFinancialHistoryPreservesHistoryAndTerminatesMembers() throws Exception {
         String s = suffix();
         Employer employer = newEmployer(s);
         BenefitPolicy policy = newPolicy(employer, s);
@@ -391,11 +384,82 @@ class MemberStatusTransitionServiceIntegrationTest extends PostgresIntegrationTe
             }
         }
 
-        assertThatThrownBy(() -> transitionService.terminateMembership(principal.getId(), "إنهاء", 1L, StatusSource.MANUAL))
-                .isInstanceOf(BusinessRuleException.class);
+        transitionService.terminateMembership(principal.getId(), "انتهاء التغطية", 1L, StatusSource.MANUAL);
 
-        assertThat(memberRepository.findById(principal.getId()).orElseThrow().getStatus()).isEqualTo(Member.MemberStatus.ACTIVE);
-        assertThat(memberRepository.findById(dependent.getId()).orElseThrow().getStatus()).isEqualTo(Member.MemberStatus.ACTIVE);
+        assertThat(memberRepository.findById(principal.getId()).orElseThrow().getStatus()).isEqualTo(Member.MemberStatus.TERMINATED);
+        assertThat(memberRepository.findById(dependent.getId()).orElseThrow().getStatus()).isEqualTo(Member.MemberStatus.TERMINATED);
+        try (Connection conn = DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+             PreparedStatement ps = conn.prepareStatement("SELECT COUNT(*) FROM visits WHERE member_id = ?")) {
+            ps.setLong(1, dependent.getId());
+            try (var rs = ps.executeQuery()) { rs.next(); assertThat(rs.getLong(1)).isEqualTo(1); }
+        }
+    }
+
+    @Test
+    void hardDeleteMemberWithStatusHistoryPreservesImmutableHistory() {
+        String s = suffix();
+        Employer employer = newEmployer(s);
+        BenefitPolicy policy = newPolicy(employer, s);
+        Member principal = newPrincipal(employer, policy, s);
+        Long id = principal.getId();
+        String name = principal.getFullName();
+
+        transitionService.suspend(id, "إيقاف تجريبي", 1L);
+        transitionService.hardDelete(id, "سجل مكرر بلا أثر مالي", 1L, "admin", true);
+
+        assertThat(memberRepository.findById(id)).isEmpty();
+        List<MemberStatusHistory> history = historyRepository.findByMemberIdOrderByChangedAtDesc(id);
+        assertThat(history).hasSize(1);
+        assertThat(history.get(0).getMemberFullName()).isEqualTo(name);
+        assertThat(history.get(0).getMemberCardNumber()).isEqualTo(principal.getCardNumber());
+    }
+
+    @Test
+    void manualTransitionsRejectBlankReasons() {
+        String s = suffix();
+        Employer employer = newEmployer(s);
+        BenefitPolicy policy = newPolicy(employer, s);
+        Member principal = newPrincipal(employer, policy, s);
+
+        assertThatThrownBy(() -> transitionService.suspend(principal.getId(), " ", 1L))
+                .isInstanceOf(BusinessRuleException.class);
+        assertThatThrownBy(() -> transitionService.terminateMembership(principal.getId(), null, 1L, StatusSource.MANUAL))
+                .isInstanceOf(BusinessRuleException.class);
+        transitionService.suspend(principal.getId(), "إيقاف", 1L);
+        assertThatThrownBy(() -> transitionService.restoreFromSuspended(principal.getId(), "", 1L))
+                .isInstanceOf(BusinessRuleException.class);
+    }
+
+    @Test
+    void hardDeleteAuditRollsBackWhenPhysicalDeleteFails() throws Exception {
+        String s = suffix();
+        Employer employer = newEmployer(s);
+        BenefitPolicy policy = newPolicy(employer, s);
+        Member principal = newPrincipal(employer, policy, s);
+        Long id = principal.getId();
+
+        try (Connection conn = DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+             var statement = conn.createStatement()) {
+            statement.execute("CREATE OR REPLACE FUNCTION fail_member_delete_test() RETURNS trigger AS $$ "
+                    + "BEGIN RAISE EXCEPTION 'forced member delete failure'; END; $$ LANGUAGE plpgsql");
+            statement.execute("CREATE TRIGGER trg_fail_member_delete_test BEFORE DELETE ON members "
+                    + "FOR EACH ROW EXECUTE FUNCTION fail_member_delete_test() ");
+        }
+        try {
+            assertThatThrownBy(() -> transitionService.hardDelete(id, "اختبار التراجع", 1L, "admin", true))
+                    .isInstanceOf(Exception.class);
+            assertThat(memberRepository.findById(id)).isPresent();
+            assertThat(hardDeleteAuditRepository.findByMemberId(id)).isEmpty();
+        } finally {
+            try (Connection conn = DriverManager.getConnection(
+                    POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+                 var statement = conn.createStatement()) {
+                statement.execute("DROP TRIGGER IF EXISTS trg_fail_member_delete_test ON members");
+                statement.execute("DROP FUNCTION IF EXISTS fail_member_delete_test()");
+            }
+        }
     }
 
     // 14. Two concurrent transitions on the same member: one succeeds, the other gets a conflict.

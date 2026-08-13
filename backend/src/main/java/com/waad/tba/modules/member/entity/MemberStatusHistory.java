@@ -17,7 +17,8 @@ import lombok.NoArgsConstructor;
 
 /**
  * Append-only record of a single member status transition. Immutable at the
- * DB level (V169's triggers reject UPDATE/DELETE) -- this is the actual
+ * DB level (V169's triggers reject UPDATE/DELETE; V170 detaches the member
+ * foreign key and adds identity snapshots) -- this is the actual
  * history; Member's own statusReason/statusSource/statusChangedAt/etc.
  * fields only describe the LAST transition, not the full timeline.
  *
@@ -40,6 +41,13 @@ public class MemberStatusHistory {
 
     @Column(name = "member_id", nullable = false)
     private Long memberId;
+
+    /** Immutable identity snapshots: the history survives physical deletion. */
+    @Column(name = "member_full_name", length = 200)
+    private String memberFullName;
+
+    @Column(name = "member_card_number", length = 50)
+    private String memberCardNumber;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "from_status", length = 20)
