@@ -15,6 +15,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ClaimLimitSnapshotFactory {
     private final EntityManager entityManager;
+    private final com.waad.tba.modules.member.service.MemberPolicyResolver memberPolicyResolver;
 
     public List<ClaimLineLimitSnapshot> build(
             Claim claim, ClaimFinancialAdjudicationService.AdjudicationResult adjudication) {
@@ -22,6 +23,9 @@ public class ClaimLimitSnapshotFactory {
         if (claim.getLines().size() != lineResults.size()) {
             throw new IllegalStateException("LIMIT_SNAPSHOT_LINE_COUNT_MISMATCH");
         }
+        Long assignmentId = memberPolicyResolver
+                .resolveAssignmentFor(claim.getMember(), claim.getServiceDate())
+                .map(a -> a.getId()).orElse(null);
         List<ClaimLineLimitSnapshot> snapshots = new ArrayList<>();
         for (int lineIndex = 0; lineIndex < claim.getLines().size(); lineIndex++) {
             ClaimLine line = claim.getLines().get(lineIndex);
@@ -47,6 +51,8 @@ public class ClaimLimitSnapshotFactory {
                         .benefitGroup(reference(BenefitGroup.class, definition.benefitGroupId()))
                         .sourceType(effective.sourceType()).sourceId(sourceId)
                         .sourceVersion(policy.getVersion()).structureRevision(null)
+                        // Which coverage PERIOD, not just which policy -- see V172.
+                        .memberPolicyAssignmentId(assignmentId)
                         .periodType(definition.periodType())
                         .periodStart(definition.periodStart()).periodEnd(definition.periodEnd())
                         .effectiveLimit(allocation.effectiveLimit())

@@ -51,6 +51,7 @@ import lombok.extern.slf4j.Slf4j;
 public class ClaimMapper {
 
         private final ProviderContractService providerContractService;
+        private final com.waad.tba.modules.member.service.MemberPolicyResolver memberPolicyResolver;
         private final BenefitPolicyRepository benefitPolicyRepository;
         private final MedicalCategoryRepository medicalCategoryRepository;
         private final MedicalServiceRepository medicalServiceRepository;
@@ -67,20 +68,19 @@ public class ClaimMapper {
         private static final BigDecimal ZERO = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
         private static final BigDecimal EPSILON = new BigDecimal("0.01");
 
+        /**
+         * The policy in force ON THE SERVICE DATE. This is what selects the
+         * BenefitPolicyRule applied to each line, so reading the member's
+         * current pointer here made the rule come from one policy while the
+         * limit machinery resolved another -- surfacing as
+         * BENEFIT_RULE_POLICY_MISMATCH once the limit side was converted.
+         * Both sides now ask the same resolver the same dated question.
+         */
         private com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy resolvePolicy(
                         com.waad.tba.modules.member.entity.Member member, LocalDate serviceDate) {
                 if (member == null)
                         return null;
-                var direct = member.getBenefitPolicy();
-                if (direct != null)
-                        return direct;
-                if (member.getEmployer() != null) {
-                        return benefitPolicyRepository
-                                        .findActiveEffectivePolicyForEmployer(member.getEmployer().getId(),
-                                                        serviceDate != null ? serviceDate : LocalDate.now())
-                                        .orElse(null);
-                }
-                return null;
+                return memberPolicyResolver.resolveFor(member, serviceDate).orElse(null);
         }
 
         public Claim toEntity(ClaimCreateDto dto, Visit visit, Provider provider, PreAuthorization preAuth,

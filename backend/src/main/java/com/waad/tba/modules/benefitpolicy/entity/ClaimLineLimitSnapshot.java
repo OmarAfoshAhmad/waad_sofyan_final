@@ -107,6 +107,14 @@ public class ClaimLineLimitSnapshot {
     @Column(name = "source_version")
     private Long sourceVersion;
 
+    /**
+     * The member_policy_assignments row this policy was resolved through.
+     * policy_id alone cannot distinguish two separate coverage periods that
+     * happen to use the same logical policy -- see V172.
+     */
+    @Column(name = "member_policy_assignment_id")
+    private Long memberPolicyAssignmentId;
+
     @Column(name = "structure_revision")
     private Integer structureRevision;
 

@@ -149,6 +149,20 @@ public class MemberPolicyResolver {
     }
 
     /**
+     * The assignment row itself, for callers that must record WHICH coverage
+     * period a decision was made under -- policyId alone cannot distinguish
+     * two separate assignment periods that use the same logical policy.
+     */
+    @Transactional(readOnly = true)
+    public Optional<MemberPolicyAssignment> resolveAssignmentFor(Member member, LocalDate serviceDate) {
+        if (member == null || member.getId() == null) {
+            return Optional.empty();
+        }
+        return assignmentRepository.findCovering(member.getId(),
+                serviceDate != null ? serviceDate : LocalDate.now());
+    }
+
+    /**
      * Financial callers must use this, not resolveFor: a missing policy has to
      * stop the operation with a clear reason, never flow onward as a null that
      * some downstream branch reads as "no limit applies". Fail closed.
