@@ -376,18 +376,39 @@ const UnifiedMembersList = () => {
   };
 
   const handleHardDeleteClick = (member) => {
+    // TODO(UX follow-up): replace with a proper reason-input dialog field --
+    // window.prompt is a stopgap so the backend's now-mandatory reason
+    // (member lifecycle closure) doesn't just start silently failing here.
+    const reason = window.prompt(`سبب الحذف النهائي لـ ${member.fullName} (إلزامي):`);
+    if (reason === null || reason.trim() === '') {
+      if (reason !== null) {
+        enqueueSnackbar('سبب الحذف النهائي إلزامي', { variant: 'error' });
+      }
+      return;
+    }
     setConfirmDialog({
       open: true,
       title: 'حذف نهائي؟',
       content: `سيتم حذف المستفيد ${member.fullName} نهائياً من قاعدة البيانات. هذا الإجراء لا يمكن التراجع عنه!`,
       severity: 'error',
       confirmText: 'نعم، احذف نهائياً',
-      onConfirm: () => handleConfirmAction(() => hardDeleteMember(member.id), 'تم الحذف النهائي بنجاح', 'خطأ في الحذف النهائي')
+      onConfirm: () => handleConfirmAction(() => hardDeleteMember(member.id, reason), 'تم الحذف النهائي بنجاح', 'خطأ في الحذف النهائي')
     });
   };
 
   const handleToggleActiveClick = (member) => {
     const newActive = member.active === false ? true : false;
+    let reason;
+    if (!newActive) {
+      // TODO(UX follow-up): replace with a proper reason-input dialog field.
+      reason = window.prompt(`سبب إيقاف ${member.fullName} (إلزامي):`);
+      if (reason === null || reason.trim() === '') {
+        if (reason !== null) {
+          enqueueSnackbar('سبب الإيقاف إلزامي', { variant: 'error' });
+        }
+        return;
+      }
+    }
     setConfirmDialog({
       open: true,
       title: newActive ? 'تفعيل المستفيد؟' : 'إيقاف المستفيد؟',
@@ -396,7 +417,7 @@ const UnifiedMembersList = () => {
       confirmText: newActive ? 'نعم، فعّله' : 'نعم، أوقفه',
       onConfirm: () =>
         handleConfirmAction(
-          () => toggleMemberActive(member.id, newActive),
+          () => toggleMemberActive(member.id, newActive, reason),
           newActive ? 'تم تفعيل المستفيد بنجاح' : 'تم إيقاف المستفيد بنجاح',
           'خطأ في تغيير حالة المستفيد'
         )

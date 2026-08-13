@@ -125,7 +125,7 @@ export const countMembers = async (filters = {}) => {
  *
  * @param {Object} criteria - Search criteria
  * @param {string} [criteria.fullName] - Full name search
- * @param {string} [criteria.nationalNumber] - National number filter
+ * @param {string} [criteria.civilId] - Civil ID filter
  * @param {string} [criteria.barcode] - Barcode filter
  * @param {string} [criteria.cardNumber] - Card number filter
  * @param {number} [criteria.organizationId] - Organization filter
@@ -283,6 +283,25 @@ export const deleteMember = async (id) => {
 };
 
 /**
+ * End a member's membership. Nothing is physically deleted -- status
+ * becomes TERMINATED. Prefer this over deleteMember() in new code; that
+ * name is kept only for existing callers (it calls the same backend
+ * endpoint that this function's route now aliases to internally).
+ *
+ * @param {number} id - Member ID
+ * @param {string} [reason] - Reason recorded on the transition
+ * @returns {Promise<void>}
+ */
+export const terminateMembership = async (id, reason) => {
+  try {
+    await api.post(`${UNIFIED_MEMBERS_BASE_URL}/${id}/terminate`, null, { params: { reason } });
+  } catch (error) {
+    console.error('Error terminating membership:', error);
+    throw error;
+  }
+};
+
+/**
  * Bulk delete members by IDs
  *
  * @param {Array<number>} ids - Array of Member IDs
@@ -315,18 +334,62 @@ export const restoreMember = async (id) => {
 };
 
 /**
- * Toggle active/inactive status for a member
+ * Toggle active/inactive status for a member.
+ *
+ * active=true restores from SUSPENDED (rejects a TERMINATED member -- use
+ * reinstateTerminatedMember for that). active=false suspends and requires
+ * a reason.
  *
  * @param {number} id - Member ID
  * @param {boolean} active - true to activate, false to deactivate
+ * @param {string} [reason] - Required when active=false
  * @returns {Promise<Object>} Updated member
  */
-export const toggleMemberActive = async (id, active) => {
+export const toggleMemberActive = async (id, active, reason) => {
   try {
-    const response = await api.patch(`${UNIFIED_MEMBERS_BASE_URL}/${id}/active`, null, { params: { active } });
+    const response = await api.patch(`${UNIFIED_MEMBERS_BASE_URL}/${id}/active`, null, { params: { active, reason } });
     return response.data;
   } catch (error) {
     console.error('Error toggling member active status:', error);
+    throw error;
+  }
+};
+
+/**
+ * TERMINATED -> ACTIVE. Exceptional action requiring SUPER_ADMIN and a
+ * mandatory reason -- distinct from the ordinary restore/toggle-active
+ * path, which explicitly refuses to touch a TERMINATED member.
+ *
+ * @param {number} id - Member ID
+ * @param {string} reason - Mandatory reason
+ * @returns {Promise<Object>} Updated member
+ */
+export const reinstateTerminatedMember = async (id, reason) => {
+  try {
+    const response = await api.put(`${UNIFIED_MEMBERS_BASE_URL}/${id}/reinstate`, null, { params: { reason } });
+    return response.data;
+  } catch (error) {
+    console.error('Error reinstating terminated member:', error);
+    throw error;
+  }
+};
+
+/**
+ * Restores exactly the dependents ONE specific suspend/terminate family
+ * cascade affected (identified by transitionId, found on the principal's
+ * statusTransitionId after that cascade ran) -- never every dependent
+ * currently sharing that status, and never one who changed independently
+ * since. Restoring the principal never does this automatically.
+ *
+ * @param {string} transitionId
+ * @returns {Promise<Object>} { restoredMemberIds, skipped }
+ */
+export const restoreFamily = async (transitionId) => {
+  try {
+    const response = await api.put(`${UNIFIED_MEMBERS_BASE_URL}/family-restore/${transitionId}`);
+    return response.data;
+  } catch (error) {
+    console.error('Error restoring family cascade:', error);
     throw error;
   }
 };
@@ -350,14 +413,18 @@ export const changeMemberStatus = async (id, status, reason) => {
 };
 
 /**
- * Physically delete a member from the database
+ * Physically delete a member from the database. SUPER_ADMIN only, blocked
+ * entirely if any financial/medical/audit footprint exists, and requires a
+ * reason -- an independent (non-FK'd) audit record is written before the
+ * delete.
  *
  * @param {number} id - Member ID
+ * @param {string} reason - Mandatory reason
  * @returns {Promise<void>}
  */
-export const hardDeleteMember = async (id) => {
+export const hardDeleteMember = async (id, reason) => {
   try {
-    await api.delete(`${UNIFIED_MEMBERS_BASE_URL}/${id}/hard`);
+    await api.delete(`${UNIFIED_MEMBERS_BASE_URL}/${id}/hard`, { params: { reason } });
   } catch (error) {
     console.error('Error physically deleting member:', error);
     throw error;

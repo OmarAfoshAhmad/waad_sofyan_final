@@ -2,6 +2,7 @@ package com.waad.tba.modules.member.controller;
 
 import com.waad.tba.common.dto.ApiResponse;
 import com.waad.tba.common.dto.PaginationResponse;
+import com.waad.tba.common.exception.BusinessRuleException;
 import com.waad.tba.modules.member.dto.DependentMemberDto;
 import com.waad.tba.modules.member.dto.FamilyEligibilityResponseDto;
 import com.waad.tba.modules.member.dto.MemberCreateDto;
@@ -858,12 +859,49 @@ public class UnifiedMemberController {
         })
         public ResponseEntity<ApiResponse<MemberViewDto>> setActive(
                         @PathVariable("id") Long id,
-                        @RequestParam(name = "active") boolean active) {
+                        @RequestParam(name = "active") boolean active,
+                        @RequestParam(name = "reason", required = false) String reason) {
 
                 log.info("Setting active={} for member ID={}", active, id);
-                MemberViewDto updated = unifiedMemberService.toggleActive(id, active);
+                MemberViewDto updated = unifiedMemberService.toggleActive(id, active, reason);
                 String message = active ? "تم تفعيل العضو بنجاح" : "تم إيقاف العضو بنجاح";
                 return ResponseEntity.ok(ApiResponse.success(message, updated));
+        }
+
+        /**
+         * TERMINATED -> ACTIVE. Exceptional action distinct from the ordinary
+         * restore endpoints above: requires SUPER_ADMIN and a mandatory reason.
+         */
+        @PutMapping("/{id}/reinstate")
+        @PreAuthorize("hasRole('SUPER_ADMIN')")
+        @Operation(summary = "Reinstate a terminated member", description = "Restores a TERMINATED member to ACTIVE. "
+                        + "Exceptional action requiring SUPER_ADMIN and a mandatory reason -- unlike restoring a "
+                        + "SUSPENDED member, this does not happen through the ordinary restore/active endpoints.")
+        public ResponseEntity<ApiResponse<MemberViewDto>> reinstateTerminated(
+                        @PathVariable("id") Long id,
+                        @RequestParam(name = "reason") String reason) {
+                MemberViewDto updated = unifiedMemberService.reinstateTerminatedMember(id, reason);
+                return ResponseEntity.ok(ApiResponse.success("تمت إعادة العضوية المنتهية بنجاح", updated));
+        }
+
+        /**
+         * Restores exactly the dependents ONE specific family-cascade suspend/
+         * terminate operation affected -- an explicit, opt-in action. Restoring
+         * the principal never does this automatically.
+         */
+        @PutMapping("/family-restore/{transitionId}")
+        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN')")
+        @Operation(summary = "Restore a family cascade", description = "Restores exactly the dependents affected by "
+                        + "one specific suspend/terminate cascade (identified by transitionId), skipping any "
+                        + "dependent whose status changed independently since, or who no longer qualifies for "
+                        + "activation (e.g. no active benefit policy).")
+        public ResponseEntity<ApiResponse<Map<String, Object>>> restoreFamily(
+                        @PathVariable("transitionId") String transitionId) {
+                var result = unifiedMemberService.restoreFamily(transitionId);
+                Map<String, Object> body = new java.util.LinkedHashMap<>();
+                body.put("restoredMemberIds", result.restoredMemberIds());
+                body.put("skipped", result.skippedWithReason());
+                return ResponseEntity.ok(ApiResponse.success("تمت معالجة الاستعادة العائلية", body));
         }
 
         /**
@@ -923,37 +961,55 @@ public class UnifiedMemberController {
          * @return ResponseEntity with 204 No Content on success
          * @throws NotFoundException if Member not found
          */
-        @DeleteMapping("/{id}")
+        /**
+         * The proper name for what this endpoint does: nothing is deleted, a
+         * membership is ended. Prefer POST /{id}/terminate in new code --
+         * this stays only so existing callers of DELETE /{id} keep working.
+         */
+        @PostMapping("/{id}/terminate")
         @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN')")
-        @Operation(summary = "Delete Member (CASCADE for Principals)", description = "Deletes a Member. BEHAVIOR VARIES BY TYPE: "
-                        +
-                        "PRINCIPAL deletion: CASCADE deletes ALL Dependents (entire family removed). " +
-                        "DEPENDENT deletion: Removes only that Dependent (Principal and other Dependents remain). " +
-                        "Deletion is SOFT DELETE (member marked TERMINATED, not physically removed). " +
-                        "Audit trail maintained for compliance. " +
-                        "WARNING: Principal deletion is irreversible and affects entire family. " +
-                        "Consider SUSPENDING members for temporary deactivation instead.", parameters = {
-                                        @Parameter(name = "id", description = "Member ID to delete", required = true)
+        @Operation(summary = "Terminate membership (CASCADE for Principals)", description = "Ends a Member's "
+                        + "membership. BEHAVIOR VARIES BY TYPE: PRINCIPAL termination cascades to every currently-"
+                        + "ACTIVE dependent (a dependent already suspended/terminated for their own reason keeps "
+                        + "that history). DEPENDENT termination affects only that dependent. Nothing is physically "
+                        + "removed -- status becomes TERMINATED, recorded in the append-only status history. "
+                        + "Blocked entirely if the member (or, for a principal, any dependent) has financial/"
+                        + "medical history.", parameters = {
+                                        @Parameter(name = "id", description = "Member ID", required = true)
                         })
         @ApiResponses(value = {
-                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "204", description = "Member deleted successfully (CASCADE applied if Principal)", content = @Content(mediaType = "application/json")),
-                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Member not found", content = @Content(mediaType = "application/json")),
-                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden: Insufficient permissions (requires ADMIN or EMPLOYER role)", content = @Content(mediaType = "application/json"))
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Membership terminated (CASCADE applied if Principal)"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Member not found"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Blocked: financial/medical history exists")
         })
-        public ResponseEntity<ApiResponse<Void>> deleteMember(
-                        @PathVariable("id") Long id) {
+        public ResponseEntity<ApiResponse<Void>> terminateMembership(
+                        @PathVariable("id") Long id,
+                        @RequestParam(name = "reason", required = false) String reason) {
 
-                log.info("Deleting Member: id={}", id);
+                log.info("Terminating membership: id={}", id);
 
                 try {
-                        unifiedMemberService.deleteMember(id);
-                        log.info("Member deleted successfully: id={}", id);
-                        return ResponseEntity.ok(ApiResponse.success("تم حذف المستفيد بنجاح", null));
-                } catch (IllegalStateException e) {
-                        log.warn("Delete blocked for member id={}: {}", id, e.getMessage());
+                        unifiedMemberService.terminateMembership(id, reason);
+                        log.info("Membership terminated successfully: id={}", id);
+                        return ResponseEntity.ok(ApiResponse.success("تم إنهاء العضوية بنجاح", null));
+                } catch (BusinessRuleException | IllegalStateException e) {
+                        log.warn("Termination blocked for member id={}: {}", id, e.getMessage());
                         return ResponseEntity.status(org.springframework.http.HttpStatus.CONFLICT)
                                         .body(ApiResponse.error(e.getMessage()));
                 }
+        }
+
+        /**
+         * @deprecated use POST /{id}/terminate. Kept as a thin compatibility
+         *             alias -- same behavior, same response message.
+         */
+        @Deprecated
+        @DeleteMapping("/{id}")
+        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN')")
+        @Operation(summary = "[Deprecated] Terminate membership -- use POST /{id}/terminate", description = "Deprecated alias for POST /{id}/terminate. Nothing is deleted; this ends membership (status=TERMINATED).")
+        public ResponseEntity<ApiResponse<Void>> deleteMember(
+                        @PathVariable("id") Long id) {
+                return terminateMembership(id, null);
         }
 
         @PostMapping("/bulk-delete")
@@ -1352,12 +1408,16 @@ public class UnifiedMemberController {
          */
         @DeleteMapping("/{id}/hard")
         @PreAuthorize("hasRole('SUPER_ADMIN')")
-        @Operation(summary = "Hard Delete Member", description = "Permanently delete a member from the database (SUPER_ADMIN only)")
-        public ResponseEntity<ApiResponse<Void>> hardDeleteMember(@PathVariable("id") Long id) {
+        @Operation(summary = "Hard Delete Member", description = "Permanently delete a member from the database (SUPER_ADMIN only). "
+                        + "Requires a reason, blocked entirely if any financial/medical/audit footprint exists, "
+                        + "and writes an independent (non-FK'd) audit record before deleting.")
+        public ResponseEntity<ApiResponse<Void>> hardDeleteMember(
+                        @PathVariable("id") Long id,
+                        @RequestParam(name = "reason") String reason) {
                 log.warn("⚠️ HARD DELETE request: memberId={}", id);
 
                 try {
-                        unifiedMemberService.hardDeleteMember(id);
+                        unifiedMemberService.hardDeleteMember(id, reason);
 
                         log.info("✅ Member hard deleted: memberId={}", id);
 

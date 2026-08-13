@@ -76,6 +76,12 @@ class MemberExcelImportServiceTest {
     private PreAuthorizationRepository preAuthorizationRepository;
     @Mock
     private MemberImportAuditRecorder auditRecorder;
+    @Mock
+    private com.waad.tba.modules.member.repository.MemberStatusHistoryRepository statusHistoryRepository;
+    @Mock
+    private com.waad.tba.modules.member.repository.MemberHardDeleteAuditRepository hardDeleteAuditRepository;
+    @Mock
+    private org.springframework.jdbc.core.JdbcTemplate statusTransitionJdbcTemplate;
 
     @InjectMocks
     private MemberExcelImportService service;
@@ -86,9 +92,12 @@ class MemberExcelImportServiceTest {
     void setUp() {
         MemberImportParser parser = new MemberImportParser();
         MemberImportMapper mapper = new MemberImportMapper(parser);
+        MemberStatusTransitionService statusTransitionService = new MemberStatusTransitionService(
+                memberRepository, statusHistoryRepository, hardDeleteAuditRepository, benefitPolicyRepository,
+                statusTransitionJdbcTemplate);
         MemberImportRowProcessor rowProcessor = new MemberImportRowProcessor(
                 parser, employerRepository, benefitPolicyRepository, barcodeGeneratorService,
-                cardNumberGeneratorService);
+                cardNumberGeneratorService, statusTransitionService);
 
         service = new MemberExcelImportService(
                 memberRepository,

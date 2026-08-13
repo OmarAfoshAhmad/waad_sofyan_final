@@ -121,6 +121,21 @@ public class MemberViewDto {
     @Schema(description = "Blocked reason", example = "Exceeded limit")
     private String blockedReason;
 
+    @Schema(description = "Reason recorded on the last status transition")
+    private String statusReason;
+
+    @Schema(description = "Source of the last status transition", example = "MANUAL")
+    private com.waad.tba.modules.member.entity.StatusSource statusSource;
+
+    @Schema(description = "When the last status transition happened")
+    private java.time.LocalDateTime statusChangedAt;
+
+    @Schema(description = "Status before the last transition", example = "SUSPENDED")
+    private Member.MemberStatus previousStatus;
+
+    @Schema(description = "Groups this member with others changed by the same family-cascade operation, if any")
+    private String statusTransitionId;
+
     // Eligibility
     @Schema(description = "Eligibility status", example = "true")
     private Boolean eligibilityStatus;

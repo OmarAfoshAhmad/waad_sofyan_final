@@ -39,9 +39,15 @@ class MemberImportRowProcessorPolicyTest {
         when(barcodeGenerator.generateForPrincipal()).thenReturn("BAR-1");
         when(cardGenerator.generateUniqueForPrincipal(any(Member.class))).thenReturn("CARD-1");
 
+        MemberStatusTransitionService statusTransitionService = new MemberStatusTransitionService(
+                mock(com.waad.tba.modules.member.repository.MemberRepository.class),
+                mock(com.waad.tba.modules.member.repository.MemberStatusHistoryRepository.class),
+                mock(com.waad.tba.modules.member.repository.MemberHardDeleteAuditRepository.class),
+                policyRepository,
+                mock(org.springframework.jdbc.core.JdbcTemplate.class));
         processor = new MemberImportRowProcessor(
                 new MemberImportParser(), mock(EmployerRepository.class), policyRepository,
-                barcodeGenerator, cardGenerator);
+                barcodeGenerator, cardGenerator, statusTransitionService);
         employer = Employer.builder().id(10L).code("EMP").name("Employer").active(true).build();
         policy = BenefitPolicy.builder()
                 .id(20L).name("Policy").policyCode("POL-20").employer(employer)

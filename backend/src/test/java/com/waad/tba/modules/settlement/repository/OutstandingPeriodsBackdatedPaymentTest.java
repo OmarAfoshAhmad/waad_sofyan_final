@@ -80,8 +80,8 @@ class OutstandingPeriodsBackdatedPaymentTest extends PostgresIntegrationTestBase
         // benefit policy for active members, and the outstanding query joins members
         // only to read employer_id — it never filters on the member's status.
         Long memberId = jdbc.queryForObject("""
-                INSERT INTO members (employer_id, full_name, national_number, barcode, active, created_at, updated_at)
-                VALUES (?, ?, ?, ?, false, now(), now()) RETURNING id
+                INSERT INTO members (employer_id, full_name, national_number, barcode, status, active, created_at, updated_at)
+                VALUES (?, ?, ?, ?, 'SUSPENDED', false, now(), now()) RETURNING id
                 """, Long.class, employerId, "Backdate Member " + suffix, "NAT-" + suffix, "BC-" + suffix);
 
         Long visitId = jdbc.queryForObject("""

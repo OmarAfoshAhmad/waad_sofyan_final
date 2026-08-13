@@ -44,7 +44,6 @@ class UnifiedMemberServiceSecurityTest {
     @Mock
     private JdbcTemplate jdbcTemplate;
 
-    @InjectMocks
     private UnifiedMemberService service;
 
     private com.waad.tba.modules.rbac.entity.User currentUser;
@@ -58,6 +57,34 @@ class UnifiedMemberServiceSecurityTest {
 
         when(authorizationService.getCurrentUser()).thenReturn(currentUser);
         lenient().when(memberRepository.findById(500L)).thenReturn(Optional.of(member));
+
+        // Real (not mocked) MemberStatusTransitionService, backed by mocked
+        // repositories: the SUPER_ADMIN and financial-footprint checks this
+        // test class exists to cover now live there, not in
+        // UnifiedMemberService itself -- a mock would make these tests
+        // exercise nothing.
+        com.waad.tba.modules.member.service.MemberStatusTransitionService statusTransitionService =
+                new com.waad.tba.modules.member.service.MemberStatusTransitionService(
+                        memberRepository,
+                        org.mockito.Mockito.mock(com.waad.tba.modules.member.repository.MemberStatusHistoryRepository.class),
+                        org.mockito.Mockito.mock(com.waad.tba.modules.member.repository.MemberHardDeleteAuditRepository.class),
+                        org.mockito.Mockito.mock(com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository.class),
+                        jdbcTemplate);
+
+        service = new UnifiedMemberService(
+                memberRepository,
+                org.mockito.Mockito.mock(com.waad.tba.modules.employer.repository.EmployerRepository.class),
+                org.mockito.Mockito.mock(com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository.class),
+                org.mockito.Mockito.mock(BarcodeGeneratorService.class),
+                org.mockito.Mockito.mock(CardNumberGeneratorService.class),
+                org.mockito.Mockito.mock(com.waad.tba.modules.member.mapper.UnifiedMemberMapper.class),
+                authorizationService,
+                org.mockito.Mockito.mock(com.waad.tba.modules.provider.service.ProviderService.class),
+                org.mockito.Mockito.mock(MemberFinancialSummaryService.class),
+                jdbcTemplate,
+                org.mockito.Mockito.mock(com.waad.tba.modules.systemadmin.service.AuditLogService.class),
+                org.mockito.Mockito.mock(com.waad.tba.modules.eligibility.service.FamilyEligibilityService.class),
+                statusTransitionService);
     }
 
     @Test
@@ -74,7 +101,7 @@ class UnifiedMemberServiceSecurityTest {
     void toggleActiveDeniedWhenCallerCannotAccessMember() {
         when(authorizationService.canAccessMember(currentUser, 500L)).thenReturn(false);
 
-        assertThrows(AccessDeniedException.class, () -> service.toggleActive(500L, false));
+        assertThrows(AccessDeniedException.class, () -> service.toggleActive(500L, false, "reason"));
 
         verify(memberRepository, never()).save(org.mockito.ArgumentMatchers.any());
     }
@@ -127,7 +154,7 @@ class UnifiedMemberServiceSecurityTest {
 
     @Test
     void hardDeleteDeniedWhenCallerIsNotSuperAdminEvenIfServiceIsCalledDirectly() {
-        assertThrows(AccessDeniedException.class, () -> service.hardDeleteMember(500L));
+        assertThrows(AccessDeniedException.class, () -> service.hardDeleteMember(500L, "reason"));
 
         verify(memberRepository, never()).delete(org.mockito.ArgumentMatchers.any(Member.class));
     }
@@ -139,7 +166,7 @@ class UnifiedMemberServiceSecurityTest {
         when(jdbcTemplate.queryForObject(anyString(), eq(Long.class)))
                 .thenReturn(1L, 0L, 0L, 0L, 0L);
 
-        assertThrows(BusinessRuleException.class, () -> service.hardDeleteMember(500L));
+        assertThrows(BusinessRuleException.class, () -> service.hardDeleteMember(500L, "reason"));
 
         verify(memberRepository, never()).delete(org.mockito.ArgumentMatchers.any(Member.class));
     }

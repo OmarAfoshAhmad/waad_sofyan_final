@@ -40,6 +40,7 @@ public class MemberImportRowProcessor {
     private final BenefitPolicyRepository benefitPolicyRepository;
     private final BarcodeGeneratorService barcodeGeneratorService;
     private final CardNumberGeneratorService cardNumberGeneratorService;
+    private final MemberStatusTransitionService statusTransitionService;
     private final Map<String, Optional<Employer>> employerCache = new java.util.concurrent.ConcurrentHashMap<>();
 
     private Optional<Employer> findEmployerCached(String nameOrCode) {
@@ -212,25 +213,26 @@ public class MemberImportRowProcessor {
             member.setBenefitPolicy(finalPolicy);
             member.setParent(parent);
             member.setRelationship(relationship);
-            member.setStatus(importedStatus);
             member.setCardStatus(importedStatus == MemberStatus.TERMINATED
                     ? Member.CardStatus.INACTIVE : Member.CardStatus.ACTIVE);
-            // Suspended/Pending remain visible in operational lists; eligibility
-            // is denied by MemberStatus, while TERMINATED is the archival state.
-            member.setActive(importedStatus != MemberStatus.TERMINATED);
             member.getAttributes().clear();
         } else {
             member = Member.builder()
                     .fullName(fullName)
                     .employer(finalEmployer)
                     .benefitPolicy(finalPolicy)
-                    .status(importedStatus)
                     .cardStatus(importedStatus == MemberStatus.TERMINATED
                             ? Member.CardStatus.INACTIVE : Member.CardStatus.ACTIVE)
-                    .active(importedStatus != MemberStatus.TERMINATED)
                     .parent(parent)
                     .relationship(relationship)
                     .build();
+        }
+        // status/active/statusReason/statusSource/etc. are set in exactly one
+        // place (MemberStatusTransitionService), even on this batching path
+        // that saves the entity itself rather than calling a transition
+        // method -- see applyStatusFieldsForImport's Javadoc for why.
+        if (member.getStatus() != importedStatus) {
+            statusTransitionService.applyStatusFieldsForImport(member, importedStatus, "استيراد Excel");
         }
 
         // Set card number: use value from Excel if present, otherwise generate a unique one

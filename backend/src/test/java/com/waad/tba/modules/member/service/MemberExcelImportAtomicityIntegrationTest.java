@@ -425,7 +425,7 @@ class MemberExcelImportAtomicityIntegrationTest extends PostgresIntegrationTestB
         // will delete this on the FIRST call.
         Member preExisting = memberRepository.save(Member.builder()
                 .fullName("Stale Member " + s).employer(employer)
-                .cardNumber("STALE" + s).barcode("STALE" + s).active(false).build());
+                .cardNumber("STALE" + s).barcode("STALE" + s).status(Member.MemberStatus.SUSPENDED).active(false).build());
 
         MockMultipartFile file = excel(List.of(
                 HEADER,
@@ -469,7 +469,7 @@ class MemberExcelImportAtomicityIntegrationTest extends PostgresIntegrationTestB
 
         Member preExisting = memberRepository.save(Member.builder()
                 .fullName("Stale Member " + s).employer(employer)
-                .cardNumber("STALE2" + s).barcode("STALE2" + s).active(false).build());
+                .cardNumber("STALE2" + s).barcode("STALE2" + s).status(Member.MemberStatus.SUSPENDED).active(false).build());
 
         doThrow(new DataIntegrityViolationException("simulated unique constraint violation"))
                 .when(memberRepository)

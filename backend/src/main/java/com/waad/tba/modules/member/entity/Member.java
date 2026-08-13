@@ -226,9 +226,49 @@ public class Member {
     @Column(length = 500, name = "blocked_reason")
     private String blockedReason;
 
+    /**
+     * Derived from {@code status}, never an independent business state --
+     * DB-enforced by chk_member_status_active_consistency (V169): true only
+     * when status=ACTIVE. Every write to this field MUST go through
+     * MemberStatusTransitionService; a direct setActive/setStatus call
+     * outside it risks violating that constraint (the transition service is
+     * what previously-missing toggleActive semantics broke: it used to set
+     * this flag without touching status at all).
+     */
     @Builder.Default
     @Column(nullable = false)
     private Boolean active = true;
+
+    // ==================== STATUS LIFECYCLE (last transition only --
+    // member_status_history is the append-only full timeline) ====================
+
+    @Column(name = "status_reason", length = 500)
+    private String statusReason;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status_source", length = 30)
+    private StatusSource statusSource;
+
+    @Column(name = "status_changed_at")
+    private LocalDateTime statusChangedAt;
+
+    @Column(name = "status_changed_by")
+    private Long statusChangedBy;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "previous_status", length = 20)
+    private MemberStatus previousStatus;
+
+    /**
+     * Groups every member (principal + whichever dependents a single
+     * suspend/terminate operation cascaded to) changed by ONE transition
+     * operation. restoreFamily uses this to reinstate exactly the dependents
+     * a specific cascade affected -- never a dependent who was independently
+     * suspended before or after it, even if they currently share the same
+     * status value.
+     */
+    @Column(name = "status_transition_id", length = 64)
+    private String statusTransitionId;
 
     // Eligibility
     @Builder.Default

@@ -29,6 +29,7 @@ import com.waad.tba.modules.member.dto.MemberCreateDto;
 import com.waad.tba.modules.member.dto.MemberUpdateDto;
 import com.waad.tba.modules.member.dto.MemberViewDto;
 import com.waad.tba.modules.member.entity.Member;
+import com.waad.tba.modules.member.entity.StatusSource;
 import com.waad.tba.modules.member.mapper.UnifiedMemberMapper;
 import com.waad.tba.modules.member.repository.MemberRepository;
 import com.waad.tba.modules.provider.service.ProviderService;
@@ -84,6 +85,7 @@ public class UnifiedMemberService {
     private final JdbcTemplate jdbcTemplate;
     private final AuditLogService auditLogService;
     private final FamilyEligibilityService familyEligibilityService;
+    private final MemberStatusTransitionService statusTransitionService;
 
     /**
      * Create a PRINCIPAL member (optionally with dependents inline).
@@ -366,18 +368,24 @@ public class UnifiedMemberService {
     }
 
     /**
-     * Activate or deactivate a member.
+     * Compatibility alias over {@link MemberStatusTransitionService}. Used to
+     * write the {@code active} flag directly and independently of
+     * {@code status} -- exactly the divergence that let a member end up
+     * status=SUSPENDED with active=true, since nothing kept them in sync.
+     * Now: active=true translates to "restore from SUSPENDED" (rejects a
+     * TERMINATED member -- reinstating one is an exceptional action, not a
+     * flag flip, see {@link #reinstateTerminatedMember}); active=false
+     * translates to "suspend" and requires a reason, same as the dedicated
+     * suspend path.
      *
      * @param id     Member ID
-     * @param active true = activate, false = deactivate
+     * @param active true = restore from suspension, false = suspend
+     * @param reason Required when active=false
      * @return Updated member view DTO
      */
     @Transactional
-    public MemberViewDto toggleActive(Long id, boolean active) {
+    public MemberViewDto toggleActive(Long id, boolean active, String reason) {
         log.info("🔄 Setting active={} for member ID={}", active, id);
-
-        Member member = memberRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Member not found: " + id));
 
         User currentUser = authorizationService.getCurrentUser();
         if (!authorizationService.canAccessMember(currentUser, id)) {
@@ -385,9 +393,11 @@ public class UnifiedMemberService {
                     currentUser != null ? currentUser.getUsername() : "unknown", id);
             throw new AccessDeniedException("Access denied to this member");
         }
+        Long userId = currentUser != null ? currentUser.getId() : null;
 
-        member.setActive(active);
-        member = memberRepository.save(member);
+        Member member = active
+                ? statusTransitionService.restoreFromSuspended(id, reason, userId)
+                : statusTransitionService.suspend(id, reason, userId);
 
         log.info("✅ Member ID={} active status set to {}", id, active);
 
@@ -400,18 +410,13 @@ public class UnifiedMemberService {
 
     /**
      * Explicitly transition a member's membership status (ACTIVE / SUSPENDED / PENDING / TERMINATED).
-     *
-     * Distinct from {@link #toggleActive}: that only flips the coarse `active` flag used for
-     * eligibility checks, but never touched the richer {@code MemberStatus} enum, leaving it
-     * permanently stale after creation. This is the first endpoint that lets an operator move a
-     * member to SUSPENDED or PENDING (not just active/terminated).
-     *
-     * `active` is kept in sync: true only while status == ACTIVE, so eligibility checks continue
-     * to rely solely on the `active` flag with no behavior change elsewhere.
+     * Delegates the actual status/active write, family cascade, and history recording to
+     * {@link MemberStatusTransitionService} -- this method only resolves the specific target-status
+     * transition to call and adapts the result to this controller's DTO shape.
      *
      * @param id        Member ID
      * @param newStatus Target status
-     * @param reason    Optional reason, required for SUSPENDED (stored as blockedReason)
+     * @param reason    Reason (required for SUSPENDED/TERMINATED via the transition service)
      * @return Updated member view DTO
      */
     @Transactional
@@ -420,70 +425,63 @@ public class UnifiedMemberService {
             throw new BusinessRuleException("يجب تحديد الحالة الجديدة");
         }
 
-        Member member = memberRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Member not found: " + id));
-
         User currentUser = authorizationService.getCurrentUser();
         if (!authorizationService.canAccessMember(currentUser, id)) {
             log.warn("❌ Access denied: user {} attempted to change status of member {}",
                     currentUser != null ? currentUser.getUsername() : "unknown", id);
             throw new AccessDeniedException("Access denied to this member");
         }
+        Long userId = currentUser != null ? currentUser.getId() : null;
 
-        Member.MemberStatus previousStatus = member.getStatus();
-        if (previousStatus == newStatus) {
-            throw new BusinessRuleException("المستفيد بالفعل في هذه الحالة: " + newStatus);
-        }
+        Member member = switch (newStatus) {
+            case ACTIVE -> statusTransitionService.restoreFromSuspended(id, reason, userId);
+            case SUSPENDED -> statusTransitionService.suspend(id, reason, userId);
+            case TERMINATED -> statusTransitionService.terminateMembership(id, reason, userId, StatusSource.MANUAL);
+            case PENDING -> statusTransitionService.transitionTo(id, Member.MemberStatus.PENDING, reason,
+                    StatusSource.MANUAL, java.util.UUID.randomUUID().toString(), userId);
+        };
 
-        if (newStatus == Member.MemberStatus.SUSPENDED && (reason == null || reason.trim().isEmpty())) {
-            throw new BusinessRuleException("سبب الإيقاف مطلوب عند تعليق المستفيد");
-        }
-
-        if (newStatus == Member.MemberStatus.ACTIVE) {
-            ensureBenefitPolicyForActivation(member);
-        }
-
-        member.setStatus(newStatus);
-        // `active` is this system's archive/soft-delete flag (same convention as Employer/Provider),
-        // NOT a mirror of "status == ACTIVE" — it drives default-list visibility. Only TERMINATED
-        // is an archival state; SUSPENDED/PENDING members must stay visible in the normal list with
-        // their status chip reflecting the real state, not vanish as if soft-deleted.
-        member.setActive(newStatus != Member.MemberStatus.TERMINATED);
-        member.setBlockedReason(newStatus == Member.MemberStatus.SUSPENDED ? reason : null);
-        member = memberRepository.save(member);
-
-        // Suspending/terminating a principal removes coverage for the whole family; reactivation
-        // is deliberately NOT cascaded — each dependent must be reactivated individually so a
-        // dependent who was separately suspended for their own reason isn't silently reinstated.
-        if (member.isPrincipal()
-                && (newStatus == Member.MemberStatus.SUSPENDED || newStatus == Member.MemberStatus.TERMINATED)) {
-            List<Member> dependents = memberRepository.findByParentId(id);
-            dependents.forEach(dep -> {
-                dep.setStatus(newStatus);
-                dep.setActive(newStatus != Member.MemberStatus.TERMINATED);
-                // Dependents inherit the principal's suspension reason — they weren't suspended
-                // for their own reason, so the tooltip/badge should explain it's a family-wide
-                // effect of the principal's status, not show a blank reason.
-                dep.setBlockedReason(newStatus == Member.MemberStatus.SUSPENDED
-                        ? "إيقاف تلقائي لتوقف الرئيسي: " + reason
-                        : null);
-            });
-            memberRepository.saveAll(dependents);
-        }
-
-        auditLogService.createAuditLog("STATUS_CHANGE", "MEMBER", id,
-                String.format("Status changed from %s to %s%s", previousStatus, newStatus,
-                        reason != null && !reason.isBlank() ? " — " + reason : ""),
-                currentUser != null ? currentUser.getId() : null,
-                currentUser != null ? currentUser.getUsername() : "system", null, null);
-
-        log.info("✅ Member ID={} status changed: {} -> {}", id, previousStatus, newStatus);
+        log.info("✅ Member ID={} status changed to: {}", id, newStatus);
 
         if (member.isPrincipal()) {
             List<Member> dependents = memberRepository.findByParentId(member.getId());
             return mapper.toViewDto(member, dependents);
         }
         return mapper.toViewDto(member);
+    }
+
+    /**
+     * TERMINATED -> ACTIVE. Exceptional action: requires SUPER_ADMIN and a
+     * mandatory reason, unlike the ordinary {@link #toggleActive}/restore
+     * path (which explicitly refuses to touch a TERMINATED member).
+     */
+    @Transactional
+    public MemberViewDto reinstateTerminatedMember(Long id, String reason) {
+        User currentUser = authorizationService.getCurrentUser();
+        if (!authorizationService.canAccessMember(currentUser, id)) {
+            throw new AccessDeniedException("Access denied to this member");
+        }
+        boolean isSuperAdmin = currentUser != null && "SUPER_ADMIN".equalsIgnoreCase(currentUser.getUserType());
+        Member member = statusTransitionService.reinstateTerminated(id, reason,
+                currentUser != null ? currentUser.getId() : null, isSuperAdmin);
+        if (member.isPrincipal()) {
+            List<Member> dependents = memberRepository.findByParentId(member.getId());
+            return mapper.toViewDto(member, dependents);
+        }
+        return mapper.toViewDto(member);
+    }
+
+    /**
+     * Restores exactly the dependents ONE specific family-cascade operation
+     * affected (see {@link MemberStatusTransitionService#restoreFamily}) --
+     * an explicit, opt-in action, never triggered automatically by restoring
+     * the principal.
+     */
+    @Transactional
+    public MemberStatusTransitionService.FamilyRestoreResult restoreFamily(String transitionId) {
+        User currentUser = authorizationService.getCurrentUser();
+        Long userId = currentUser != null ? currentUser.getId() : null;
+        return statusTransitionService.restoreFamily(transitionId, userId);
     }
 
     /**
@@ -666,74 +664,43 @@ public class UnifiedMemberService {
     }
 
     /**
-     * Soft-delete a member (principal or dependent).
+     * Ends a member's membership (principal or dependent) -- what used to be
+     * called "delete" here, but nothing is deleted: this sets
+     * status=TERMINATED (active becomes false as a consequence, never
+     * independently) via {@link MemberStatusTransitionService}, which
+     * blocks the transition entirely if the member (or, for a principal,
+     * any dependent) has financial/medical history, cascades to currently-
+     * ACTIVE dependents only, and records the transition in the append-only
+     * status history.
      *
-     * Sets active=false and status=TERMINATED. Physical deletion is intentionally
-     * avoided because FK constraints (claims, visits, pre-auth, etc.) use
-     * ON DELETE RESTRICT, which would cause a 500 for any member with related
-     * records. The hard-delete path ({@link #hardDeleteMember}) still exists for
-     * admin use when all related records have been removed.
-     *
-     * IMPORTANT: Soft-deleting a principal will cascade the same flags to all
-     * dependents.
-     *
-     * @param id Member ID
+     * @param id     Member ID
+     * @param reason Optional reason recorded on the transition
      */
     @Transactional
-    public void deleteMember(Long id) {
-        Member member = memberRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Member not found: " + id));
-
+    public void terminateMembership(Long id, String reason) {
         User currentUser = authorizationService.getCurrentUser();
         if (!authorizationService.canAccessMember(currentUser, id)) {
-            log.warn("❌ Access denied: user {} attempted to delete member {}",
+            log.warn("❌ Access denied: user {} attempted to terminate membership {}",
                     currentUser != null ? currentUser.getUsername() : "unknown", id);
             throw new AccessDeniedException("Access denied to this member");
         }
+        statusTransitionService.terminateMembership(id, reason,
+                currentUser != null ? currentUser.getId() : null, StatusSource.MANUAL);
+        log.info("✅ Membership terminated for member ID={}", id);
+    }
 
-        // Collect IDs to check (principal + its dependents)
-        List<Long> allIds = new java.util.ArrayList<>();
-        allIds.add(id);
-        if (member.isPrincipal()) {
-            memberRepository.findByParentId(id).forEach(d -> allIds.add(d.getId()));
-        }
-        String idList = allIds.stream().map(String::valueOf).collect(java.util.stream.Collectors.joining(","));
-
-        // Block soft deletion if any financial/medical records exist
-        long claimsCount = jdbcTemplate
-                .queryForObject("SELECT COUNT(*) FROM claims WHERE member_id IN (" + idList + ")", Long.class);
-        long preAuthCount = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM preauthorization_requests WHERE member_id IN (" + idList + ")", Long.class);
-        long visitsCount = jdbcTemplate
-                .queryForObject("SELECT COUNT(*) FROM visits WHERE member_id IN (" + idList + ")", Long.class);
-
-        if (claimsCount > 0 || preAuthCount > 0 || visitsCount > 0) {
-            String details = String.format(
-                    "مطالبات: %d، موافقات مسبقة: %d، زيارات: %d",
-                    claimsCount, preAuthCount, visitsCount);
-            throw new IllegalStateException(
-                    "لا يمكن حذف المستفيد لأن له معاملات مالية مرتبطة (" + details + "). " +
-                            "يُرجى أرشفة المستفيد بدلاً من الحذف، أو مراجعة السجلات المالية أولاً.");
-        }
-
-        member.setActive(false);
-        member.setStatus(Member.MemberStatus.TERMINATED);
-        memberRepository.save(member);
-
-        if (member.isPrincipal()) {
-            List<Member> dependents = memberRepository.findByParentId(id);
-            if (!dependents.isEmpty()) {
-                log.warn("⚠️ Soft-deleting PRINCIPAL member ID={} — cascading TERMINATED to {} dependents",
-                        id, dependents.size());
-                dependents.forEach(dep -> {
-                    dep.setActive(false);
-                    dep.setStatus(Member.MemberStatus.TERMINATED);
-                });
-                memberRepository.saveAll(dependents);
-            }
-        }
-
-        log.info("✅ Soft-deleted member ID={} (status=TERMINATED, active=false)", id);
+    /**
+     * @deprecated kept only for existing callers of the old name; delegates
+     *             entirely to {@link #terminateMembership(Long, String)}.
+     *             "Delete" was always the wrong word here -- this never
+     *             removed a row, it ends membership. Use
+     *             {@link #terminateMembership(Long, String)} directly in new
+     *             code.
+     */
+    @Deprecated
+    @Transactional
+    public void deleteMember(Long id) {
+        terminateMembership(id, null);
     }
 
     // ==================== ADDITIONAL METHODS FOR UNIFIED CONTROLLER
@@ -1307,8 +1274,10 @@ public class UnifiedMemberService {
     // ==================== RESTORE & HARD DELETE ====================
 
     /**
-     * Restore a terminated/suspended member to ACTIVE status.
-     * 
+     * Restore a SUSPENDED (or PENDING) member to ACTIVE. Refuses a
+     * TERMINATED member -- reinstating one is a separate, elevated-privilege
+     * action, see {@link #reinstateTerminatedMember}.
+     *
      * @param memberId Member ID
      * @return Restored member view DTO
      */
@@ -1316,23 +1285,13 @@ public class UnifiedMemberService {
     public MemberViewDto restoreMember(Long memberId) {
         log.info("♻️ Restoring member: memberId={}", memberId);
 
-        Member member = memberRepository.findById(memberId)
-                .orElseThrow(() -> new ResourceNotFoundException("Member not found: " + memberId));
-
         if (!authorizationService.canAccessMember(authorizationService.getCurrentUser(), memberId)) {
             throw new AccessDeniedException("Access denied to this member");
         }
+        User currentUser = authorizationService.getCurrentUser();
 
-        if (member.getStatus() == Member.MemberStatus.ACTIVE) {
-            throw new BusinessRuleException("Member is already active: " + memberId);
-        }
-
-        ensureBenefitPolicyForActivation(member);
-
-        member.setStatus(Member.MemberStatus.ACTIVE);
-        member.setActive(true);
-
-        Member saved = memberRepository.save(member);
+        Member saved = statusTransitionService.restoreFromSuspended(memberId, null,
+                currentUser != null ? currentUser.getId() : null);
 
         log.info("✅ Member restored to ACTIVE: memberId={}", memberId);
 
@@ -1340,70 +1299,26 @@ public class UnifiedMemberService {
     }
 
     /**
-     * Permanently delete a member (hard delete).
-     * Warning: This cannot be undone!
+     * Permanently delete a member (hard delete). Warning: this cannot be
+     * undone! Delegates entirely to {@link MemberStatusTransitionService#hardDelete},
+     * which blocks the operation if any financial/medical/audit footprint
+     * exists and writes an independent (non-FK'd) audit record before
+     * deleting.
      *
-     * Production rule:
-     * Hard delete is allowed only for members with no financial/medical footprint.
-     * Claims, visits, pre-authorizations, eligibility checks and benefit-bucket
-     * consumptions are audit evidence and must never be physically removed through
-     * the member screen.
-     * 
      * @param memberId Member ID
+     * @param reason   Mandatory reason for the permanent deletion
      */
     @Transactional
-    public void hardDeleteMember(Long memberId) {
+    public void hardDeleteMember(Long memberId, String reason) {
         log.warn("⚠️ HARD DELETE member: memberId={}", memberId);
 
         User currentUser = authorizationService.getCurrentUser();
-        if (currentUser == null || !"SUPER_ADMIN".equalsIgnoreCase(currentUser.getUserType())) {
-            throw new AccessDeniedException("Only SUPER_ADMIN can permanently delete members");
-        }
+        boolean isSuperAdmin = currentUser != null && "SUPER_ADMIN".equalsIgnoreCase(currentUser.getUserType());
 
-        Member member = memberRepository.findById(memberId)
-                .orElseThrow(() -> new ResourceNotFoundException("Member not found: " + memberId));
-
-        // Collect all IDs to delete (principal + its dependents)
-        List<Long> allIds = new java.util.ArrayList<>();
-        allIds.add(memberId);
-        if (!member.isDependent()) {
-            List<Member> dependents = memberRepository.findByParentId(memberId);
-            dependents.forEach(d -> allIds.add(d.getId()));
-        }
-
-        String idList = allIds.stream().map(String::valueOf).collect(java.util.stream.Collectors.joining(","));
-        log.warn("⚠️ Cascade hard delete for member IDs: {}", idList);
-
-        long claimsCount = jdbcTemplate
-                .queryForObject("SELECT COUNT(*) FROM claims WHERE member_id IN (" + idList + ")", Long.class);
-        long preAuthCount = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM preauthorization_requests WHERE member_id IN (" + idList + ")", Long.class);
-        long visitsCount = jdbcTemplate
-                .queryForObject("SELECT COUNT(*) FROM visits WHERE member_id IN (" + idList + ")", Long.class);
-        long eligibilityChecksCount = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM eligibility_checks WHERE member_id IN (" + idList + ")", Long.class);
-        long bucketConsumptionsCount = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM benefit_bucket_consumptions WHERE member_id IN (" + idList + ")", Long.class);
-
-        if (claimsCount > 0 || preAuthCount > 0 || visitsCount > 0
-                || eligibilityChecksCount > 0 || bucketConsumptionsCount > 0) {
-            String details = String.format(
-                    "مطالبات: %d، موافقات مسبقة: %d، زيارات: %d، فحوص أهلية: %d، استهلاك سقوف: %d",
-                    claimsCount, preAuthCount, visitsCount, eligibilityChecksCount, bucketConsumptionsCount);
-            throw new BusinessRuleException(
-                    "لا يمكن حذف المستفيد نهائياً لوجود أثر مالي أو طبي مرتبط به (" + details + "). "
-                            + "استخدم الإيقاف/الأرشفة للحفاظ على سلامة السجل المالي والتدقيقي.");
-        }
-
-        jdbcTemplate.update("DELETE FROM member_policy_assignments WHERE member_id IN (" + idList + ")");
-        jdbcTemplate.update("DELETE FROM member_deductibles WHERE member_id IN (" + idList + ")");
-
-        // Delete dependents first (self-FK parent_id SET NULL is OK, but easier to
-        // delete directly)
-        if (!member.isDependent()) {
-            memberRepository.deleteByParentId(memberId);
-        }
-        memberRepository.delete(member);
+        statusTransitionService.hardDelete(memberId, reason,
+                currentUser != null ? currentUser.getId() : null,
+                currentUser != null ? currentUser.getUsername() : null,
+                isSuperAdmin);
 
         log.info("✅ Member hard deleted: memberId={}", memberId);
     }
