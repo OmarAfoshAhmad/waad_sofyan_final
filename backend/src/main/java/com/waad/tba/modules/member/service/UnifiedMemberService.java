@@ -333,8 +333,58 @@ public class UnifiedMemberService {
     }
 
     /**
-     * Update a member (principal or dependent).
-     * 
+     * The generic update path may only change descriptive attributes. Anything
+     * that alters a member's LIFECYCLE, MONEY or IDENTITY belongs to a
+     * dedicated, reasoned, audited operation -- routing it through here would
+     * bypass the status transition service, the policy assignment record, and
+     * every audit trail attached to them.
+     *
+     * The rule is applied to CHANGES, not to mere presence: an edit form that
+     * round-trips the member's current employerId or relationship unchanged is
+     * harmless and must keep working, while changing either through this path
+     * is refused. Silently dropping the field instead (as the mapper still does
+     * for status/active) is worse than refusing -- the caller is told the save
+     * succeeded and never learns their change was discarded.
+     */
+    private void rejectSensitiveFieldChanges(Member member, MemberUpdateDto dto) {
+        List<String> violations = new ArrayList<>();
+
+        if (dto.getStatus() != null && dto.getStatus() != member.getStatus()) {
+            violations.add("حالة العضوية (status): استخدم PATCH /{id}/status أو POST /{id}/terminate");
+        }
+        if (dto.getActive() != null && !dto.getActive().equals(member.getActive())) {
+            violations.add("حالة التفعيل (active): استخدم PATCH /{id}/active");
+        }
+        Long currentPolicyId = member.getBenefitPolicy() != null ? member.getBenefitPolicy().getId() : null;
+        if (dto.getBenefitPolicyId() != null && !dto.getBenefitPolicyId().equals(currentPolicyId)) {
+            violations.add("وثيقة المنافع (benefitPolicyId): تغيير الوثيقة عملية مستقلة تتطلب تاريخ سريان وسبب"
+                    + " (غير متاحة عبر هذا المسار)");
+        }
+        Long currentEmployerId = member.getEmployer() != null ? member.getEmployer().getId() : null;
+        if (dto.getEmployerId() != null && !dto.getEmployerId().equals(currentEmployerId)) {
+            violations.add("جهة العمل (employerId): نقل جهة العمل عملية مستقلة تتطلب تاريخ سريان وسبب"
+                    + " (غير متاحة عبر هذا المسار)");
+        }
+        if (dto.getRelationship() != null && dto.getRelationship() != member.getRelationship()) {
+            violations.add("صلة القرابة (relationship): تغيير البناء الأسري عملية مستقلة (غير متاحة عبر هذا المسار)");
+        }
+        if (dto.getCardNumber() != null && !dto.getCardNumber().equals(member.getCardNumber())) {
+            violations.add("رقم البطاقة (cardNumber): هوية نظامية مرتبطة بالباركود، تغييرها عملية مستقلة مدقَّقة"
+                    + " (غير متاحة عبر هذا المسار)");
+        }
+
+        if (!violations.isEmpty()) {
+            throw new BusinessRuleException(
+                    "لا يمكن تعديل الحقول الحساسة التالية عبر التعديل العام:\n- "
+                            + String.join("\n- ", violations));
+        }
+    }
+
+    /**
+     * Update a member (principal or dependent) -- DESCRIPTIVE fields only.
+     * Lifecycle, money and identity changes are refused here; see
+     * {@link #rejectSensitiveFieldChanges}.
+     *
      * @param id  Member ID
      * @param dto Update DTO
      * @return Updated member view DTO
@@ -353,32 +403,10 @@ public class UnifiedMemberService {
             throw new AccessDeniedException("Access denied to this member");
         }
 
+        rejectSensitiveFieldChanges(member, dto);
+
         // Update common fields
         mapper.updateEntityFromDto(member, dto);
-
-        if (dto.getEmployerId() != null) {
-            // An EMPLOYER_ADMIN must not be able to move a member to another
-            // employer's roster (and thus another employer's policy/claims
-            // liability) by sending a different employerId; resolveEmployerScope
-            // forces it back to their own employer. Internal staff pass through
-            // unchanged and can still reassign members between employers.
-            Long scopedEmployerId = authorizationService.resolveEmployerScope(currentUser, dto.getEmployerId());
-            Employer employer = employerRepository.findById(scopedEmployerId)
-                    .orElseThrow(() -> new ResourceNotFoundException("Employer not found: " + scopedEmployerId));
-            member.setEmployer(employer);
-        }
-
-        if (dto.getBenefitPolicyId() != null) {
-            Long employerId = member.getEmployer() != null ? member.getEmployer().getId() : null;
-            member.setBenefitPolicy(loadAndValidateBenefitPolicy(dto.getBenefitPolicyId(), employerId));
-        } else if (member.getBenefitPolicy() == null && member.getEmployer() != null) {
-            BenefitPolicy autoPolicy = findActiveEmployerPolicy(member.getEmployer().getId());
-            if (autoPolicy != null) {
-                member.setBenefitPolicy(autoPolicy);
-                log.info("✅ Auto-assigned policy during member update: memberId={}, policyId={}",
-                        member.getId(), autoPolicy.getId());
-            }
-        }
 
         // Save
         member = memberRepository.save(member);

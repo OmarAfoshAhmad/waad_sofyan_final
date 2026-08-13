@@ -94,9 +94,11 @@ class MemberExcelImportServiceTest {
     void setUp() {
         MemberImportParser parser = new MemberImportParser();
         MemberImportMapper mapper = new MemberImportMapper(parser);
+        MemberPolicyResolver policyResolverForStatus = new MemberPolicyResolver(
+                policyAssignmentRepository, benefitPolicyRepository);
         MemberStatusTransitionService statusTransitionService = new MemberStatusTransitionService(
                 memberRepository, statusHistoryRepository, hardDeleteAuditRepository, benefitPolicyRepository,
-                statusTransitionJdbcTemplate);
+                statusTransitionJdbcTemplate, policyResolverForStatus);
         MemberPolicyResolver memberPolicyResolver = new MemberPolicyResolver(
                 policyAssignmentRepository, benefitPolicyRepository);
         MemberImportRowProcessor rowProcessor = new MemberImportRowProcessor(

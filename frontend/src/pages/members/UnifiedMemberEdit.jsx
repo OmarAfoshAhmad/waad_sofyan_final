@@ -51,7 +51,6 @@ import dayjs from 'dayjs';
 
 import MainCard from 'components/MainCard';
 import ModernPageHeader from 'components/tba/ModernPageHeader';
-import EmployerSelectField from 'components/tba/EmployerSelectField';
 import {
   getMember,
   updateMember,
@@ -64,13 +63,6 @@ import {
 import axiosClient from 'utils/axios';
 import { openSnackbar } from 'api/snackbar';
 import { MemberAvatar } from '../../components/tba';
-import {
-  RELATIONSHIP_AR,
-  MEMBER_FORM_MENU_PROPS,
-  sanitizeMemberFieldValue,
-  validateNationalNumber,
-  validateLibyanPhone
-} from './member.shared';
 
 /**
  * Unified Member Edit Component
@@ -85,7 +77,15 @@ const UnifiedMemberEdit = () => {
     setTabValue(newValue);
   };
 
-  const menuProps = MEMBER_FORM_MENU_PROPS;
+  const menuProps = {
+    PaperProps: {
+      sx: {
+        '& .MuiMenuItem-root': { fontSize: '0.75rem' },
+        maxHeight: '18.75rem',
+        minWidth: '12.5rem'
+      }
+    }
+  };
 
   // Loading & States
   const [loading, setLoading] = useState(true);
@@ -119,6 +119,7 @@ const UnifiedMemberEdit = () => {
   });
 
   // Lookup Data
+  const [employers, setEmployers] = useState([]);
   const [benefitPolicies, setBenefitPolicies] = useState([]);
   const [isPrincipal, setIsPrincipal] = useState(false);
   const [initialStatus, setInitialStatus] = useState('ACTIVE');
@@ -129,7 +130,11 @@ const UnifiedMemberEdit = () => {
    */
   const getTabErrorCount = (index) => {
     if (index === 0) {
-      return (errors.fullName ? 1 : 0) + (errors.nationalNumber ? 1 : 0) + (errors.relationship ? 1 : 0);
+      return (
+        (errors.fullName ? 1 : 0) +
+        (errors.nationalNumber ? 1 : 0) +
+        (errors.relationship ? 1 : 0)
+      );
     }
     if (index === 1) {
       return errors.employerId ? 1 : 0;
@@ -190,7 +195,11 @@ const UnifiedMemberEdit = () => {
 
   const fetchLookupData = async () => {
     try {
-      const policiesRes = await axiosClient.get('/benefit-policies', { params: { size: 1000 } });
+      const [orgsRes, policiesRes] = await Promise.all([
+        axiosClient.get('/employers/selectors'),
+        axiosClient.get('/benefit-policies', { params: { size: 1000 } })
+      ]);
+      setEmployers(orgsRes.data?.data || []);
       setBenefitPolicies(policiesRes.data?.data?.content || []);
     } catch (error) {
       console.error('Error fetching lookup data:', error);
@@ -210,9 +219,11 @@ const UnifiedMemberEdit = () => {
       value = eventOrValue;
     }
 
-    const sanitized = sanitizeMemberFieldValue(field, value);
-    if (!sanitized.accepted) return;
-    value = sanitized.value;
+    if ((field === 'nationalNumber' || field === 'phone' || field === 'employeeNumber') && typeof value === 'string') {
+      value = value.replace(/\D/g, '');
+      if (field === 'nationalNumber' && value.length > 12) return;
+      if (field === 'phone' && value.length > 10) return;
+    }
 
     setForm((prev) => ({ ...prev, [field]: value }));
     if (errors[field]) {
@@ -260,11 +271,13 @@ const UnifiedMemberEdit = () => {
     if (isPrincipal && !form.employerId) newErrors.employerId = 'جهة العمل مطلوبة';
     if (!isPrincipal && !form.relationship) newErrors.relationship = 'صلة القرابة مطلوبة';
 
-    const nationalNumberError = validateNationalNumber(form.nationalNumber);
-    if (nationalNumberError) newErrors.nationalNumber = nationalNumberError;
+    if (form.nationalNumber && form.nationalNumber.length !== 12) {
+      newErrors.nationalNumber = 'الرقم الوطني يجب أن يتكون من 12 خانة';
+    }
 
-    const phoneError = validateLibyanPhone(form.phone, { message: 'رقم الهاتف غير صحيح' });
-    if (phoneError) newErrors.phone = phoneError;
+    if (form.phone && !/^(091|092|094|093|095|096)\d{7}$/.test(form.phone)) {
+      newErrors.phone = 'رقم الهاتف غير صحيح';
+    }
 
     setErrors(newErrors);
 
@@ -314,11 +327,11 @@ const UnifiedMemberEdit = () => {
         notes: form.notes || null
       };
 
-      if (isPrincipal) {
-        payload.employerId = form.employerId;
-      } else {
-        payload.relationship = form.relationship;
-      }
+      // employerId / relationship are deliberately NOT sent: the generic
+      // update path refuses to CHANGE them (moving a member between employers
+      // or altering the family structure are separate, audited operations).
+      // Round-tripping them unchanged would work, but not sending them at all
+      // keeps this payload honest about what it is allowed to modify.
 
       await updateMember(id, payload);
 
@@ -546,7 +559,23 @@ const UnifiedMemberEdit = () => {
                           >
                             {Object.entries(RELATIONSHIPS).map(([key, value]) => (
                               <MenuItem key={key} value={value}>
-                                {RELATIONSHIP_AR[value] || value}
+                                {value === 'WIFE'
+                                  ? 'زوجة'
+                                  : value === 'HUSBAND'
+                                    ? 'زوج'
+                                    : value === 'SON'
+                                      ? 'ابن'
+                                      : value === 'DAUGHTER'
+                                        ? 'ابنة'
+                                        : value === 'FATHER'
+                                          ? 'أب'
+                                          : value === 'MOTHER'
+                                            ? 'أم'
+                                            : value === 'BROTHER'
+                                              ? 'أخ'
+                                              : value === 'SISTER'
+                                                ? 'أخت'
+                                                : value}
                               </MenuItem>
                             ))}
                           </Select>
@@ -560,12 +589,7 @@ const UnifiedMemberEdit = () => {
                     <Grid size={{ xs: 12, md: 6 }}>
                       <FormControl fullWidth size="small">
                         <InputLabel>حالة المستفيد</InputLabel>
-                        <Select
-                          value={form.status || 'ACTIVE'}
-                          label="حالة المستفيد"
-                          onChange={handleChange('status')}
-                          MenuProps={menuProps}
-                        >
+                        <Select value={form.status || 'ACTIVE'} label="حالة المستفيد" onChange={handleChange('status')} MenuProps={menuProps}>
                           <MenuItem value="ACTIVE">نشط</MenuItem>
                           <MenuItem value="SUSPENDED">موقوف</MenuItem>
                           <MenuItem value="PENDING">قيد المراجعة</MenuItem>
@@ -681,14 +705,20 @@ const UnifiedMemberEdit = () => {
                 {isPrincipal ? (
                   <>
                     <Grid size={{ xs: 12 }}>
-                      <EmployerSelectField
-                        value={form.employerId}
-                        onChange={handleChange('employerId')}
-                        required
-                        error={!!errors.employerId}
-                        helperText={errors.employerId}
-                        size="small"
-                      />
+                      <FormControl fullWidth required error={!!errors.employerId} size="small">
+                        <InputLabel>جهة العمل</InputLabel>
+                        <Select value={form.employerId} onChange={handleChange('employerId')} label="جهة العمل" MenuProps={menuProps}>
+                          <MenuItem value="">
+                            <em>اختر جهة العمل...</em>
+                          </MenuItem>
+                          {Array.isArray(employers) &&
+                            employers.map((emp) => (
+                              <MenuItem key={emp.id} value={emp.id}>
+                                {emp.label}
+                              </MenuItem>
+                            ))}
+                        </Select>
+                      </FormControl>
                     </Grid>
                     <Grid size={{ xs: 12, md: 4 }}>
                       <TextField

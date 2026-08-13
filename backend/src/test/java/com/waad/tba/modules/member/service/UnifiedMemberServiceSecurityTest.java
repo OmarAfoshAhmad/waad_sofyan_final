@@ -69,7 +69,10 @@ class UnifiedMemberServiceSecurityTest {
                         org.mockito.Mockito.mock(com.waad.tba.modules.member.repository.MemberStatusHistoryRepository.class),
                         org.mockito.Mockito.mock(com.waad.tba.modules.member.repository.MemberHardDeleteAuditRepository.class),
                         org.mockito.Mockito.mock(com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository.class),
-                        jdbcTemplate);
+                        jdbcTemplate,
+                        new com.waad.tba.modules.member.service.MemberPolicyResolver(
+                                org.mockito.Mockito.mock(com.waad.tba.modules.member.repository.MemberPolicyAssignmentRepository.class),
+                                org.mockito.Mockito.mock(com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository.class)));
 
         service = new UnifiedMemberService(
                 memberRepository,

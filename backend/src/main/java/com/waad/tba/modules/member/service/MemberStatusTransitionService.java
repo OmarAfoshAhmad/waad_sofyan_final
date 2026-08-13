@@ -55,6 +55,7 @@ public class MemberStatusTransitionService {
     private final MemberHardDeleteAuditRepository hardDeleteAuditRepository;
     private final BenefitPolicyRepository benefitPolicyRepository;
     private final JdbcTemplate jdbcTemplate;
+    private final MemberPolicyResolver memberPolicyResolver;
 
     public static boolean activeFor(Member.MemberStatus status) {
         return status == Member.MemberStatus.ACTIVE;
@@ -375,7 +376,15 @@ public class MemberStatusTransitionService {
             throw new BusinessRuleException(
                     "لا يمكن تفعيل المستفيد لعدم وجود وثيقة تأمين سارية لجهة العمل. يرجى ربط وثيقة تأمين أولاً.");
         }
-        member.setBenefitPolicy(autoPolicy);
+        // Goes through the resolver, not a bare setter: auto-assigning here used
+        // to write only the denormalized pointer, leaving the member's dated
+        // assignment history claiming a different policy than the pointer did --
+        // reintroducing exactly the parallel source of truth the assignment
+        // record exists to remove. Caught by
+        // MemberSensitiveFieldWriteArchitectureTest.
+        memberPolicyResolver.assignPolicy(member, autoPolicy, java.time.LocalDate.now(),
+                "إسناد تلقائي لوثيقة جهة العمل السارية عند تفعيل المستفيد",
+                com.waad.tba.modules.member.entity.PolicyAssignmentSource.EMPLOYER_DEFAULT, null);
     }
 
     private void requireReason(String reason, String message) {

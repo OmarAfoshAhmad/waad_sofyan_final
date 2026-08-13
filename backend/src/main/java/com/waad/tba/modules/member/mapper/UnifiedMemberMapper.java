@@ -172,13 +172,11 @@ public class UnifiedMemberMapper {
         if (dto.getNotes() != null) {
             entity.setNotes(dto.getNotes());
         }
-        // active/status are deliberately ignored here. Lifecycle endpoints are
-        // the only supported way to change them after creation.
-
-        // Relationship can be updated for dependents only
-        if (dto.getRelationship() != null && entity.isDependent()) {
-            entity.setRelationship(dto.getRelationship());
-        }
+        // status/active/benefitPolicy/employer/relationship/cardNumber are not
+        // copied here at all. They are no longer merely "ignored" either --
+        // UnifiedMemberService.rejectSensitiveFieldChanges refuses the request
+        // outright when one of them would CHANGE, so a caller can never be told
+        // their save succeeded while the change was quietly dropped.
     }
 
     /**

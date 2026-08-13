@@ -44,7 +44,10 @@ class MemberImportRowProcessorPolicyTest {
                 mock(com.waad.tba.modules.member.repository.MemberStatusHistoryRepository.class),
                 mock(com.waad.tba.modules.member.repository.MemberHardDeleteAuditRepository.class),
                 policyRepository,
-                mock(org.springframework.jdbc.core.JdbcTemplate.class));
+                mock(org.springframework.jdbc.core.JdbcTemplate.class),
+                new MemberPolicyResolver(
+                        mock(com.waad.tba.modules.member.repository.MemberPolicyAssignmentRepository.class),
+                        policyRepository));
         processor = new MemberImportRowProcessor(
                 new MemberImportParser(), mock(EmployerRepository.class), policyRepository,
                 barcodeGenerator, cardGenerator, statusTransitionService);
