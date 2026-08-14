@@ -126,8 +126,13 @@ public class LimitBalanceReader {
                 committed = amount(bucketBalances, definition, Status.COMMITTED);
                 reserved = amount(bucketBalances, definition, Status.RESERVED);
             }
-            BigDecimal actualRemaining = limit.effectiveLimit().subtract(committed);
-            BigDecimal reservableAvailable = actualRemaining.subtract(reserved);
+            // A count-only bucket constrains occurrences and not money, so it
+            // has no monetary balance to report. Null here means "this
+            // ceiling does not measure money" -- never "no money left".
+            BigDecimal actualRemaining = limit.effectiveLimit() == null
+                    ? null : limit.effectiveLimit().subtract(committed);
+            BigDecimal reservableAvailable = actualRemaining == null
+                    ? null : actualRemaining.subtract(reserved);
 
             // The occurrence dimension, read only where the bucket declares
             // one. Left null otherwise so "no times limit" cannot be mistaken
@@ -160,9 +165,11 @@ public class LimitBalanceReader {
         // reservable figure, not the tightest remaining one: a hold already
         // promised elsewhere is not available to spend again.
         BigDecimal binding = balances.stream().map(LimitBalance::reservableAvailable)
+                .filter(Objects::nonNull)
                 .min(BigDecimal::compareTo).orElse(null);
         List<String> bindingKeys = balances.stream()
-                .filter(balance -> binding != null && balance.reservableAvailable().compareTo(binding) == 0)
+                .filter(balance -> binding != null && balance.reservableAvailable() != null
+                        && balance.reservableAvailable().compareTo(binding) == 0)
                 .map(balance -> balance.limit().definition().semanticKey()).toList();
         return new BalanceSet(memberId, List.copyOf(balances), binding, bindingKeys);
     }

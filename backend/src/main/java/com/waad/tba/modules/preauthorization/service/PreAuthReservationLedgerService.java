@@ -67,6 +67,7 @@ public class PreAuthReservationLedgerService {
     private final PreauthLineSnapshotRepository lineSnapshotRepository;
     private final PreauthLineLimitSnapshotRepository limitSnapshotRepository;
     private final LedgerConstraintTranslator constraintTranslator;
+    private final PreAuthLockCoordinator lockCoordinator;
 
     /**
      * How long an approval stays usable. Required and positive: an approval
@@ -196,8 +197,6 @@ public class PreAuthReservationLedgerService {
             throw new BusinessRuleException("لا يمكن إنهاء موافقة قبل انتهاء صلاحيتها.");
         }
 
-        // The member is already locked by lockForWrite, ahead of the
-        // pre-authorization, in the system's one global order.
         List<BenefitBucketConsumption> originals =
                 consumptionRepository.findActiveReservationsForPreauth(preauthId);
         originals.sort(Comparator.comparing(c -> c.getBucket() == null ? 0L : c.getBucket().getId()));
@@ -205,7 +204,7 @@ public class PreAuthReservationLedgerService {
         int released = 0;
         for (BenefitBucketConsumption original : originals) {
             if (original.getBucket() != null) {
-                bucketRepository.findByIdForUpdate(original.getBucket().getId());
+                lockCoordinator.lockBucketsAscending(List.of(original.getBucket().getId()));
             }
 
             // Release only what is still OUTSTANDING. Releasing the original
@@ -342,6 +341,8 @@ public class PreAuthReservationLedgerService {
             PreAuthorizationDecision decision, PreauthLineSnapshot lineSnapshot,
             PreAuthorizationDecision.LimitHold hold) {
 
+        // Null means the ceiling does not measure money at all; the ledger
+        // movement then carries the occurrence dimension alone.
         BigDecimal amount = Optional.ofNullable(hold.amountReserved()).orElse(BigDecimal.ZERO);
         int times = Optional.ofNullable(hold.timesReserved()).orElse(0);
 
@@ -396,45 +397,12 @@ public class PreAuthReservationLedgerService {
     // ── helpers ──────────────────────────────────────────────────────────
 
     /**
-     * A real row lock, not optimistic versioning alone: two approvals reading
-     * the same balance must not both proceed to hold it. Always reached
-     * through the global order below.
+     * Every lock in this service goes through the coordinator, which owns the
+     * one global order. Nothing here calls findForUpdate directly.
      */
     private PreAuthorization lockForWrite(Long preauthId) {
-        return lockInGlobalOrder(preauthId);
+        return lockCoordinator.lockMemberThenPreAuth(preauthId);
     }
-
-    /**
-     * THE LOCK ORDER, and it is global rather than local to this service:
-     *
-     *     Member  ->  PreAuthorization  ->  Buckets (ascending id)
-     *
-     * The claim path already establishes it -- AtomicFinancialService takes
-     * the member lock before any bucket -- and a second path taking the same
-     * locks in a different order is exactly how two individually-correct
-     * paths deadlock each other. Which order is "nicer" does not matter; that
-     * there is ONE does.
-     *
-     * The member must therefore be locked before the pre-authorization, which
-     * means reading the pre-authorization unlocked first just to learn whose
-     * member it is. That extra read is the price of a single global order.
-     */
-    private PreAuthorization lockInGlobalOrder(Long preauthId) {
-        // Unlocked read: only to discover the member. Nothing is decided on it.
-        Long memberId = preauthRepository.findById(preauthId)
-                .orElseThrow(() -> new BusinessRuleException("الموافقة المسبقة غير موجودة."))
-                .getMemberId();
-        if (memberId == null) {
-            throw new BusinessRuleException("الموافقة المسبقة غير مرتبطة بمستفيد.");
-        }
-
-        memberRepository.findByIdWithLock(memberId)
-                .orElseThrow(() -> new BusinessRuleException("المستفيد المرتبط بالموافقة غير موجود."));
-
-        return preauthRepository.findByIdForUpdate(preauthId)
-                .orElseThrow(() -> new BusinessRuleException("الموافقة المسبقة غير موجودة."));
-    }
-
 
     private void requireVersion(PreAuthorization preauth, Long expectedVersion) {
         if (expectedVersion != null && !Objects.equals(preauth.getVersion(), expectedVersion)) {
@@ -443,21 +411,11 @@ public class PreAuthReservationLedgerService {
         }
     }
 
-    /**
-     * Buckets are locked in ascending id order so two approvals touching the
-     * same pair can never take them in opposite orders and deadlock.
-     */
     private void lockBucketsInAscendingOrder(PreAuthorizationDecision decision) {
-        List<Long> bucketIds = new ArrayList<>(decision.lines().stream()
+        lockCoordinator.lockBucketsAscending(decision.lines().stream()
                 .flatMap(line -> line.limitHolds().stream())
                 .map(PreAuthorizationDecision.LimitHold::bucketId)
-                .filter(Objects::nonNull)
-                .distinct()
-                .sorted()
                 .toList());
-        for (Long bucketId : bucketIds) {
-            bucketRepository.findByIdForUpdate(bucketId);
-        }
     }
 
     private BigDecimal outstandingAmount(BenefitBucketConsumption original) {

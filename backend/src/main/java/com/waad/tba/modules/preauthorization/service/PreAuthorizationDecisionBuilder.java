@@ -372,6 +372,11 @@ public class PreAuthorizationDecisionBuilder {
             // not cancel what the claim then commits.
             Measure measure = measureFor(definition.bucketId(), companyShare, result, 1);
 
+            // A ceiling that measures no money holds none. Writing an amount
+            // against it would assert a monetary limit that does not exist.
+            BigDecimal heldAmount = balance.limit().effectiveLimit() == null
+                    ? null : measure.amount();
+
             // A bucket may cap BOTH money and occurrences. The two are
             // recorded side by side, never added: they answer different
             // questions and are measured in different units.
@@ -398,7 +403,7 @@ public class PreAuthorizationDecisionBuilder {
                     balance.timesLimit(), balance.committedTimes(), balance.reservedTimes(),
                     balance.actualRemainingTimes(), balance.reservableTimes(),
                     measure.basis(), measure.unit(),
-                    measure.amount(), heldTimes, measure.days(),
+                    heldAmount, heldTimes, measure.days(),
                     binding));
         }
 

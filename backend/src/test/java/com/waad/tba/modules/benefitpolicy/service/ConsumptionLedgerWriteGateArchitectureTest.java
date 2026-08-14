@@ -214,4 +214,49 @@ class ConsumptionLedgerWriteGateArchitectureTest {
         assertThat(reservationBody).contains("Status.RESERVED");
         assertThat(reservationBody).doesNotContain("Status.COMMITTED");
     }
+
+    /**
+     * 5. Locks for the pre-authorization life cycle are taken only by
+     * PreAuthLockCoordinator.
+     *
+     * The order Member -> PreAuthorization -> Buckets is global. A service
+     * that takes its own locks can take them in its own order, and two
+     * individually-correct orders are how a deadlock is built. Checking line
+     * positions inside a service would test the wrong thing; centralising the
+     * locks and forbidding direct acquisition tests the right one.
+     */
+    @Test
+    void preAuthServicesDoNotAcquireLocksDirectly() throws IOException {
+        List<String> violations = new ArrayList<>();
+
+        for (Path path : productionFiles()) {
+            String fileName = path.getFileName().toString();
+            if (!path.toString().replace('\\', '/').contains("/preauthorization/")) {
+                continue;
+            }
+            // A repository DECLARES the locking query; it does not acquire
+            // a lock. The rule is about who calls it.
+            if (fileName.equals("PreAuthLockCoordinator.java") || fileName.endsWith("Repository.java")) {
+                continue;
+            }
+            int lineNumber = 0;
+            for (String line : Files.readString(path, StandardCharsets.UTF_8).lines().toList()) {
+                lineNumber++;
+                String code = line.strip();
+                if (isComment(code)) {
+                    continue;
+                }
+                if (code.contains("findByIdForUpdate") || code.contains("findByIdWithLock")) {
+                    violations.add(fileName + ":" + lineNumber + " -> " + code);
+                }
+            }
+        }
+
+        assertThat(violations)
+                .as("""
+                        Pre-authorization locks belong to PreAuthLockCoordinator, which \
+                        owns the one global order. A service taking its own locks can \
+                        take them in its own order.""")
+                .isEmpty();
+    }
 }
