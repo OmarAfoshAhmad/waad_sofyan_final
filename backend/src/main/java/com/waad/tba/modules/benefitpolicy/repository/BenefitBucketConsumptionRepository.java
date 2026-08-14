@@ -212,4 +212,40 @@ public interface BenefitBucketConsumptionRepository extends JpaRepository<Benefi
     List<BenefitBucketConsumption> findByClaimIdAndStatus(Long claimId, BenefitBucketConsumption.Status status);
     boolean existsByBucketId(Long bucketId);
     boolean existsByIdempotencyKey(String idempotencyKey);
+
+    /**
+     * Net RESERVED amount held against the POLICY_GENERAL ceiling. Read from
+     * its OWN rows -- never derived by summing bucket rows, since one line can
+     * map to several buckets and that sum would count the same money more than
+     * once (LimitBalanceReader carried exactly this warning as a comment while
+     * the ledger could not yet store such rows).
+     */
+    @Query(value = """
+        select coalesce(sum(c.approved_amount - coalesce(r.reversed_amount, 0)), 0)
+          from benefit_bucket_consumptions c
+          left join (
+                select reversal_of_id, sum(approved_amount) as reversed_amount
+                  from benefit_bucket_consumptions
+                 where status = 'REVERSED' and reversal_of_id is not null
+                 group by reversal_of_id
+          ) r on r.reversal_of_id = c.id
+         where c.member_id = :memberId
+           and c.policy_id = :policyId
+           and c.limit_scope = 'POLICY_GENERAL'
+           and c.status = 'RESERVED'
+           and c.period_start = :periodStart
+           -- An open-ended period matches an open-ended row, not every row.
+           -- Treating a null bound as "any period" would sum holds from other
+           -- periods into this one and understate what the member may spend.
+           -- The bucket path matches (bucketId, periodStart, periodEnd) exactly,
+           -- null included; this keeps the two scopes on identical semantics.
+           and (
+                 (cast(:periodEnd as date) is null and c.period_end is null)
+                 or c.period_end = cast(:periodEnd as date)
+               )
+        """, nativeQuery = true)
+    BigDecimal sumGeneralScopeReserved(@Param("memberId") Long memberId,
+                                       @Param("policyId") Long policyId,
+                                       @Param("periodStart") LocalDate periodStart,
+                                       @Param("periodEnd") LocalDate periodEnd);
 }

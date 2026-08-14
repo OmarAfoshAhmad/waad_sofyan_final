@@ -93,9 +93,14 @@ public class LimitBalanceReader {
             if (definition.benefitScopeType() == BenefitScopeType.POLICY_GENERAL) {
                 committed = claimRepository.sumLimitConsumptionByMemberAndPeriodExcludingClaim(
                         memberId, definition.periodStart(), definition.periodEnd(), excludeClaimId);
-                // General reservations will remain zero until the pre-authorization reservation
-                // ledger is connected; manufacturing them from bucket rows would double count.
-                reserved = BigDecimal.ZERO;
+                // Read from the general ceiling's OWN reservation rows (V174).
+                // Still never derived from bucket rows: one line can map to
+                // several buckets, so summing them would count the same money
+                // repeatedly. Until the approval service starts writing holds
+                // this is legitimately zero -- but it is now zero because
+                // nothing is reserved, not because it cannot be expressed.
+                reserved = consumptionRepository.sumGeneralScopeReserved(
+                        memberId, definition.policyId(), definition.periodStart(), definition.periodEnd());
             } else {
                 committed = amount(bucketBalances, definition, Status.COMMITTED);
                 reserved = amount(bucketBalances, definition, Status.RESERVED);
