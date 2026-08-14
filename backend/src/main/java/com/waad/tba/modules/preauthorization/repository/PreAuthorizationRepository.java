@@ -21,6 +21,18 @@ import java.util.Optional;
 @Repository
 public interface PreAuthorizationRepository extends JpaRepository<PreAuthorization, Long> {
 
+       /**
+        * PESSIMISTIC_WRITE, not @Version alone. Optimistic versioning detects a
+        * conflict only at flush -- by which point two approvals may both have
+        * read the same available balance and decided to hold it. The row lock
+        * makes the second wait for the first to finish.
+        */
+       @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+       @org.springframework.data.jpa.repository.Query("SELECT p FROM PreAuthorization p WHERE p.id = :id")
+       java.util.Optional<PreAuthorization> findByIdForUpdate(
+               @org.springframework.data.repository.query.Param("id") Long id);
+
+
        // ==================== Find All Active ====================
 
        /**

@@ -159,6 +159,11 @@ file:
 # WAAD FEATURE FLAGS (Phase 10)
 # ═══════════════════════════════════════════════════════════
 waad:
+  preauth:
+    # How long an approval stays usable. An approval with no expiry holds a
+    # member's limit forever, so the service refuses to approve when this is
+    # missing or non-positive rather than assuming a number.
+    validity-days: ${WAAD_PREAUTH_VALIDITY_DAYS:30}
   features:
     # false = Batches ONLY (Current Requirement 2026-03-06)
     provider-portal-enabled: ${WAAD_FEATURE_PROVIDER_PORTAL:false}

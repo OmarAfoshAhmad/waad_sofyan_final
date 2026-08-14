@@ -84,17 +84,28 @@ class ConsumptionLedgerWriteGateArchitectureTest {
     void onlyThePreAuthLedgerServiceAppendsReservationsOrReleases() throws IOException {
         List<String> callers = callersOf("appendPreAuthReservation", "appendPreAuthRelease");
 
-        // Until PreAuthReservationLedgerService exists, this must be empty --
-        // which is the real guarantee behind "no reservation writer yet": a
-        // hold that nothing can release removes limit from a member
-        // permanently, so the release path must arrive in the same change as
-        // the first writer.
         assertThat(callers)
-                .as("""
-                        A reservation may only be appended by \
-                        PreAuthReservationLedgerService, and only once its release and \
-                        expiry paths exist alongside it.""")
-                .isEmpty();
+                .as("A reservation is the pre-authorization ledger service's life cycle, and no other's.")
+                .isNotEmpty()
+                .allSatisfy(caller -> assertThat(caller).contains(PREAUTH_WRITER));
+    }
+
+    /**
+     * A hold that nothing can release removes limit from a member permanently,
+     * with no claim to explain where it went. So the writer may only exist
+     * alongside both of its exits -- this is the rule the old "no reservation
+     * writer yet" guard stood in for, now stated directly.
+     */
+    @Test
+    void theReservationWriterShipsWithBothOfItsExits() throws IOException {
+        Path service = PRODUCTION.resolve(
+                "com/waad/tba/modules/preauthorization/service/" + PREAUTH_WRITER);
+        assertThat(Files.exists(service)).as(PREAUTH_WRITER + " must exist").isTrue();
+
+        String source = Files.readString(service, StandardCharsets.UTF_8);
+        assertThat(source).contains("approveAndReserve");
+        assertThat(source).as("a hold with no cancellation path").contains("cancelAndRelease");
+        assertThat(source).as("a hold with no expiry path").contains("expireAndRelease");
     }
 
     /** 3. Claim movements belong to the claim life cycle alone. */

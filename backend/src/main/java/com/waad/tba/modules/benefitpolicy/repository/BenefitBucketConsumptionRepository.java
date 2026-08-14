@@ -226,6 +226,35 @@ public interface BenefitBucketConsumptionRepository extends JpaRepository<Benefi
     boolean existsByIdempotencyKey(String idempotencyKey);
 
     /**
+     * Every hold this pre-authorization still has outstanding. Ordered by id
+     * so a release walks them deterministically.
+     */
+    @Query(value = """
+        select * from benefit_bucket_consumptions c
+         where c.preauth_id = :preauthId
+           and c.status = 'RESERVED'
+         order by c.id
+        """, nativeQuery = true)
+    List<BenefitBucketConsumption> findActiveReservationsForPreauth(@Param("preauthId") Long preauthId);
+
+    /**
+     * How much of an original has already been given back. A release must
+     * return what is OUTSTANDING: releasing the original amount blindly would
+     * give back more than is held whenever part of it was already returned.
+     */
+    @Query(value = """
+        select coalesce(sum(approved_amount), 0) from benefit_bucket_consumptions
+         where reversal_of_id = :originalId and status = 'REVERSED'
+        """, nativeQuery = true)
+    BigDecimal sumReleasedAmount(@Param("originalId") Long originalId);
+
+    @Query(value = """
+        select coalesce(sum(times_consumed), 0) from benefit_bucket_consumptions
+         where reversal_of_id = :originalId and status = 'REVERSED'
+        """, nativeQuery = true)
+    Integer sumReleasedTimes(@Param("originalId") Long originalId);
+
+    /**
      * Net RESERVED times held against a bucket. A separate dimension from the
      * amount: a visit count and a currency figure are not comparable, and a
      * decision can be constrained by either independently.

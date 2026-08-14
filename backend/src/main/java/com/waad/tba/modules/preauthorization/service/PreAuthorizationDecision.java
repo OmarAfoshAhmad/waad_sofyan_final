@@ -167,6 +167,16 @@ public record PreAuthorizationDecision(
             BigDecimal actualRemainingBefore,
             BigDecimal reservableAvailableBefore,
             /**
+             * The occurrence dimension's own balances. Null throughout when
+             * the bucket caps no count -- a hold cannot be justified without
+             * the figures it was decided against, so these travel together.
+             */
+            Integer timesLimit,
+            Integer committedTimesBefore,
+            Integer reservedTimesBefore,
+            Integer actualRemainingTimesBefore,
+            Integer reservableTimesBefore,
+            /**
              * What this scope MEASURES. One decision, several independent
              * measures: the general ceiling counts the insurer's money, a
              * service bucket may count the eligible amount, a visit bucket

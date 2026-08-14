@@ -395,6 +395,8 @@ public class PreAuthorizationDecisionBuilder {
                     scaled(balance.reserved()),
                     scaled(balance.actualRemaining()),
                     scaled(balance.reservableAvailable()),
+                    balance.timesLimit(), balance.committedTimes(), balance.reservedTimes(),
+                    balance.actualRemainingTimes(), balance.reservableTimes(),
                     measure.basis(), measure.unit(),
                     measure.amount(), heldTimes, measure.days(),
                     binding));
