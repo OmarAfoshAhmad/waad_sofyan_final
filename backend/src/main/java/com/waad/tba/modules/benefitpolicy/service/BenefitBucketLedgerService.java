@@ -40,6 +40,7 @@ public class BenefitBucketLedgerService {
     // its locks, its idempotency keys, its ordering -- and delegates only
     // the append itself, so the ledger has one place to enforce invariants.
     private final BenefitConsumptionEntryWriter entryWriter;
+    private final TimesLimitEvaluator timesLimitEvaluator;
 
     /**
      * One-time operational repair for an already approved legacy claim.
@@ -188,15 +189,15 @@ public class BenefitBucketLedgerService {
         }
     }
 
+    /**
+     * Delegates to the shared evaluator so claims and pre-authorizations have
+     * ONE definition of how many occurrences a decision consumes. Two
+     * definitions would let an approval hold one quantity and the claim that
+     * follows consume another, leaving a residue at conversion.
+     */
     private int consumedTimes(BenefitLimitBucket bucket, ClaimLine line, Set<Long> countedOnce) {
-        CountingMethod method = bucket.getCountingMethod() != null
-                ? bucket.getCountingMethod()
-                : CountingMethod.EACH_LINE;
-        return switch (method) {
-            case EACH_UNIT -> Math.max(1, line.getQuantity() == null ? 1 : line.getQuantity());
-            case PER_VISIT, PER_DAY -> countedOnce.add(bucket.getId()) ? 1 : 0;
-            case EACH_LINE -> 1;
-        };
+        int quantity = Math.max(1, line.getQuantity() == null ? 1 : line.getQuantity());
+        return timesLimitEvaluator.occurrencesFor(bucket, quantity, countedOnce);
     }
 
     private void validateAvailableBalance(BenefitLimitBucket bucket, Long memberId, LocalDate serviceDate,

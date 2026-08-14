@@ -389,14 +389,21 @@ class PreAuthReservationLifecycleIntegrationTest extends PostgresIntegrationTest
 
     // ── the remaining consumption bases ─────────────────────────────────
 
-    // A bucket with ONLY an occurrence limit is deliberately out of scope:
-    // ApplicableLimitResolver skips count/day-only buckets because it feeds
-    // the monetary engine, and assigning them a synthetic monetary value
-    // would invent policy. The codebase records this as an open
-    // constitutional decision (POLICY_DECISION_REQUIRED-03), so a
-    // pre-authorization cannot hold such a bucket until that is settled --
-    // and a test asserting otherwise would be asserting a behaviour nobody
-    // has decided on.
+    @Test
+    void aBucketWithOnlyAnOccurrenceLimitStillHoldsItsVisit() {
+        Scenario sc = scenario("NULL", 3, "1000.00", 80, 2);
+
+        service.approveAndReserve(sc.preauthId(), 0L, "reviewer");
+
+        // Previously invisible: the monetary resolver declines a bucket with
+        // no amount, and it was the approval path's only source of ceilings --
+        // so two approvals could each hold the last visit.
+        Integer heldTimes = jdbc.queryForObject(
+                "SELECT times_consumed FROM benefit_bucket_consumptions "
+                        + "WHERE preauth_id = ? AND bucket_id = ? AND status = 'RESERVED'",
+                Integer.class, sc.preauthId(), sc.bucketId());
+        assertThat(heldTimes).as("a bucket may cap occurrences without capping money").isEqualTo(2);
+    }
 
     @Test
     void anEligibleAmountBucketHoldsTheEligibleAmountNotTheCompanyShare() {

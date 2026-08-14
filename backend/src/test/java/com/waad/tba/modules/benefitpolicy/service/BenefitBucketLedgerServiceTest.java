@@ -50,7 +50,8 @@ class BenefitBucketLedgerServiceTest {
         service = new BenefitBucketLedgerService(
                 claimRepository, memberPolicyResolver, benefitPolicyRepository, ruleBucketRepository,
                 bucketRepository, consumptionRepository,
-                new BenefitConsumptionEntryWriter(consumptionRepository));
+                new BenefitConsumptionEntryWriter(consumptionRepository),
+                new TimesLimitEvaluator());
 
         policy = BenefitPolicy.builder()
                 .id(1L)

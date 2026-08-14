@@ -4,9 +4,13 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -62,6 +66,9 @@ public class PreAuthorizationDecisionBuilder {
     private final LimitBalanceReader limitBalanceReader;
     private final BenefitLimitBucketRepository bucketRepository;
     private final WaadFinancialEngine financialEngine;
+    private final com.waad.tba.modules.benefitpolicy.repository.BenefitBucketConsumptionRepository consumptionRepository;
+    private final com.waad.tba.modules.benefitpolicy.service.ApplicableCountingLimitResolver countingLimitResolver;
+    private final com.waad.tba.modules.benefitpolicy.service.TimesLimitEvaluator timesLimitEvaluator;
     private final com.waad.tba.modules.benefitpolicy.service.CoverageDecisionService coverageDecisionService;
 
     private static final BigDecimal HUNDRED = new BigDecimal("100.00");
@@ -306,12 +313,29 @@ public class PreAuthorizationDecisionBuilder {
         // the policy covers only 2. The other 2 become the patient's, exactly
         // as an amount above the ceiling does.
         rejectUnsupportedDayLimit(balances);
-        int requiredTimes = requiredTimesFor(balances, approvedQuantity);
-        Integer reservableTimes = balances.limits().stream()
-                .map(LimitBalanceReader.LimitBalance::reservableTimes)
-                .filter(Objects::nonNull)
-                .min(Integer::compareTo)
-                .orElse(null);
+        // The counting ceilings come from their OWN resolver. The monetary
+        // resolver correctly declines to report a bucket that caps only
+        // visits -- it has no amount to contribute -- and taking it as the
+        // sole source is what let two approvals each hold the last visit.
+        //
+        // The two dimensions are joined only by bucketId. Nothing is summed
+        // across them: a visit count and a currency amount are not the same
+        // kind of number.
+        List<BenefitLimitBucket> countingBuckets = countingLimitResolver.resolve(benefitRuleId);
+        Set<Long> countedOnce = new HashSet<>();
+        Map<Long, Integer> requiredTimesByBucket = new LinkedHashMap<>();
+        for (BenefitLimitBucket bucket : countingBuckets) {
+            requiredTimesByBucket.put(bucket.getId(),
+                    timesLimitEvaluator.occurrencesFor(bucket, approvedQuantity, countedOnce));
+        }
+
+        int requiredTimes = requiredTimesByBucket.values().stream()
+                .max(Integer::compareTo).orElse(0);
+        Integer reservableTimes = countingBuckets.isEmpty() ? null
+                : countingBuckets.stream()
+                        .map(bucket -> countingLimitResolver.reservableTimes(member.getId(), bucket, policy, serviceDate))
+                        .min(Integer::compareTo)
+                        .orElse(null);
 
         int coveredTimes = reservableTimes == null
                 ? requiredTimes
@@ -328,7 +352,8 @@ public class PreAuthorizationDecisionBuilder {
         // Storing reservedTimes without changing the money would let the
         // insurer pay for occurrences the policy does not cover.
         if (limitExcessTimes > 0) {
-            if (requiredTimes > 0 && countingMethod(balances) == CountingMethod.EACH_UNIT) {
+            if (requiredTimes > 0 && countingBuckets.stream().anyMatch(
+                    b -> b.getCountingMethod() == CountingMethod.EACH_UNIT)) {
                 // Divisible: the insurer pays for the covered units, and the
                 // uncovered ones move to the patient.
                 BigDecimal coveredFraction = BigDecimal.valueOf(coveredTimes)
@@ -407,6 +432,41 @@ public class PreAuthorizationDecisionBuilder {
                     binding));
         }
 
+        // A bucket that caps ONLY occurrences never appears in the monetary
+        // balances, so it would otherwise produce no hold at all -- which is
+        // exactly how two approvals could each take the last visit. It gets
+        // its own row, carrying the occurrence dimension and no money.
+        Set<Long> alreadyHeld = holds.stream()
+                .map(PreAuthorizationDecision.LimitHold::bucketId)
+                .filter(Objects::nonNull)
+                .collect(java.util.stream.Collectors.toSet());
+
+        for (BenefitLimitBucket bucket : countingBuckets) {
+            if (alreadyHeld.contains(bucket.getId())) {
+                continue; // a mixed bucket already has its row; both dimensions ride on it
+            }
+            var period = countingLimitResolver.periodFor(bucket, policy, serviceDate);
+            int reservable = countingLimitResolver.reservableTimes(
+                    member.getId(), bucket, policy, serviceDate);
+            int wanted = requiredTimesByBucket.getOrDefault(bucket.getId(), 0);
+            int held = Math.min(wanted, reservable);
+
+            holds.add(new PreAuthorizationDecision.LimitHold(
+                    "BUCKET:" + bucket.getId(), "BUCKET", bucket.getId(), policy.getId(),
+                    bucket.getPeriodType().name(), period.start(), period.end(),
+                    // No monetary dimension: this ceiling does not measure
+                    // money. reservedBefore stays a real zero rather than
+                    // null -- the column is NOT NULL, and "no money held" is
+                    // a true statement about a bucket that holds no money.
+                    null, null, java.math.BigDecimal.ZERO, null, null,
+                    bucket.getTimesLimit(),
+                    bucket.getTimesLimit() - reservable, 0,
+                    reservable, reservable,
+                    "COMPANY_SHARE", PreAuthorizationDecision.ReservedUnit.CURRENCY,
+                    null, held, null,
+                    held < wanted));
+        }
+
         return new PreAuthorizationDecision.Line(
                 line.getId(), line.getProviderServiceId(), line.getProviderServiceCode(), line.getServiceName(),
                 1, scaled(contractPrice), scaled(requested), coveragePercent,
@@ -470,34 +530,6 @@ public class PreAuthorizationDecisionBuilder {
 
 
     /**
-     * How many occurrences this line consumes, derived the same way the claim
-     * ledger derives them so a hold and the consumption that follows measure
-     * the same thing. Uses the APPROVED quantity: a refused unit is not an
-     * occurrence.
-     *
-     * PER_DAY here counts occurrences within a day -- it is a counting method
-     * for TIMES, not a day limit. The two are unrelated despite the name.
-     */
-    private int requiredTimesFor(LimitBalanceReader.BalanceSet balances, int approvedQuantity) {
-        CountingMethod method = countingMethod(balances);
-        return switch (method) {
-            case EACH_UNIT -> Math.max(0, approvedQuantity);
-            case EACH_LINE, PER_VISIT, PER_DAY -> approvedQuantity > 0 ? 1 : 0;
-        };
-    }
-
-    private CountingMethod countingMethod(LimitBalanceReader.BalanceSet balances) {
-        return balances.limits().stream()
-                .filter(b -> b.timesLimit() != null)
-                .map(b -> b.limit().definition().bucketId())
-                .filter(Objects::nonNull)
-                .findFirst()
-                .flatMap(bucketRepository::findById)
-                .map(BenefitLimitBucket::getCountingMethod)
-                .orElse(CountingMethod.EACH_LINE);
-    }
-
-    /**
      * A day limit counts DISTINCT SERVICE DATES, and a pre-authorization
      * carries a single expected date with no admission/discharge behind it.
      * Reserving one day from one date would understate a multi-day stay;
@@ -517,6 +549,7 @@ public class PreAuthorizationDecisionBuilder {
                             + "(تاريخ خدمة متوقع واحد بلا تاريخ دخول/خروج) يمكن حجز الحد منه.");
         }
     }
+
 
     private Long requiredCategoryId(PreAuthorizationLine line) {
         if (line.getMedicalCategoryId() == null) {
