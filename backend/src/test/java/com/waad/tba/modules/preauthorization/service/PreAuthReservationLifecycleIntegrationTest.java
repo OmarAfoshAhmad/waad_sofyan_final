@@ -332,4 +332,92 @@ class PreAuthReservationLifecycleIntegrationTest extends PostgresIntegrationTest
                 Integer.class, sc.bucketId());
         assertThat(releasedTimes).isEqualTo(1);
     }
+
+    // ── transaction boundaries ──────────────────────────────────────────
+
+    @Test
+    void aFailureOnTheLastScopeLeavesNoSnapshotNoHoldAndNoStatusChange() {
+        Scenario sc = scenario("10000", null, "1000.00", 80, 1);
+
+        String statusBefore = status(sc.preauthId());
+        Long versionBefore = jdbc.queryForObject(
+                "SELECT version FROM pre_authorizations WHERE id = ?", Long.class, sc.preauthId());
+
+        // Fail on the LAST scope written -- the general ceiling -- so the
+        // bucket hold and the whole snapshot are already in the transaction
+        // when it blows up. Anything less would test rollback of nothing.
+        jdbc.execute("""
+                CREATE OR REPLACE FUNCTION fail_on_general_scope() RETURNS trigger AS $$
+                BEGIN
+                    IF NEW.limit_scope = 'POLICY_GENERAL' THEN
+                        RAISE EXCEPTION 'injected failure on the last scope';
+                    END IF;
+                    RETURN NEW;
+                END;
+                $$ LANGUAGE plpgsql;
+                """);
+        jdbc.execute("""
+                CREATE TRIGGER trg_fail_on_general_scope
+                BEFORE INSERT ON benefit_bucket_consumptions
+                FOR EACH ROW EXECUTE FUNCTION fail_on_general_scope();
+                """);
+        try {
+            assertThatThrownBy(() -> service.approveAndReserve(sc.preauthId(), 0L, "reviewer"))
+                    .isInstanceOf(RuntimeException.class);
+        } finally {
+            jdbc.execute("DROP TRIGGER IF EXISTS trg_fail_on_general_scope "
+                    + "ON benefit_bucket_consumptions");
+            jdbc.execute("DROP FUNCTION IF EXISTS fail_on_general_scope()");
+        }
+
+        // Read afterwards, in a new transaction: a half-written approval is
+        // the worst outcome available -- limit held with no snapshot to
+        // explain it, or a snapshot promising money never reserved.
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM preauth_decision_snapshots WHERE preauth_id = ?",
+                Long.class, sc.preauthId())).as("no decision head").isZero();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM preauth_line_snapshots ls "
+                + "JOIN preauth_decision_snapshots d ON d.id = ls.decision_snapshot_id "
+                + "WHERE d.preauth_id = ?", Long.class, sc.preauthId()))
+                .as("no line snapshot").isZero();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM benefit_bucket_consumptions "
+                + "WHERE preauth_id = ?", Long.class, sc.preauthId()))
+                .as("not even the bucket hold that succeeded before the failure").isZero();
+        assertThat(status(sc.preauthId())).as("status untouched").isEqualTo(statusBefore);
+        assertThat(jdbc.queryForObject("SELECT version FROM pre_authorizations WHERE id = ?",
+                Long.class, sc.preauthId())).as("version untouched").isEqualTo(versionBefore);
+    }
+
+    // ── the remaining consumption bases ─────────────────────────────────
+
+    // A bucket with ONLY an occurrence limit is deliberately out of scope:
+    // ApplicableLimitResolver skips count/day-only buckets because it feeds
+    // the monetary engine, and assigning them a synthetic monetary value
+    // would invent policy. The codebase records this as an open
+    // constitutional decision (POLICY_DECISION_REQUIRED-03), so a
+    // pre-authorization cannot hold such a bucket until that is settled --
+    // and a test asserting otherwise would be asserting a behaviour nobody
+    // has decided on.
+
+    @Test
+    void anEligibleAmountBucketHoldsTheEligibleAmountNotTheCompanyShare() {
+        Scenario sc = scenario("10000", null, "1000.00", 80, 1);
+        jdbc.update("UPDATE benefit_limit_buckets SET consumption_basis = 'ELIGIBLE_AMOUNT' WHERE id = ?",
+                sc.bucketId());
+
+        service.approveAndReserve(sc.preauthId(), 0L, "reviewer");
+
+        BigDecimal bucketHold = jdbc.queryForObject(
+                "SELECT approved_amount FROM benefit_bucket_consumptions "
+                        + "WHERE preauth_id = ? AND bucket_id = ? AND status = 'RESERVED'",
+                BigDecimal.class, sc.preauthId(), sc.bucketId());
+        BigDecimal generalHold = jdbc.queryForObject(
+                "SELECT approved_amount FROM benefit_bucket_consumptions "
+                        + "WHERE preauth_id = ? AND bucket_id IS NULL AND status = 'RESERVED'",
+                BigDecimal.class, sc.preauthId());
+
+        // Each scope holds ITS OWN measure of one decision: the bucket counts
+        // the eligible amount, the general ceiling counts the insurer's money.
+        assertThat(bucketHold).isEqualByComparingTo("1000.00");
+        assertThat(generalHold).isEqualByComparingTo("800.00");
+    }
 }

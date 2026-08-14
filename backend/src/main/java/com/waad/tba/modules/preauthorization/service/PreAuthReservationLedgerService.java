@@ -113,8 +113,8 @@ public class PreAuthReservationLedgerService {
         if (preauth.getExpectedServiceDate() == null) {
             throw new BusinessRuleException("لا يمكن اعتماد موافقة بدون تاريخ الخدمة المتوقع.");
         }
-        memberRepository.findByIdWithLock(preauth.getMemberId())
-                .orElseThrow(() -> new BusinessRuleException("المستفيد المرتبط بالموافقة غير موجود."));
+        // The member is already locked -- lockForWrite takes it before the
+        // pre-authorization, in the system's one global order.
 
         // Everything computed before the bucket locks is a PREVIEW. Between
         // reading a balance and locking it, another approval for the same
@@ -196,8 +196,8 @@ public class PreAuthReservationLedgerService {
             throw new BusinessRuleException("لا يمكن إنهاء موافقة قبل انتهاء صلاحيتها.");
         }
 
-        memberRepository.findByIdWithLock(preauth.getMemberId());
-
+        // The member is already locked by lockForWrite, ahead of the
+        // pre-authorization, in the system's one global order.
         List<BenefitBucketConsumption> originals =
                 consumptionRepository.findActiveReservationsForPreauth(preauthId);
         originals.sort(Comparator.comparing(c -> c.getBucket() == null ? 0L : c.getBucket().getId()));
@@ -395,12 +395,46 @@ public class PreAuthReservationLedgerService {
 
     // ── helpers ──────────────────────────────────────────────────────────
 
+    /**
+     * A real row lock, not optimistic versioning alone: two approvals reading
+     * the same balance must not both proceed to hold it. Always reached
+     * through the global order below.
+     */
     private PreAuthorization lockForWrite(Long preauthId) {
-        // A real row lock, not optimistic versioning alone: two approvals
-        // reading the same balance must not both proceed to hold it.
+        return lockInGlobalOrder(preauthId);
+    }
+
+    /**
+     * THE LOCK ORDER, and it is global rather than local to this service:
+     *
+     *     Member  ->  PreAuthorization  ->  Buckets (ascending id)
+     *
+     * The claim path already establishes it -- AtomicFinancialService takes
+     * the member lock before any bucket -- and a second path taking the same
+     * locks in a different order is exactly how two individually-correct
+     * paths deadlock each other. Which order is "nicer" does not matter; that
+     * there is ONE does.
+     *
+     * The member must therefore be locked before the pre-authorization, which
+     * means reading the pre-authorization unlocked first just to learn whose
+     * member it is. That extra read is the price of a single global order.
+     */
+    private PreAuthorization lockInGlobalOrder(Long preauthId) {
+        // Unlocked read: only to discover the member. Nothing is decided on it.
+        Long memberId = preauthRepository.findById(preauthId)
+                .orElseThrow(() -> new BusinessRuleException("الموافقة المسبقة غير موجودة."))
+                .getMemberId();
+        if (memberId == null) {
+            throw new BusinessRuleException("الموافقة المسبقة غير مرتبطة بمستفيد.");
+        }
+
+        memberRepository.findByIdWithLock(memberId)
+                .orElseThrow(() -> new BusinessRuleException("المستفيد المرتبط بالموافقة غير موجود."));
+
         return preauthRepository.findByIdForUpdate(preauthId)
                 .orElseThrow(() -> new BusinessRuleException("الموافقة المسبقة غير موجودة."));
     }
+
 
     private void requireVersion(PreAuthorization preauth, Long expectedVersion) {
         if (expectedVersion != null && !Objects.equals(preauth.getVersion(), expectedVersion)) {
