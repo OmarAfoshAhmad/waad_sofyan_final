@@ -533,4 +533,151 @@ class PreAuthorizationDecisionBuilderIntegrationTest extends PostgresIntegration
                 .filter(java.util.Objects::nonNull).distinct().toList();
         assertThat(buckets).contains(sc.bucketId(), otherBucket);
     }
+
+    // ── the occurrence dimension ────────────────────────────────────────
+
+    /** Gives the scenario's bucket a times limit and counting method. */
+    private void timesLimit(Scenario sc, int limit, String countingMethod) {
+        jdbc.update("UPDATE benefit_limit_buckets SET times_limit = ?, counting_method = ?, "
+                + "amount_limit = 1000000 WHERE id = ?", limit, countingMethod, sc.bucketId());
+    }
+
+    private void commitTimes(Scenario sc, int times) {
+        jdbc.update("INSERT INTO benefit_bucket_consumptions (policy_id, member_id, bucket_id, period_start, "
+                + "period_end, approved_amount, times_consumed, calculation_version, idempotency_key, status, "
+                + "source_type, limit_scope, created_at) VALUES (?, ?, ?, "
+                + "DATE_TRUNC('year', CURRENT_DATE)::date, "
+                + "(DATE_TRUNC('year', CURRENT_DATE) + INTERVAL '1 year - 1 day')::date, "
+                + "0.00, ?, 1, ?, 'COMMITTED', 'OPENING_IMPORT', 'BUCKET', now())",
+                sc.policyId(), sc.memberId(), sc.bucketId(), times, "T-" + suffix());
+    }
+
+    @Test
+    void eachUnitCoversOnlyTheOccurrencesLeftAndChargesTheRestToThePatient() {
+        Scenario sc = scenario("1000000", null, "1000.00", 80, null, LocalDate.now().plusDays(14));
+        timesLimit(sc, 4, "EACH_UNIT");
+        commitTimes(sc, 2); // 2 of 4 already used
+        jdbc.update("UPDATE pre_authorization_lines SET requested_quantity = 4, approved_quantity = 4 "
+                + "WHERE pre_authorization_id = ?", sc.preauthId());
+
+        PreAuthorizationDecision decision = builder.build(sc.preauthId(), 1);
+        var line = decision.lines().get(0);
+
+        // The reviewer authorised 4, and the ceiling does NOT reduce that.
+        assertThat(line.approvedQuantity()).isEqualTo(4);
+        assertThat(line.coveredTimes()).isEqualTo(2);
+        assertThat(line.limitExcessTimes()).isEqualTo(2);
+        assertThat(decision.outcome()).isEqualTo(PreAuthorizationDecision.Outcome.APPROVED);
+        assertThat(decision.coverageOutcome())
+                .isEqualTo(PreAuthorizationDecision.CoverageOutcome.LIMIT_CAPPED);
+
+        // Half the occurrences are covered, so the insurer pays for half.
+        assertThat(line.companyShare()).isEqualByComparingTo("400.00");
+        assertThat(line.patientShare()).isEqualByComparingTo("600.00");
+        assertThat(line.limitExcessDisposition())
+                .isEqualTo(PreAuthorizationDecision.LimitExcessDisposition.PATIENT_RESPONSIBILITY);
+
+        var hold = line.limitHolds().stream()
+                .filter(h -> "BUCKET".equals(h.limitScope())).findFirst().orElseThrow();
+        assertThat(hold.timesReserved()).isEqualTo(2);
+    }
+
+    @Test
+    void eachLineReservesOneOccurrenceWhateverTheQuantity() {
+        Scenario sc = scenario("1000000", null, "1000.00", 80, null, LocalDate.now().plusDays(14));
+        timesLimit(sc, 5, "EACH_LINE");
+        jdbc.update("UPDATE pre_authorization_lines SET requested_quantity = 7, approved_quantity = 7 "
+                + "WHERE pre_authorization_id = ?", sc.preauthId());
+
+        var line = builder.build(sc.preauthId(), 1).lines().get(0);
+
+        assertThat(line.coveredTimes()).isEqualTo(1);
+        assertThat(line.limitExcessTimes()).isZero();
+        assertThat(line.companyShare()).isEqualByComparingTo("800.00");
+    }
+
+    @Test
+    void anExhaustedOccurrenceLimitPaysNothingWithoutChangingThePolicyPercentage() {
+        Scenario sc = scenario("1000000", null, "1000.00", 80, null, LocalDate.now().plusDays(14));
+        timesLimit(sc, 1, "PER_VISIT");
+        commitTimes(sc, 1); // the single visit is already used
+
+        PreAuthorizationDecision decision = builder.build(sc.preauthId(), 1);
+        var line = decision.lines().get(0);
+
+        // A visit is not half-attended: indivisible, so the insurer pays
+        // nothing -- but the SERVICE is still approved, and the policy still
+        // covers 80%.
+        assertThat(decision.outcome()).isEqualTo(PreAuthorizationDecision.Outcome.APPROVED);
+        assertThat(decision.coverageOutcome())
+                .isEqualTo(PreAuthorizationDecision.CoverageOutcome.LIMIT_EXHAUSTED);
+        assertThat(line.coveredTimes()).isZero();
+        assertThat(line.companyShare()).isEqualByComparingTo("0.00");
+        assertThat(line.patientShare()).isEqualByComparingTo("1000.00");
+        assertThat(line.coveragePercent()).as("the policy percentage never changed").isEqualTo(80);
+        assertThat(line.companyShareBeforeLimit()).isEqualByComparingTo("800.00");
+    }
+
+    @Test
+    void anExistingOccurrenceHoldRemovesTheLastVisitFromASecondApproval() {
+        Scenario sc = scenario("1000000", null, "1000.00", 80, null, LocalDate.now().plusDays(14));
+        timesLimit(sc, 1, "PER_VISIT");
+
+        // Another approval already holds the single visit.
+        Long otherPreauth = jdbc.queryForObject("INSERT INTO pre_authorizations (member_id, status, "
+                + "request_date, created_at, updated_at) VALUES (" + sc.memberId()
+                + ", 'APPROVED', now(), now(), now()) RETURNING id", Long.class);
+        Long otherLine = jdbc.queryForObject("INSERT INTO pre_authorization_lines (pre_authorization_id, "
+                + "requested_amount) VALUES (" + otherPreauth + ", 100.00) RETURNING id", Long.class);
+        jdbc.update("INSERT INTO benefit_bucket_consumptions (policy_id, member_id, bucket_id, preauth_id, "
+                + "preauth_line_id, period_start, period_end, approved_amount, times_consumed, "
+                + "calculation_version, idempotency_key, status, source_type, limit_scope, created_at) VALUES ("
+                + "?, ?, ?, ?, ?, DATE_TRUNC('year', CURRENT_DATE)::date, "
+                + "(DATE_TRUNC('year', CURRENT_DATE) + INTERVAL '1 year - 1 day')::date, "
+                + "0.00, 1, 1, ?, 'RESERVED', 'PREAUTH', 'BUCKET', now())",
+                sc.policyId(), sc.memberId(), sc.bucketId(), otherPreauth, otherLine, "TH-" + suffix());
+
+        PreAuthorizationDecision decision = builder.build(sc.preauthId(), 1);
+
+        // Nothing is CONSUMED, so the visit is still actually remaining --
+        // but it is already promised, so a second approval may not take it.
+        assertThat(decision.coverageOutcome())
+                .isEqualTo(PreAuthorizationDecision.CoverageOutcome.LIMIT_EXHAUSTED);
+        assertThat(decision.lines().get(0).coveredTimes()).isZero();
+    }
+
+    @Test
+    void anAmountLimitAndAnOccurrenceLimitConstrainSeparatelyWithoutBeingCombined() {
+        Scenario sc = scenario("1000", "800.00", "400.00", 80, null, LocalDate.now().plusDays(14));
+        // 4 occurrences, of which the opening balance already used 1, so 3
+        // remain -- enough for this line. The MONEY is what binds here.
+        jdbc.update("UPDATE benefit_limit_buckets SET times_limit = 4, counting_method = 'EACH_UNIT' "
+                + "WHERE id = ?", sc.bucketId());
+        jdbc.update("UPDATE pre_authorization_lines SET requested_quantity = 3, approved_quantity = 3 "
+                + "WHERE pre_authorization_id = ?", sc.preauthId());
+
+        var line = builder.build(sc.preauthId(), 1).lines().get(0);
+        var hold = line.limitHolds().stream()
+                .filter(h -> "BUCKET".equals(h.limitScope())).findFirst().orElseThrow();
+
+        // The money binds (200 left of 1000); the occurrences do not (3 of 3).
+        // Each dimension is recorded in its own unit, and nothing is summed.
+        assertThat(line.coveredTimes()).isEqualTo(3);
+        assertThat(hold.timesReserved()).isEqualTo(3);
+        assertThat(hold.amountReserved()).isNotNull();
+        assertThat(hold.reservedUnit()).isEqualTo(PreAuthorizationDecision.ReservedUnit.CURRENCY);
+        assertThat(line.companyShare()).isEqualByComparingTo("160.00");
+    }
+
+    @Test
+    void aDayLimitFailsClosedRatherThanBeingGuessedFromOneDate() {
+        Scenario sc = scenario("1000000", null, "1000.00", 80, null, LocalDate.now().plusDays(14));
+        jdbc.update("UPDATE benefit_limit_buckets SET days_limit = 5 WHERE id = ?", sc.bucketId());
+
+        // A day limit counts distinct service dates. A pre-authorization has
+        // one expected date with no admission/discharge behind it, so a stay
+        // cannot be expressed -- and quantity is not days.
+        assertThatThrownBy(() -> builder.build(sc.preauthId(), 1))
+                .hasMessageContaining("حد أيام");
+    }
 }

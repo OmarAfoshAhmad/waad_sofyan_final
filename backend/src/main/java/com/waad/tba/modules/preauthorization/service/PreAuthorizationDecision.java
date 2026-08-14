@@ -77,6 +77,14 @@ public record PreAuthorizationDecision(
     public enum ReservedUnit { CURRENCY, TIMES, DAYS }
 
     /**
+     * Where value beyond a ceiling lands. Today the constitution fixes one
+     * answer (S6-S7), but naming it keeps the snapshot readable and leaves
+     * room for a policy that refuses the service or charges the provider
+     * instead -- without that meaning being implicit in the arithmetic.
+     */
+    public enum LimitExcessDisposition { PATIENT_RESPONSIBILITY }
+
+    /**
      * Everything the decision was made ON. Recorded so a conversion months
      * later settles on this basis rather than on whatever the configuration
      * says by then.
@@ -119,7 +127,13 @@ public record PreAuthorizationDecision(
             Long medicalCategoryId,
             Long benefitRuleId,
             int requestedQuantity,
+            /** What the REVIEWER authorised. Never reduced by a ceiling. */
             int approvedQuantity,
+            /** Of the approved quantity, how many occurrences the insurance covers. */
+            int coveredTimes,
+            /** Approved occurrences the ceiling could not cover; the patient's under S6-S7. */
+            int limitExcessTimes,
+            LimitExcessDisposition limitExcessDisposition,
             String reviewDecision,
             String rejectionReason,
             /** The insurer's share BEFORE the ceiling was applied -- what the policy would have paid. */

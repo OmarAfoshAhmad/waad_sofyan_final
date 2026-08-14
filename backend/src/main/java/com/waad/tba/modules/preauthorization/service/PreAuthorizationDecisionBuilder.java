@@ -16,6 +16,7 @@ import com.waad.tba.modules.benefitpolicy.entity.BenefitLimitBucket;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy;
 import com.waad.tba.modules.benefitpolicy.enums.BenefitScopeType;
 import com.waad.tba.modules.benefitpolicy.enums.ConsumptionBasis;
+import com.waad.tba.modules.benefitpolicy.enums.CountingMethod;
 import com.waad.tba.modules.providercontract.enums.EncounterType;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitLimitBucketRepository;
 import com.waad.tba.modules.benefitpolicy.service.EffectiveLimitResolver;
@@ -174,7 +175,11 @@ public class PreAuthorizationDecisionBuilder {
         // A spent ceiling is not "zero coverage": the policy still covers its
         // percentage, and what reached zero is the payable amount. The two
         // are separate facts, so they get separate names.
-        boolean limitCapped = limitExcessTotal.compareTo(BigDecimal.ZERO) > 0;
+        // A ceiling reached in EITHER dimension caps the coverage: an
+        // occurrence limit that stops the insurer paying is no less real than
+        // a monetary one.
+        boolean anyTimesExcess = lines.stream().anyMatch(l -> l.limitExcessTimes() > 0);
+        boolean limitCapped = limitExcessTotal.compareTo(BigDecimal.ZERO) > 0 || anyTimesExcess;
         PreAuthorizationDecision.CoverageOutcome coverageOutcome;
         if (limitCapped && companyTotal.compareTo(BigDecimal.ZERO) == 0) {
             coverageOutcome = PreAuthorizationDecision.CoverageOutcome.LIMIT_EXHAUSTED;
@@ -291,12 +296,53 @@ public class PreAuthorizationDecisionBuilder {
                 fullyRejected,
                 approvedQuantity));
 
+        // ── the occurrence dimension ────────────────────────────────────
+        // A ceiling on OCCURRENCES constrains the decision independently of
+        // the money, and the two are never compared: min() across a visit
+        // count and a currency amount is meaningless.
+        //
+        // It is applied to what the REVIEWER approved, and never reduces it:
+        // a service authorised for 4 units stays authorised for 4 even when
+        // the policy covers only 2. The other 2 become the patient's, exactly
+        // as an amount above the ceiling does.
+        rejectUnsupportedDayLimit(balances);
+        int requiredTimes = requiredTimesFor(balances, approvedQuantity);
+        Integer reservableTimes = balances.limits().stream()
+                .map(LimitBalanceReader.LimitBalance::reservableTimes)
+                .filter(Objects::nonNull)
+                .min(Integer::compareTo)
+                .orElse(null);
+
+        int coveredTimes = reservableTimes == null
+                ? requiredTimes
+                : Math.min(requiredTimes, Math.max(0, reservableTimes));
+        int limitExcessTimes = Math.max(0, requiredTimes - coveredTimes);
+
         // ONE reservable company share for the line. Recorded against each
         // applicable scope below -- never added across them: a line mapped to a
         // service bucket, its group, its parent and the general ceiling holds
         // one amount that four scopes each measure, not four amounts.
         BigDecimal companyShare = scaled(result.insurerFinalPayment());
         BigDecimal patientShare = scaled(result.patientTotalResponsibility());
+
+        // Storing reservedTimes without changing the money would let the
+        // insurer pay for occurrences the policy does not cover.
+        if (limitExcessTimes > 0) {
+            if (requiredTimes > 0 && countingMethod(balances) == CountingMethod.EACH_UNIT) {
+                // Divisible: the insurer pays for the covered units, and the
+                // uncovered ones move to the patient.
+                BigDecimal coveredFraction = BigDecimal.valueOf(coveredTimes)
+                        .divide(BigDecimal.valueOf(requiredTimes), 6, RoundingMode.HALF_UP);
+                BigDecimal payable = scaled(companyShare.multiply(coveredFraction));
+                patientShare = scaled(patientShare.add(companyShare.subtract(payable)));
+                companyShare = payable;
+            } else {
+                // Indivisible: a visit is not half-attended. Either the
+                // occurrence is available or the insurer pays nothing.
+                patientShare = scaled(patientShare.add(companyShare));
+                companyShare = BigDecimal.ZERO.setScale(2);
+            }
+        }
 
         // What the policy WOULD have paid had the ceiling not intervened.
         // Reporting only the post-ceiling figure is what makes an exhausted
@@ -326,6 +372,11 @@ public class PreAuthorizationDecisionBuilder {
             // not cancel what the claim then commits.
             Measure measure = measureFor(definition.bucketId(), companyShare, result, 1);
 
+            // A bucket may cap BOTH money and occurrences. The two are
+            // recorded side by side, never added: they answer different
+            // questions and are measured in different units.
+            Integer heldTimes = balance.timesLimit() == null ? null : coveredTimes;
+
             boolean binding = minimumReservable != null
                     && balance.reservableAvailable() != null
                     && balance.reservableAvailable().compareTo(minimumReservable) == 0;
@@ -345,7 +396,7 @@ public class PreAuthorizationDecisionBuilder {
                     scaled(balance.actualRemaining()),
                     scaled(balance.reservableAvailable()),
                     measure.basis(), measure.unit(),
-                    measure.amount(), measure.times(), measure.days(),
+                    measure.amount(), heldTimes, measure.days(),
                     binding));
         }
 
@@ -358,7 +409,8 @@ public class PreAuthorizationDecisionBuilder {
                 // authorised, and conflating them misreports both.
                 scaled(rejectedForLine),
                 line.getMedicalServiceId(), line.getMedicalCategoryId(), benefitRuleId,
-                requestedQuantity, approvedQuantity,
+                requestedQuantity, approvedQuantity, coveredTimes, limitExcessTimes,
+                PreAuthorizationDecision.LimitExcessDisposition.PATIENT_RESPONSIBILITY,
                 reviewDecision == null ? null : reviewDecision.name(),
                 line.getRejectionReason(),
                 scaled(companyShareBeforeLimit),
@@ -407,6 +459,56 @@ public class PreAuthorizationDecisionBuilder {
                     scaled(Optional.ofNullable(result.insideLimit()).orElse(result.settlementBase())),
                     null, null);
         };
+    }
+
+
+    /**
+     * How many occurrences this line consumes, derived the same way the claim
+     * ledger derives them so a hold and the consumption that follows measure
+     * the same thing. Uses the APPROVED quantity: a refused unit is not an
+     * occurrence.
+     *
+     * PER_DAY here counts occurrences within a day -- it is a counting method
+     * for TIMES, not a day limit. The two are unrelated despite the name.
+     */
+    private int requiredTimesFor(LimitBalanceReader.BalanceSet balances, int approvedQuantity) {
+        CountingMethod method = countingMethod(balances);
+        return switch (method) {
+            case EACH_UNIT -> Math.max(0, approvedQuantity);
+            case EACH_LINE, PER_VISIT, PER_DAY -> approvedQuantity > 0 ? 1 : 0;
+        };
+    }
+
+    private CountingMethod countingMethod(LimitBalanceReader.BalanceSet balances) {
+        return balances.limits().stream()
+                .filter(b -> b.timesLimit() != null)
+                .map(b -> b.limit().definition().bucketId())
+                .filter(Objects::nonNull)
+                .findFirst()
+                .flatMap(bucketRepository::findById)
+                .map(BenefitLimitBucket::getCountingMethod)
+                .orElse(CountingMethod.EACH_LINE);
+    }
+
+    /**
+     * A day limit counts DISTINCT SERVICE DATES, and a pre-authorization
+     * carries a single expected date with no admission/discharge behind it.
+     * Reserving one day from one date would understate a multi-day stay;
+     * treating quantity as days would invent data; ignoring the limit would
+     * let it be overdrawn. All three are worse than stopping.
+     */
+    private void rejectUnsupportedDayLimit(LimitBalanceReader.BalanceSet balances) {
+        boolean hasDayLimit = balances.limits().stream()
+                .map(b -> b.limit().definition().bucketId())
+                .filter(Objects::nonNull)
+                .flatMap(id -> bucketRepository.findById(id).stream())
+                .anyMatch(bucket -> bucket.getDaysLimit() != null);
+
+        if (hasDayLimit) {
+            throw new BusinessRuleException(
+                    "الوعاء المنطبق يحمل حد أيام، والموافقة المسبقة لا تحمل جدول أيام "
+                            + "(تاريخ خدمة متوقع واحد بلا تاريخ دخول/خروج) يمكن حجز الحد منه.");
+        }
     }
 
     private Long requiredCategoryId(PreAuthorizationLine line) {

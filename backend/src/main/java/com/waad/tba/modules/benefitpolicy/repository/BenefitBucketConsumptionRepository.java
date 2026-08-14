@@ -226,6 +226,28 @@ public interface BenefitBucketConsumptionRepository extends JpaRepository<Benefi
     boolean existsByIdempotencyKey(String idempotencyKey);
 
     /**
+     * Net RESERVED times held against a bucket. A separate dimension from the
+     * amount: a visit count and a currency figure are not comparable, and a
+     * decision can be constrained by either independently.
+     */
+    @Query(value = """
+        select coalesce(sum(c.times_consumed), 0)
+          from benefit_bucket_consumptions c
+         where c.member_id = :memberId and c.bucket_id = :bucketId and c.status = 'RESERVED'
+           and c.period_start = :periodStart
+           and c.period_end is not distinct from cast(:periodEnd as date)
+           -- A released hold no longer counts: its compensating movement
+           -- carries the times it gave back.
+           and not exists (
+                select 1 from benefit_bucket_consumptions r
+                 where r.reversal_of_id = c.id and r.status = 'REVERSED')
+        """, nativeQuery = true)
+    Integer sumReservedTimes(@Param("memberId") Long memberId,
+                             @Param("bucketId") Long bucketId,
+                             @Param("periodStart") LocalDate periodStart,
+                             @Param("periodEnd") LocalDate periodEnd);
+
+    /**
      * Net RESERVED amount held against the POLICY_GENERAL ceiling. Read from
      * its OWN rows -- never derived by summing bucket rows, since one line can
      * map to several buckets and that sum would count the same money more than

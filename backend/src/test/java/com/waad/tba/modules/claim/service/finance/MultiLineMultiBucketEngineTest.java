@@ -89,8 +89,10 @@ class MultiLineMultiBucketEngineTest {
                 10L, 20L, null, limitValue, "ANNUAL",
                 LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31), 1, 0);
         var effective = new EffectiveLimit(definition, limitValue, SourceType.POLICY_DEFAULT, null, null);
-        // no committed, no reserved: both balances equal the full limit
+        // no committed, no reserved: both balances equal the full limit.
+        // The occurrence dimension is null -- this bucket declares no times
+        // limit, which is not the same as having none left.
         return new LimitBalanceReader.LimitBalance(effective, BigDecimal.ZERO, BigDecimal.ZERO,
-                limitValue, limitValue);
+                limitValue, limitValue, null, null, null, null, null);
     }
 }

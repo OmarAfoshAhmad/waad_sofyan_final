@@ -3,7 +3,9 @@ package com.waad.tba.modules.benefitpolicy.service;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitBucketConsumption.Status;
 import com.waad.tba.modules.benefitpolicy.enums.BeneficiaryScopeType;
 import com.waad.tba.modules.benefitpolicy.enums.BenefitScopeType;
+import com.waad.tba.modules.benefitpolicy.entity.BenefitLimitBucket;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitBucketConsumptionRepository;
+import com.waad.tba.modules.benefitpolicy.repository.BenefitLimitBucketRepository;
 import com.waad.tba.modules.claim.repository.ClaimRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -17,13 +19,17 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 /** Reads committed/reserved balances without deciding which limits apply. */
 @Service
 @RequiredArgsConstructor
 public class LimitBalanceReader {
+
+    // Reads the occurrence limit a bucket declares, alongside its amount limit.
     private final BenefitBucketConsumptionRepository consumptionRepository;
     private final ClaimRepository claimRepository;
+    private final BenefitLimitBucketRepository bucketRepository;
 
     /**
      * Two DIFFERENT balances, deliberately not collapsed into one number.
@@ -46,12 +52,27 @@ public class LimitBalanceReader {
      * Values stay signed; clamping negatives is a display decision, not a
      * ledger one.
      */
+    /**
+     * Two independent dimensions, never mixed. A limit can bind by money, by
+     * occurrences, or by both -- but min() across a currency amount and a
+     * visit count is meaningless, so each constrains a decision in its own
+     * terms.
+     *
+     * The times fields are null when the bucket carries no times limit --
+     * "not applicable", not zero (zero means the count is used up, the
+     * opposite of unconstrained).
+     */
     public record LimitBalance(
             EffectiveLimitResolver.EffectiveLimit limit,
             BigDecimal committed,
             BigDecimal reserved,
             BigDecimal actualRemaining,
-            BigDecimal reservableAvailable) {}
+            BigDecimal reservableAvailable,
+            Integer timesLimit,
+            Integer committedTimes,
+            Integer reservedTimes,
+            Integer actualRemainingTimes,
+            Integer reservableTimes) {}
 
     public record BalanceSet(
             Long memberId,
@@ -107,7 +128,32 @@ public class LimitBalanceReader {
             }
             BigDecimal actualRemaining = limit.effectiveLimit().subtract(committed);
             BigDecimal reservableAvailable = actualRemaining.subtract(reserved);
-            balances.add(new LimitBalance(limit, committed, reserved, actualRemaining, reservableAvailable));
+
+            // The occurrence dimension, read only where the bucket declares
+            // one. Left null otherwise so "no times limit" cannot be mistaken
+            // for "no times left".
+            Integer timesLimit = null;
+            Integer committedTimes = null;
+            Integer reservedTimes = null;
+            Integer actualRemainingTimes = null;
+            Integer reservableTimes = null;
+            if (definition.bucketId() != null) {
+                timesLimit = bucketRepository.findById(definition.bucketId())
+                        .map(BenefitLimitBucket::getTimesLimit).orElse(null);
+                if (timesLimit != null) {
+                    committedTimes = Optional.ofNullable(consumptionRepository.sumCommittedTimes(
+                            memberId, definition.bucketId(), definition.periodStart(),
+                            definition.periodEnd(), excludeClaimId)).orElse(0);
+                    reservedTimes = Optional.ofNullable(consumptionRepository.sumReservedTimes(
+                            memberId, definition.bucketId(), definition.periodStart(),
+                            definition.periodEnd())).orElse(0);
+                    actualRemainingTimes = Math.max(0, timesLimit - committedTimes);
+                    reservableTimes = Math.max(0, actualRemainingTimes - reservedTimes);
+                }
+            }
+
+            balances.add(new LimitBalance(limit, committed, reserved, actualRemaining, reservableAvailable,
+                    timesLimit, committedTimes, reservedTimes, actualRemainingTimes, reservableTimes));
         }
 
         // The binding constraint for a NEW decision is the tightest
