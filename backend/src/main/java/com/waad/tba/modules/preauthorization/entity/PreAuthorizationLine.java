@@ -28,6 +28,20 @@ public class PreAuthorizationLine {
     @Column(name = "provider_service_id")
     private Long providerServiceId;
 
+    /**
+     * The line's own medical identity (V176). providerServiceId identifies
+     * the provider's price-list entry, not a classification -- and the
+     * benefit rule that decides which buckets apply is resolved from the
+     * CATEGORY. Resolving it from the pre-authorization head instead would
+     * price every line of a mixed-category request against a single
+     * category, landing holds on the wrong buckets for all but one of them.
+     */
+    @Column(name = "medical_service_id")
+    private Long medicalServiceId;
+
+    @Column(name = "medical_category_id")
+    private Long medicalCategoryId;
+
     @Column(name = "provider_service_code", length = 50)
     private String providerServiceCode;
 

@@ -98,11 +98,14 @@ class PreauthDecisionSnapshotConstraintsIntegrationTest extends PostgresIntegrat
     private String decisionSql(Fixture f, String status, String requested, String approved,
             String patient, String company, String key) {
         return "INSERT INTO preauth_decision_snapshots (preauth_id, calculation_version, member_id, policy_id, "
-                + "expected_service_date, provider_id, requested_total, approved_total, rejected_total, "
-                + "patient_share_total, company_share_total, decision_status, decided_by, idempotency_key) VALUES ("
+                + "expected_service_date, provider_id, requested_total, settlement_total, "
+                + "authorized_service_total, rejected_total, "
+                + "patient_share_total, company_share_total, decision_status, coverage_outcome, "
+                + "decided_by, idempotency_key) VALUES ("
                 + f.preauthId() + ", 1, " + f.memberId() + ", " + f.policyId()
                 + ", CURRENT_DATE + 14, " + f.providerId() + ", " + requested + ", " + approved
-                + ", 0, " + patient + ", " + company + ", '" + status + "', 'reviewer', '" + key + "')";
+                + ", " + requested + ", 0, " + patient + ", " + company
+                + ", '" + status + "', 'FULLY_COVERED', 'reviewer', '" + key + "')";
     }
 
     private long insertDecision(Fixture f) throws Exception {
@@ -120,10 +123,11 @@ class PreauthDecisionSnapshotConstraintsIntegrationTest extends PostgresIntegrat
         return "INSERT INTO preauth_line_limit_snapshots (line_snapshot_id, limit_scope, limit_semantic_key, "
                 + "bucket_id, policy_id, period_type, period_start, period_end, effective_limit, "
                 + "committed_before, reserved_before, actual_remaining_before, reservable_available_before, "
-                + "reserved_amount) VALUES (" + lineSnapshotId + ", '" + scope + "', '" + scope + ":"
+                + "consumption_basis, reserved_unit, amount_reserved) VALUES (" + lineSnapshotId + ", '" + scope + "', '" + scope + ":"
                 + suffix() + "', " + (bucketId == null ? "NULL" : bucketId) + ", " + f.policyId()
                 + ", 'ANNUAL', CURRENT_DATE - 10, CURRENT_DATE + 355, " + limit + ", " + committed + ", "
-                + reserved + ", " + actualRemaining + ", " + reservable + ", " + reservedAmount + ")";
+                + reserved + ", " + actualRemaining + ", " + reservable
+                + ", 'COMPANY_SHARE', 'CURRENCY', " + reservedAmount + ")";
     }
 
     // ── the happy path, so the rejections below mean something ──────────
@@ -144,11 +148,11 @@ class PreauthDecisionSnapshotConstraintsIntegrationTest extends PostgresIntegrat
     // ── the basis cannot be incoherent ──────────────────────────────────
 
     @Test
-    void sharesThatDoNotAccountForTheApprovedTotalAreRejected() throws Exception {
+    void sharesThatDoNotAccountForTheSettlementTotalAreRejected() throws Exception {
         Fixture f = fixture();
         assertThatThrownBy(() -> exec(decisionSql(f, "APPROVED", "500.00", "500.00",
                 "100.00", "300.00", "K-" + suffix())))
-                .hasMessageContaining("chk_preauth_snapshot_shares");
+                .hasMessageContaining("chk_preauth_snapshot_settlement");
     }
 
     // The three status/total rules overlap deliberately -- each states a
@@ -156,7 +160,7 @@ class PreauthDecisionSnapshotConstraintsIntegrationTest extends PostgresIntegrat
     // does not fix which constraint reports first, so these assert that a
     // snapshot rule refused the row, not which one won the race.
     @Test
-    void approvingMoreThanWasRequestedIsRejected() throws Exception {
+    void settlingMoreThanWasRequestedIsRejected() throws Exception {
         Fixture f = fixture();
         assertThatThrownBy(() -> exec(decisionSql(f, "APPROVED", "500.00", "600.00",
                 "100.00", "500.00", "K-" + suffix())))
@@ -164,11 +168,45 @@ class PreauthDecisionSnapshotConstraintsIntegrationTest extends PostgresIntegrat
     }
 
     @Test
-    void aPartialApprovalThatApprovedEverythingIsRejected() throws Exception {
+    void aPartialApprovalWithNothingRefusedIsRejected() throws Exception {
         Fixture f = fixture();
+        // PARTIALLY_APPROVED is now a statement about the SERVICE: something
+        // was explicitly refused. A ceiling alone never produces it -- that
+        // is what coverage_outcome carries.
         assertThatThrownBy(() -> exec(decisionSql(f, "PARTIALLY_APPROVED", "500.00", "500.00",
                 "100.00", "400.00", "K-" + suffix())))
-                .hasMessageContaining("chk_preauth_snapshot_partial");
+                .hasMessageContaining("chk_preauth_snapshot_partial_means_refusal");
+    }
+
+    @Test
+    void aCappedCoverageWithoutAnyExcessIsRejected() throws Exception {
+        Fixture f = fixture();
+        // Claiming a ceiling was reached without an excess would misstate why
+        // the insurer paid less.
+        assertThatThrownBy(() -> exec(
+                "INSERT INTO preauth_decision_snapshots (preauth_id, calculation_version, member_id, policy_id, "
+                        + "expected_service_date, provider_id, requested_total, settlement_total, "
+                        + "authorized_service_total, rejected_total, patient_share_total, company_share_total, "
+                        + "decision_status, coverage_outcome, decided_by, idempotency_key) VALUES ("
+                        + f.preauthId() + ", 1, " + f.memberId() + ", " + f.policyId() + ", CURRENT_DATE + 14, "
+                        + f.providerId() + ", 500.00, 500.00, 500.00, 0, 100.00, 400.00, 'APPROVED', "
+                        + "'LIMIT_CAPPED', 'reviewer', 'K-" + suffix() + "')"))
+                .hasMessageContaining("chk_preauth_snapshot_capped_outcome");
+    }
+
+    @Test
+    void theCappedFlagAndTheExcessMayNotDisagree() throws Exception {
+        Fixture f = fixture();
+        assertThatThrownBy(() -> exec(
+                "INSERT INTO preauth_decision_snapshots (preauth_id, calculation_version, member_id, policy_id, "
+                        + "expected_service_date, provider_id, requested_total, settlement_total, "
+                        + "authorized_service_total, rejected_total, patient_share_total, company_share_total, "
+                        + "limit_capped, limit_excess_total, decision_status, coverage_outcome, decided_by, "
+                        + "idempotency_key) VALUES (" + f.preauthId() + ", 1, " + f.memberId() + ", "
+                        + f.policyId() + ", CURRENT_DATE + 14, " + f.providerId()
+                        + ", 500.00, 500.00, 500.00, 0, 100.00, 400.00, true, 0, 'APPROVED', "
+                        + "'FULLY_COVERED', 'reviewer', 'K-" + suffix() + "')"))
+                .hasMessageContaining("chk_preauth_snapshot_limit_capped");
     }
 
     @Test
@@ -184,11 +222,13 @@ class PreauthDecisionSnapshotConstraintsIntegrationTest extends PostgresIntegrat
         Fixture f = fixture();
         assertThatThrownBy(() -> exec(
                 "INSERT INTO preauth_decision_snapshots (preauth_id, calculation_version, member_id, policy_id, "
-                        + "expected_service_date, provider_id, discount_percent, requested_total, approved_total, "
-                        + "patient_share_total, company_share_total, decision_status, decided_by, idempotency_key) "
+                        + "expected_service_date, provider_id, discount_percent, requested_total, settlement_total, "
+                        + "authorized_service_total, patient_share_total, company_share_total, decision_status, "
+                        + "coverage_outcome, decided_by, idempotency_key) "
                         + "VALUES (" + f.preauthId() + ", 1, " + f.memberId() + ", " + f.policyId()
                         + ", CURRENT_DATE + 14, " + f.providerId()
-                        + ", 15.00, 500.00, 500.00, 100.00, 400.00, 'APPROVED', 'reviewer', 'K-" + suffix() + "')"))
+                        + ", 15.00, 500.00, 500.00, 500.00, 100.00, 400.00, 'APPROVED', 'FULLY_COVERED', "
+                        + "'reviewer', 'K-" + suffix() + "')"))
                 .hasMessageContaining("chk_preauth_snapshot_contract_shape");
     }
 
@@ -285,7 +325,7 @@ class PreauthDecisionSnapshotConstraintsIntegrationTest extends PostgresIntegrat
         // Conversion trusts these rows precisely because nothing between
         // approval and conversion can have altered them.
         assertThatThrownBy(() -> exec(
-                "UPDATE preauth_decision_snapshots SET approved_total = 1.00 WHERE id = " + decisionId))
+                "UPDATE preauth_decision_snapshots SET settlement_total = 1.00 WHERE id = " + decisionId))
                 .hasMessageContaining("append-only");
         assertThatThrownBy(() -> exec(
                 "DELETE FROM preauth_decision_snapshots WHERE id = " + decisionId))
@@ -299,7 +339,7 @@ class PreauthDecisionSnapshotConstraintsIntegrationTest extends PostgresIntegrat
                 .hasMessageContaining("append-only");
 
         assertThatThrownBy(() -> exec(
-                "UPDATE preauth_line_limit_snapshots SET reserved_amount = 1.00 "
+                "UPDATE preauth_line_limit_snapshots SET amount_reserved = 1.00 "
                         + "WHERE line_snapshot_id = " + lineId))
                 .hasMessageContaining("append-only");
         assertThatThrownBy(() -> exec(
@@ -315,11 +355,12 @@ class PreauthDecisionSnapshotConstraintsIntegrationTest extends PostgresIntegrat
         // The way a decision is revised: another version alongside the first,
         // leaving the original readable.
         exec("INSERT INTO preauth_decision_snapshots (preauth_id, calculation_version, member_id, policy_id, "
-                + "expected_service_date, provider_id, requested_total, approved_total, rejected_total, "
-                + "patient_share_total, company_share_total, decision_status, decided_by, idempotency_key) VALUES ("
+                + "expected_service_date, provider_id, requested_total, settlement_total, authorized_service_total, "
+                + "rejected_total, patient_share_total, company_share_total, decision_status, coverage_outcome, "
+                + "decided_by, idempotency_key) VALUES ("
                 + f.preauthId() + ", 2, " + f.memberId() + ", " + f.policyId() + ", CURRENT_DATE + 14, "
-                + f.providerId() + ", 500.00, 400.00, 100.00, 80.00, 320.00, 'PARTIALLY_APPROVED', "
-                + "'reviewer', 'K-" + suffix() + "')");
+                + f.providerId() + ", 500.00, 400.00, 400.00, 100.00, 80.00, 320.00, 'PARTIALLY_APPROVED', "
+                + "'PARTIALLY_COVERED', 'reviewer', 'K-" + suffix() + "')");
 
         try (Connection c = conn();
                 PreparedStatement ps = c.prepareStatement(
