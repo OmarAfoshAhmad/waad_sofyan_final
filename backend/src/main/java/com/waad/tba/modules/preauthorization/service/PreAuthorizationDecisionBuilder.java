@@ -147,29 +147,40 @@ public class PreAuthorizationDecisionBuilder {
         }
 
         // ── the outcome: two separate questions ─────────────────────────
-        // Was the SERVICE approved? -- was any part of it explicitly refused?
-        // Did the INSURER cover it? -- or did a ceiling cap its share?
+        // Was the SERVICE approved? -- decided by the REVIEWER, from the
+        //   per-line decisions above. The engine never manufactures a refusal
+        //   to make its own totals balance.
+        // Did the INSURER cover it? -- decided by the ceilings.
         //
-        // These were previously one field, which meant a fully authorised
-        // service whose ceiling was reached got reported as "partially
-        // approved" -- telling a patient their request was cut down when it
-        // was not. A ceiling decides who PAYS, not what was authorised.
+        // Folding these together is what made a fully authorised service whose
+        // ceiling was reached report as "partially approved", telling a
+        // patient their request was cut down when it was not.
+        boolean anyRefusal = rejectedTotal.compareTo(BigDecimal.ZERO) > 0;
+
         PreAuthorizationDecision.Outcome outcome;
         String rejectionReason = null;
         if (authorizedServiceTotal.compareTo(BigDecimal.ZERO) == 0) {
             outcome = PreAuthorizationDecision.Outcome.REJECTED;
-            rejectionReason = "لم يُعتمد أي بند من بنود الطلب.";
-        } else if (rejectedTotal.compareTo(BigDecimal.ZERO) > 0) {
+            rejectionReason = lines.stream()
+                    .map(PreAuthorizationDecision.Line::rejectionReason)
+                    .filter(r -> r != null && !r.isBlank())
+                    .findFirst().orElse("رُفضت جميع بنود الطلب.");
+        } else if (anyRefusal) {
             outcome = PreAuthorizationDecision.Outcome.PARTIALLY_APPROVED;
         } else {
             outcome = PreAuthorizationDecision.Outcome.APPROVED;
         }
 
+        // A spent ceiling is not "zero coverage": the policy still covers its
+        // percentage, and what reached zero is the payable amount. The two
+        // are separate facts, so they get separate names.
         boolean limitCapped = limitExcessTotal.compareTo(BigDecimal.ZERO) > 0;
         PreAuthorizationDecision.CoverageOutcome coverageOutcome;
-        if (limitCapped) {
+        if (limitCapped && companyTotal.compareTo(BigDecimal.ZERO) == 0) {
+            coverageOutcome = PreAuthorizationDecision.CoverageOutcome.LIMIT_EXHAUSTED;
+        } else if (limitCapped) {
             coverageOutcome = PreAuthorizationDecision.CoverageOutcome.LIMIT_CAPPED;
-        } else if (rejectedTotal.compareTo(BigDecimal.ZERO) > 0) {
+        } else if (anyRefusal) {
             coverageOutcome = PreAuthorizationDecision.CoverageOutcome.PARTIALLY_COVERED;
         } else {
             coverageOutcome = PreAuthorizationDecision.CoverageOutcome.FULLY_COVERED;
@@ -186,6 +197,29 @@ public class PreAuthorizationDecisionBuilder {
             Member member, BenefitPolicy policy, LocalDate serviceDate, ProviderContractTerm terms) {
 
         BigDecimal requested = Optional.ofNullable(line.getRequestedAmount()).orElse(BigDecimal.ZERO);
+
+        // The reviewer's decision arrives as data. An unreviewed line is
+        // treated as fully requested -- never as silently refused.
+        int requestedQuantity = Optional.ofNullable(line.getRequestedQuantity()).orElse(1);
+        int approvedQuantity = Optional.ofNullable(line.getApprovedQuantity()).orElse(requestedQuantity);
+        BigDecimal explicitRejected = Optional.ofNullable(line.getExplicitRejectedAmount())
+                .orElse(BigDecimal.ZERO);
+        var reviewDecision = line.getReviewDecision();
+        boolean fullyRejected = reviewDecision == PreAuthorizationLine.ReviewDecision.REJECT
+                || approvedQuantity == 0;
+
+        if (fullyRejected) {
+            approvedQuantity = 0;
+        }
+        if ((fullyRejected || explicitRejected.signum() > 0 || approvedQuantity < requestedQuantity)
+                && (line.getRejectionReason() == null || line.getRejectionReason().isBlank())) {
+            // A refusal nobody explained cannot be appealed by the member or
+            // answered by the provider.
+            throw new BusinessRuleException("رفض بند الموافقة يتطلب سبباً صريحاً.");
+        }
+        if (explicitRejected.compareTo(requested) > 0) {
+            throw new BusinessRuleException("المبلغ المرفوض يتجاوز المبلغ المطلوب للبند.");
+        }
         BigDecimal contractPrice = Optional.ofNullable(line.getContractPrice())
                 .orElse(Optional.ofNullable(line.getManualPrice()).orElse(requested));
         int coveragePercent = Optional.ofNullable(line.getCoveragePercentage())
@@ -250,9 +284,12 @@ public class PreAuthorizationDecisionBuilder {
                 coveragePercent,
                 terms == null ? BigDecimal.ZERO : terms.getDiscountPercent(),
                 terms != null && Boolean.TRUE.equals(terms.getDiscountBeforeRejection()),
-                BigDecimal.ZERO,
-                false,
-                1));
+                // The reviewer's refusal, passed through rather than invented.
+                // Its position relative to the discount is what makes
+                // discountBeforeRejection matter at all.
+                explicitRejected,
+                fullyRejected,
+                approvedQuantity));
 
         // ONE reservable company share for the line. Recorded against each
         // applicable scope below -- never added across them: a line mapped to a
@@ -260,6 +297,23 @@ public class PreAuthorizationDecisionBuilder {
         // one amount that four scopes each measure, not four amounts.
         BigDecimal companyShare = scaled(result.insurerFinalPayment());
         BigDecimal patientShare = scaled(result.patientTotalResponsibility());
+
+        // What the policy WOULD have paid had the ceiling not intervened.
+        // Reporting only the post-ceiling figure is what makes an exhausted
+        // bucket look like "0% coverage" -- the percentage never changed.
+        WaadFinancialEngine.Result uncapped = financialEngine.evaluate(new WaadFinancialEngine.Input(
+                requested, contractPrice, WaadFinancialEngine.LimitMode.UNLIMITED, null,
+                coveragePercent,
+                terms == null ? BigDecimal.ZERO : terms.getDiscountPercent(),
+                terms != null && Boolean.TRUE.equals(terms.getDiscountBeforeRejection()),
+                explicitRejected, fullyRejected, approvedQuantity));
+        BigDecimal companyShareBeforeLimit = scaled(uncapped.insurerFinalPayment());
+
+        BigDecimal rejectedForLine = fullyRejected
+                ? requested
+                : explicitRejected.add(requested
+                        .multiply(BigDecimal.valueOf(requestedQuantity - approvedQuantity))
+                        .divide(BigDecimal.valueOf(requestedQuantity), 2, RoundingMode.HALF_UP));
 
         List<PreAuthorizationDecision.LimitHold> holds = new ArrayList<>();
         for (LimitBalanceReader.LimitBalance balance : balances.limits()) {
@@ -299,13 +353,16 @@ public class PreAuthorizationDecisionBuilder {
                 line.getId(), line.getProviderServiceId(), line.getProviderServiceCode(), line.getServiceName(),
                 1, scaled(contractPrice), scaled(requested), coveragePercent,
                 BigDecimal.ZERO.setScale(2),
-                // Nothing is refused by this builder yet -- a reviewer's
-                // refusal is an input it does not receive. Recorded as zero
-                // explicitly rather than inferred from the ceiling, which is
-                // a different thing entirely.
-                BigDecimal.ZERO.setScale(2),
+                // What the REVIEWER refused. Never inferred from the ceiling:
+                // a ceiling decides who pays, a refusal decides what was
+                // authorised, and conflating them misreports both.
+                scaled(rejectedForLine),
                 line.getMedicalServiceId(), line.getMedicalCategoryId(), benefitRuleId,
-                scaled(requested),
+                requestedQuantity, approvedQuantity,
+                reviewDecision == null ? null : reviewDecision.name(),
+                line.getRejectionReason(),
+                scaled(companyShareBeforeLimit),
+                scaled(requested.subtract(rejectedForLine).max(BigDecimal.ZERO)),
                 scaled(companyShare.add(patientShare)),
                 scaled(result.providerContractDiscount()),
                 scaled(result.patientLimitExcess()),

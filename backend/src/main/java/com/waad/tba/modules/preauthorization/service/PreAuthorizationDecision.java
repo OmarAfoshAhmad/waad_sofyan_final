@@ -59,7 +59,19 @@ public record PreAuthorizationDecision(
      * was cut down when it was not: the whole service was authorised, and a
      * limit they had already spent decides who pays for it.
      */
-    public enum CoverageOutcome { FULLY_COVERED, LIMIT_CAPPED, PARTIALLY_COVERED }
+    public enum CoverageOutcome {
+        FULLY_COVERED,
+        /** Part of the service value exceeded the ceiling; the insurer still pays something. */
+        LIMIT_CAPPED,
+        /**
+         * Nothing was left to pay from. NOT "zero coverage": the policy still
+         * covers its percentage -- what reached zero is the payable amount,
+         * because the ceiling is spent. Showing a member 0% would misstate
+         * their entitlement.
+         */
+        LIMIT_EXHAUSTED,
+        PARTIALLY_COVERED
+    }
 
     /** The unit a scope reserves in. Values in different units are never summed. */
     public enum ReservedUnit { CURRENCY, TIMES, DAYS }
@@ -106,6 +118,12 @@ public record PreAuthorizationDecision(
             Long medicalServiceId,
             Long medicalCategoryId,
             Long benefitRuleId,
+            int requestedQuantity,
+            int approvedQuantity,
+            String reviewDecision,
+            String rejectionReason,
+            /** The insurer's share BEFORE the ceiling was applied -- what the policy would have paid. */
+            BigDecimal companyShareBeforeLimit,
             BigDecimal authorizedServiceAmount,
             BigDecimal settlementAmount,
             BigDecimal providerDiscount,

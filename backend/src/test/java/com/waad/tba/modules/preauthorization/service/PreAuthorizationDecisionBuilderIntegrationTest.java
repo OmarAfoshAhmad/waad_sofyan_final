@@ -311,9 +311,16 @@ class PreAuthorizationDecisionBuilderIntegrationTest extends PostgresIntegration
         // it, and the whole value falls to the patient as limit excess.
         assertThat(decision.outcome()).isEqualTo(PreAuthorizationDecision.Outcome.APPROVED);
         assertThat(decision.coverageOutcome())
-                .isEqualTo(PreAuthorizationDecision.CoverageOutcome.LIMIT_CAPPED);
+                // Exhausted, not merely capped: the insurer pays nothing at
+                // all. And NOT "0% coverage" -- the policy still covers 80%;
+                // what reached zero is the payable amount.
+                .isEqualTo(PreAuthorizationDecision.CoverageOutcome.LIMIT_EXHAUSTED);
         assertThat(decision.companyShareTotal()).isEqualByComparingTo("0.00");
         assertThat(decision.patientShareTotal()).isEqualByComparingTo("500.00");
+        assertThat(decision.lines().get(0).coveragePercent())
+                .as("the policy percentage is unchanged by an exhausted ceiling").isEqualTo(80);
+        assertThat(decision.lines().get(0).companyShareBeforeLimit())
+                .as("what the policy would have paid").isEqualByComparingTo("400.00");
     }
 
     // ── the whole point: it decides, it does not act ────────────────────
@@ -380,22 +387,47 @@ class PreAuthorizationDecisionBuilderIntegrationTest extends PostgresIntegration
     }
 
     @Test
-    void discountBeforeAndAfterRejectionProduceDifferentButValidBases() {
+    void discountBeforeAndAfterRejectionProduceDifferentNumbers() {
+        // 1000 requested, 80% coverage, 200 explicitly refused, 10% discount.
+        // The discount's position relative to the refusal changes what the
+        // insurer finally pays -- which is the whole reason the ORDER is part
+        // of the recorded basis rather than a detail of the contract.
         Scenario after = scenario("1000000", null, "1000.00", 80, "10.00", LocalDate.now().plusDays(14));
+        refuse(after, "200.00");
         PreAuthorizationDecision afterDecision = builder.build(after.preauthId(), 1);
 
         Scenario before = scenario("1000000", null, "1000.00", 80, "10.00", LocalDate.now().plusDays(14));
+        refuse(before, "200.00");
         jdbc.update("UPDATE provider_contract_terms SET discount_before_rejection = true "
                 + "WHERE contract_id = (SELECT contract_id FROM pre_authorizations WHERE id = ?)",
                 before.preauthId());
         PreAuthorizationDecision beforeDecision = builder.build(before.preauthId(), 1);
 
-        // Both are legitimate; the ORDER is part of the basis, so each
-        // snapshot must record which one applied.
         assertThat(afterDecision.basis().discountBeforeRejection()).isFalse();
         assertThat(beforeDecision.basis().discountBeforeRejection()).isTrue();
-        assertThat(afterDecision.providerDiscountTotal()).isEqualByComparingTo("80.00");
-        assertThat(beforeDecision.providerDiscountTotal()).isEqualByComparingTo("80.00");
+
+        // After-rejection: the refusal comes off first, then 10% of what is
+        // left. Before-rejection: 10% comes off the gross share first, then
+        // the refusal. Different discount bases, different discounts,
+        // different final payment.
+        assertThat(beforeDecision.providerDiscountTotal())
+                .as("the two orders must not produce the same discount")
+                .isNotEqualByComparingTo(afterDecision.providerDiscountTotal());
+        assertThat(beforeDecision.companyShareTotal())
+                .as("nor the same final payment")
+                .isNotEqualByComparingTo(afterDecision.companyShareTotal());
+
+        // Both are PARTIALLY_APPROVED: a reviewer refused part of the service.
+        assertThat(afterDecision.outcome())
+                .isEqualTo(PreAuthorizationDecision.Outcome.PARTIALLY_APPROVED);
+        assertThat(afterDecision.rejectedTotal()).isEqualByComparingTo("200.00");
+    }
+
+    /** Records a reviewer's explicit partial refusal against the scenario's line. */
+    private void refuse(Scenario sc, String amount) {
+        jdbc.update("UPDATE pre_authorization_lines SET explicit_rejected_amount = " + amount
+                + ", review_decision = 'PARTIALLY_APPROVE', rejection_reason = 'مبالغة في السعر المرجعي' "
+                + "WHERE pre_authorization_id = ?", sc.preauthId());
     }
 
     @Test
@@ -420,5 +452,85 @@ class PreAuthorizationDecisionBuilderIntegrationTest extends PostgresIntegration
         assertThat(general.amountReserved()).isEqualByComparingTo("800.00");
 
         assertThat(bucket.amountReserved()).isNotEqualByComparingTo(general.amountReserved());
+    }
+
+    @Test
+    void refusingHalfTheQuantityMakesItAPartialApproval() {
+        Scenario sc = scenario("1000000", null, "1000.00", 80, null, LocalDate.now().plusDays(14));
+        jdbc.update("UPDATE pre_authorization_lines SET requested_quantity = 4, approved_quantity = 2, "
+                + "review_decision = 'PARTIALLY_APPROVE', rejection_reason = 'الكمية تتجاوز المبرر الطبي' "
+                + "WHERE pre_authorization_id = ?", sc.preauthId());
+
+        PreAuthorizationDecision decision = builder.build(sc.preauthId(), 1);
+
+        // The SERVICE was cut down -- by a reviewer, not by a ceiling.
+        assertThat(decision.outcome()).isEqualTo(PreAuthorizationDecision.Outcome.PARTIALLY_APPROVED);
+        assertThat(decision.lines().get(0).requestedQuantity()).isEqualTo(4);
+        assertThat(decision.lines().get(0).approvedQuantity()).isEqualTo(2);
+        assertThat(decision.rejectedTotal()).isEqualByComparingTo("500.00");
+        assertThat(decision.authorizedServiceTotal()).isEqualByComparingTo("500.00");
+        assertThat(decision.limitCapped()).as("no ceiling was involved").isFalse();
+    }
+
+    @Test
+    void aRefusalWithoutAStatedReasonIsRefused() {
+        Scenario sc = scenario("1000000", null, "1000.00", 80, null, LocalDate.now().plusDays(14));
+        jdbc.update("UPDATE pre_authorization_lines SET explicit_rejected_amount = 100.00 "
+                + "WHERE pre_authorization_id = ?", sc.preauthId());
+
+        // A refusal nobody explained cannot be appealed or answered.
+        assertThatThrownBy(() -> builder.build(sc.preauthId(), 1))
+                .hasMessageContaining("سبباً صريحاً");
+    }
+
+    @Test
+    void twoLinesFromDifferentCategoriesResolveTwoDifferentRules() {
+        Scenario sc = scenario("1000000", null, "1000.00", 80, null, LocalDate.now().plusDays(14));
+        String s2 = suffix();
+
+        // A second category, with its own rule and its own bucket.
+        Long otherCategory = jdbc.queryForObject("INSERT INTO medical_categories (code, name, active) "
+                + "VALUES ('DCAT2-" + s2 + "', 'Other Category', true) RETURNING id", Long.class);
+        Long otherService = jdbc.queryForObject("INSERT INTO medical_services (code, name, category_id, active) "
+                + "VALUES ('DSRV2-" + s2 + "', 'Other Service', " + otherCategory + ", true) RETURNING id",
+                Long.class);
+        Long otherRule = jdbc.queryForObject("INSERT INTO benefit_policy_rules (benefit_policy_id, "
+                + "medical_category_id, encounter_type, coverage_percent, active, deleted) VALUES ("
+                + sc.policyId() + ", " + otherCategory + ", 'OUTPATIENT', 50, true, false) RETURNING id",
+                Long.class);
+        Long otherGroup = jdbc.queryForObject("INSERT INTO benefit_groups (policy_id, code, name_ar, "
+                + "context_type, aggregation_mode) VALUES (" + sc.policyId() + ", 'DG2-" + s2
+                + "', 'مجموعة أخرى', 'OUTPATIENT', 'INDIVIDUAL') RETURNING id", Long.class);
+        Long otherBucket = jdbc.queryForObject("INSERT INTO benefit_limit_buckets (policy_id, "
+                + "benefit_group_id, code, name_ar, amount_limit, period_type, counting_method, "
+                + "consumption_basis, benefit_scope_type, context_type, active) VALUES (" + sc.policyId()
+                + ", " + otherGroup + ", 'DB2-" + s2 + "', 'وعاء آخر', 999999, 'ANNUAL', 'EACH_LINE', "
+                + "'COMPANY_SHARE', 'CATEGORY', 'OUTPATIENT', true) RETURNING id", Long.class);
+        jdbc.update("INSERT INTO benefit_rule_buckets (rule_id, bucket_id) VALUES (?, ?)",
+                otherRule, otherBucket);
+
+        jdbc.update("INSERT INTO pre_authorization_lines (pre_authorization_id, provider_service_id, "
+                + "medical_service_id, medical_category_id, provider_service_code, service_name, "
+                + "contract_price, requested_amount, coverage_percentage, encounter_type) VALUES (?, "
+                + otherService + ", " + otherService + ", " + otherCategory + ", ?, ?, "
+                + "1000.00, 1000.00, 50, 'OUTPATIENT')", sc.preauthId(), "SVC2-" + s2, "Other " + s2);
+
+        PreAuthorizationDecision decision = builder.build(sc.preauthId(), 1);
+
+        assertThat(decision.lines()).hasSize(2);
+
+        // Each line resolved its OWN rule from its OWN category. Resolving
+        // from the pre-authorization head would have priced both against one
+        // category, landing holds on the wrong buckets for one of them.
+        List<Long> rules = decision.lines().stream()
+                .map(PreAuthorizationDecision.Line::benefitRuleId).distinct().toList();
+        assertThat(rules).as("two categories must resolve two rules").hasSize(2);
+
+        // And the two lines therefore hold against different buckets.
+        List<Long> buckets = decision.lines().stream()
+                .flatMap(l -> l.limitHolds().stream())
+                .map(PreAuthorizationDecision.LimitHold::bucketId)
+                .filter(java.util.Objects::nonNull).distinct().toList();
+        assertThat(buckets).contains(sc.bucketId(), otherBucket);
     }
 }
