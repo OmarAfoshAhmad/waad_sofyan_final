@@ -35,7 +35,7 @@ public interface BenefitBucketConsumptionRepository extends JpaRepository<Benefi
          where c.member_id = :memberId
            and c.bucket_id in (:bucketIds)
            and c.status in ('COMMITTED', 'RESERVED')
-           and (:excludeClaimId is null or c.claim_id <> :excludeClaimId)
+           and (:excludeClaimId is null or c.claim_id is distinct from :excludeClaimId)
          group by c.bucket_id, c.period_start, c.period_end, c.status
         """, nativeQuery = true)
     List<BucketAmountBalanceProjection> aggregateAmountBalances(
@@ -107,7 +107,7 @@ public interface BenefitBucketConsumptionRepository extends JpaRepository<Benefi
          where c.member_id = :memberId and c.bucket_id = :bucketId and c.status = 'COMMITTED'
            and c.period_start = :periodStart
            and c.period_end = :periodEnd
-           and (:excludeClaimId is null or c.claim_id <> :excludeClaimId)
+           and (:excludeClaimId is null or c.claim_id is distinct from :excludeClaimId)
         """, nativeQuery = true)
     BigDecimal sumCommittedAmountBounded(@Param("memberId") Long memberId,
                                          @Param("bucketId") Long bucketId,
@@ -127,7 +127,7 @@ public interface BenefitBucketConsumptionRepository extends JpaRepository<Benefi
          where c.member_id = :memberId and c.bucket_id = :bucketId and c.status = 'COMMITTED'
            and c.period_start = :periodStart
            and c.period_end is null
-           and (:excludeClaimId is null or c.claim_id <> :excludeClaimId)
+           and (:excludeClaimId is null or c.claim_id is distinct from :excludeClaimId)
         """, nativeQuery = true)
     BigDecimal sumCommittedAmountOpenEnded(@Param("memberId") Long memberId,
                                            @Param("bucketId") Long bucketId,
@@ -141,31 +141,43 @@ public interface BenefitBucketConsumptionRepository extends JpaRepository<Benefi
                 : sumCommittedTimesBounded(memberId, bucketId, periodStart, periodEnd, excludeClaimId);
     }
 
-    @Query("""
-        select coalesce(sum(c.timesConsumed), 0) from BenefitBucketConsumption c
-        where c.memberId = :memberId and c.bucket.id = :bucketId and c.status = com.waad.tba.modules.benefitpolicy.entity.BenefitBucketConsumption.Status.COMMITTED
-          and c.periodStart = :periodStart
-          and c.periodEnd = :periodEnd
-          and (:excludeClaimId is null or c.claim.id <> :excludeClaimId)
-        """)
+    @Query(value = """
+        select coalesce(sum(c.times_consumed), 0)
+          from benefit_bucket_consumptions c
+         where c.member_id = :memberId and c.bucket_id = :bucketId and c.status = 'COMMITTED'
+           and c.period_start = :periodStart
+           and c.period_end = :periodEnd
+           and (:excludeClaimId is null or c.claim_id is distinct from :excludeClaimId)
+        """, nativeQuery = true)
     Integer sumCommittedTimesBounded(@Param("memberId") Long memberId,
                                      @Param("bucketId") Long bucketId,
                                      @Param("periodStart") LocalDate periodStart,
                                      @Param("periodEnd") LocalDate periodEnd,
                                      @Param("excludeClaimId") Long excludeClaimId);
 
-    @Query("""
-        select coalesce(sum(c.timesConsumed), 0) from BenefitBucketConsumption c
-        where c.memberId = :memberId and c.bucket.id = :bucketId and c.status = com.waad.tba.modules.benefitpolicy.entity.BenefitBucketConsumption.Status.COMMITTED
-          and c.periodStart = :periodStart
-          and c.periodEnd is null
-          and (:excludeClaimId is null or c.claim.id <> :excludeClaimId)
-        """)
+    @Query(value = """
+        select coalesce(sum(c.times_consumed), 0)
+          from benefit_bucket_consumptions c
+         where c.member_id = :memberId and c.bucket_id = :bucketId and c.status = 'COMMITTED'
+           and c.period_start = :periodStart
+           and c.period_end is null
+           and (:excludeClaimId is null or c.claim_id is distinct from :excludeClaimId)
+        """, nativeQuery = true)
     Integer sumCommittedTimesOpenEnded(@Param("memberId") Long memberId,
                                        @Param("bucketId") Long bucketId,
                                        @Param("periodStart") LocalDate periodStart,
                                        @Param("excludeClaimId") Long excludeClaimId);
 
+    /**
+     * CLAIM-SCOPED BY DESIGN. A "service day" is a fact of the claim, so these
+     * read c.claim.serviceDate and therefore INNER JOIN through claim --
+     * deliberately excluding claim-less movements (a PREAUTH hold, an
+     * OPENING_IMPORT balance), which carry no service date to count.
+     *
+     * Do NOT reuse them as "all committed consumption": since V174 that is a
+     * strictly larger set. A read that means the whole ledger must filter on
+     * sourceType/limitScope, never on the presence of a claim.
+     */
     default Long countCommittedServiceDays(Long memberId, Long bucketId, LocalDate periodStart,
                                            LocalDate periodEnd, Long excludeClaimId) {
         return periodEnd == null
@@ -234,15 +246,11 @@ public interface BenefitBucketConsumptionRepository extends JpaRepository<Benefi
            and c.limit_scope = 'POLICY_GENERAL'
            and c.status = 'RESERVED'
            and c.period_start = :periodStart
-           -- An open-ended period matches an open-ended row, not every row.
-           -- Treating a null bound as "any period" would sum holds from other
-           -- periods into this one and understate what the member may spend.
-           -- The bucket path matches (bucketId, periodStart, periodEnd) exactly,
-           -- null included; this keeps the two scopes on identical semantics.
-           and (
-                 (cast(:periodEnd as date) is null and c.period_end is null)
-                 or c.period_end = cast(:periodEnd as date)
-               )
+           -- Null-safe EQUALITY: an open-ended period matches an open-ended
+           -- row, not every row. Treating a null bound as "any period" would
+           -- sum holds from other periods into this one and understate what
+           -- the member may spend.
+           and c.period_end is not distinct from cast(:periodEnd as date)
         """, nativeQuery = true)
     BigDecimal sumGeneralScopeReserved(@Param("memberId") Long memberId,
                                        @Param("policyId") Long policyId,

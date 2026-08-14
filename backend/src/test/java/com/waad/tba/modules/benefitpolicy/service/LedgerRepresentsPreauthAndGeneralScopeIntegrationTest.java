@@ -292,6 +292,48 @@ class LedgerRepresentsPreauthAndGeneralScopeIntegrationTest extends PostgresInte
                 .isEqualByComparingTo("0");
     }
 
+    // 13. The source/entry-type matrix, enforced by the database rather than
+    //     by whoever writes the next service. PREAUTH+COMMITTED is the one
+    //     that matters most: the claim-scoped reads inner-join through
+    //     claim_id, so such a row would be silently invisible to them.
+    @Test
+    void aPreauthMayNotPostACommittedMovement() throws Exception {
+        Fixture f = fixture();
+        assertThatThrownBy(() -> exec(insertSql(f, "PREAUTH", "BUCKET", "COMMITTED", f.bucketId(), null, null,
+                f.preauthId(), f.preauthLineId(), "100.00", null, null, "K-" + suffix())))
+                .hasMessageContaining("chk_bucket_consumption_entry_type_by_source");
+    }
+
+    @Test
+    void aClaimMayNotPostAReservation() throws Exception {
+        Fixture f = fixture();
+        assertThatThrownBy(() -> exec(insertSql(f, "CLAIM", "BUCKET", "RESERVED", f.bucketId(),
+                f.claimId(), f.claimLineId(), null, null, "100.00", null, null, "K-" + suffix())))
+                .hasMessageContaining("chk_bucket_consumption_entry_type_by_source");
+    }
+
+    @Test
+    void onlyAPreauthMayHoldLimit() throws Exception {
+        Fixture f = fixture();
+        // Neither an opening balance nor a manual adjustment is a hold: both
+        // describe money already spent, not money set aside.
+        for (String source : new String[] {"OPENING_IMPORT", "ADJUSTMENT"}) {
+            assertThatThrownBy(() -> exec(insertSql(f, source, "BUCKET", "RESERVED", f.bucketId(), null, null,
+                    null, null, "100.00", null, null, "K-" + suffix())))
+                    .as(source + " must not be able to reserve")
+                    .hasMessageContaining("chk_bucket_consumption_entry_type_by_source");
+        }
+    }
+
+    @Test
+    void anOpeningBalanceAndAnAdjustmentMayPostCommittedConsumption() throws Exception {
+        Fixture f = fixture();
+        for (String source : new String[] {"OPENING_IMPORT", "ADJUSTMENT"}) {
+            exec(insertSql(f, source, "BUCKET", "COMMITTED", f.bucketId(), null, null,
+                    null, null, "100.00", null, null, "K-" + suffix()));
+        }
+    }
+
     // 12. A compensating movement must match its original's scope and source.
     @Test
     void aCompensatingMovementMustMatchTheOriginalsScopeAndSource() throws Exception {

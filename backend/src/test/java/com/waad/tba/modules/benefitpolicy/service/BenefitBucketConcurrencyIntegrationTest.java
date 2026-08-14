@@ -75,6 +75,7 @@ class BenefitBucketConcurrencyIntegrationTest extends PostgresIntegrationTestBas
     @Autowired UserRepository userRepository;
     @Autowired EffectiveLimitResolver effectiveLimitResolver;
     @Autowired LimitBalanceReader limitBalanceReader;
+    @Autowired org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
 
     @BeforeEach
     void ensureAuthenticatedUserExists() {
@@ -127,7 +128,9 @@ class BenefitBucketConcurrencyIntegrationTest extends PostgresIntegrationTestBas
             assertThat(afterReversal).isZero();
 
             long reversalRows = consumptionRepository.findAll().stream()
-                    .filter(c -> c.getClaim().getId().equals(acceptedClaim))
+                    // Since V174 a movement need not have a claim (a PREAUTH
+                    // hold has none), and findAll() sees the whole table.
+                    .filter(c -> c.getClaim() != null && c.getClaim().getId().equals(acceptedClaim))
                     .filter(c -> c.getReversalOf() != null)
                     .count();
             assertThat(reversalRows).isEqualTo(1);
@@ -235,20 +238,31 @@ class BenefitBucketConcurrencyIntegrationTest extends PostgresIntegrationTestBas
             ledgerService.commitClaim(principalClaimId);
         });
 
-        Long dependentDraftClaimId = createClaim(dependent, createVisit(dependent, LocalDate.now()), LocalDate.now());
-        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
-            var dependentDraftClaim = claimRepository.findById(dependentDraftClaimId).orElseThrow();
-            var dependentDraftLine = dependentDraftClaim.getLines().get(0);
+        // A hold is posted by a PRE-AUTHORIZATION, never by a claim: a claim
+        // consumes, it does not reserve. V174 makes that an invariant of the
+        // table, so this fixture must express the reservation the way the
+        // approval service will.
+        Long dependentPreauthId = jdbcTemplate.queryForObject(
+                "INSERT INTO pre_authorizations (member_id, policy_id, status, request_date, created_at, "
+                        + "updated_at) VALUES (?, ?, 'APPROVED', now(), now(), now()) RETURNING id",
+                Long.class, dependent.member().getId(), principal.policy().getId());
+        Long dependentPreauthLineId = jdbcTemplate.queryForObject(
+                "INSERT INTO pre_authorization_lines (pre_authorization_id, requested_amount) "
+                        + "VALUES (?, 60.00) RETURNING id",
+                Long.class, dependentPreauthId);
+
+        new TransactionTemplate(transactionManager).executeWithoutResult(status ->
             consumptionRepository.save(BenefitBucketConsumption.builder()
-                    .claim(dependentDraftClaim).claimLine(dependentDraftLine).policy(principal.policy())
+                    .policy(principal.policy())
                     .memberId(dependent.member().getId()).bucket(principal.bucket())
                     .periodStart(LocalDate.of(LocalDate.now().getYear(), 1, 1))
                     .periodEnd(LocalDate.of(LocalDate.now().getYear(), 12, 31))
                     .approvedAmount(new BigDecimal("60.00")).timesConsumed(1)
                     .status(BenefitBucketConsumption.Status.RESERVED)
-                    .calculationVersion(dependentDraftLine.getCalculationVersion())
-                    .idempotencyKey("TEST:RESERVED:" + dependentDraftClaimId).build());
-        });
+                    .sourceType(BenefitBucketConsumption.SourceType.PREAUTH)
+                    .preauthId(dependentPreauthId).preauthLineId(dependentPreauthLineId)
+                    .calculationVersion(1)
+                    .idempotencyKey("TEST:RESERVED:" + dependentPreauthId).build()));
 
         var principalLimits = effectiveLimitResolver.resolve(principal.policy().getId(), principal.rule().getId(),
                 principal.member().getId(), LocalDate.now(), EncounterType.OUTPATIENT);

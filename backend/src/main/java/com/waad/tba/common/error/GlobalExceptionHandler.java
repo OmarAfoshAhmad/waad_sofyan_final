@@ -53,6 +53,13 @@ import jakarta.servlet.http.HttpServletRequest;
 public class GlobalExceptionHandler {
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
+    private final com.waad.tba.modules.benefitpolicy.service.LedgerConstraintTranslator ledgerConstraintTranslator;
+
+    public GlobalExceptionHandler(
+            com.waad.tba.modules.benefitpolicy.service.LedgerConstraintTranslator ledgerConstraintTranslator) {
+        this.ledgerConstraintTranslator = ledgerConstraintTranslator;
+    }
+
     private String now() {
         return Instant.now().toString();
     }
@@ -311,6 +318,14 @@ public class GlobalExceptionHandler {
             } else if (rootMsg.contains("users_email_key") || rootMsg.toLowerCase().contains("duplicate key") && rootMsg.contains("email")) {
                 messageAr = "البريد الإلكتروني هذا مسجل مسبقاً بنظام آخر أو بحالة مختلفة.";
             }
+        }
+
+        // Checked last so it wins: a benefit-ledger rule names WHICH accounting
+        // rule was broken, which is always more useful than the generic
+        // integrity wording above.
+        String ledgerExplanation = ledgerConstraintTranslator.translate(ex);
+        if (ledgerExplanation != null) {
+            messageAr = ledgerExplanation;
         }
 
         ApiError error = ApiError.of(
@@ -742,6 +757,25 @@ public class GlobalExceptionHandler {
         Map<String, Object> details = new HashMap<>();
         details.put("reference", trackingId);
         details.put("exception", ex.getClass().getSimpleName());
+
+        // A consumption-ledger rule refused the write. Postgres raises those in
+        // English, naming constraints, row ids and amounts held against other
+        // movements; "reason" below would hand all of that to the caller. The
+        // rule is a business rule, so answer it as one -- in Arabic, with the
+        // technical text kept to the log line above.
+        String ledgerExplanation = ledgerConstraintTranslator.translate(ex);
+        if (ledgerExplanation != null) {
+            ApiError error = ApiError.of(
+                    ErrorCode.BUSINESS_RULE_VIOLATION,
+                    "The operation violates a benefit ledger rule.",
+                    request.getRequestURI(),
+                    details,
+                    now(),
+                    trackingId);
+            error.setMessageAr(ledgerExplanation);
+            return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(error);
+        }
+
         if (ex.getMessage() != null && !ex.getMessage().isBlank()) {
             details.put("reason", ex.getMessage());
         }

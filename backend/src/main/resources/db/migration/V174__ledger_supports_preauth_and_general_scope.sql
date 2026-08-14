@@ -34,7 +34,39 @@ ALTER TABLE benefit_bucket_consumptions
 -- Every existing row is a claim-sourced BUCKET movement. This is a
 -- representation backfill, NOT a financial migration: no general-ceiling row
 -- is invented, because none ever existed.
+--
+-- V173 installed the append-only triggers, which refuse every UPDATE -- that
+-- is the whole point of them, and V173 deliberately installed them LAST so its
+-- own normalization could run first. This migration needs the same room: a
+-- classification column added today has no value on rows written yesterday,
+-- and only an UPDATE can give it one.
+--
+-- The suspension is safe and is kept as narrow as possible. The statement
+-- touches limit_scope alone -- a label that carries no money. No amount, no
+-- status, no reversal link, no period is altered, so no balance can move. The
+-- trigger is restored immediately afterwards and verified below; Postgres runs
+-- DDL transactionally, so a failure anywhere in this migration rolls the
+-- suspension back with everything else.
+ALTER TABLE benefit_bucket_consumptions DISABLE TRIGGER trg_no_update_bucket_consumptions;
+
 UPDATE benefit_bucket_consumptions SET limit_scope = 'BUCKET' WHERE limit_scope IS NULL;
+
+ALTER TABLE benefit_bucket_consumptions ENABLE TRIGGER trg_no_update_bucket_consumptions;
+
+-- Leaving the ledger mutable would silently undo V173. Prove it did not.
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_trigger
+        WHERE tgname = 'trg_no_update_bucket_consumptions'
+          AND tgrelid = 'benefit_bucket_consumptions'::regclass
+          AND tgenabled <> 'D'
+    ) THEN
+        RAISE EXCEPTION
+            'V174 aborted: the append-only UPDATE guard was not restored. '
+            'The ledger must not be left mutable.';
+    END IF;
+END $$;
 
 -- Refuse to proceed if any existing row cannot be classified -- a row with no
 -- bucket could not have been a BUCKET movement, and inventing a scope for it
@@ -62,6 +94,43 @@ ALTER TABLE benefit_bucket_consumptions
     ALTER COLUMN claim_id DROP NOT NULL,
     ALTER COLUMN claim_line_id DROP NOT NULL,
     ALTER COLUMN bucket_id DROP NOT NULL;
+
+-- The entry-type matrix below is an accounting rule, so a row that breaks it
+-- is a financial fact we do not understand -- not something to force through.
+-- V173 backfilled every legacy row to source_type CLAIM, so a legacy RESERVED
+-- row would land as CLAIM+RESERVED, which the matrix forbids. Report it and
+-- stop rather than letting Postgres fail with an opaque constraint error that
+-- names no row.
+DO $$
+DECLARE
+    offending BIGINT;
+    sample TEXT;
+BEGIN
+    SELECT COUNT(*) INTO offending
+    FROM benefit_bucket_consumptions
+    WHERE NOT (
+        (source_type = 'CLAIM'          AND status IN ('COMMITTED', 'REVERSED'))
+        OR (source_type = 'PREAUTH'        AND status IN ('RESERVED', 'REVERSED'))
+        OR (source_type = 'OPENING_IMPORT' AND status IN ('COMMITTED', 'REVERSED'))
+        OR (source_type = 'ADJUSTMENT'     AND status IN ('COMMITTED', 'REVERSED'))
+    );
+
+    IF offending > 0 THEN
+        SELECT string_agg(DISTINCT source_type || '+' || status, ', ')
+        INTO sample
+        FROM benefit_bucket_consumptions
+        WHERE NOT (
+            (source_type = 'CLAIM'          AND status IN ('COMMITTED', 'REVERSED'))
+            OR (source_type = 'PREAUTH'        AND status IN ('RESERVED', 'REVERSED'))
+            OR (source_type = 'OPENING_IMPORT' AND status IN ('COMMITTED', 'REVERSED'))
+            OR (source_type = 'ADJUSTMENT'     AND status IN ('COMMITTED', 'REVERSED'))
+        );
+
+        RAISE EXCEPTION
+            'V174 aborted: % row(s) break the source/entry-type matrix (%). '
+            'Classify them explicitly before migrating.', offending, sample;
+    END IF;
+END $$;
 
 ALTER TABLE benefit_bucket_consumptions
     ADD CONSTRAINT chk_bucket_consumption_limit_scope
@@ -91,6 +160,37 @@ ALTER TABLE benefit_bucket_consumptions
         (source_type IN ('OPENING_IMPORT', 'ADJUSTMENT')
             AND claim_id IS NULL AND claim_line_id IS NULL
             AND preauth_id IS NULL AND preauth_line_id IS NULL)
+    ),
+
+    -- Which ENTRY TYPES each source may post. An explicit matrix, not a
+    -- blanket allowance: the pairing is the accounting rule, and leaving it
+    -- to the application means it survives only as long as whoever writes
+    -- the next service remembers it.
+    --
+    --   CLAIM          COMMITTED, REVERSED   a claim consumes; it never holds
+    --   PREAUTH        RESERVED,  REVERSED   a hold; the actual consumption is
+    --                                        posted by the claim that follows
+    --   OPENING_IMPORT COMMITTED, REVERSED   a balance carried in from a prior
+    --                                        system is already spent
+    --   ADJUSTMENT     COMMITTED, REVERSED   a manual correction to consumption
+    --
+    -- RESERVED is therefore reachable ONLY through PREAUTH: nothing but a
+    -- pre-authorization may hold a member's limit. And PREAUTH + COMMITTED is
+    -- now structurally impossible, which is what keeps the claim-scoped JPQL
+    -- reads (they inner-join through claim_id) from silently dropping rows
+    -- they were never meant to see.
+    --
+    -- REVERSED is permitted for every source because a compensating movement
+    -- must mirror its original's source_type -- enforced row-to-row by
+    -- validate_bucket_consumption_reversal, which a CHECK cannot express.
+    ADD CONSTRAINT chk_bucket_consumption_entry_type_by_source CHECK (
+        (source_type = 'CLAIM'          AND status IN ('COMMITTED', 'REVERSED'))
+        OR
+        (source_type = 'PREAUTH'        AND status IN ('RESERVED', 'REVERSED'))
+        OR
+        (source_type = 'OPENING_IMPORT' AND status IN ('COMMITTED', 'REVERSED'))
+        OR
+        (source_type = 'ADJUSTMENT'     AND status IN ('COMMITTED', 'REVERSED'))
     );
 
 -- A line must belong to the head it is recorded against: pointing at
