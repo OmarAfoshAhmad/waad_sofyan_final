@@ -121,7 +121,7 @@ class PreauthLimitSnapshotTwoDimensionsIntegrationTest extends PostgresIntegrati
                 + "reservable_available_before, "
                 + "times_limit, committed_times_before, reserved_times_before, "
                 + "actual_remaining_times_before, reservable_times_before, "
-                + "consumption_basis, reserved_unit, amount_reserved, times_reserved, days_reserved) VALUES ("
+                + "amount_consumption_basis, amount_unit, amount_reserved, times_reserved, days_reserved) VALUES ("
                 + lineSnapshotId + ", 'BUCKET', 'BUCKET:" + f.bucketId() + "', " + f.bucketId() + ", "
                 + f.policyId() + ", 'ANNUAL', CURRENT_DATE - 10, CURRENT_DATE + 355, "
                 + "1000.00, 200.00, 0, 800.00, 800.00, "
@@ -224,7 +224,7 @@ class PreauthLimitSnapshotTwoDimensionsIntegrationTest extends PostgresIntegrati
                         + "reserved_before, actual_remaining_before, reservable_available_before, "
                         + "times_limit, committed_times_before, reserved_times_before, "
                         + "actual_remaining_times_before, reservable_times_before, "
-                        + "consumption_basis, reserved_unit, amount_reserved, times_reserved) VALUES ("
+                        + "amount_consumption_basis, amount_unit, amount_reserved, times_reserved) VALUES ("
                         + lineSnapshotId + ", 'POLICY_GENERAL', 'POLICY_GENERAL:" + f.policyId() + "', "
                         + f.policyId() + ", 'ANNUAL', CURRENT_DATE - 10, CURRENT_DATE + 355, "
                         + "10000.00, 0, 0, 10000.00, 10000.00, 5, 0, 0, 5, 5, "
@@ -248,7 +248,7 @@ class PreauthLimitSnapshotTwoDimensionsIntegrationTest extends PostgresIntegrati
                 + "bucket_id, policy_id, period_type, period_start, period_end, effective_limit, "
                 + "committed_before, reserved_before, actual_remaining_before, reservable_available_before, "
                 + "times_limit, committed_times_before, reserved_times_before, actual_remaining_times_before, "
-                + "reservable_times_before, consumption_basis, reserved_unit, amount_reserved, times_reserved) "
+                + "reservable_times_before, amount_consumption_basis, amount_unit, amount_reserved, times_reserved) "
                 + "VALUES (" + lineSnapshotId + ", 'BUCKET', 'BUCKET:" + f.bucketId() + "', " + f.bucketId()
                 + ", " + f.policyId() + ", 'ANNUAL', CURRENT_DATE - 10, CURRENT_DATE + 355, "
                 + "1000.00, 1000.00, 0, 0, 0, 3, 3, 0, 0, 0, 'COMPANY_SHARE', 'CURRENCY', 0, 0)");

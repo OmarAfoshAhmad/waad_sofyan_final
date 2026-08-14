@@ -462,7 +462,9 @@ public class PreAuthorizationDecisionBuilder {
                     bucket.getTimesLimit(),
                     bucket.getTimesLimit() - reservable, 0,
                     reservable, reservable,
-                    "COMPANY_SHARE", PreAuthorizationDecision.ReservedUnit.CURRENCY,
+                    // No monetary basis and no monetary unit: this ceiling
+                    // counts visits.
+                    null, null,
                     null, held, null,
                     held < wanted));
         }

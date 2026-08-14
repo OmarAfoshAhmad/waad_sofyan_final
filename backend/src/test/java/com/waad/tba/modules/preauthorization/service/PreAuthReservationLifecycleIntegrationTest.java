@@ -403,6 +403,25 @@ class PreAuthReservationLifecycleIntegrationTest extends PostgresIntegrationTest
                         + "WHERE preauth_id = ? AND bucket_id = ? AND status = 'RESERVED'",
                 Integer.class, sc.preauthId(), sc.bucketId());
         assertThat(heldTimes).as("a bucket may cap occurrences without capping money").isEqualTo(2);
+
+        // And its snapshot must not describe money it never measured. A false
+        // audit trail is worse than a missing one: nothing signals it is wrong
+        // to whoever reconstructs this decision later.
+        String basis = jdbc.queryForObject(
+                "SELECT pls.amount_consumption_basis FROM preauth_line_limit_snapshots pls "
+                        + "JOIN preauth_line_snapshots ls ON ls.id = pls.line_snapshot_id "
+                        + "JOIN preauth_decision_snapshots d ON d.id = ls.decision_snapshot_id "
+                        + "WHERE d.preauth_id = ? AND pls.bucket_id = ?",
+                String.class, sc.preauthId(), sc.bucketId());
+        String unit = jdbc.queryForObject(
+                "SELECT pls.amount_unit FROM preauth_line_limit_snapshots pls "
+                        + "JOIN preauth_line_snapshots ls ON ls.id = pls.line_snapshot_id "
+                        + "JOIN preauth_decision_snapshots d ON d.id = ls.decision_snapshot_id "
+                        + "WHERE d.preauth_id = ? AND pls.bucket_id = ?",
+                String.class, sc.preauthId(), sc.bucketId());
+
+        assertThat(basis).as("no monetary basis for a ceiling that measures no money").isNull();
+        assertThat(unit).as("no monetary unit either").isNull();
     }
 
     @Test

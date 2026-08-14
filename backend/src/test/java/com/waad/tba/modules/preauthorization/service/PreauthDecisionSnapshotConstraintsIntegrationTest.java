@@ -123,7 +123,7 @@ class PreauthDecisionSnapshotConstraintsIntegrationTest extends PostgresIntegrat
         return "INSERT INTO preauth_line_limit_snapshots (line_snapshot_id, limit_scope, limit_semantic_key, "
                 + "bucket_id, policy_id, period_type, period_start, period_end, effective_limit, "
                 + "committed_before, reserved_before, actual_remaining_before, reservable_available_before, "
-                + "consumption_basis, reserved_unit, amount_reserved) VALUES (" + lineSnapshotId + ", '" + scope + "', '" + scope + ":"
+                + "amount_consumption_basis, amount_unit, amount_reserved) VALUES (" + lineSnapshotId + ", '" + scope + "', '" + scope + ":"
                 + suffix() + "', " + (bucketId == null ? "NULL" : bucketId) + ", " + f.policyId()
                 + ", 'ANNUAL', CURRENT_DATE - 10, CURRENT_DATE + 355, " + limit + ", " + committed + ", "
                 + reserved + ", " + actualRemaining + ", " + reservable

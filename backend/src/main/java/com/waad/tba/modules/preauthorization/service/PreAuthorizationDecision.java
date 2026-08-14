@@ -182,7 +182,9 @@ public record PreAuthorizationDecision(
              * service bucket may count the eligible amount, a visit bucket
              * counts occurrences. Never comparable, never summed.
              */
+            /** Null when this ceiling measures no money. */
             String consumptionBasis,
+            /** Null when this ceiling measures no money. */
             ReservedUnit reservedUnit,
             /** Set exactly when reservedUnit is CURRENCY. */
             BigDecimal amountReserved,

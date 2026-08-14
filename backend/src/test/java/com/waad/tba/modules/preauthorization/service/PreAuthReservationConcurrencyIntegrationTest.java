@@ -290,4 +290,28 @@ class PreAuthReservationConcurrencyIntegrationTest extends PostgresIntegrationTe
                     .isEqualByComparingTo("800.00");
         }
     }
+
+    @Test
+    @WithMockUser(username = "superadmin", roles = "SUPER_ADMIN")
+    void twoApprovalsOnACountOnlyBucketCannotBothTakeTheOnlyVisit() throws Exception {
+        // No monetary ceiling at all -- the case the approval path could not
+        // even see until the counting dimension was separated out, and the
+        // one where both approvals used to succeed.
+        World w = world("NULL", 1, "1000.00", 80, 2);
+
+        raceOf(() -> service.approveAndReserve(w.preauthIds().get(0), null, "reviewer-a"),
+               () -> service.approveAndReserve(w.preauthIds().get(1), null, "reviewer-b"));
+
+        assertThat(netReservedTimes(w.bucketId()))
+                .as("one visit exists, so the two approvals may hold one between them")
+                .isEqualTo(1);
+
+        // The approval that missed out holds nothing at all -- no zero row.
+        Long zeroHolds = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM benefit_bucket_consumptions "
+                        + "WHERE bucket_id = ? AND status = 'RESERVED' "
+                        + "AND COALESCE(times_consumed, 0) = 0 AND COALESCE(approved_amount, 0) = 0",
+                Long.class, w.bucketId());
+        assertThat(zeroHolds).as("a hold of nothing records an effect that did not happen").isZero();
+    }
 }

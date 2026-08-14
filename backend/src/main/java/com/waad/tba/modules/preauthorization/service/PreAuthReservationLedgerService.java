@@ -323,8 +323,11 @@ public class PreAuthReservationLedgerService {
                         .reservedTimesBefore(hold.reservedTimesBefore())
                         .actualRemainingTimesBefore(hold.actualRemainingTimesBefore())
                         .reservableTimesBefore(hold.reservableTimesBefore())
-                        .consumptionBasis(hold.consumptionBasis())
-                        .reservedUnit(hold.reservedUnit().name())
+                        // Absent, not invented, when the ceiling measures no
+                        // money: a count-only bucket has no monetary basis.
+                        .amountConsumptionBasis(hold.effectiveLimit() == null
+                                ? null : hold.consumptionBasis())
+                        .amountUnit(hold.effectiveLimit() == null ? null : "CURRENCY")
                         .amountReserved(hold.amountReserved())
                         .timesReserved(hold.timesReserved())
                         .daysReserved(0)

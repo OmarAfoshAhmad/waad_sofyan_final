@@ -47,8 +47,15 @@ public class PreauthLineLimitSnapshot {
     @Column(name = "actual_remaining_times_before") private Integer actualRemainingTimesBefore;
     @Column(name = "reservable_times_before") private Integer reservableTimesBefore;
 
-    @Column(name = "consumption_basis", nullable = false, length = 20) private String consumptionBasis;
-    @Column(name = "reserved_unit", nullable = false, length = 10) private String reservedUnit;
+    /**
+     * What the MONETARY ceiling measures. Null when this ceiling constrains
+     * occurrences only -- naming a monetary basis for a bucket that measures
+     * no money would be a false audit trail, and a false one is worse than a
+     * missing one because nothing signals it is wrong.
+     */
+    @Column(name = "amount_consumption_basis", length = 20) private String amountConsumptionBasis;
+    /** CURRENCY when a monetary dimension is present, null otherwise. */
+    @Column(name = "amount_unit", length = 10) private String amountUnit;
 
     @Column(name = "amount_reserved", precision = 15, scale = 2) private BigDecimal amountReserved;
     @Column(name = "times_reserved") private Integer timesReserved;
