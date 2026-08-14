@@ -297,6 +297,7 @@ public class PreAuthReservationLedgerService {
                     .copayAmount(line.copayAmount())
                     .rejectedAmount(line.rejectedAmount())
                     .approvedAmount(line.authorizedServiceAmount())
+                    .settlementAmount(line.settlementAmount())
                     .patientShare(line.patientShare())
                     .companyShare(line.companyShare())
                     .build());

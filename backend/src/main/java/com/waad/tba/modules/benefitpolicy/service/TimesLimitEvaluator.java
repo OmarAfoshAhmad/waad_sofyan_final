@@ -34,7 +34,21 @@ public class TimesLimitEvaluator {
      *                         caller carries the set across lines
      */
     public int occurrencesFor(BenefitLimitBucket bucket, int approvedQuantity,
-            Set<Long> alreadyCountedBuckets) {
+            Set<CountedKey> alreadyCounted) {
+        return occurrencesFor(bucket, approvedQuantity, alreadyCounted, null);
+    }
+
+    /**
+     * The identity a once-per-decision count is keyed on. The bucket alone is
+     * not enough: a decision covering more than one service date would merge
+     * two distinct visits into one, holding a single occurrence for both.
+     * Today an approval carries one expected date, so this changes nothing --
+     * which is exactly when it is cheap to get right.
+     */
+    public record CountedKey(Long bucketId, java.time.LocalDate serviceDate) {}
+
+    public int occurrencesFor(BenefitLimitBucket bucket, int approvedQuantity,
+            Set<CountedKey> alreadyCounted, java.time.LocalDate serviceDate) {
 
         if (approvedQuantity <= 0) {
             return 0;
@@ -55,7 +69,7 @@ public class TimesLimitEvaluator {
             // counts distinct service dates across a stay -- that stays a
             // closed failure for pre-authorizations, which carry one expected
             // date and no admission or discharge.
-            case PER_VISIT, PER_DAY -> alreadyCountedBuckets.add(bucket.getId()) ? 1 : 0;
+            case PER_VISIT, PER_DAY -> alreadyCounted.add(new CountedKey(bucket.getId(), serviceDate)) ? 1 : 0;
         };
     }
 }

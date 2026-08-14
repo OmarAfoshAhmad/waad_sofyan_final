@@ -114,8 +114,8 @@ class PreauthDecisionSnapshotConstraintsIntegrationTest extends PostgresIntegrat
 
     private long insertLine(Fixture f, long decisionId) throws Exception {
         return execId("INSERT INTO preauth_line_snapshots (decision_snapshot_id, preauth_line_id, quantity, "
-                + "unit_price, requested_amount, approved_amount, patient_share, company_share) VALUES ("
-                + decisionId + ", " + f.preauthLineId() + ", 1, 500.00, 500.00, 500.00, 100.00, 400.00)");
+                + "unit_price, requested_amount, approved_amount, settlement_amount, patient_share, company_share) VALUES ("
+                + decisionId + ", " + f.preauthLineId() + ", 1, 500.00, 500.00, 500.00, 500.00, 100.00, 400.00)");
     }
 
     private String limitSql(long lineSnapshotId, Fixture f, String scope, Long bucketId, String limit,
@@ -249,20 +249,20 @@ class PreauthDecisionSnapshotConstraintsIntegrationTest extends PostgresIntegrat
         long decisionId = insertDecision(f);
 
         assertThatThrownBy(() -> exec("INSERT INTO preauth_line_snapshots (decision_snapshot_id, preauth_line_id, "
-                + "quantity, unit_price, requested_amount, approved_amount, patient_share, company_share) VALUES ("
-                + decisionId + ", " + other.preauthLineId() + ", 1, 500.00, 500.00, 500.00, 100.00, 400.00)"))
+                + "quantity, unit_price, requested_amount, approved_amount, settlement_amount, patient_share, company_share) VALUES ("
+                + decisionId + ", " + other.preauthLineId() + ", 1, 500.00, 500.00, 500.00, 500.00, 100.00, 400.00)"))
                 .hasMessageContaining("but this snapshot describes");
     }
 
     @Test
-    void lineSharesMustAccountForTheApprovedAmount() throws Exception {
+    void lineSharesMustAccountForTheSettlementAmount() throws Exception {
         Fixture f = fixture();
         long decisionId = insertDecision(f);
 
         assertThatThrownBy(() -> exec("INSERT INTO preauth_line_snapshots (decision_snapshot_id, preauth_line_id, "
-                + "quantity, unit_price, requested_amount, approved_amount, patient_share, company_share) VALUES ("
-                + decisionId + ", " + f.preauthLineId() + ", 1, 500.00, 500.00, 500.00, 100.00, 100.00)"))
-                .hasMessageContaining("chk_preauth_line_snapshot_shares");
+                + "quantity, unit_price, requested_amount, approved_amount, settlement_amount, patient_share, company_share) VALUES ("
+                + decisionId + ", " + f.preauthLineId() + ", 1, 500.00, 500.00, 500.00, 500.00, 100.00, 100.00)"))
+                .hasMessageContaining("chk_preauth_line_snapshot_settlement");
     }
 
     // ── the balances must be arithmetically true ────────────────────────

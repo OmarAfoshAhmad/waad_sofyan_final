@@ -108,8 +108,8 @@ class PreauthLimitSnapshotTwoDimensionsIntegrationTest extends PostgresIntegrati
                 + "'FULLY_COVERED', 'reviewer', 'K-" + suffix() + "')");
 
         return execId("INSERT INTO preauth_line_snapshots (decision_snapshot_id, preauth_line_id, quantity, "
-                + "unit_price, requested_amount, approved_amount, patient_share, company_share) VALUES ("
-                + decisionId + ", " + f.preauthLineId() + ", 2, 250.00, 500.00, 500.00, 100.00, 400.00)");
+                + "unit_price, requested_amount, approved_amount, settlement_amount, patient_share, company_share) VALUES ("
+                + decisionId + ", " + f.preauthLineId() + ", 2, 250.00, 500.00, 500.00, 500.00, 100.00, 400.00)");
     }
 
     /** Both ceilings on one row: 1000 of money with 200 spent, 3 visits with 1 spent. */

@@ -92,7 +92,7 @@ public class BenefitBucketLedgerService {
                     "يوجد للمستفيد مطالبة معتمدة سابقة لم تُرحّل إلى دفتر سقوف المنافع. "
                     + "تم إيقاف الاعتماد لمنع تجاوز السقف؛ راجع سلامة دفتر المنافع ثم أعد المحاولة.");
         }
-        Set<Long> countedOnce = new HashSet<>();
+        Set<TimesLimitEvaluator.CountedKey> countedOnce = new HashSet<>();
         Set<Long> validatedDays = new HashSet<>();
 
         for (ClaimLine line : claim.getLines()) {
@@ -108,7 +108,7 @@ public class BenefitBucketLedgerService {
                 String key = "CLAIM:" + claimId + ":LINE:" + line.getId() + ":BUCKET:" + bucket.getId() + ":V" + line.getCalculationVersion();
                 if (consumptionRepository.existsByIdempotencyKey(key)) continue;
                 Period period = period(bucket, policy, serviceDate);
-                int times = consumedTimes(bucket, line, countedOnce);
+                int times = consumedTimes(bucket, line, countedOnce, serviceDate);
                 BigDecimal consumedAmount;
                 if (bucket.getAmountLimit() != null) {
                     consumedAmount = Optional.ofNullable(line.getLimitConsumption()).orElseThrow(() ->
@@ -195,9 +195,10 @@ public class BenefitBucketLedgerService {
      * definitions would let an approval hold one quantity and the claim that
      * follows consume another, leaving a residue at conversion.
      */
-    private int consumedTimes(BenefitLimitBucket bucket, ClaimLine line, Set<Long> countedOnce) {
+    private int consumedTimes(BenefitLimitBucket bucket, ClaimLine line,
+            Set<TimesLimitEvaluator.CountedKey> countedOnce, LocalDate serviceDate) {
         int quantity = Math.max(1, line.getQuantity() == null ? 1 : line.getQuantity());
-        return timesLimitEvaluator.occurrencesFor(bucket, quantity, countedOnce);
+        return timesLimitEvaluator.occurrencesFor(bucket, quantity, countedOnce, serviceDate);
     }
 
     private void validateAvailableBalance(BenefitLimitBucket bucket, Long memberId, LocalDate serviceDate,

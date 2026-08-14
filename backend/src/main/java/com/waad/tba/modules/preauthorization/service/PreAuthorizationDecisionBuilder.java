@@ -127,6 +127,10 @@ public class PreAuthorizationDecisionBuilder {
                 terms == null ? null : terms.getDiscountBeforeRejection());
 
         // ── the money, line by line ─────────────────────────────────────
+        // Spans the whole decision: PER_VISIT counts one occurrence per
+        // bucket for the APPROVAL, not one per line. Three lines of the same
+        // encounter are still one visit.
+        Set<com.waad.tba.modules.benefitpolicy.service.TimesLimitEvaluator.CountedKey> countedOnce = new HashSet<>();
         List<PreAuthorizationDecision.Line> lines = new ArrayList<>();
         BigDecimal requestedTotal = BigDecimal.ZERO;
         BigDecimal authorizedServiceTotal = BigDecimal.ZERO;
@@ -138,7 +142,7 @@ public class PreAuthorizationDecisionBuilder {
         BigDecimal companyTotal = BigDecimal.ZERO;
 
         for (PreAuthorizationLine line : preauth.getLines()) {
-            PreAuthorizationDecision.Line decided = decideLine(preauth, line, member, policy, serviceDate, terms);
+            PreAuthorizationDecision.Line decided = decideLine(preauth, line, member, policy, serviceDate, terms, countedOnce);
             lines.add(decided);
             requestedTotal = requestedTotal.add(decided.requestedAmount());
             authorizedServiceTotal = authorizedServiceTotal.add(decided.authorizedServiceAmount());
@@ -206,7 +210,8 @@ public class PreAuthorizationDecisionBuilder {
     }
 
     private PreAuthorizationDecision.Line decideLine(PreAuthorization preauth, PreAuthorizationLine line,
-            Member member, BenefitPolicy policy, LocalDate serviceDate, ProviderContractTerm terms) {
+            Member member, BenefitPolicy policy, LocalDate serviceDate, ProviderContractTerm terms,
+            Set<com.waad.tba.modules.benefitpolicy.service.TimesLimitEvaluator.CountedKey> countedOnce) {
 
         BigDecimal requested = Optional.ofNullable(line.getRequestedAmount()).orElse(BigDecimal.ZERO);
 
@@ -322,11 +327,10 @@ public class PreAuthorizationDecisionBuilder {
         // across them: a visit count and a currency amount are not the same
         // kind of number.
         List<BenefitLimitBucket> countingBuckets = countingLimitResolver.resolve(benefitRuleId);
-        Set<Long> countedOnce = new HashSet<>();
         Map<Long, Integer> requiredTimesByBucket = new LinkedHashMap<>();
         for (BenefitLimitBucket bucket : countingBuckets) {
             requiredTimesByBucket.put(bucket.getId(),
-                    timesLimitEvaluator.occurrencesFor(bucket, approvedQuantity, countedOnce));
+                    timesLimitEvaluator.occurrencesFor(bucket, approvedQuantity, countedOnce, serviceDate));
         }
 
         int requiredTimes = requiredTimesByBucket.values().stream()

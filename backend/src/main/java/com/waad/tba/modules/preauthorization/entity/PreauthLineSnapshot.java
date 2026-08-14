@@ -38,8 +38,12 @@ public class PreauthLineSnapshot {
     @Builder.Default private BigDecimal copayAmount = BigDecimal.ZERO;
     @Column(name = "rejected_amount", nullable = false, precision = 15, scale = 2)
     @Builder.Default private BigDecimal rejectedAmount = BigDecimal.ZERO;
+    /** The AUTHORISED service value: requested less explicitly refused. */
     @Column(name = "approved_amount", nullable = false, precision = 15, scale = 2)
     private BigDecimal approvedAmount;
+    /** What the two parties pay between them. Differs from the above once anything is refused. */
+    @Column(name = "settlement_amount", nullable = false, precision = 15, scale = 2)
+    private BigDecimal settlementAmount;
     @Column(name = "patient_share", nullable = false, precision = 15, scale = 2)
     @Builder.Default private BigDecimal patientShare = BigDecimal.ZERO;
     @Column(name = "company_share", nullable = false, precision = 15, scale = 2)
