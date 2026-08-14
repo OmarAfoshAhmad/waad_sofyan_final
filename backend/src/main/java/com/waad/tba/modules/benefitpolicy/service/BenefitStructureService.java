@@ -375,24 +375,33 @@ public class BenefitStructureService {
         }
     }
 
-    /** Mirrors assertBucketHasNoFinancialHistory's definition of "live" — see its Javadoc. */
+    /**
+     * Refuses to delete a bucket that carries ANY consumption history.
+     *
+     * This used to DELETE the "non-financial" rows -- those belonging to
+     * rejected, inactive or deleted claims -- so the bucket could be removed.
+     * That stopped working the moment the ledger became genuinely append-only:
+     * V173 installs a trigger rejecting every DELETE, so this path has failed
+     * at runtime ever since, reporting the trigger's message instead of an
+     * explanation.
+     *
+     * Deleting was not the right answer regardless. A consumption row records
+     * that a limit WAS measured; a claim being rejected afterwards does not
+     * unmake the measurement, and that history is exactly what an audit needs
+     * to reconstruct why a balance moved. The bucket is deactivated instead --
+     * which the caller already offers for the financial case.
+     */
     private void detachNonFinancialBucketConsumptionHistory(BenefitLimitBucket bucket) {
-        int removedCount = em.createNativeQuery("""
-                DELETE FROM benefit_bucket_consumptions bbc
-                USING claims c
-                WHERE bbc.claim_id = c.id
-                  AND bbc.bucket_id = :bucketId
-                  AND NOT (
-                    bbc.status IN ('RESERVED', 'COMMITTED')
-                    AND c.status <> 'REJECTED'
-                    AND COALESCE(c.active, true) = true
-                    AND c.deleted_at IS NULL
-                  )
+        Number historyCount = (Number) em.createNativeQuery("""
+                SELECT COUNT(*) FROM benefit_bucket_consumptions WHERE bucket_id = :bucketId
                 """)
                 .setParameter("bucketId", bucket.getId())
-                .executeUpdate();
-        if (removedCount > 0) {
-            log.info("Removed {} non-financial bucket consumption rows before deleting bucket {}", removedCount, bucket.getId());
+                .getSingleResult();
+
+        if (historyCount != null && historyCount.longValue() > 0) {
+            throw new BusinessRuleException(
+                    "لا يمكن حذف المنفعة أو المجموعة لوجود سجل استهلاك مرتبط بها لا يجوز حذفه. "
+                            + "يمكن تعطيلها مع الاحتفاظ بالسجل التاريخي: " + bucket.getNameAr());
         }
     }
 

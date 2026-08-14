@@ -36,6 +36,10 @@ public class BenefitBucketLedgerService {
     private final BenefitRuleBucketRepository ruleBucketRepository;
     private final BenefitLimitBucketRepository bucketRepository;
     private final BenefitBucketConsumptionRepository consumptionRepository;
+    // The single save gate. This service still owns the claim life cycle --
+    // its locks, its idempotency keys, its ordering -- and delegates only
+    // the append itself, so the ledger has one place to enforce invariants.
+    private final BenefitConsumptionEntryWriter entryWriter;
 
     /**
      * One-time operational repair for an already approved legacy claim.
@@ -116,13 +120,9 @@ public class BenefitBucketLedgerService {
                 }
                 validateAvailableBalance(bucket, memberId, serviceDate, period, consumedAmount, times,
                         validatedDays.add(bucket.getId()));
-                consumptionRepository.save(BenefitBucketConsumption.builder()
-                        .claim(claim).claimLine(line).policy(policy).memberId(memberId).bucket(bucket)
-                        .periodStart(period.start()).periodEnd(period.end())
-                        .approvedAmount(consumedAmount).timesConsumed(times)
-                        .status(BenefitBucketConsumption.Status.COMMITTED)
-                        .calculationVersion(line.getCalculationVersion()).idempotencyKey(key)
-                        .committedAt(LocalDateTime.now()).build());
+                entryWriter.appendClaimCommit(claim, line, policy, memberId, bucket,
+                        period.start(), period.end(), consumedAmount, times,
+                        line.getCalculationVersion(), key);
             }
         }
     }
@@ -175,16 +175,8 @@ public class BenefitBucketLedgerService {
             // original out by status. Flipping the original (the previous
             // behaviour) both erased the history and made partial reversal
             // impossible to express.
-            consumptionRepository.save(BenefitBucketConsumption.builder()
-                    .claim(original.getClaim()).claimLine(original.getClaimLine()).policy(original.getPolicy())
-                    .memberId(original.getMemberId()).bucket(original.getBucket())
-                    .periodStart(original.getPeriodStart()).periodEnd(original.getPeriodEnd())
-                    .approvedAmount(original.getApprovedAmount()).timesConsumed(original.getTimesConsumed())
-                    .status(BenefitBucketConsumption.Status.REVERSED)
-                    .reversalReason(BenefitBucketConsumption.ReversalReason.CLAIM_REVERSAL)
-                    .sourceType(BenefitBucketConsumption.SourceType.CLAIM)
-                    .calculationVersion(original.getCalculationVersion()).idempotencyKey(key)
-                    .reversalOf(original).reversedAt(now).build());
+            entryWriter.appendClaimReversal(original, original.getApprovedAmount(),
+                    original.getTimesConsumed() == null ? 0 : original.getTimesConsumed(), key, now);
         }
     }
 

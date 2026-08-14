@@ -45,9 +45,12 @@ class BenefitBucketLedgerServiceTest {
     void setUp() {
         memberPolicyResolver = org.mockito.Mockito.mock(
                 com.waad.tba.modules.member.service.MemberPolicyResolver.class);
+        // The real gate, over the same mocked repository: the extraction must
+        // not change what is written, only where the write is issued from.
         service = new BenefitBucketLedgerService(
                 claimRepository, memberPolicyResolver, benefitPolicyRepository, ruleBucketRepository,
-                bucketRepository, consumptionRepository);
+                bucketRepository, consumptionRepository,
+                new BenefitConsumptionEntryWriter(consumptionRepository));
 
         policy = BenefitPolicy.builder()
                 .id(1L)
