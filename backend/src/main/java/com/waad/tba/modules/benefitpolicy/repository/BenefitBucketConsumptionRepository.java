@@ -255,6 +255,69 @@ public interface BenefitBucketConsumptionRepository extends JpaRepository<Benefi
     Integer sumReleasedTimes(@Param("originalId") Long originalId);
 
     /**
+     * What ONE pre-authorization still holds against one bucket and period --
+     * net of anything already released.
+     *
+     * Scoped by preauth_id AND member AND bucket AND period on purpose. A
+     * looser scope would return a neighbouring approval's hold, letting one
+     * approval spend limit promised to another; a scope that ignored prior
+     * releases would hand back money that has already been given back.
+     */
+    @Query(value = """
+        select coalesce(sum(c.approved_amount - coalesce(r.released, 0)), 0)
+          from benefit_bucket_consumptions c
+          left join (
+                select reversal_of_id, sum(approved_amount) as released
+                  from benefit_bucket_consumptions
+                 where status = 'REVERSED' and reversal_of_id is not null
+                 group by reversal_of_id
+          ) r on r.reversal_of_id = c.id
+         where c.member_id = :memberId
+           and c.preauth_id = :preauthId
+           and c.bucket_id is not distinct from :bucketId
+           -- Explicit even though bucket_id already separates the two scopes
+           -- (V174 forbids a general row from carrying a bucket): a rule that
+           -- holds by implication is one refactor away from not holding.
+           and c.limit_scope = :limitScope
+           and c.status = 'RESERVED'
+           and c.period_start = :periodStart
+           and c.period_end is not distinct from cast(:periodEnd as date)
+        """, nativeQuery = true)
+    BigDecimal sumOwnActiveReservation(@Param("memberId") Long memberId,
+                                       @Param("preauthId") Long preauthId,
+                                       @Param("bucketId") Long bucketId,
+                                       @Param("limitScope") String limitScope,
+                                       @Param("periodStart") LocalDate periodStart,
+                                       @Param("periodEnd") LocalDate periodEnd);
+
+    /**
+     * The occurrence half of the same ownership question, on exactly the same
+     * dimensions. A claim converting its own approval must see its own held
+     * VISITS returned too -- otherwise an approval that took the last visit
+     * blocks the very claim it was granted for.
+     */
+    @Query(value = """
+        select coalesce(sum(c.times_consumed), 0)
+          from benefit_bucket_consumptions c
+         where c.member_id = :memberId
+           and c.preauth_id = :preauthId
+           and c.bucket_id is not distinct from :bucketId
+           and c.limit_scope = :limitScope
+           and c.status = 'RESERVED'
+           and c.period_start = :periodStart
+           and c.period_end is not distinct from cast(:periodEnd as date)
+           and not exists (
+                select 1 from benefit_bucket_consumptions r
+                 where r.reversal_of_id = c.id and r.status = 'REVERSED')
+        """, nativeQuery = true)
+    Integer sumOwnActiveReservationTimes(@Param("memberId") Long memberId,
+                                         @Param("preauthId") Long preauthId,
+                                         @Param("bucketId") Long bucketId,
+                                         @Param("limitScope") String limitScope,
+                                         @Param("periodStart") LocalDate periodStart,
+                                         @Param("periodEnd") LocalDate periodEnd);
+
+    /**
      * Net RESERVED times held against a bucket. A separate dimension from the
      * amount: a visit count and a currency figure are not comparable, and a
      * decision can be constrained by either independently.

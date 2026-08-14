@@ -80,7 +80,101 @@ public class LimitBalanceReader {
             BigDecimal bindingAvailableLimit,
             List<String> bindingSemanticKeys) {}
 
+    /**
+     * A balance seen from the perspective of the approval that placed the
+     * hold. Every figure is named for exactly what it is:
+     *
+     *   reservableAvailable    what ANY new decision may take (unchanged)
+     *   ownActiveReservation   what THIS approval still holds
+     *   availableForThisClaim  reservable + own, capped at actualRemaining
+     *
+     * reservableAvailable deliberately keeps its ordinary meaning. Widening it
+     * to include the owner's hold would make the name lie everywhere it is
+     * reported -- in this record, in the snapshot and in every audit that
+     * reads it.
+     */
+    public record PreauthorizedClaimBalance(
+            LimitBalance balance,
+            BigDecimal ownActiveReservation,
+            BigDecimal availableForThisClaim,
+            Integer ownReservedTimes,
+            Integer availableTimesForThisClaim) {}
+
+    public record PreauthorizedClaimBalanceSet(
+            Long memberId,
+            Long preAuthorizationId,
+            List<PreauthorizedClaimBalance> limits,
+            BigDecimal bindingAvailableForThisClaim) {}
+
     private record BalanceKey(Long bucketId, LocalDate start, LocalDate end, Status status) {}
+
+    /**
+     * The balance a claim born from a pre-authorization may spend against.
+     *
+     * A hold protects limit FROM other decisions, but it was placed FOR this
+     * one. The ordinary read subtracts every reservation without asking whose
+     * it is, so a claim converting its own approval would find the money it
+     * was promised already spoken for -- by itself -- and could be refused for
+     * insufficient balance.
+     *
+     *     availableForClaim = reservableAvailable + ownActiveReservation
+     *     availableForClaim <= actualRemaining
+     *
+     * The ceiling matters: the own reservation is added back, never stacked on
+     * top of what the member actually has left.
+     *
+     * A SEPARATE entry point on purpose. Changing read() would alter the
+     * meaning of available for every caller in the system to serve one path.
+     */
+    @Transactional(readOnly = true)
+    public PreauthorizedClaimBalanceSet readForPreauthorizedClaim(Long memberId,
+            List<EffectiveLimitResolver.EffectiveLimit> limits, Long excludeClaimId,
+            Long preAuthorizationId) {
+
+        if (preAuthorizationId == null) {
+            throw new IllegalArgumentException("preAuthorizationId is required");
+        }
+        BalanceSet base = read(memberId, limits, excludeClaimId);
+
+        List<PreauthorizedClaimBalance> result = new ArrayList<>();
+        for (LimitBalance balance : base.limits()) {
+            var definition = balance.limit().definition();
+            String scope = definition.benefitScopeType() == BenefitScopeType.POLICY_GENERAL
+                    ? "POLICY_GENERAL" : "BUCKET";
+
+            BigDecimal own = Optional.ofNullable(consumptionRepository.sumOwnActiveReservation(
+                    memberId, preAuthorizationId, definition.bucketId(), scope,
+                    definition.periodStart(), definition.periodEnd())).orElse(BigDecimal.ZERO);
+
+            // Added BACK, then capped: the hold returns to its owner, but never
+            // lifts them above what the member actually has left.
+            BigDecimal availableForClaim = balance.reservableAvailable() == null ? null
+                    : balance.reservableAvailable().add(own).min(balance.actualRemaining());
+
+            Integer ownTimes = null;
+            Integer availableTimes = null;
+            if (balance.timesLimit() != null) {
+                ownTimes = Optional.ofNullable(consumptionRepository.sumOwnActiveReservationTimes(
+                        memberId, preAuthorizationId, definition.bucketId(), scope,
+                        definition.periodStart(), definition.periodEnd())).orElse(0);
+                // The same rule in occurrences: an approval that took the last
+                // visit must not block the claim it was granted for.
+                availableTimes = Math.min(
+                        Optional.ofNullable(balance.reservableTimes()).orElse(0) + ownTimes,
+                        Optional.ofNullable(balance.actualRemainingTimes()).orElse(0));
+            }
+
+            result.add(new PreauthorizedClaimBalance(
+                    balance, own, availableForClaim, ownTimes, availableTimes));
+        }
+
+        BigDecimal binding = result.stream()
+                .map(PreauthorizedClaimBalance::availableForThisClaim)
+                .filter(Objects::nonNull).min(BigDecimal::compareTo).orElse(null);
+
+        return new PreauthorizedClaimBalanceSet(
+                memberId, preAuthorizationId, List.copyOf(result), binding);
+    }
 
     @Transactional(readOnly = true)
     public BalanceSet read(Long memberId, List<EffectiveLimitResolver.EffectiveLimit> limits,
