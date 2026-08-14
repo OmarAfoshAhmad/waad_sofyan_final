@@ -275,7 +275,7 @@ class PreauthDecisionSnapshotConstraintsIntegrationTest extends PostgresIntegrat
         // it decided against is worse than no snapshot.
         assertThatThrownBy(() -> exec(limitSql(lineId, f, "BUCKET", f.bucketId(),
                 "5000.00", "1000.00", "0", "4500.00", "4500.00", "100.00")))
-                .hasMessageContaining("chk_preauth_limit_snapshot_actual_remaining");
+                .hasMessageContaining("chk_preauth_limit_snapshot_amount_arithmetic");
     }
 
     @Test
@@ -287,7 +287,7 @@ class PreauthDecisionSnapshotConstraintsIntegrationTest extends PostgresIntegrat
         // the same limit gets spent twice.
         assertThatThrownBy(() -> exec(limitSql(lineId, f, "BUCKET", f.bucketId(),
                 "5000.00", "1000.00", "1000.00", "4000.00", "4000.00", "100.00")))
-                .hasMessageContaining("chk_preauth_limit_snapshot_reservable");
+                .hasMessageContaining("chk_preauth_limit_snapshot_amount_arithmetic");
     }
 
     @Test
@@ -296,7 +296,7 @@ class PreauthDecisionSnapshotConstraintsIntegrationTest extends PostgresIntegrat
         long lineId = insertLine(f, insertDecision(f));
         assertThatThrownBy(() -> exec(limitSql(lineId, f, "BUCKET", f.bucketId(),
                 "5000.00", "4900.00", "0", "100.00", "100.00", "500.00")))
-                .hasMessageContaining("chk_preauth_limit_snapshot_within_available");
+                .hasMessageContaining("chk_preauth_limit_snapshot_amount_bound");
     }
 
     @Test
