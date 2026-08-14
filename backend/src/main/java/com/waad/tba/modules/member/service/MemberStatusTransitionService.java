@@ -342,8 +342,12 @@ public class MemberStatusTransitionService {
         String idList = memberIds.stream().map(String::valueOf).collect(Collectors.joining(","));
         long claimsCount = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM claims WHERE member_id IN (" + idList + ")", Long.class);
+        // pre_authorizations, not preauthorization_requests. The latter is a
+        // dead model with no entity and no writer, so counting it always
+        // returned zero -- and this guard would have let a member with real
+        // approvals be hard-deleted, taking their approval history with them.
         long preAuthCount = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM preauthorization_requests WHERE member_id IN (" + idList + ")", Long.class);
+                "SELECT COUNT(*) FROM pre_authorizations WHERE member_id IN (" + idList + ")", Long.class);
         long visitsCount = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM visits WHERE member_id IN (" + idList + ")", Long.class);
         long eligibilityChecksCount = jdbcTemplate.queryForObject(
