@@ -89,7 +89,12 @@ public class MultiLineMultiBucketEngine {
 
             for (var balance : set.limits()) {
                 String key = balance.limit().definition().semanticKey();
-                BigDecimal baseline = balance.signedAvailable();
+                // A claim is a decision that consumes limit, so it reads
+                // reservableAvailable -- it must not spend money already held
+                // for an approved pre-authorization. (A claim converting its
+                // OWN pre-authorization gets that hold released first, so the
+                // amount is available to it.)
+                BigDecimal baseline = balance.reservableAvailable();
                 BigDecimal previousBaseline = originalAvailable.putIfAbsent(key, baseline);
                 if (previousBaseline != null && previousBaseline.compareTo(baseline) != 0) {
                     throw new IllegalStateException("INCONSISTENT_LIMIT_SNAPSHOT: " + key

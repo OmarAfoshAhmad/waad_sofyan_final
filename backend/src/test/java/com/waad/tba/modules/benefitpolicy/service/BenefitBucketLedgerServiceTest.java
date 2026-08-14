@@ -188,7 +188,7 @@ class BenefitBucketLedgerServiceTest {
 
     @Test
     @DisplayName("إلغاء المطالبة يعكس الاستهلاك ويحفظ أثراً تدقيقياً")
-    void reversalMarksOriginalAndCreatesAuditEntry() {
+    void reversalLeavesTheOriginalIntactAndPostsACompensatingMovement() {
         BenefitBucketConsumption original = BenefitBucketConsumption.builder()
                 .id(90L)
                 .claim(claim)
@@ -210,13 +210,23 @@ class BenefitBucketLedgerServiceTest {
 
         service.reverseClaim(20L);
 
-        assertEquals(BenefitBucketConsumption.Status.REVERSED, original.getStatus());
+        // The original is NEVER touched: the ledger is append-only, and the
+        // balance effect comes from the compensating row via
+        // net = original - SUM(reversals). Flipping it (the old behaviour)
+        // erased the fact that the amount had been committed at all, and made
+        // partial reversal impossible to express.
+        assertEquals(BenefitBucketConsumption.Status.COMMITTED, original.getStatus());
+        assertNull(original.getReversedAt());
+
         ArgumentCaptor<BenefitBucketConsumption> captor =
                 ArgumentCaptor.forClass(BenefitBucketConsumption.class);
-        verify(consumptionRepository, times(2)).save(captor.capture());
-        BenefitBucketConsumption reversal = captor.getAllValues().get(1);
+        verify(consumptionRepository, times(1)).save(captor.capture());
+        BenefitBucketConsumption reversal = captor.getValue();
         assertEquals(original, reversal.getReversalOf());
         assertEquals("ORIGINAL:REVERSAL", reversal.getIdempotencyKey());
+        assertEquals(BenefitBucketConsumption.Status.REVERSED, reversal.getStatus());
+        assertEquals(BenefitBucketConsumption.ReversalReason.CLAIM_REVERSAL, reversal.getReversalReason());
+        assertEquals(original.getApprovedAmount(), reversal.getApprovedAmount());
     }
 
     @Test

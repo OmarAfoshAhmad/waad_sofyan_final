@@ -404,10 +404,32 @@ class ClaimReviewApprovalIntegrationTest extends PostgresIntegrationTestBase {
         // Difference is derived (requested - payable), so while no payable
         // snapshot exists the full requested amount is intentionally exposed.
         assertThat(correction.getDifferenceAmount()).isEqualByComparingTo("1000.00");
-        assertThat(benefitBucketConsumptionRepository.findByClaimIdAndStatus(
-                claimId, BenefitBucketConsumption.Status.COMMITTED)).isEmpty();
-        assertThat(benefitBucketConsumptionRepository.findByClaimIdAndStatus(
-                claimId, BenefitBucketConsumption.Status.REVERSED)).hasSize(2);
+        // The ledger is append-only: the COMMITTED movements stay on record and
+        // are neutralised by an equal compensating movement each, rather than
+        // being flipped to REVERSED. What proves the money was released is
+        // net = committed - reversals == 0, not the disappearance of the
+        // original rows.
+        var committedRows = benefitBucketConsumptionRepository.findByClaimIdAndStatus(
+                claimId, BenefitBucketConsumption.Status.COMMITTED);
+        var reversalRows = benefitBucketConsumptionRepository.findByClaimIdAndStatus(
+                claimId, BenefitBucketConsumption.Status.REVERSED);
+        // Previously this read "2 REVERSED": one flipped original plus one
+        // marker. Now the original stays COMMITTED and exactly one
+        // compensating movement neutralises it.
+        assertThat(committedRows).as("the original commitment remains in the ledger").hasSize(1);
+        assertThat(reversalRows).as("one compensating movement per commitment").hasSize(1);
+        assertThat(reversalRows).allSatisfy(reversal -> {
+            assertThat(reversal.getReversalOf()).isNotNull();
+            assertThat(reversal.getReversalReason())
+                    .isEqualTo(BenefitBucketConsumption.ReversalReason.CLAIM_REVERSAL);
+        });
+        java.math.BigDecimal netConsumption = committedRows.stream()
+                .map(BenefitBucketConsumption::getApprovedAmount)
+                .reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add)
+                .subtract(reversalRows.stream().map(BenefitBucketConsumption::getApprovedAmount)
+                        .reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add));
+        assertThat(netConsumption).as("the reversal fully released the consumption")
+                .isEqualByComparingTo("0.00");
         assertThat(accountTransactionRepository.countByReferenceTypeAndReferenceId(
                 com.waad.tba.modules.settlement.entity.AccountTransaction.ReferenceType.CLAIM_REVERSAL,
                 claimId)).isEqualTo(1);
@@ -457,10 +479,22 @@ class ClaimReviewApprovalIntegrationTest extends PostgresIntegrationTestBase {
                 .isEqualTo(ClaimStatus.APPROVED);
         assertThat(claimRepository.findById(claimId).orElseThrow().getServiceDate())
                 .isEqualTo(correctedServiceDate);
-        assertThat(benefitBucketConsumptionRepository.findByClaimIdAndStatus(
-                claimId, BenefitBucketConsumption.Status.COMMITTED)).hasSize(1);
-        assertThat(benefitBucketConsumptionRepository.findByClaimIdAndStatus(
-                claimId, BenefitBucketConsumption.Status.COMMITTED).get(0).getApprovedAmount())
+        // After the correction there are TWO commitments on record -- the first
+        // approval's (neutralised by its compensating movement) and the
+        // re-approval's -- because nothing is ever rewritten. What must equal
+        // 2000 is the NET, not the latest row in isolation.
+        var committedAfterCorrection = benefitBucketConsumptionRepository.findByClaimIdAndStatus(
+                claimId, BenefitBucketConsumption.Status.COMMITTED);
+        var reversedAfterCorrection = benefitBucketConsumptionRepository.findByClaimIdAndStatus(
+                claimId, BenefitBucketConsumption.Status.REVERSED);
+        assertThat(committedAfterCorrection).hasSize(2);
+        java.math.BigDecimal netAfterCorrection = committedAfterCorrection.stream()
+                .map(BenefitBucketConsumption::getApprovedAmount)
+                .reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add)
+                .subtract(reversedAfterCorrection.stream().map(BenefitBucketConsumption::getApprovedAmount)
+                        .reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add));
+        assertThat(netAfterCorrection)
+                .as("only the corrected consumption counts against the limit")
                 .isEqualByComparingTo("2000.00");
         assertThat(claimRepository.findById(claimId).orElseThrow().getApprovedAmount())
                 .isEqualByComparingTo("1440.00");

@@ -24,8 +24,14 @@ public interface BenefitBucketConsumptionRepository extends JpaRepository<Benefi
                c.period_start as periodStart,
                c.period_end as periodEnd,
                c.status as status,
-               coalesce(sum(c.approved_amount), 0) as amount
+               coalesce(sum(c.approved_amount - coalesce(r.reversed_amount, 0)), 0) as amount
           from benefit_bucket_consumptions c
+          left join (
+                select reversal_of_id, sum(approved_amount) as reversed_amount
+                  from benefit_bucket_consumptions
+                 where status = 'REVERSED' and reversal_of_id is not null
+                 group by reversal_of_id
+          ) r on r.reversal_of_id = c.id
          where c.member_id = :memberId
            and c.bucket_id in (:bucketIds)
            and c.status in ('COMMITTED', 'RESERVED')
@@ -89,26 +95,40 @@ public interface BenefitBucketConsumptionRepository extends JpaRepository<Benefi
                 : sumCommittedAmountBounded(memberId, bucketId, periodStart, periodEnd, excludeClaimId);
     }
 
-    @Query("""
-        select coalesce(sum(c.approvedAmount), 0) from BenefitBucketConsumption c
-        where c.memberId = :memberId and c.bucket.id = :bucketId and c.status = com.waad.tba.modules.benefitpolicy.entity.BenefitBucketConsumption.Status.COMMITTED
-          and c.periodStart = :periodStart
-          and c.periodEnd = :periodEnd
-          and (:excludeClaimId is null or c.claim.id <> :excludeClaimId)
-        """)
+    @Query(value = """
+        select coalesce(sum(c.approved_amount - coalesce(r.reversed_amount, 0)), 0)
+          from benefit_bucket_consumptions c
+          left join (
+                select reversal_of_id, sum(approved_amount) as reversed_amount
+                  from benefit_bucket_consumptions
+                 where status = 'REVERSED' and reversal_of_id is not null
+                 group by reversal_of_id
+          ) r on r.reversal_of_id = c.id
+         where c.member_id = :memberId and c.bucket_id = :bucketId and c.status = 'COMMITTED'
+           and c.period_start = :periodStart
+           and c.period_end = :periodEnd
+           and (:excludeClaimId is null or c.claim_id <> :excludeClaimId)
+        """, nativeQuery = true)
     BigDecimal sumCommittedAmountBounded(@Param("memberId") Long memberId,
                                          @Param("bucketId") Long bucketId,
                                          @Param("periodStart") LocalDate periodStart,
                                          @Param("periodEnd") LocalDate periodEnd,
                                          @Param("excludeClaimId") Long excludeClaimId);
 
-    @Query("""
-        select coalesce(sum(c.approvedAmount), 0) from BenefitBucketConsumption c
-        where c.memberId = :memberId and c.bucket.id = :bucketId and c.status = com.waad.tba.modules.benefitpolicy.entity.BenefitBucketConsumption.Status.COMMITTED
-          and c.periodStart = :periodStart
-          and c.periodEnd is null
-          and (:excludeClaimId is null or c.claim.id <> :excludeClaimId)
-        """)
+    @Query(value = """
+        select coalesce(sum(c.approved_amount - coalesce(r.reversed_amount, 0)), 0)
+          from benefit_bucket_consumptions c
+          left join (
+                select reversal_of_id, sum(approved_amount) as reversed_amount
+                  from benefit_bucket_consumptions
+                 where status = 'REVERSED' and reversal_of_id is not null
+                 group by reversal_of_id
+          ) r on r.reversal_of_id = c.id
+         where c.member_id = :memberId and c.bucket_id = :bucketId and c.status = 'COMMITTED'
+           and c.period_start = :periodStart
+           and c.period_end is null
+           and (:excludeClaimId is null or c.claim_id <> :excludeClaimId)
+        """, nativeQuery = true)
     BigDecimal sumCommittedAmountOpenEnded(@Param("memberId") Long memberId,
                                            @Param("bucketId") Long bucketId,
                                            @Param("periodStart") LocalDate periodStart,

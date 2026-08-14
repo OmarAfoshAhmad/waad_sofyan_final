@@ -25,11 +25,33 @@ public class LimitBalanceReader {
     private final BenefitBucketConsumptionRepository consumptionRepository;
     private final ClaimRepository claimRepository;
 
+    /**
+     * Two DIFFERENT balances, deliberately not collapsed into one number.
+     *
+     * actualRemaining = limit - committed
+     *     What the member has actually used up. This is the figure for
+     *     financial reports, the member's balance screen and exports. A
+     *     reservation is a hold, not a consumption, and must never reduce it.
+     *
+     * reservableAvailable = actualRemaining - reserved
+     *     What a NEW decision may still consume without breaking a hold
+     *     already promised to a pre-authorization. Every decision that
+     *     consumes limit -- approving a claim as well as issuing a
+     *     pre-authorization -- reads this one.
+     *
+     * The old single `signedAvailable` subtracted reservations and was then
+     * used for both purposes, which meant a pending hold silently understated
+     * the member's remaining balance everywhere it was displayed.
+     *
+     * Values stay signed; clamping negatives is a display decision, not a
+     * ledger one.
+     */
     public record LimitBalance(
             EffectiveLimitResolver.EffectiveLimit limit,
             BigDecimal committed,
             BigDecimal reserved,
-            BigDecimal signedAvailable) {}
+            BigDecimal actualRemaining,
+            BigDecimal reservableAvailable) {}
 
     public record BalanceSet(
             Long memberId,
@@ -78,14 +100,18 @@ public class LimitBalanceReader {
                 committed = amount(bucketBalances, definition, Status.COMMITTED);
                 reserved = amount(bucketBalances, definition, Status.RESERVED);
             }
-            BigDecimal signedAvailable = limit.effectiveLimit().subtract(committed).subtract(reserved);
-            balances.add(new LimitBalance(limit, committed, reserved, signedAvailable));
+            BigDecimal actualRemaining = limit.effectiveLimit().subtract(committed);
+            BigDecimal reservableAvailable = actualRemaining.subtract(reserved);
+            balances.add(new LimitBalance(limit, committed, reserved, actualRemaining, reservableAvailable));
         }
 
-        BigDecimal binding = balances.stream().map(LimitBalance::signedAvailable)
+        // The binding constraint for a NEW decision is the tightest
+        // reservable figure, not the tightest remaining one: a hold already
+        // promised elsewhere is not available to spend again.
+        BigDecimal binding = balances.stream().map(LimitBalance::reservableAvailable)
                 .min(BigDecimal::compareTo).orElse(null);
         List<String> bindingKeys = balances.stream()
-                .filter(balance -> binding != null && balance.signedAvailable().compareTo(binding) == 0)
+                .filter(balance -> binding != null && balance.reservableAvailable().compareTo(binding) == 0)
                 .map(balance -> balance.limit().definition().semanticKey()).toList();
         return new BalanceSet(memberId, List.copyOf(balances), binding, bindingKeys);
     }

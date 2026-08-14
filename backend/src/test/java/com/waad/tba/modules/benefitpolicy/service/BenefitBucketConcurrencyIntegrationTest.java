@@ -265,8 +265,13 @@ class BenefitBucketConcurrencyIntegrationTest extends PostgresIntegrationTestBas
         assertThat(balance(dependentBalances, "BUCKET:" + principal.bucket().getId()).committed()).isZero();
         assertThat(balance(dependentBalances, "BUCKET:" + principal.bucket().getId()).reserved())
                 .isEqualByComparingTo("60.00");
-        assertThat(balance(dependentBalances, "BUCKET:" + principal.bucket().getId()).signedAvailable())
+        // The reservation reduces what a NEW decision may consume, but not the
+        // member's actual remaining balance -- a hold is not a consumption.
+        assertThat(balance(dependentBalances, "BUCKET:" + principal.bucket().getId()).reservableAvailable())
                 .isEqualByComparingTo("940.00");
+        assertThat(balance(dependentBalances, "BUCKET:" + principal.bucket().getId()).actualRemaining())
+                .as("nothing was committed, so the real remaining balance is untouched by the hold")
+                .isEqualByComparingTo("1000.00");
         assertThat(balance(principalBalances, "POLICY_GENERAL:" + principal.policy().getId()).committed())
                 .isEqualByComparingTo("60.00");
         assertThat(balance(dependentBalances, "POLICY_GENERAL:" + principal.policy().getId()).committed()).isZero();

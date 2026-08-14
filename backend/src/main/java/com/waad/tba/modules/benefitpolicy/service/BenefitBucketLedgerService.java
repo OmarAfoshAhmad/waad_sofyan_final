@@ -168,15 +168,21 @@ public class BenefitBucketLedgerService {
             if (consumptionRepository.existsByIdempotencyKey(key)) continue;
             bucketRepository.findByIdForUpdate(original.getBucket().getId()).orElseThrow();
             LocalDateTime now = LocalDateTime.now();
-            original.setStatus(BenefitBucketConsumption.Status.REVERSED);
-            original.setReversedAt(now);
-            consumptionRepository.save(original);
+            // The original is NOT touched. It stays COMMITTED forever, and the
+            // compensating row below is what removes the money from the
+            // balance -- because every balance query now reads
+            // net = original - SUM(its reversals) rather than filtering the
+            // original out by status. Flipping the original (the previous
+            // behaviour) both erased the history and made partial reversal
+            // impossible to express.
             consumptionRepository.save(BenefitBucketConsumption.builder()
                     .claim(original.getClaim()).claimLine(original.getClaimLine()).policy(original.getPolicy())
                     .memberId(original.getMemberId()).bucket(original.getBucket())
                     .periodStart(original.getPeriodStart()).periodEnd(original.getPeriodEnd())
                     .approvedAmount(original.getApprovedAmount()).timesConsumed(original.getTimesConsumed())
                     .status(BenefitBucketConsumption.Status.REVERSED)
+                    .reversalReason(BenefitBucketConsumption.ReversalReason.CLAIM_REVERSAL)
+                    .sourceType(BenefitBucketConsumption.SourceType.CLAIM)
                     .calculationVersion(original.getCalculationVersion()).idempotencyKey(key)
                     .reversalOf(original).reversedAt(now).build());
         }
