@@ -262,6 +262,7 @@ public class UnifiedMemberMapper {
                 dto.setParentFullName(entity.getParent().getFullName());
             } 
             dto.setRelationship(entity.getRelationship());
+            dto.setFamilyOrder(entity.getFamilyOrder());
         }
 
         return dto;

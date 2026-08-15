@@ -9,9 +9,14 @@ import com.waad.tba.modules.member.dto.MemberCreateDto;
 import com.waad.tba.modules.member.dto.MemberFinancialSummaryDto;
 import com.waad.tba.modules.member.dto.MemberUpdateDto;
 import com.waad.tba.modules.member.dto.MemberViewDto;
+import com.waad.tba.modules.member.dto.MemberFamilyTransferRequest;
+import com.waad.tba.modules.member.dto.MemberRelationshipCorrectionRequest;
+import com.waad.tba.modules.member.dto.MemberFamilyPolicyChangeRequest;
+import com.waad.tba.modules.member.dto.MemberFamilyReorderRequest;
 import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.modules.member.service.MemberFinancialSummaryService;
 import com.waad.tba.modules.member.service.UnifiedMemberService;
+import com.waad.tba.modules.member.service.MemberFamilyService;
 import com.waad.tba.modules.member.service.MemberExcelExportService;
 import com.waad.tba.modules.member.service.UnifiedSearchService;
 import com.waad.tba.modules.member.dto.MemberSearchDto;
@@ -130,6 +135,47 @@ public class UnifiedMemberController {
         private final HtmlToPdfService htmlToPdfService;
         private final FileStorageService fileStorageService;
         private final MemberExcelExportService excelExportService;
+        private final MemberFamilyService memberFamilyService;
+
+        @PostMapping("/{id}/family-transfer")
+        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN')")
+        @Operation(summary = "نقل تابع إلى رئيس أسرة آخر", description = "عملية ذرية مؤرخة ومدققة؛ تنقل جهة العمل والوثيقة عند الحاجة ولا تسمح بتداخل أسري أو نقل جزئي.")
+        public ResponseEntity<ApiResponse<MemberViewDto>> transferDependent(
+                        @PathVariable("id") Long id,
+                        @Valid @RequestBody MemberFamilyTransferRequest request) {
+                return ResponseEntity.ok(ApiResponse.success("تم نقل التابع وتسجيل أثر العملية",
+                                memberFamilyService.transferDependent(id, request)));
+        }
+
+        @PostMapping("/{id}/relationship-correction")
+        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN')")
+        @Operation(summary = "تصحيح صلة قرابة تابع", description = "تصحيح مدقق يتطلب سبباً ونسخة السجل لمنع تعارض التعديلات.")
+        public ResponseEntity<ApiResponse<MemberViewDto>> correctRelationship(
+                        @PathVariable("id") Long id,
+                        @Valid @RequestBody MemberRelationshipCorrectionRequest request) {
+                return ResponseEntity.ok(ApiResponse.success("تم تصحيح صلة القرابة وتسجيل أثر العملية",
+                                memberFamilyService.correctRelationship(id, request)));
+        }
+
+        @PostMapping("/{id}/family-policy")
+        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN')")
+        @Operation(summary = "تغيير وثيقة الأسرة بتاريخ سريان صريح", description = "كل أفراد الأسرة أو لا أحد؛ يتطلب نسخة كل سجل ولا يكتب تغييراً جزئياً.")
+        public ResponseEntity<ApiResponse<List<MemberViewDto>>> changeFamilyPolicy(
+                        @PathVariable("id") Long id,
+                        @Valid @RequestBody MemberFamilyPolicyChangeRequest request) {
+                return ResponseEntity.ok(ApiResponse.success("تم تغيير وثيقة الأسرة وتسجيل الفترات الزمنية",
+                                memberFamilyService.changeFamilyPolicy(id, request)));
+        }
+
+        @PostMapping("/{id}/family-order")
+        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN')")
+        @Operation(summary = "إعادة ترتيب التابعين", description = "يغيّر ترتيب العرض فقط ولا يغيّر رقم البطاقة أو الباركود.")
+        public ResponseEntity<ApiResponse<List<MemberViewDto>>> reorderFamily(
+                        @PathVariable("id") Long id,
+                        @Valid @RequestBody MemberFamilyReorderRequest request) {
+                return ResponseEntity.ok(ApiResponse.success("تم تحديث ترتيب الأسرة دون تغيير الهوية",
+                                memberFamilyService.reorderFamily(id, request)));
+        }
 
         // ==================== CREATE OPERATIONS ====================
 

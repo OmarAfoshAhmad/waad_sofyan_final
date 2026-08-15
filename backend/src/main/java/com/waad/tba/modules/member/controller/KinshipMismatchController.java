@@ -29,7 +29,7 @@ public class KinshipMismatchController {
 
     @PostMapping("/{id}/fix")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
-    public ResponseEntity<ApiResponse<Void>> fixMismatch(@PathVariable Long id, @RequestBody KinshipMismatchFixRequest request) {
+    public ResponseEntity<ApiResponse<Void>> fixMismatch(@PathVariable Long id, @jakarta.validation.Valid @RequestBody KinshipMismatchFixRequest request) {
         kinshipMismatchService.fixMismatch(id, request);
         return ResponseEntity.ok(ApiResponse.success("تم إصلاح بيانات القرابة بنجاح", null));
     }
@@ -43,7 +43,7 @@ public class KinshipMismatchController {
 
     @PostMapping("/bulk-fix")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
-    public ResponseEntity<ApiResponse<Void>> fixMismatchesBulk(@RequestBody com.waad.tba.modules.member.dto.KinshipMismatchBulkFixRequest request) {
+    public ResponseEntity<ApiResponse<Void>> fixMismatchesBulk(@jakarta.validation.Valid @RequestBody com.waad.tba.modules.member.dto.KinshipMismatchBulkFixRequest request) {
         kinshipMismatchService.fixMismatchesBulk(request);
         return ResponseEntity.ok(ApiResponse.success("تم الإصلاح الجماعي بنجاح", null));
     }
