@@ -64,9 +64,10 @@ public class MemberDuplicateController {
 
     @PostMapping("/merge")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
-    public ResponseEntity<ApiResponse<Void>> mergeDuplicates(@RequestBody MemberDuplicateMergeRequestDto request) {
+    public ResponseEntity<ApiResponse<Void>> mergeDuplicates(@jakarta.validation.Valid @RequestBody MemberDuplicateMergeRequestDto request) {
         log.info("REST request to merge duplicates for primary member {}", request.getPrimaryMemberId());
-        duplicateService.mergeDuplicates(request.getPrimaryMemberId(), request.getDuplicateMemberIds());
+        duplicateService.mergeDuplicates(request.getPrimaryMemberId(), request.getDuplicateMemberIds(),
+                request.getReason(), request.getExpectedVersions());
         return ResponseEntity.ok(ApiResponse.success("تم دمج السجلات المكررة بنجاح", null));
     }
 }

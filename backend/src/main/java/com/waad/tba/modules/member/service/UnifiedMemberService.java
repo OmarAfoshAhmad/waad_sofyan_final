@@ -514,6 +514,8 @@ public class UnifiedMemberService {
             case ACTIVE -> MemberOperation.REINSTATE;
             case TERMINATED -> MemberOperation.TERMINATE;
             case SUSPENDED, PENDING -> MemberOperation.CHANGE_STATUS;
+            case DUPLICATE_MERGED -> throw new BusinessRuleException(
+                    "حالة الدمج تُنشأ حصراً من عملية معالجة المكررات");
         };
         commandAccessPolicy.require(operation, employerIdOf(stored));
         Long userId = currentUser != null ? currentUser.getId() : null;
@@ -524,6 +526,8 @@ public class UnifiedMemberService {
             case TERMINATED -> statusTransitionService.terminateMembership(id, reason, userId, StatusSource.MANUAL);
             case PENDING -> statusTransitionService.transitionTo(id, Member.MemberStatus.PENDING, reason,
                     StatusSource.MANUAL, java.util.UUID.randomUUID().toString(), userId);
+            case DUPLICATE_MERGED -> throw new BusinessRuleException(
+                    "حالة الدمج تُنشأ حصراً من عملية معالجة المكررات");
         };
 
         log.info("✅ Member ID={} status changed to: {}", id, newStatus);
