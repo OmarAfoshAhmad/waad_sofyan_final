@@ -208,6 +208,9 @@ public class MemberViewDto {
     @Schema(description = "Relationship type - for dependents only", example = "SON")
     private Member.Relationship relationship;
 
+    @Schema(description = "Visual order inside the family; does not alter card identity")
+    private Integer familyOrder;
+
     /**
      * List of Dependents - Only populated for PRINCIPAL members.
      * Empty/NULL for DEPENDENT members.

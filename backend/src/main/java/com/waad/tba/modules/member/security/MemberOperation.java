@@ -26,6 +26,12 @@ public enum MemberOperation {
     /** Name, phone, descriptive fields. NOT employer or policy. */
     EDIT_DEMOGRAPHICS,
     ADD_DEPENDENT,
+    /** Move an existing dependent to another principal with dated context. */
+    TRANSFER_DEPENDENT,
+    /** Correct the declared kinship without changing family ownership. */
+    CORRECT_RELATIONSHIP,
+    CHANGE_POLICY,
+    REORDER_FAMILY,
     CHANGE_STATUS,
     TERMINATE,
     REINSTATE,

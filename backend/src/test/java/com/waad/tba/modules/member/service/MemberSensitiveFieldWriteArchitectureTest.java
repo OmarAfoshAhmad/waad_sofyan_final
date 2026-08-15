@@ -55,16 +55,17 @@ class MemberSensitiveFieldWriteArchitectureTest {
                     // dependent between principals is a separate operation.
                     "UnifiedMemberService.java",
                     "MemberImportRowProcessor.java",
+                    // Audited transfer owns changes to an existing family.
+                    "MemberFamilyService.java",
                     // Duplicate-merge re-parents the duplicate's dependents onto
                     // the surviving primary; a dedicated operation, not a field edit.
                     "MemberDuplicateService.java"),
             ".setRelationship(", Set.of(
                     "UnifiedMemberService.java",
                     "MemberImportRowProcessor.java",
-                    // Dedicated, purpose-built correction service for kinship /
-                    // gender mismatches -- exactly the "separate operation"
-                    // shape this rule asks for, not a generic back door.
-                    "KinshipMismatchService.java"));
+                    // Sole owner for transfer and audited kinship correction;
+                    // KinshipMismatchService delegates here and no longer writes.
+                    "MemberFamilyService.java"));
 
     @org.junit.jupiter.api.Test
     void sensitiveMemberFieldsAreOnlyWrittenByTheirOwningService() throws Exception {

@@ -12,6 +12,7 @@ import com.waad.tba.common.file.FileStorageService;
 import com.waad.tba.modules.member.dto.MemberViewDto;
 import com.waad.tba.modules.member.service.MemberExcelExportService;
 import com.waad.tba.modules.member.service.MemberFinancialSummaryService;
+import com.waad.tba.modules.member.service.MemberFamilyService;
 import com.waad.tba.modules.member.service.UnifiedMemberService;
 import com.waad.tba.modules.member.service.UnifiedSearchService;
 import com.waad.tba.services.pdf.HtmlToPdfService;
@@ -35,7 +36,8 @@ class UnifiedMemberControllerPagingTest {
             mock(PdfTemplateService.class),
             mock(HtmlToPdfService.class),
             mock(FileStorageService.class),
-            mock(MemberExcelExportService.class)
+            mock(MemberExcelExportService.class),
+            mock(MemberFamilyService.class)
     );
 
     @Test
