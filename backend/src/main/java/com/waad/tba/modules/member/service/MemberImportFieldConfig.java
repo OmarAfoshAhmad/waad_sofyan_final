@@ -63,11 +63,14 @@ public class MemberImportFieldConfig {
                     "card_number", "cardnumber", "card number", "member_no", "member_number",
                     "insurance_no", "insurance_number", "membership_no", "membership_number",
                     "barcode", "badge_id", "employee_id", "card no", "member no", "member number",
-                    "insurance number", "card_no", "card-number", "card-no", "principal_card_number",
-                    "principal card number", "principal-card-number",
+                    "insurance number", "card_no", "card-number", "card-no",
                     "رقم البطاقة", "رقم العضوية", "رقم التأمين", "رقم العضو", "رقم بطاقة التأمين",
                     "الباركود", "رقم الشارة", "رقم بطاقة المستفيد", "رقم بطاقة المؤمن عليه", "رقم الكارت",
-                    "رقم بطاقة الموظف"
+                    "رقم الكارت"
+            }),
+            Map.entry("principalCardNumber", new String[] {
+                    "principal_card_number", "principal card number", "principal-card-number",
+                    "employee_card_number", "رقم بطاقة الموظف", "رقم بطاقة العائل", "بطاقة الموظف"
             }),
             // Birth Date - تاريخ الميلاد
             Map.entry("birthDate", new String[] {

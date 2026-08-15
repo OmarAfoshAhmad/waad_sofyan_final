@@ -35,6 +35,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import com.waad.tba.TbaWaadApplication;
+import com.waad.tba.common.exception.BusinessRuleException;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy.BenefitPolicyStatus;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository;
@@ -51,6 +52,8 @@ import com.waad.tba.modules.member.security.AuthorizedImportScope;
 import com.waad.tba.modules.member.security.MemberImportAccessPolicy;
 import com.waad.tba.modules.rbac.entity.User;
 import com.waad.tba.modules.rbac.repository.UserRepository;
+import com.waad.tba.modules.visit.entity.Visit;
+import com.waad.tba.modules.visit.repository.VisitRepository;
 import com.waad.tba.support.PostgresIntegrationTestBase;
 
 /**
@@ -93,6 +96,7 @@ import com.waad.tba.support.PostgresIntegrationTestBase;
 class MemberExcelImportAtomicityIntegrationTest extends PostgresIntegrationTestBase {
 
     @Autowired private MemberExcelImportService importService;
+    @Autowired private MemberExcelExportService exportService;
     @MockitoSpyBean private MemberRepository memberRepository;
     @Autowired private MemberImportLogRepository importLogRepository;
     @Autowired private EmployerRepository employerRepository;
@@ -100,6 +104,7 @@ class MemberExcelImportAtomicityIntegrationTest extends PostgresIntegrationTestB
     @Autowired private UserRepository userRepository;
     @Autowired private MemberEmployerAssignmentRepository employerAssignmentRepository;
     @Autowired private MemberPolicyAssignmentRepository policyAssignmentRepository;
+    @Autowired private VisitRepository visitRepository;
     @MockitoBean private MemberImportAccessPolicy importAccessPolicy;
 
     @BeforeEach
@@ -434,14 +439,77 @@ class MemberExcelImportAtomicityIntegrationTest extends PostgresIntegrationTestB
         assertThat(dependent.getParent().getId()).isEqualTo(principal.getId());
     }
 
+    @Test
+    void canonicalFamilyColumns_linkDependentWithoutCardNumberSuffix() throws Exception {
+        String s = randomSuffix();
+        Employer employer = newEmployer(s);
+        newPolicy(employer, s);
+        String[] canonicalHeader = { "full_name", "employer", "relationship",
+                "principal_card_number", "card_number", "member_status" };
+
+        MockMultipartFile file = excel(List.of(
+                canonicalHeader,
+                new String[] { "Principal " + s, employer.getName(), "PRINCIPAL", "",
+                        "HEAD" + s, "ACTIVE" },
+                new String[] { "Dependent " + s, employer.getName(), "SON", "HEAD" + s,
+                        "CHILD" + s, "ACTIVE" }));
+
+        MemberImportResultDto result = importService.executeImport(file, "batch-family-columns-" + s,
+                employer.getId(), null, 0, false);
+
+        assertThat(result.getErrors()).isEmpty();
+        assertThat(result.getStatus()).isEqualTo("COMPLETED");
+        Member principal = memberRepository.findByCardNumber("HEAD" + s).orElseThrow();
+        Member dependent = memberRepository.findByCardNumber("CHILD" + s).orElseThrow();
+        assertThat(dependent.getParent().getId()).isEqualTo(principal.getId());
+        assertThat(dependent.getRelationship()).isEqualTo(Member.Relationship.SON);
+    }
+
+    @Test
+    @WithMockUser(username = "admin")
+    void reimportableExport_roundTripsThroughPreviewAndExecuteWithoutChangingFamilyPolicyOrStatus()
+            throws Exception {
+        ensureSuperAdminUser();
+        String s = randomSuffix();
+        Employer employer = newEmployer(s);
+        BenefitPolicy policy = newPolicy(employer, s);
+        Member principal = memberRepository.saveAndFlush(Member.builder()
+                .fullName("Roundtrip Principal " + s).employer(employer).benefitPolicy(policy)
+                .policyNumber(policy.getPolicyCode()).cardNumber("RTP" + s).barcode("RTP" + s)
+                .status(Member.MemberStatus.ACTIVE).active(true).build());
+        Member dependent = memberRepository.saveAndFlush(Member.builder()
+                .fullName("Roundtrip Child " + s).employer(employer).benefitPolicy(policy)
+                .policyNumber(policy.getPolicyCode()).cardNumber("RTC" + s).barcode("RTC" + s)
+                .parent(principal).relationship(Member.Relationship.SON)
+                .status(Member.MemberStatus.SUSPENDED).active(false).build());
+
+        byte[] workbook = exportService.exportReimportableExcel(
+                null, employer.getId(), null, null, null, true);
+        MockMultipartFile file = new MockMultipartFile("file", "roundtrip.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", workbook);
+
+        var preview = importService.parseAndPreview(file, null, 0, employer.getId());
+        assertThat(preview.getInvalidRows()).isZero();
+        assertThat(preview.getValidRows()).isEqualTo(2);
+        importService.executeImport(file, "batch-roundtrip-" + s, employer.getId(), null, 0, false);
+
+        Member principalAfter = memberRepository.findById(principal.getId()).orElseThrow();
+        Member dependentAfter = memberRepository.findById(dependent.getId()).orElseThrow();
+        assertThat(dependentAfter.getParent().getId()).isEqualTo(principalAfter.getId());
+        assertThat(dependentAfter.getRelationship()).isEqualTo(Member.Relationship.SON);
+        assertThat(dependentAfter.getStatus()).isEqualTo(Member.MemberStatus.SUSPENDED);
+        assertThat(principalAfter.getBenefitPolicy().getId()).isEqualTo(policy.getId());
+        assertThat(dependentAfter.getBenefitPolicy().getId()).isEqualTo(policy.getId());
+    }
+
     /**
      * Regression test for the ordering bug found on review: clearOldMembers
      * used to run BEFORE the idempotency check, so a duplicate submission of
-     * a clearOldMembers=true import would delete members again and THEN find
-     * the scope hash already COMPLETED -- committing the delete with no
+     * a clearOldMembers=true import would end members again and THEN find
+     * the scope hash already COMPLETED -- committing the transition with no
      * re-import to replace it. clearOldMembers now runs AFTER the idempotent
      * short-circuit, so a duplicate submission must do nothing at all: if it
-     * still ran clearOldMembers on the second call, it would delete the
+     * still ran clearOldMembers on the second call, it would terminate the
      * principal the FIRST call just created (that principal has no
      * visits/claims/preauths of its own, so it's exactly the kind of "old
      * member with no movements" clearOldMembers targets).
@@ -455,7 +523,7 @@ class MemberExcelImportAtomicityIntegrationTest extends PostgresIntegrationTestB
         newPolicy(employer, s);
 
         // A pre-existing member with no financial movements -- clearOldMembers
-        // will delete this on the FIRST call.
+        // will terminate this logically on the FIRST call.
         Member preExisting = memberRepository.save(Member.builder()
                 .fullName("Stale Member " + s).employer(employer)
                 .cardNumber("STALE" + s).barcode("STALE" + s).status(Member.MemberStatus.SUSPENDED).active(false).build());
@@ -467,7 +535,10 @@ class MemberExcelImportAtomicityIntegrationTest extends PostgresIntegrationTestB
         MemberImportResultDto first = importService.executeImport(
                 file, "batch-clear-1-" + s, employer.getId(), null, 0, true);
         assertThat(first.getStatus()).isEqualTo("COMPLETED");
-        assertThat(memberRepository.findById(preExisting.getId())).as("stale member deleted by the first, real clearOldMembers run").isEmpty();
+        Member ended = memberRepository.findById(preExisting.getId()).orElseThrow();
+        assertThat(ended.getStatus()).as("stale member ended by the first real replacement run")
+                .isEqualTo(Member.MemberStatus.TERMINATED);
+        assertThat(ended.getFullName()).isEqualTo("Stale Member " + s);
         Member freshFromFirstCall = memberRepository.findByCardNumber("FRESH" + s).orElseThrow();
 
         // Identical resubmission (same file, same employer, same
@@ -486,10 +557,10 @@ class MemberExcelImportAtomicityIntegrationTest extends PostgresIntegrationTestB
     }
 
     /**
-     * clearOldMembers's delete and the new import's writes must be one
+     * clearOldMembers's logical termination and the new import's writes must be one
      * atomic unit: if the import fails technically partway through, the
-     * delete must roll back along with everything else -- the old members
-     * must NOT end up permanently gone with nothing successfully imported to
+     * transition must roll back along with everything else -- the old members
+     * must NOT end up terminated with nothing successfully imported to
      * replace them.
      */
     @Test
@@ -517,9 +588,80 @@ class MemberExcelImportAtomicityIntegrationTest extends PostgresIntegrationTestB
         assertThatThrownBy(() -> importService.executeImport(file, "batch-clear-fail-" + s, employer.getId(), null, 0, true))
                 .isInstanceOf(Exception.class);
 
-        assertThat(memberRepository.findById(preExisting.getId())).as("delete rolled back -- stale member restored")
-                .isPresent();
+        Member restoredByRollback = memberRepository.findById(preExisting.getId()).orElseThrow();
+        assertThat(restoredByRollback.getStatus())
+                .as("logical termination rolled back -- stale member kept its original status")
+                .isEqualTo(Member.MemberStatus.SUSPENDED);
         assertThat(memberRepository.findByCardNumber("DOOM" + s)).as("new principal rolled back too").isEmpty();
         assertThat(memberRepository.findByCardNumber("DOOM" + s + "S1")).as("new dependent rolled back too").isEmpty();
+    }
+
+    @Test
+    @WithMockUser(username = "admin")
+    void replacementTerminatesAbsentMemberEvenWhenHistoricalVisitExists() throws Exception {
+        ensureSuperAdminUser();
+        String s = randomSuffix();
+        Employer employer = newEmployer(s);
+        BenefitPolicy policy = newPolicy(employer, s);
+        Member absent = memberRepository.saveAndFlush(Member.builder()
+                .fullName("Historical Absent " + s).employer(employer)
+                .benefitPolicy(policy)
+                .cardNumber("HISTABS" + s).barcode("HISTABS" + s)
+                .status(Member.MemberStatus.ACTIVE).active(true).build());
+        Long visitId = visitRepository.saveAndFlush(Visit.builder()
+                .member(absent).employer(employer).visitDate(LocalDate.now().minusDays(3)).build()).getId();
+
+        MockMultipartFile replacement = excel(List.of(
+                HEADER,
+                new String[] { "Present Member " + s, employer.getName(), "NP" + s,
+                        "2026-01-01", "PRESENT" + s }));
+
+        importService.executeImport(replacement, "batch-history-replacement-" + s,
+                employer.getId(), null, 0, true);
+
+        Member terminated = memberRepository.findById(absent.getId()).orElseThrow();
+        assertThat(terminated.getStatus()).isEqualTo(Member.MemberStatus.TERMINATED);
+        assertThat(terminated.getActive()).isFalse();
+        assertThat(visitRepository.findById(visitId).orElseThrow().getMember().getId())
+                .as("historical medical data remains linked to the logically terminated member")
+                .isEqualTo(absent.getId());
+    }
+
+    @Test
+    void existingMemberEmployerTransferAttempt_rejectsWholeFileWithoutPartialWrite() throws Exception {
+        String s = randomSuffix();
+        Employer targetEmployer = newEmployer(s + "-target");
+        newPolicy(targetEmployer, s + "-target");
+        Employer originalEmployer = newEmployer(s + "-original");
+        BenefitPolicy originalPolicy = newPolicy(originalEmployer, s + "-original");
+
+        Member existing = memberRepository.save(Member.builder()
+                .fullName("Existing " + s)
+                .employer(originalEmployer)
+                .benefitPolicy(originalPolicy)
+                .cardNumber("MOVE" + s)
+                .barcode("MOVE" + s)
+                .status(Member.MemberStatus.ACTIVE)
+                .active(true)
+                .build());
+
+        MockMultipartFile file = excel(List.of(
+                HEADER,
+                new String[] { "Would Be Created " + s, targetEmployer.getName(), "NEW" + s,
+                        "2026-01-01", "NEWCARD" + s },
+                new String[] { "Transfer Attempt " + s, targetEmployer.getName(), "OLD" + s,
+                        "2026-01-01", "MOVE" + s }));
+
+        assertThatThrownBy(() -> importService.executeImport(file, "batch-transfer-" + s,
+                targetEmployer.getId(), null, 0, false))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("لا يمكن نقل عضو قائم");
+
+        assertThat(memberRepository.findByCardNumber("NEWCARD" + s))
+                .as("an authorization/scope violation aborts the complete import")
+                .isEmpty();
+        Member unchanged = memberRepository.findById(existing.getId()).orElseThrow();
+        assertThat(unchanged.getEmployer().getId()).isEqualTo(originalEmployer.getId());
+        assertThat(unchanged.getFullName()).isEqualTo("Existing " + s);
     }
 }

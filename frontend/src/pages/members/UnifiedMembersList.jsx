@@ -77,6 +77,7 @@ import DataExportWizard from 'components/tba/DataExportWizard';
 import {
   searchMembers,
   exportMembers,
+  exportReimportableMembers,
   terminateMembership,
   bulkDeleteMembers,
   restoreMember,
@@ -247,6 +248,29 @@ const UnifiedMembersList = () => {
 
   const performExport = async (params) => {
     return await exportMembers(params);
+  };
+
+  const handleReimportableExport = async () => {
+    try {
+      const blob = await exportReimportableMembers({
+        searchTerm,
+        organizationId: filters.organizationId || undefined,
+        status: filters.status || undefined,
+        type: filters.type || undefined,
+        deleted: showDeleted
+      });
+      const url = window.URL.createObjectURL(new Blob([blob]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `members-reimportable-${new Date().toISOString().split('T')[0]}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      enqueueSnackbar('تم إنشاء ملف صالح للمعاينة وإعادة الاستيراد', { variant: 'success' });
+    } catch (error) {
+      enqueueSnackbar(error?.response?.data?.message || 'فشل إنشاء ملف إعادة الاستيراد', { variant: 'error' });
+    }
   };
 
   // Delete/Restore Handlers
@@ -670,6 +694,14 @@ const UnifiedMembersList = () => {
               }}
             >
               تصدير لإكسل
+            </Button>
+            <Button
+              variant="outlined"
+              onClick={handleReimportableExport}
+              startIcon={<FileDownloadIcon />}
+              sx={{ minWidth: '12rem' }}
+            >
+              تصدير قابل لإعادة الاستيراد
             </Button>
 
             {/* Deleted Members Toggle */}

@@ -43,7 +43,7 @@ describe('MembersBulkUploadDialog import contract', () => {
     await user.click(screen.getByRole('button', { name: 'معاينة الملف' }));
     await screen.findByText('نتيجة المعاينة قبل التنفيذ');
 
-    expect(previewImport).toHaveBeenCalledWith(file, { employerId: 77 });
+    expect(previewImport).toHaveBeenCalledWith(file, { employerId: 77, clearOldMembers: false });
     expect(executeImport).not.toHaveBeenCalled();
 
     await user.click(screen.getByRole('button', { name: 'تأكيد وتنفيذ الاستيراد' }));

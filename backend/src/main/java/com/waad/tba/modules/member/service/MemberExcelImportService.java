@@ -38,6 +38,7 @@ import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.modules.member.entity.Member.Relationship;
 import com.waad.tba.modules.member.entity.MemberImportError;
 import com.waad.tba.modules.member.entity.MemberImportLog;
+import com.waad.tba.modules.member.entity.StatusSource;
 import com.waad.tba.modules.member.repository.MemberAttributeRepository;
 import com.waad.tba.modules.member.repository.MemberImportErrorRepository;
 import com.waad.tba.modules.member.repository.MemberImportLogRepository;
@@ -46,9 +47,6 @@ import com.waad.tba.modules.member.security.AuthorizedImportScope;
 import com.waad.tba.modules.member.security.MemberImportAccessPolicy;
 import com.waad.tba.modules.member.security.MemberOperation;
 import com.waad.tba.modules.rbac.entity.User;
-import com.waad.tba.modules.visit.repository.VisitRepository;
-import com.waad.tba.modules.claim.repository.ClaimRepository;
-import com.waad.tba.modules.preauthorization.repository.PreAuthorizationRepository;
 import com.waad.tba.security.AuthorizationService;
 
 import lombok.RequiredArgsConstructor;
@@ -85,10 +83,8 @@ public class MemberExcelImportService {
     private final MemberPolicyResolver memberPolicyResolver;
     private final com.waad.tba.modules.member.repository.MemberPolicyAssignmentRepository policyAssignmentRepository;
     private final MemberImportAccessPolicy importAccessPolicy;
+    private final MemberImportPreviewTicketService previewTicketService;
 
-    private final VisitRepository visitRepository;
-    private final ClaimRepository claimRepository;
-    private final PreAuthorizationRepository preAuthorizationRepository;
 
     public MemberImportPreviewDto parseAndPreview(MultipartFile file) throws Exception {
         return parseAndPreview(file, null, null, null);
@@ -223,6 +219,7 @@ public class MemberExcelImportService {
                     .availableEmployers(loadEmployerOptions())
                     .availableBenefitPolicies(loadPolicyOptions())
                     .resolvedEmployerIds(java.util.Set.copyOf(resolvedEmployerIds))
+                    .resolvedHeaderRowNumber(resolvedHeaderRowNumber)
                     .build();
         }
     }
@@ -233,47 +230,6 @@ public class MemberExcelImportService {
 
     public MemberImportResultDto executeImport(MultipartFile file, String batchId, Long employerId, Long benefitPolicyId, Integer headerRowNumber) throws Exception {
         return executeImport(file, batchId, employerId, benefitPolicyId, headerRowNumber, false);
-    }
-
-    @org.springframework.transaction.annotation.Transactional
-    public void clearOldMembersForFile(MultipartFile file, Long employerId, Integer headerRowNumber) {
-        assertCurrentUserCanClearOldMembers();
-
-        if (employerId != null) {
-            clearOldMembers(employerId);
-        } else {
-            Set<Long> detectedEmployerIds = new HashSet<>();
-            try (InputStream is = file.getInputStream(); Workbook workbook = new XSSFWorkbook(is)) {
-                Sheet sheet = workbook.getSheetAt(0);
-                int physicalLastRow = sheet.getLastRowNum();
-                int resolvedHeaderRowNumber = headerRowNumber != null ? Math.max(0, headerRowNumber) : mapper.detectHeaderRowNumber(sheet);
-                Row headerRow = sheet.getRow(resolvedHeaderRowNumber);
-                if (headerRow != null) {
-                    Map<String, Integer> fieldToColumnIndex = new HashMap<>();
-                    for (int i = 0; i < headerRow.getLastCellNum(); i++) {
-                        String colName = parser.cleanColumnName(parser.getCellStringValue(headerRow.getCell(i))).toLowerCase();
-                        mapper.mapColumnToField(colName, i, fieldToColumnIndex, new HashMap<>());
-                    }
-                    for (int rowIndex = resolvedHeaderRowNumber + 1; rowIndex <= physicalLastRow; rowIndex++) {
-                        Row row = sheet.getRow(rowIndex);
-                        if (row == null || parser.isEmptyRow(row)) continue;
-                        try {
-                            Employer rowEmployer = rowProcessor.resolveEmployerForRow(row, rowIndex - resolvedHeaderRowNumber, fieldToColumnIndex, null);
-                            if (rowEmployer != null) {
-                                detectedEmployerIds.add(rowEmployer.getId());
-                            }
-                        } catch (Exception e) {
-                            // Ignore row parsing errors during scan
-                        }
-                    }
-                }
-            } catch (Exception e) {
-                log.error("Error scanning file for employers to clear", e);
-            }
-            for (Long empId : detectedEmployerIds) {
-                clearOldMembers(empId);
-            }
-        }
     }
 
     /**
@@ -305,7 +261,26 @@ public class MemberExcelImportService {
      * specific write out would reopen a duplicate-import race.
      */
     @org.springframework.transaction.annotation.Transactional
+    public MemberImportResultDto executeConfirmedImport(MultipartFile file, String previewToken, Long employerId,
+            Long benefitPolicyId, Integer headerRowNumber, Boolean clearOldMembers,
+            Map<String, String> customMappings) throws Exception {
+        MemberImportPreviewDto guard = parseAndPreview(file, customMappings, headerRowNumber, employerId);
+        previewTicketService.consume(previewToken, file, employerId, benefitPolicyId,
+                guard.getResolvedHeaderRowNumber(),
+                clearOldMembers, customMappings, guard.getResolvedEmployerIds());
+        return executeImport(file, previewToken, employerId, benefitPolicyId,
+                guard.getResolvedHeaderRowNumber(),
+                clearOldMembers, customMappings);
+    }
+
+    @org.springframework.transaction.annotation.Transactional
     public MemberImportResultDto executeImport(MultipartFile file, String batchId, Long employerId, Long benefitPolicyId, Integer headerRowNumber, Boolean clearOldMembers) throws Exception {
+        return executeImport(file, batchId, employerId, benefitPolicyId, headerRowNumber, clearOldMembers, null);
+    }
+
+    private MemberImportResultDto executeImport(MultipartFile file, String batchId, Long employerId,
+            Long benefitPolicyId, Integer headerRowNumber, Boolean clearOldMembers,
+            Map<String, String> customMappings) throws Exception {
         log.info("📥 Executing member import: batchId={}, file={}, employer={}, policy={}, clearOldMembers={}", batchId, file.getOriginalFilename(), employerId, benefitPolicyId, clearOldMembers);
 
         // clearOldMembers is deliberately NOT run here, before the
@@ -319,8 +294,12 @@ public class MemberExcelImportService {
         // genuine clearOldMembers run rolls back together with the rest of
         // this transaction if anything downstream fails.
 
-        MemberImportPreviewDto previewGuard = parseAndPreview(file, null, headerRowNumber, employerId);
+        MemberImportPreviewDto previewGuard = parseAndPreview(file, customMappings, headerRowNumber, employerId);
         if (previewGuard.getValidRows() <= 0) throw new BusinessRuleException("لا يوجد صفوف صالحة للاستيراد");
+        if (Boolean.TRUE.equals(clearOldMembers) && previewGuard.getInvalidRows() > 0) {
+            throw new BusinessRuleException(
+                    "لا يمكن استبدال قائمة المستفيدين بملف يحتوي صفوفاً غير صالحة؛ صحح جميع الصفوف ثم أعد المعاينة");
+        }
         AuthorizedImportScope importScope = importAccessPolicy.require(
                 MemberOperation.IMPORT_EXECUTE,
                 previewGuard.getResolvedEmployerIds(), Boolean.TRUE.equals(clearOldMembers));
@@ -390,14 +369,6 @@ public class MemberExcelImportService {
         int totalProcessed = 0, createdCount = 0, skippedCount = 0, errorCount = 0;
 
         try (InputStream is = new java.io.ByteArrayInputStream(fileBytes); Workbook workbook = new XSSFWorkbook(is)) {
-            // Runs INSIDE this transaction, after the idempotency
-            // short-circuit above -- a duplicate submission never reaches
-            // here, and a genuine clear+reimport rolls back together with
-            // everything below if any later row fails technically.
-            if (Boolean.TRUE.equals(clearOldMembers)) {
-                clearOldMembersForFile(file, employerId, headerRowNumber);
-            }
-
             Sheet sheet = workbook.getSheetAt(0);
             int physicalLastRow = sheet.getLastRowNum();
             int totalRows = Math.max(0, physicalLastRow - resolvedHeaderRowNumber);
@@ -408,7 +379,29 @@ public class MemberExcelImportService {
             for (int i = 0; i < headerRow.getLastCellNum(); i++) {
                 String colName = parser.cleanColumnName(parser.getCellStringValue(headerRow.getCell(i))).toLowerCase();
                 columnIndexToName.put(i, colName);
-                mapper.mapColumnToField(colName, i, fieldToColumnIndex, new HashMap<>());
+                if (customMappings == null || customMappings.isEmpty())
+                    mapper.mapColumnToField(colName, i, fieldToColumnIndex, new HashMap<>());
+            }
+            if (customMappings != null && !customMappings.isEmpty()) {
+                for (Map.Entry<String, String> entry : customMappings.entrySet()) {
+                    Integer index = mapper.findColumnIndexByName(entry.getKey().trim().toLowerCase(),
+                            columnIndexToName);
+                    if (index != null) fieldToColumnIndex.put(entry.getValue(), index);
+                }
+            }
+
+            // Replacement semantics are based on the exact identities in the
+            // validated file, not on whether an absent member happens to have
+            // historical claims. History prevents physical deletion; it must
+            // never keep an absent membership ACTIVE. This runs after the
+            // idempotency short-circuit and inside the import transaction.
+            if (Boolean.TRUE.equals(clearOldMembers)) {
+                assertCurrentUserCanClearOldMembers();
+                Map<Long, Set<String>> presentCardsByEmployer = collectPresentCardsByEmployer(
+                        sheet, resolvedHeaderRowNumber, physicalLastRow, fieldToColumnIndex, defaultEmployer);
+                for (Map.Entry<Long, Set<String>> entry : presentCardsByEmployer.entrySet()) {
+                    terminateMembersAbsentFromReplacement(entry.getKey(), entry.getValue());
+                }
             }
 
             Map<String, Member> memberCache = loadExistingMembersForImport(sheet, resolvedHeaderRowNumber,
@@ -424,7 +417,7 @@ public class MemberExcelImportService {
                 Member parent;
                 try {
                     String cardNumber = parser.getFieldValue(row, fieldToColumnIndex, "cardNumber");
-                    CardInfo cardInfo = parseCardNumber(cardNumber);
+                    CardInfo cardInfo = resolveFamilyLink(row, rowNum, fieldToColumnIndex, cardNumber);
                     Relationship relationship = cardInfo.relationship;
                     String parentCardNumber = cardInfo.parentCardNumber;
 
@@ -437,7 +430,7 @@ public class MemberExcelImportService {
                             memberCache.put(parentCardKey, parent);
                         }
                         if (!importScope.covers(parent.getEmployer() == null ? null : parent.getEmployer().getId())) {
-                            throw new MemberImportRowValidationException(
+                            throw new BusinessRuleException(
                                     "الصف " + rowNum + ": الموظف الرئيسي خارج نطاق المستخدم");
                         }
                     }
@@ -452,7 +445,7 @@ public class MemberExcelImportService {
                             row, rowNum, fieldToColumnIndex, defaultEmployer);
                     if (existingMember != null && existingMember.getEmployer() != null
                             && !existingMember.getEmployer().getId().equals(rowEmployer.getId())) {
-                        throw new MemberImportRowValidationException(
+                        throw new BusinessRuleException(
                                 "الصف " + rowNum + ": لا يمكن نقل عضو قائم إلى جهة أخرى عبر الاستيراد");
                     }
 
@@ -638,75 +631,70 @@ public class MemberExcelImportService {
         try { return objectMapper.writeValueAsString(data); } catch (JsonProcessingException e) { return "{}"; }
     }
 
-    private void clearOldMembers(Long employerId) {
-        log.info("🧹 Clearing old members for employerId={} who do not have financial movements", employerId);
+    private Map<Long, Set<String>> collectPresentCardsByEmployer(Sheet sheet, int headerRowNumber,
+            int lastRow, Map<String, Integer> fieldToColumnIndex, Employer defaultEmployer) {
+        Map<Long, Set<String>> result = new HashMap<>();
+        for (int rowIndex = headerRowNumber + 1; rowIndex <= lastRow; rowIndex++) {
+            Row row = sheet.getRow(rowIndex);
+            if (row == null || parser.isEmptyRow(row)) continue;
+            int rowNumber = rowIndex - headerRowNumber;
+            Employer rowEmployer = rowProcessor.resolveEmployerForRow(
+                    row, rowNumber, fieldToColumnIndex, defaultEmployer);
+            String card = normalizeCardKey(parser.getFieldValue(row, fieldToColumnIndex, "cardNumber"));
+            if (card == null) {
+                throw new BusinessRuleException("الصف " + rowNumber + ": رقم بطاقة المستفيد إلزامي للاستبدال");
+            }
+            result.computeIfAbsent(rowEmployer.getId(), ignored -> new HashSet<>()).add(card);
+        }
+        return result;
+    }
+
+    private void terminateMembersAbsentFromReplacement(Long employerId, Set<String> presentCards) {
+        log.info("🧹 Terminating members absent from replacement file for employerId={}", employerId);
         List<Member> allMembers = memberRepository.findByEmployerId(employerId);
         if (allMembers.isEmpty()) {
             return;
         }
 
-        Set<Long> allMemberIds = new HashSet<>();
         Map<Long, Member> memberMap = new HashMap<>();
         for (Member m : allMembers) {
-            allMemberIds.add(m.getId());
             memberMap.put(m.getId(), m);
         }
 
-        // Fetch movements in bulk (3 fast queries)
-        Set<Long> idsWithMovements = new HashSet<>();
-        idsWithMovements.addAll(visitRepository.findMemberIdsWithVisits(allMemberIds));
-        idsWithMovements.addAll(claimRepository.findMemberIdsWithClaims(allMemberIds));
-        idsWithMovements.addAll(preAuthorizationRepository.findMemberIdsWithPreAuths(allMemberIds));
+        // Members absent from the replacement file are ended logically. Their
+        // identity, attributes and history must remain available for audit and
+        // historical claims; clearOldMembers is never a physical-delete path.
+        Set<Long> memberIdsToTerminate = allMembers.stream()
+                .filter(member -> !presentCards.contains(normalizeCardKey(member.getCardNumber())))
+                .map(Member::getId)
+                .collect(java.util.stream.Collectors.toSet());
 
-        // Determine which members to keep:
-        // A member is kept if they have movements, or if they are a principal and have a dependent with movements.
-        Set<Long> keepIds = new HashSet<>();
-        for (Long id : idsWithMovements) {
-            keepIds.add(id);
-            Member m = memberMap.get(id);
-            if (m != null && m.getParent() != null) {
-                keepIds.add(m.getParent().getId());
-            }
-        }
-
-        // Members to delete are those not in keepIds
-        Set<Long> memberIdsToDelete = new HashSet<>(allMemberIds);
-        memberIdsToDelete.removeAll(keepIds);
-
-        if (memberIdsToDelete.isEmpty()) {
+        if (memberIdsToTerminate.isEmpty()) {
             return;
         }
 
-
-        // Separate dependents and principals to delete
-        List<Long> dependentsToDelete = new ArrayList<>();
-        List<Long> principalsToDelete = new ArrayList<>();
-
-        for (Long id : memberIdsToDelete) {
-            Member m = memberMap.get(id);
-            if (m != null) {
-                if (m.isDependent()) {
-                    dependentsToDelete.add(id);
-                } else {
-                    principalsToDelete.add(id);
-                }
+        User currentUser = authorizationService.getCurrentUser();
+        Long actingUserId = currentUser != null ? currentUser.getId() : null;
+        List<Member> ordered = memberIdsToTerminate.stream()
+                .map(memberMap::get)
+                .filter(java.util.Objects::nonNull)
+                // Principals first: the central transition service performs the
+                // family cascade once and preserves independently stopped dependents.
+                .sorted(java.util.Comparator.comparing(Member::isDependent)
+                        .thenComparing(Member::getId))
+                .toList();
+        int terminated = 0;
+        for (Member member : ordered) {
+            if (member.getStatus() == Member.MemberStatus.TERMINATED
+                    || member.getStatus() == Member.MemberStatus.DUPLICATE_MERGED) {
+                continue;
             }
+            statusTransitionService.terminateMembership(member.getId(),
+                    "غير موجود في ملف الاستبدال المعتمد", actingUserId,
+                    StatusSource.IMPORT);
+            terminated++;
         }
-
-        // Delete member attributes for all members to delete in bulk to prevent FK issues
-        memberAttributeRepository.deleteByMemberIdIn(memberIdsToDelete);
-
-        // Delete dependents first to avoid parent dependency constraints
-        if (!dependentsToDelete.isEmpty()) {
-            memberRepository.deleteMembersByIds(dependentsToDelete);
-            log.info("🧹 Deleted {} dependent members in bulk", dependentsToDelete.size());
-        }
-
-        // Delete principals in bulk
-        if (!principalsToDelete.isEmpty()) {
-            memberRepository.deleteMembersByIds(principalsToDelete);
-            log.info("🧹 Deleted {} principal members in bulk", principalsToDelete.size());
-        }
+        log.info("🧹 Logically terminated {} members absent from the replacement import", terminated);
     }
 
     private void assertCurrentUserCanClearOldMembers() {
@@ -740,6 +728,9 @@ public class MemberExcelImportService {
                     relevantCardNumbers.add(normalizedParentCard);
                 }
             }
+            String explicitParentCard = normalizeCardKey(
+                    parser.getFieldValue(row, fieldToColumnIndex, "principalCardNumber"));
+            if (explicitParentCard != null) relevantCardNumbers.add(explicitParentCard);
         }
 
         Map<String, Member> memberCache = new HashMap<>();
@@ -806,13 +797,48 @@ public class MemberExcelImportService {
         return new CardInfo(null, null);
     }
 
+    private CardInfo resolveFamilyLink(Row row, int rowNum, Map<String, Integer> fieldToColumnIndex,
+            String cardNumber) {
+        CardInfo legacy = parseCardNumber(cardNumber);
+        String explicitParent = normalizeCardKey(
+                parser.getFieldValue(row, fieldToColumnIndex, "principalCardNumber"));
+        String explicitRelationship = parser.getFieldValue(row, fieldToColumnIndex, "relationship");
+
+        if ((explicitParent == null) && (explicitRelationship == null || explicitRelationship.isBlank())) {
+            return legacy;
+        }
+
+        Relationship relationship = parser.parseRelationship(explicitRelationship);
+        if (relationship == null && explicitParent != null) {
+            throw new MemberImportRowValidationException(
+                    "الصف " + rowNum + ": صلة القرابة مطلوبة عند تحديد رقم بطاقة الموظف");
+        }
+        if (relationship != null && explicitParent == null) {
+            throw new MemberImportRowValidationException(
+                    "الصف " + rowNum + ": رقم بطاقة الموظف مطلوب للتابع");
+        }
+        if (relationship == null) return new CardInfo(null, null);
+
+        String legacyParent = normalizeCardKey(legacy.parentCardNumber);
+        if (legacyParent != null && !legacyParent.equals(explicitParent)) {
+            throw new MemberImportRowValidationException(
+                    "الصف " + rowNum + ": رقم بطاقة الموظف يتعارض مع رقم بطاقة التابع");
+        }
+        if (legacy.relationship != null && legacy.relationship != relationship) {
+            throw new MemberImportRowValidationException(
+                    "الصف " + rowNum + ": صلة القرابة تتعارض مع لاحقة رقم البطاقة");
+        }
+        return new CardInfo(relationship, explicitParent);
+    }
+
 
     private Member createDummyParent(String parentCardNumber, Row row, int rowNum,
                                      Map<String, Integer> fieldToColumnIndex, Employer defaultEmployer,
                                      BenefitPolicy benefitPolicy) {
         Employer rowEmployer = rowProcessor.resolveEmployerForRow(row, rowNum, fieldToColumnIndex, defaultEmployer);
-        BenefitPolicy resolvedPolicy = rowProcessor.resolveAndValidatePolicy(benefitPolicy, rowEmployer, rowNum);
         String policyNumber = parser.getFieldValue(row, fieldToColumnIndex, "policyNumber");
+        BenefitPolicy resolvedPolicy = rowProcessor.resolveAndValidatePolicy(
+                benefitPolicy, policyNumber, rowEmployer, rowNum);
         
         Member parent = Member.builder()
                 .cardNumber(parentCardNumber)

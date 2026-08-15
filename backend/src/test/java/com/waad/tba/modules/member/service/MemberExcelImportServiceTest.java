@@ -93,6 +93,8 @@ class MemberExcelImportServiceTest {
     private com.waad.tba.modules.member.security.MemberImportAccessPolicy importAccessPolicy;
     @Mock
     private com.waad.tba.modules.member.security.AuthorizedImportScope authorizedImportScope;
+    @Mock
+    private MemberImportPreviewTicketService previewTicketService;
 
     @InjectMocks
     private MemberExcelImportService service;
@@ -136,9 +138,7 @@ class MemberExcelImportServiceTest {
                 memberPolicyResolver,
                 policyAssignmentRepository,
                 importAccessPolicy,
-                visitRepository,
-                claimRepository,
-                preAuthorizationRepository);
+                previewTicketService);
 
         employer = Employer.builder().id(10L).code("EMP1").name("Employer One").active(true).build();
 
@@ -151,6 +151,7 @@ class MemberExcelImportServiceTest {
         when(benefitPolicyRepository.findAll()).thenReturn(List.of(activePolicy));
         when(benefitPolicyRepository.findActiveEffectivePolicyForEmployer(10L, LocalDate.now()))
                 .thenReturn(Optional.of(activePolicy));
+        when(benefitPolicyRepository.findByPolicyCode("POL-1")).thenReturn(Optional.of(activePolicy));
         when(authorizationService.getCurrentUser()).thenReturn(User.builder().id(1L).username("tester").build());
         lenient().when(importAccessPolicy.require(
                 org.mockito.ArgumentMatchers.any(com.waad.tba.modules.member.security.MemberOperation.class),
