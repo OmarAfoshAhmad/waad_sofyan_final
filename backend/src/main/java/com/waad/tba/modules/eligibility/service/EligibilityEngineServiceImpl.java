@@ -50,6 +50,7 @@ public class EligibilityEngineServiceImpl implements EligibilityEngineService {
     private final EligibilityAuditRecorder auditRecorder;
     private final BenefitPolicyCoverageService coverageService;
     private final com.waad.tba.modules.member.service.MemberPolicyResolver memberPolicyResolver;
+    private final com.waad.tba.modules.member.service.MemberEmployerResolver memberEmployerResolver;
 
     // Security
     private final AuthorizationService authorizationService;
@@ -166,8 +167,10 @@ public class EligibilityEngineServiceImpl implements EligibilityEngineService {
         // and could disagree with the claim path for the very same member and
         // date. MemberPolicyResolver is now the single answer for both.
         BenefitPolicy benefitPolicy = null;
+        com.waad.tba.modules.employer.entity.Employer datedEmployer = null;
         Long benefitPolicyId = null;
         if (member != null) {
+            datedEmployer = memberEmployerResolver.resolveFor(member, request.getServiceDate()).orElse(null);
             benefitPolicy = memberPolicyResolver.resolveFor(member, request.getServiceDate()).orElse(null);
             if (benefitPolicy != null) {
                 benefitPolicyId = benefitPolicy.getId();
@@ -207,7 +210,7 @@ public class EligibilityEngineServiceImpl implements EligibilityEngineService {
                 .member(member)
                 .benefitPolicy(benefitPolicy)
                 .provider(provider)
-                .employer(member != null ? member.getEmployer() : null)
+                .employer(datedEmployer)
                 .checkedByUserId(userId)
                 .checkedByUsername(username)
                 .companyScopeId(employerId) // Using employerId as company scope in simplified model

@@ -185,6 +185,7 @@ class ClaimLimitDoubleCountingIntegrationTest extends PostgresIntegrationTestBas
                 .benefitPolicy(policy)
                 .active(true)
                 .build());
+        initializeTemporalAssignments(member);
 
         provider = providerRepository.save(Provider.builder()
                 .name("Limit Test Hospital " + suffix)

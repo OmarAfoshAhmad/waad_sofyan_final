@@ -165,6 +165,7 @@ public class ClaimLifecycleIntegrationTest extends PostgresIntegrationTestBase {
                                 .benefitPolicy(policy)
                                 .active(true)
                                 .build());
+                initializeTemporalAssignments(member);
 
                 // 4. Provider
                 provider = providerRepository.save(Provider.builder()

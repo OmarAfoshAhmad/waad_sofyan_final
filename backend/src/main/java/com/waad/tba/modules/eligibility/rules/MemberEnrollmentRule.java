@@ -55,10 +55,10 @@ public class MemberEnrollmentRule implements EligibilityRule {
 
     @Override
     public RuleResult evaluate(EligibilityContext context) {
-        Member member = context.getMember();
-
-        // Check: Member has a BenefitPolicy assigned
-        BenefitPolicy benefitPolicy = member.getBenefitPolicy();
+        // The engine resolved this policy for context.serviceDate. Reading the
+        // member's current convenience pointer here made this rule disagree
+        // with every other dated eligibility rule after a policy change.
+        BenefitPolicy benefitPolicy = context.getBenefitPolicy();
         if (benefitPolicy == null) {
             return RuleResult.fail(
                 EligibilityReason.MEMBER_NOT_ENROLLED,

@@ -14,6 +14,7 @@ import com.waad.tba.modules.member.repository.MemberRepository;
 import com.waad.tba.modules.medicaltaxonomy.entity.MedicalService;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalServiceRepository;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -25,6 +26,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -61,9 +63,19 @@ class MemberFinancialSummaryServiceTest {
     private ClaimRepository claimRepository;
     @Mock
     private MedicalServiceRepository medicalServiceRepository;
+    @Mock
+    private MemberPolicyResolver memberPolicyResolver;
 
     @InjectMocks
     private MemberFinancialSummaryService service;
+
+    @BeforeEach
+    void resolveThePolicyOnTheSummaryDate() {
+        org.mockito.Mockito.lenient()
+                .when(memberPolicyResolver.resolveFor(any(Member.class), any(LocalDate.class)))
+                .thenAnswer(invocation -> Optional.ofNullable(
+                        invocation.<Member>getArgument(0).getBenefitPolicy()));
+    }
 
     private Member memberWithPolicy(Long id, BigDecimal annualLimit) {
         BenefitPolicy policy = BenefitPolicy.builder()

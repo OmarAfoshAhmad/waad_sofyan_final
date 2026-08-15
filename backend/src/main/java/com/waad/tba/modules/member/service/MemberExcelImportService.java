@@ -80,6 +80,8 @@ public class MemberExcelImportService {
     private final BarcodeGeneratorService barcodeGeneratorService;
     private final MemberImportAuditRecorder auditRecorder;
     private final MemberStatusTransitionService statusTransitionService;
+    private final MemberEmployerResolver memberEmployerResolver;
+    private final com.waad.tba.modules.member.repository.MemberEmployerAssignmentRepository employerAssignmentRepository;
     private final MemberPolicyResolver memberPolicyResolver;
     private final com.waad.tba.modules.member.repository.MemberPolicyAssignmentRepository policyAssignmentRepository;
     private final MemberImportAccessPolicy importAccessPolicy;
@@ -507,6 +509,7 @@ public class MemberExcelImportService {
             // not after, at an implicit commit-time flush the caller never sees.
             memberRepository.flush();
 
+            recordEmployerAssignmentsForImport(processedMembers);
             recordPolicyAssignmentsForImport(processedMembers);
 
             MemberImportLog importLog = importLogRepository.findById(importLogId)
@@ -570,6 +573,30 @@ public class MemberExcelImportService {
             memberPolicyResolver.assignPolicy(member, member.getBenefitPolicy(),
                     member.getStartDate() != null ? member.getStartDate() : java.time.LocalDate.now(),
                     "تعيين وثيقة عبر استيراد Excel", com.waad.tba.modules.member.entity.PolicyAssignmentSource.IMPORT,
+                    actingUserId);
+        }
+    }
+
+    private void recordEmployerAssignmentsForImport(List<Member> processedMembers) {
+        List<Member> withEmployer = processedMembers.stream()
+                .filter(m -> m.getId() != null && m.getEmployer() != null)
+                .toList();
+        if (withEmployer.isEmpty()) {
+            return;
+        }
+        Set<Long> alreadyAssigned = new HashSet<>(employerAssignmentRepository.findMemberIdsWithAnyAssignment(
+                withEmployer.stream().map(Member::getId).toList()));
+
+        User currentUser = authorizationService.getCurrentUser();
+        Long actingUserId = currentUser != null ? currentUser.getId() : null;
+        for (Member member : withEmployer) {
+            if (alreadyAssigned.contains(member.getId())) {
+                continue;
+            }
+            memberEmployerResolver.assignEmployer(member, member.getEmployer(),
+                    member.getStartDate() != null ? member.getStartDate() : java.time.LocalDate.now(),
+                    "تعيين جهة العمل عبر استيراد Excel",
+                    com.waad.tba.modules.member.entity.EmployerAssignmentSource.IMPORT,
                     actingUserId);
         }
     }

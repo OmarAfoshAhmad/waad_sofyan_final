@@ -44,6 +44,7 @@ class UnifiedMemberPhotoSecurityTest {
     @Mock private com.waad.tba.modules.eligibility.service.FamilyEligibilityService familyEligibilityService;
     @Mock private com.waad.tba.modules.member.service.MemberStatusTransitionService statusTransitionService;
     @Mock private com.waad.tba.modules.member.service.MemberPolicyResolver memberPolicyResolver;
+    @Mock private MemberEmployerResolver memberEmployerResolver;
     @Mock private MemberQueryAccessPolicy memberQueryAccessPolicy;
     @Mock private com.waad.tba.modules.member.security.MemberCommandAccessPolicy memberCommandAccessPolicy;
 
@@ -64,6 +65,7 @@ class UnifiedMemberPhotoSecurityTest {
                 familyEligibilityService,
                 statusTransitionService,
                 memberPolicyResolver,
+                memberEmployerResolver,
                 memberQueryAccessPolicy,
                 memberCommandAccessPolicy);
     }

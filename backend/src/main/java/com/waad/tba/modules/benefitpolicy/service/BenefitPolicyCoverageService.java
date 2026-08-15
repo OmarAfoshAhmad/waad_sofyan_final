@@ -193,7 +193,7 @@ public class BenefitPolicyCoverageService {
 
     public Optional<CoverageInfo> getCoverageForCategory(Member member, Long categoryId,
             com.waad.tba.modules.providercontract.enums.EncounterType encounterType, LocalDate serviceDate) {
-        BenefitPolicy policy = member.getBenefitPolicy();
+        BenefitPolicy policy = memberPolicyResolver.resolveFor(member, serviceDate).orElse(null);
         if (policy == null || categoryId == null) {
             return Optional.empty();
         }
@@ -241,7 +241,7 @@ public class BenefitPolicyCoverageService {
 
     public Optional<CoverageInfo> getCoverageForService(Member member, Long serviceId, Long categoryOverrideId,
             com.waad.tba.modules.providercontract.enums.EncounterType encounterType, LocalDate serviceDate) {
-        BenefitPolicy policy = member.getBenefitPolicy();
+        BenefitPolicy policy = memberPolicyResolver.resolveFor(member, serviceDate).orElse(null);
         if (policy == null) {
             return Optional.empty();
         }
@@ -1003,7 +1003,8 @@ public class BenefitPolicyCoverageService {
      * @return true if PA is required
      */
     public boolean requiresPreApprovalFromPolicy(Member member, Long serviceId) {
-        BenefitPolicy policy = member.getBenefitPolicy();
+        LocalDate asOfDate = LocalDate.now();
+        BenefitPolicy policy = memberPolicyResolver.resolveFor(member, asOfDate).orElse(null);
         if (policy == null) {
             return DEFAULT_REQUIRES_PA;
         }
@@ -1014,7 +1015,7 @@ public class BenefitPolicyCoverageService {
         }
 
         ResolvedCoverage coverage = resolveCoverage(policy.getId(), serviceId, resolveCategoryIdForCoverage(service),
-                null, member.getId(), LocalDate.now(), null);
+                null, member.getId(), asOfDate, null);
         if (coverage == null) {
             return DEFAULT_REQUIRES_PA;
         }
@@ -1027,7 +1028,8 @@ public class BenefitPolicyCoverageService {
      * Uses the canonical resolution algorithm.
      */
     public int getEffectiveCoveragePercent(Member member, Long serviceId) {
-        BenefitPolicy policy = member.getBenefitPolicy();
+        LocalDate asOfDate = LocalDate.now();
+        BenefitPolicy policy = memberPolicyResolver.resolveFor(member, asOfDate).orElse(null);
         if (policy == null) {
             return 0;
         }
@@ -1038,7 +1040,7 @@ public class BenefitPolicyCoverageService {
         }
 
         ResolvedCoverage coverage = resolveCoverage(policy.getId(), serviceId, resolveCategoryIdForCoverage(service),
-                null, member.getId(), LocalDate.now(), null);
+                null, member.getId(), asOfDate, null);
         if (coverage == null || !coverage.isCovered()) {
             return 0;
         }
@@ -1058,7 +1060,8 @@ public class BenefitPolicyCoverageService {
     public java.util.Map<Long, Integer> batchGetCoveragePercents(Member member, java.util.List<Long> serviceIds) {
         java.util.Map<Long, Integer> result = new java.util.HashMap<>();
 
-        BenefitPolicy policy = member.getBenefitPolicy();
+        LocalDate asOfDate = LocalDate.now();
+        BenefitPolicy policy = memberPolicyResolver.resolveFor(member, asOfDate).orElse(null);
         if (policy == null || serviceIds == null || serviceIds.isEmpty()) {
             // Return all zeros
             for (Long id : serviceIds != null ? serviceIds : java.util.Collections.<Long>emptyList()) {
@@ -1075,7 +1078,7 @@ public class BenefitPolicyCoverageService {
             MedicalService service = serviceMap.get(serviceId);
             Long categoryId = service != null ? resolveCategoryIdForCoverage(service) : null;
             ResolvedCoverage resolved = resolveCoverage(policyId, serviceId, categoryId, null,
-                    member.getId(), LocalDate.now(), null, CategoryContext.OUTPATIENT, 1.0, null, true);
+                    member.getId(), asOfDate, null, CategoryContext.OUTPATIENT, 1.0, null, true);
             result.put(serviceId, resolved.isCovered() ? resolved.getCoveragePercent() : 0);
         }
 
@@ -1094,7 +1097,7 @@ public class BenefitPolicyCoverageService {
 
     public int getEffectiveCoveragePercentByCategory(Member member, Long categoryId,
             com.waad.tba.modules.providercontract.enums.EncounterType encounterType, LocalDate serviceDate) {
-        BenefitPolicy policy = member != null ? member.getBenefitPolicy() : null;
+        BenefitPolicy policy = memberPolicyResolver.resolveFor(member, serviceDate).orElse(null);
         if (policy == null || categoryId == null) {
             return 0;
         }
@@ -1124,7 +1127,7 @@ public class BenefitPolicyCoverageService {
             LocalDate serviceDate) {
         java.util.Map<Long, Integer> result = new java.util.HashMap<>();
 
-        BenefitPolicy policy = member != null ? member.getBenefitPolicy() : null;
+        BenefitPolicy policy = memberPolicyResolver.resolveFor(member, serviceDate).orElse(null);
         if (policy == null || categoryIds == null || categoryIds.isEmpty()) {
             if (categoryIds != null)
                 categoryIds.forEach(id -> result.put(id, 0));

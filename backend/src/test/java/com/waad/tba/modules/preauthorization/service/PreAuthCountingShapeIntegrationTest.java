@@ -58,6 +58,9 @@ class PreAuthCountingShapeIntegrationTest extends PostgresIntegrationTestBase {
                 + policyId + ", 'PC" + s + "', 'PC" + s + "', 'ACTIVE', true) RETURNING id", Long.class);
         jdbc.update("INSERT INTO member_policy_assignments (member_id, policy_id, assignment_start_date, "
                 + "assignment_source) VALUES (?, ?, CURRENT_DATE - 60, 'MANUAL')", memberId, policyId);
+        jdbc.update("INSERT INTO member_employer_assignments (member_id, employer_id, assignment_start_date, "
+                + "assignment_reason, assignment_source) VALUES (?, ?, CURRENT_DATE - 60, "
+                + "'test enrollment', 'MANUAL')", memberId, employerId);
 
         Long categoryId = jdbc.queryForObject("INSERT INTO medical_categories (code, name, active) "
                 + "VALUES ('PCAT-" + s + "', 'Parent Category', true) RETURNING id", Long.class);

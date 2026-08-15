@@ -118,6 +118,7 @@ public class ClaimService {
     private final ProviderContextGuard providerContextGuard;
     private final MedicalAuditLogService medicalAuditLogService;
     private final MemberRepository memberRepository;
+    private final com.waad.tba.modules.member.service.MemberContextResolver memberContextResolver;
     private final ProviderRepository providerRepository;
     private final VisitRepository visitRepository;
     private final PreAuthorizationRepository preAuthorizationRepository;
@@ -300,6 +301,14 @@ public class ClaimService {
         Provider provider = providerRepository.findById(visit.getProviderId())
                 .orElseThrow(() -> new ResourceNotFoundException("Provider", "id", visit.getProviderId()));
 
+        if (dto.getServiceDate() == null) {
+            throw new BusinessRuleException(
+                    "تاريخ الخدمة إلزامي لإنشاء المطالبة، ولا يجوز استبداله بتاريخ اليوم");
+        }
+        var datedMemberContext = memberContextResolver.resolveForOrFail(
+                visit.getMember(), dto.getServiceDate());
+        var serviceEmployer = datedMemberContext.employer();
+
         // ══════════════════════════════════════════════════════════════════════════
         // MEDICAL REVIEWER ISOLATION: Validation (Creation)
         // ══════════════════════════════════════════════════════════════════════════
@@ -316,20 +325,20 @@ public class ClaimService {
 
         // SECURITY: Verify provider is authorized for this member's employer
         // (Prevent cross-tenant claim creation)
-        if (visit.getMember() != null && visit.getMember().getEmployer() != null) {
+        if (visit.getMember() != null) {
             // Bypass check if provider allows all employers (global network)
             boolean isGlobalProvider = Boolean.TRUE.equals(provider.getAllowAllEmployers());
 
             boolean isAuthorized = isGlobalProvider || providerAllowedEmployerRepository.hasActiveAccessToEmployer(
-                    provider.getId(), visit.getMember().getEmployer().getId());
+                    provider.getId(), serviceEmployer.getId());
 
             if (!isAuthorized) {
                 log.error(
                         "🛑 SECURITY ALERT: Provider {} attempted to create claim for UNAUTHORIZED employer {} (Member: {})",
-                        provider.getId(), visit.getMember().getEmployer().getId(), visit.getMember().getId());
+                        provider.getId(), serviceEmployer.getId(), visit.getMember().getId());
                 throw new org.springframework.web.server.ResponseStatusException(
                         org.springframework.http.HttpStatus.FORBIDDEN,
-                        "المزود غير مخول لتقديم خدمات لموظفي هذه الجهة (" + visit.getMember().getEmployer().getName()
+                        "المزود غير مخول لتقديم خدمات لموظفي هذه الجهة (" + serviceEmployer.getName()
                                 + ").");
             }
         }
@@ -349,7 +358,7 @@ public class ClaimService {
 
             if (claimBatch != null) {
                 if (!claimBatch.getProviderId().equals(provider.getId()) ||
-                        !claimBatch.getEmployerId().equals(visit.getMember().getEmployer().getId())) {
+                        !claimBatch.getEmployerId().equals(serviceEmployer.getId())) {
                     throw new BusinessRuleException("الدفعة المختارة لا تتطابق مع المزود أو جهة العمل للمطالبة.");
                 }
             }
@@ -357,13 +366,13 @@ public class ClaimService {
             // AUTO-RESOLVE CURRENT BATCH (Phase 11 Law)
             // If no batch ID is provided, we MUST find or create the current open batch
             // for this Provider + Employer + Period.
-            LocalDate date = dto.getServiceDate() != null ? dto.getServiceDate() : LocalDate.now();
+            LocalDate date = dto.getServiceDate();
             log.info("🔄 Auto-resolving batch for provider {}, employer {}, period {}/{}", 
-                    provider.getId(), visit.getMember().getEmployer().getId(), date.getMonthValue(), date.getYear());
+                    provider.getId(), serviceEmployer.getId(), date.getMonthValue(), date.getYear());
             
             claimBatch = claimBatchService.getOrCreateBatch(
                     provider.getId(),
-                    visit.getMember().getEmployer().getId(),
+                    serviceEmployer.getId(),
                     date.getYear(),
                     date.getMonthValue());
         }

@@ -41,6 +41,9 @@ class MemberSensitiveFieldWriteArchitectureTest {
                     "UnifiedMemberService.java",
                     "MemberImportRowProcessor.java"),
             ".setEmployer(", Set.of(
+                    // The dated assignment record is the source of truth; this
+                    // service alone synchronizes the display-only current pointer.
+                    "MemberEmployerResolver.java",
                     // Creation only. Moving an existing member between employers
                     // is a separate operation (not yet implemented) -- see
                     // UnifiedMemberService.rejectSensitiveFieldChanges.

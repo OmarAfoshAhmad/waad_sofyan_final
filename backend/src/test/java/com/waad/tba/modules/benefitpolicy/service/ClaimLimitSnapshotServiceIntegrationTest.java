@@ -119,6 +119,7 @@ class ClaimLimitSnapshotServiceIntegrationTest extends PostgresIntegrationTestBa
         Member member = memberRepository.save(Member.builder()
                 .fullName("Member " + suffix).barcode("BC-" + suffix).nationalNumber("NAT-" + suffix)
                 .employer(employer).benefitPolicy(policy).active(true).build());
+        initializeTemporalAssignments(member);
 
         Provider provider = providerRepository.save(Provider.builder()
                 .name("Hospital " + suffix).providerType(ProviderType.HOSPITAL)
