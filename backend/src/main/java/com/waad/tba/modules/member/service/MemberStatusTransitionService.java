@@ -98,6 +98,10 @@ public class MemberStatusTransitionService {
             String transitionId, Long actingUserId) {
         requireReason(reason, "سبب تغيير حالة المستفيد إلزامي");
         Member.MemberStatus previous = member.getStatus();
+        if (previous == Member.MemberStatus.DUPLICATE_MERGED) {
+            throw new BusinessRuleException(
+                    "لا يمكن تغيير حالة سجل مدموج؛ استخدم السجل الأساسي المرتبط به");
+        }
         if (previous == newStatus) {
             throw new BusinessRuleException("العضو بالفعل في هذه الحالة: " + newStatus);
         }

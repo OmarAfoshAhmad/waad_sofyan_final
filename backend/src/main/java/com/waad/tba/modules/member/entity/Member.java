@@ -388,7 +388,7 @@ public class Member {
     }
 
     public enum MemberStatus {
-        ACTIVE, SUSPENDED, TERMINATED, PENDING
+        ACTIVE, SUSPENDED, TERMINATED, PENDING, DUPLICATE_MERGED
     }
 
     public enum CardStatus {
