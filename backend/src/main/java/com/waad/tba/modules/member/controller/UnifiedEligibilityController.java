@@ -67,7 +67,7 @@ public class UnifiedEligibilityController {
         
         log.info("📊 Retrieving remaining limit for member: memberId={}", memberId);
         
-        try {
+        {
             MemberFinancialSummaryDto summary = financialSummaryService.getFinancialSummary(memberId);
             
             java.util.Map<String, Object> result = new java.util.HashMap<>();
@@ -85,16 +85,21 @@ public class UnifiedEligibilityController {
             log.info("✅ Remaining limit retrieved: memberId={}, remaining={}", 
                      memberId, summary.getRemainingCoverage());
             
+            result.put("financialDataAvailable", true);
             return ResponseEntity.ok(ApiResponse.success(result));
-        } catch (Exception e) {
-            log.warn("⚠️ Failed to get remaining limit for member {}: {}", memberId, e.getMessage());
-            java.util.Map<String, Object> fallback = new java.util.HashMap<>();
-            fallback.put("memberId", memberId);
-            fallback.put("annualLimit", 0);
-            fallback.put("usedAmount", 0);
-            fallback.put("remainingLimit", 0);
-            return ResponseEntity.ok(ApiResponse.success(fallback));
         }
+        // No catch-and-zero. It used to swallow every Exception -- a timeout, a
+        // lazy-init failure, a missing member -- and answer HTTP 200 with an
+        // annual limit of 0, 0 consumed and 0 remaining. Zero is a LEGITIMATE
+        // financial value that staff act on, so "could not read" arrived
+        // looking exactly like "policy exhausted": a covered patient turned
+        // away, with no error anywhere on the screen to say the figure was
+        // never actually known.
+        //
+        // The failure now propagates to GlobalExceptionHandler, which answers
+        // a real status. The barcode eligibility path already works this way
+        // (financialDataAvailable=false + "غير متاح"); this endpoint is one of
+        // the two that were never migrated to it.
     }
 
     /**
