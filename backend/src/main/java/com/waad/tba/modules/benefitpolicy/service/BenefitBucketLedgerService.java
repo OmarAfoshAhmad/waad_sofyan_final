@@ -176,8 +176,27 @@ public class BenefitBucketLedgerService {
             // original out by status. Flipping the original (the previous
             // behaviour) both erased the history and made partial reversal
             // impossible to express.
-            entryWriter.appendClaimReversal(original, original.getApprovedAmount(),
-                    original.getTimesConsumed() == null ? 0 : original.getTimesConsumed(), key, now);
+            // Release what is still OUTSTANDING, not the gross original. The
+            // pre-authorization path already does this; releasing gross here
+            // would give back more than is held the moment any partial
+            // reversal exists, and the database would reject it as a raw
+            // constraint error rather than posting the correct residual.
+            java.math.BigDecimal releasedAmount = java.util.Optional.ofNullable(
+                    consumptionRepository.sumReleasedAmount(original.getId()))
+                    .orElse(java.math.BigDecimal.ZERO);
+            java.math.BigDecimal outstandingAmount = java.util.Optional.ofNullable(
+                    original.getApprovedAmount()).orElse(java.math.BigDecimal.ZERO)
+                    .subtract(releasedAmount).max(java.math.BigDecimal.ZERO);
+
+            int releasedTimes = java.util.Optional.ofNullable(
+                    consumptionRepository.sumReleasedTimes(original.getId())).orElse(0);
+            int outstandingTimes = Math.max(0, java.util.Optional.ofNullable(
+                    original.getTimesConsumed()).orElse(0) - releasedTimes);
+
+            if (outstandingAmount.signum() == 0 && outstandingTimes == 0) {
+                continue;
+            }
+            entryWriter.appendClaimReversal(original, outstandingAmount, outstandingTimes, key, now);
         }
     }
 

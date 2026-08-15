@@ -142,8 +142,14 @@ public interface BenefitBucketConsumptionRepository extends JpaRepository<Benefi
     }
 
     @Query(value = """
-        select coalesce(sum(c.times_consumed), 0)
+        select coalesce(sum(c.times_consumed - coalesce(r.released_times, 0)), 0)
           from benefit_bucket_consumptions c
+          left join (
+                select reversal_of_id, sum(times_consumed) as released_times
+                  from benefit_bucket_consumptions
+                 where status = 'REVERSED' and reversal_of_id is not null
+                 group by reversal_of_id
+          ) r on r.reversal_of_id = c.id
          where c.member_id = :memberId and c.bucket_id = :bucketId and c.status = 'COMMITTED'
            and c.period_start = :periodStart
            and c.period_end = :periodEnd
@@ -156,8 +162,14 @@ public interface BenefitBucketConsumptionRepository extends JpaRepository<Benefi
                                      @Param("excludeClaimId") Long excludeClaimId);
 
     @Query(value = """
-        select coalesce(sum(c.times_consumed), 0)
+        select coalesce(sum(c.times_consumed - coalesce(r.released_times, 0)), 0)
           from benefit_bucket_consumptions c
+          left join (
+                select reversal_of_id, sum(times_consumed) as released_times
+                  from benefit_bucket_consumptions
+                 where status = 'REVERSED' and reversal_of_id is not null
+                 group by reversal_of_id
+          ) r on r.reversal_of_id = c.id
          where c.member_id = :memberId and c.bucket_id = :bucketId and c.status = 'COMMITTED'
            and c.period_start = :periodStart
            and c.period_end is null
@@ -185,37 +197,125 @@ public interface BenefitBucketConsumptionRepository extends JpaRepository<Benefi
                 : countCommittedServiceDaysBounded(memberId, bucketId, periodStart, periodEnd, excludeClaimId);
     }
 
-    @Query("""
-        select count(distinct c.claim.serviceDate) from BenefitBucketConsumption c
-        where c.memberId = :memberId and c.bucket.id = :bucketId and c.status = com.waad.tba.modules.benefitpolicy.entity.BenefitBucketConsumption.Status.COMMITTED
-          and c.periodStart = :periodStart
-          and c.periodEnd = :periodEnd
-          and (:excludeClaimId is null or c.claim.id <> :excludeClaimId)
-        """)
+    @Query(value = """
+        select count(distinct cl.service_date)
+          from benefit_bucket_consumptions c
+          join claims cl on cl.id = c.claim_id
+         where c.member_id = :memberId and c.bucket_id = :bucketId and c.status = 'COMMITTED'
+           and c.period_start = :periodStart
+           and c.period_end = :periodEnd
+           and (:excludeClaimId is null or c.claim_id is distinct from :excludeClaimId)
+           -- A day counts only while SOME consumption on it is still
+           -- outstanding. Counting a day whose claims were all reversed
+           -- fails twice over: it rejects a legitimate new day, and callers
+           -- that skip the day check when the day "already exists" then let a
+           -- claim onto a day that is really free.
+           -- The subquery mirrors EVERY filter of the outer query. Without
+           -- the period bound it would keep a day alive from another year;
+           -- without excludeClaimId the claim being re-adjudicated would
+           -- hold its own day open and count against itself.
+           --
+           -- And it tests BOTH dimensions. Money and occurrences are released
+           -- independently, so a day whose money was fully returned may still
+           -- have visits outstanding, and the reverse. A day is free only when
+           -- nothing at all is left on it.
+           and exists (
+                select 1 from benefit_bucket_consumptions n
+                 left join (
+                       select reversal_of_id,
+                              sum(approved_amount) as released,
+                              sum(times_consumed) as released_times
+                         from benefit_bucket_consumptions
+                        where status = 'REVERSED' and reversal_of_id is not null
+                        group by reversal_of_id
+                 ) nr on nr.reversal_of_id = n.id
+                 join claims nc on nc.id = n.claim_id
+                where n.member_id = c.member_id
+                  and n.bucket_id = c.bucket_id
+                  and n.status = 'COMMITTED'
+                  and n.period_start = c.period_start
+                  and n.period_end is not distinct from c.period_end
+                  and nc.service_date = cl.service_date
+                  and (:excludeClaimId is null or n.claim_id is distinct from :excludeClaimId)
+                  and ((n.approved_amount - coalesce(nr.released, 0)) > 0
+                       or (coalesce(n.times_consumed, 0)
+                           - coalesce(nr.released_times, 0)) > 0))
+        """, nativeQuery = true)
     Long countCommittedServiceDaysBounded(@Param("memberId") Long memberId,
                                           @Param("bucketId") Long bucketId,
                                           @Param("periodStart") LocalDate periodStart,
                                           @Param("periodEnd") LocalDate periodEnd,
                                           @Param("excludeClaimId") Long excludeClaimId);
 
-    @Query("""
-        select count(distinct c.claim.serviceDate) from BenefitBucketConsumption c
-        where c.memberId = :memberId and c.bucket.id = :bucketId and c.status = com.waad.tba.modules.benefitpolicy.entity.BenefitBucketConsumption.Status.COMMITTED
-          and c.periodStart = :periodStart
-          and c.periodEnd is null
-          and (:excludeClaimId is null or c.claim.id <> :excludeClaimId)
-        """)
+    @Query(value = """
+        select count(distinct cl.service_date)
+          from benefit_bucket_consumptions c
+          join claims cl on cl.id = c.claim_id
+         where c.member_id = :memberId and c.bucket_id = :bucketId and c.status = 'COMMITTED'
+           and c.period_start = :periodStart
+           and c.period_end is null
+           and (:excludeClaimId is null or c.claim_id is distinct from :excludeClaimId)
+           -- The subquery mirrors EVERY filter of the outer query. Without
+           -- the period bound it would keep a day alive from another year;
+           -- without excludeClaimId the claim being re-adjudicated would
+           -- hold its own day open and count against itself.
+           --
+           -- And it tests BOTH dimensions. Money and occurrences are released
+           -- independently, so a day whose money was fully returned may still
+           -- have visits outstanding, and the reverse. A day is free only when
+           -- nothing at all is left on it.
+           and exists (
+                select 1 from benefit_bucket_consumptions n
+                 left join (
+                       select reversal_of_id,
+                              sum(approved_amount) as released,
+                              sum(times_consumed) as released_times
+                         from benefit_bucket_consumptions
+                        where status = 'REVERSED' and reversal_of_id is not null
+                        group by reversal_of_id
+                 ) nr on nr.reversal_of_id = n.id
+                 join claims nc on nc.id = n.claim_id
+                where n.member_id = c.member_id
+                  and n.bucket_id = c.bucket_id
+                  and n.status = 'COMMITTED'
+                  and n.period_start = c.period_start
+                  and n.period_end is not distinct from c.period_end
+                  and nc.service_date = cl.service_date
+                  and (:excludeClaimId is null or n.claim_id is distinct from :excludeClaimId)
+                  and ((n.approved_amount - coalesce(nr.released, 0)) > 0
+                       or (coalesce(n.times_consumed, 0)
+                           - coalesce(nr.released_times, 0)) > 0))
+        """, nativeQuery = true)
     Long countCommittedServiceDaysOpenEnded(@Param("memberId") Long memberId,
                                             @Param("bucketId") Long bucketId,
                                             @Param("periodStart") LocalDate periodStart,
                                             @Param("excludeClaimId") Long excludeClaimId);
 
-    @Query("""
-        select count(c) > 0 from BenefitBucketConsumption c
-        where c.memberId = :memberId and c.bucket.id = :bucketId and c.status = com.waad.tba.modules.benefitpolicy.entity.BenefitBucketConsumption.Status.COMMITTED
-          and c.claim.serviceDate = :serviceDate
-          and (:excludeClaimId is null or c.claim.id <> :excludeClaimId)
-        """)
+    @Query(value = """
+        select count(*) > 0
+          from benefit_bucket_consumptions c
+          join claims cl on cl.id = c.claim_id
+          left join (
+                select reversal_of_id,
+                       sum(approved_amount) as released,
+                       sum(times_consumed) as released_times
+                  from benefit_bucket_consumptions
+                 where status = 'REVERSED' and reversal_of_id is not null
+                 group by reversal_of_id
+          ) r on r.reversal_of_id = c.id
+         where c.member_id = :memberId and c.bucket_id = :bucketId and c.status = 'COMMITTED'
+           and cl.service_date = :serviceDate
+           and (:excludeClaimId is null or c.claim_id is distinct from :excludeClaimId)
+           -- Outstanding, not merely posted. Answering "yes" for a fully
+           -- reversed day makes callers skip the day limit entirely for that
+           -- date, which is how a claim gets onto a day past the ceiling.
+           --
+           -- Both dimensions, because they are released independently: a day
+           -- whose money came back may still hold visits, and the reverse.
+           and ((c.approved_amount - coalesce(r.released, 0)) > 0
+                or (coalesce(c.times_consumed, 0)
+                    - coalesce(r.released_times, 0)) > 0)
+        """, nativeQuery = true)
     boolean existsCommittedForServiceDay(@Param("memberId") Long memberId,
                                          @Param("bucketId") Long bucketId,
                                          @Param("serviceDate") LocalDate serviceDate,
@@ -297,8 +397,14 @@ public interface BenefitBucketConsumptionRepository extends JpaRepository<Benefi
      * blocks the very claim it was granted for.
      */
     @Query(value = """
-        select coalesce(sum(c.times_consumed), 0)
+        select coalesce(sum(c.times_consumed - coalesce(r.released_times, 0)), 0)
           from benefit_bucket_consumptions c
+          left join (
+                select reversal_of_id, sum(times_consumed) as released_times
+                  from benefit_bucket_consumptions
+                 where status = 'REVERSED' and reversal_of_id is not null
+                 group by reversal_of_id
+          ) r on r.reversal_of_id = c.id
          where c.member_id = :memberId
            and c.preauth_id = :preauthId
            and c.bucket_id is not distinct from :bucketId
@@ -306,9 +412,6 @@ public interface BenefitBucketConsumptionRepository extends JpaRepository<Benefi
            and c.status = 'RESERVED'
            and c.period_start = :periodStart
            and c.period_end is not distinct from cast(:periodEnd as date)
-           and not exists (
-                select 1 from benefit_bucket_consumptions r
-                 where r.reversal_of_id = c.id and r.status = 'REVERSED')
         """, nativeQuery = true)
     Integer sumOwnActiveReservationTimes(@Param("memberId") Long memberId,
                                          @Param("preauthId") Long preauthId,
@@ -323,16 +426,17 @@ public interface BenefitBucketConsumptionRepository extends JpaRepository<Benefi
      * decision can be constrained by either independently.
      */
     @Query(value = """
-        select coalesce(sum(c.times_consumed), 0)
+        select coalesce(sum(c.times_consumed - coalesce(r.released_times, 0)), 0)
           from benefit_bucket_consumptions c
+          left join (
+                select reversal_of_id, sum(times_consumed) as released_times
+                  from benefit_bucket_consumptions
+                 where status = 'REVERSED' and reversal_of_id is not null
+                 group by reversal_of_id
+          ) r on r.reversal_of_id = c.id
          where c.member_id = :memberId and c.bucket_id = :bucketId and c.status = 'RESERVED'
            and c.period_start = :periodStart
            and c.period_end is not distinct from cast(:periodEnd as date)
-           -- A released hold no longer counts: its compensating movement
-           -- carries the times it gave back.
-           and not exists (
-                select 1 from benefit_bucket_consumptions r
-                 where r.reversal_of_id = c.id and r.status = 'REVERSED')
         """, nativeQuery = true)
     Integer sumReservedTimes(@Param("memberId") Long memberId,
                              @Param("bucketId") Long bucketId,
