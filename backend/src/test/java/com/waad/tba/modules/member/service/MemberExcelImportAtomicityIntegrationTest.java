@@ -3,7 +3,12 @@ package com.waad.tba.modules.member.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anySet;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.when;
 
 import java.io.ByteArrayOutputStream;
 import java.math.BigDecimal;
@@ -19,6 +24,7 @@ import java.util.concurrent.TimeUnit;
 
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -26,6 +32,7 @@ import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import com.waad.tba.TbaWaadApplication;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy;
@@ -38,6 +45,8 @@ import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.modules.member.entity.MemberImportLog;
 import com.waad.tba.modules.member.repository.MemberImportLogRepository;
 import com.waad.tba.modules.member.repository.MemberRepository;
+import com.waad.tba.modules.member.security.AuthorizedImportScope;
+import com.waad.tba.modules.member.security.MemberImportAccessPolicy;
 import com.waad.tba.modules.rbac.entity.User;
 import com.waad.tba.modules.rbac.repository.UserRepository;
 import com.waad.tba.support.PostgresIntegrationTestBase;
@@ -87,6 +96,15 @@ class MemberExcelImportAtomicityIntegrationTest extends PostgresIntegrationTestB
     @Autowired private EmployerRepository employerRepository;
     @Autowired private BenefitPolicyRepository benefitPolicyRepository;
     @Autowired private UserRepository userRepository;
+    @MockitoBean private MemberImportAccessPolicy importAccessPolicy;
+
+    @BeforeEach
+    void authorizeAtomicityFixture() {
+        AuthorizedImportScope scope = mock(AuthorizedImportScope.class);
+        when(scope.covers(any())).thenReturn(true);
+        when(scope.mayClearAbsentMembers()).thenReturn(true);
+        when(importAccessPolicy.require(any(), anySet(), anyBoolean())).thenReturn(scope);
+    }
 
     private Employer newEmployer(String suffix) {
         return employerRepository.save(Employer.builder()

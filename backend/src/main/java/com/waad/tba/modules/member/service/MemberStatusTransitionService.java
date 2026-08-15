@@ -261,6 +261,29 @@ public class MemberStatusTransitionService {
         return new FamilyRestoreResult(restored, skipped);
     }
 
+    /**
+     * Resolves the current employers of every still-existing member affected
+     * by one family cascade. The command layer uses this before restore so a
+     * bulk operation is authorised as all-or-nothing, never member by member
+     * after writes have already started.
+     */
+    @Transactional(readOnly = true)
+    public java.util.List<Long> familyCascadeEmployerIds(String transitionId) {
+        if (transitionId == null || transitionId.isBlank()) {
+            throw new BusinessRuleException("معرف عملية التتالي إلزامي");
+        }
+        return historyRepository.findByTransitionId(transitionId).stream()
+                .filter(h -> h.getSource() == StatusSource.FAMILY_CASCADE)
+                .map(MemberStatusHistory::getMemberId)
+                .distinct()
+                .map(memberRepository::findById)
+                .flatMap(java.util.Optional::stream)
+                .map(Member::getEmployer)
+                .filter(java.util.Objects::nonNull)
+                .map(com.waad.tba.modules.employer.entity.Employer::getId)
+                .toList();
+    }
+
     public record FamilyRestoreResult(List<Long> restoredMemberIds, Map<Long, String> skippedWithReason) {
     }
 

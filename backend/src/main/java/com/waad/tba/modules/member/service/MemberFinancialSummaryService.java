@@ -11,6 +11,8 @@ import com.waad.tba.modules.member.dto.MemberFinancialSummaryDto;
 import com.waad.tba.modules.member.dto.CoverageLimitsDto;
 import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.modules.member.repository.MemberRepository;
+import com.waad.tba.modules.member.security.MemberOperation;
+import com.waad.tba.modules.member.security.MemberQueryAccessPolicy;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalServiceRepository;
 import com.waad.tba.modules.medicaltaxonomy.entity.MedicalService;
 import lombok.RequiredArgsConstructor;
@@ -62,6 +64,20 @@ public class MemberFinancialSummaryService {
     private final BenefitPolicyRepository benefitPolicyRepository;
     private final ClaimRepository claimRepository;
     private final MedicalServiceRepository medicalServiceRepository;
+    private final MemberQueryAccessPolicy queryAccessPolicy;
+
+    /**
+     * HTTP/read-model entry point. Internal eligibility batching deliberately uses
+     * {@link #getFinancialSummaries(Collection)} after its own member authorization;
+     * controllers must use this method so an id cannot bypass tenant scope.
+     */
+    public MemberFinancialSummaryDto getAuthorizedFinancialSummary(Long memberId, MemberOperation operation) {
+        Member member = memberRepository.findById(memberId)
+                .orElseThrow(() -> new ResourceNotFoundException("Member", "id", memberId));
+        Long employerId = member.getEmployer() == null ? null : member.getEmployer().getId();
+        queryAccessPolicy.requireMember(operation, employerId);
+        return getFinancialSummary(memberId);
+    }
 
     /**
      * Financial summary for exactly one member. Thin wrapper over

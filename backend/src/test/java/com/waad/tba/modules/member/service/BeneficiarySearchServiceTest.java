@@ -5,10 +5,10 @@ import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.modules.member.mapper.UnifiedMemberMapper;
 import com.waad.tba.modules.member.service.search.BeneficiarySearchStrategy;
 import com.waad.tba.modules.member.service.search.BeneficiarySearchType;
-import com.waad.tba.modules.rbac.entity.User;
-import com.waad.tba.security.AuthorizationService;
-import com.waad.tba.modules.provider.service.ProviderService;
-import org.springframework.security.access.AccessDeniedException;
+import com.waad.tba.modules.member.security.AuthorizedMemberScope;
+import com.waad.tba.modules.member.security.MemberAccessDeniedException;
+import com.waad.tba.modules.member.security.MemberOperation;
+import com.waad.tba.modules.member.security.MemberQueryAccessPolicy;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -19,6 +19,7 @@ import org.mockito.quality.Strictness;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -40,28 +41,25 @@ class BeneficiarySearchServiceTest {
     @Mock
     private UnifiedMemberMapper unifiedMemberMapper;
     @Mock
-    private AuthorizationService authorizationService;
+    private MemberQueryAccessPolicy queryAccessPolicy;
     @Mock
-    private ProviderService providerService;
+    private AuthorizedMemberScope authorizedScope;
 
     private BeneficiarySearchService service;
-    private User currentUser;
-
     @BeforeEach
     void setUp() {
         when(byIdStrategy.supportedType()).thenReturn(BeneficiarySearchType.BY_ID);
         when(byNameStrategy.supportedType()).thenReturn(BeneficiarySearchType.BY_NAME);
         when(byBarcodeStrategy.supportedType()).thenReturn(BeneficiarySearchType.BY_BARCODE);
-        currentUser = User.builder().username("admin").userType("SUPER_ADMIN").build();
-        when(authorizationService.requireCurrentUser()).thenReturn(currentUser);
-        when(authorizationService.resolveEmployerScope(any(), any()))
-                .thenAnswer(invocation -> invocation.getArgument(1));
+        when(queryAccessPolicy.requireListing(eq(MemberOperation.SEARCH), any()))
+                .thenReturn(authorizedScope);
+        when(authorizedScope.isGlobal()).thenReturn(true);
+        when(authorizedScope.employerIds()).thenReturn(Set.of());
 
         service = new BeneficiarySearchService(
                 List.of(byIdStrategy, byNameStrategy, byBarcodeStrategy),
                 unifiedMemberMapper,
-                authorizationService,
-                providerService);
+                queryAccessPolicy);
     }
 
     @Test
@@ -117,31 +115,15 @@ class BeneficiarySearchServiceTest {
 
     @Test
     void employerAdminCannotOverrideTheirEmployerScope() {
-        User employerAdmin = User.builder()
-                .username("employer-admin")
-                .userType("EMPLOYER_ADMIN")
-                .employerId(77L)
-                .build();
-        when(authorizationService.requireCurrentUser()).thenReturn(employerAdmin);
-        when(authorizationService.resolveEmployerScope(employerAdmin, 999L)).thenReturn(77L);
-        when(byNameStrategy.search(any(), any(), any(), any(Integer.class))).thenReturn(List.of());
+        when(queryAccessPolicy.requireListing(MemberOperation.SEARCH, 999L))
+                .thenThrow(new MemberAccessDeniedException(MemberOperation.SEARCH, "outside scope"));
 
-        service.search(BeneficiarySearchType.BY_NAME, "Ahmed", 999L, "ACTIVE", 20);
-
-        verify(byNameStrategy).search("Ahmed", 77L, Member.MemberStatus.ACTIVE, 20);
+        assertThrows(MemberAccessDeniedException.class,
+                () -> service.search(BeneficiarySearchType.BY_NAME, "Ahmed", 999L, "ACTIVE", 20));
     }
 
     @Test
     void providerStaffCanSearchOnlyAnAllowedEmployer() {
-        User provider = User.builder()
-                .username("provider-user")
-                .userType("PROVIDER_STAFF")
-                .providerId(15L)
-                .build();
-        when(authorizationService.requireCurrentUser()).thenReturn(provider);
-        when(authorizationService.isProvider(provider)).thenReturn(true);
-        when(authorizationService.resolveEmployerScope(provider, 77L)).thenReturn(77L);
-        when(providerService.getAllowedEmployerIds(15L)).thenReturn(List.of(77L));
         when(byNameStrategy.search(any(), any(), any(), any(Integer.class))).thenReturn(List.of());
 
         service.search(BeneficiarySearchType.BY_NAME, "Ahmed", 77L, null, 20);
@@ -151,32 +133,19 @@ class BeneficiarySearchServiceTest {
 
     @Test
     void providerStaffCannotSearchAnUnrelatedEmployer() {
-        User provider = User.builder()
-                .username("provider-user")
-                .userType("PROVIDER_STAFF")
-                .providerId(15L)
-                .build();
-        when(authorizationService.requireCurrentUser()).thenReturn(provider);
-        when(authorizationService.isProvider(provider)).thenReturn(true);
-        when(authorizationService.resolveEmployerScope(provider, 999L)).thenReturn(999L);
-        when(providerService.getAllowedEmployerIds(15L)).thenReturn(List.of(77L));
+        when(queryAccessPolicy.requireListing(MemberOperation.SEARCH, 999L))
+                .thenThrow(new MemberAccessDeniedException(MemberOperation.SEARCH, "outside scope"));
 
-        assertThrows(AccessDeniedException.class,
+        assertThrows(MemberAccessDeniedException.class,
                 () -> service.search(BeneficiarySearchType.BY_NAME, "Ahmed", 999L, null, 20));
     }
 
     @Test
     void providerStaffCannotRunAnUnscopedBeneficiarySearch() {
-        User provider = User.builder()
-                .username("provider-user")
-                .userType("PROVIDER_STAFF")
-                .providerId(15L)
-                .build();
-        when(authorizationService.requireCurrentUser()).thenReturn(provider);
-        when(authorizationService.isProvider(provider)).thenReturn(true);
-        when(authorizationService.resolveEmployerScope(provider, null)).thenReturn(null);
+        when(authorizedScope.isGlobal()).thenReturn(false);
+        when(authorizedScope.employerIds()).thenReturn(Set.of(77L, 88L));
 
-        assertThrows(AccessDeniedException.class,
+        assertThrows(MemberAccessDeniedException.class,
                 () -> service.search(BeneficiarySearchType.BY_NAME, "Ahmed", null, null, 20));
     }
 }

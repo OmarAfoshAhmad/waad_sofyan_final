@@ -33,7 +33,11 @@ import com.waad.tba.modules.member.entity.PolicyAssignmentSource;
 import com.waad.tba.modules.member.entity.StatusSource;
 import com.waad.tba.modules.member.mapper.UnifiedMemberMapper;
 import com.waad.tba.modules.member.repository.MemberRepository;
-import com.waad.tba.modules.provider.service.ProviderService;
+import com.waad.tba.modules.member.security.AuthorizedMemberScope;
+import com.waad.tba.modules.member.security.MemberOperation;
+import com.waad.tba.modules.member.security.MemberCommandAccessPolicy;
+import com.waad.tba.modules.member.security.MemberQueryAccessPolicy;
+import com.waad.tba.modules.member.security.MemberScopeFilter;
 import com.waad.tba.modules.systemadmin.service.AuditLogService;
 import com.waad.tba.security.AuthorizationService;
 import com.waad.tba.modules.rbac.entity.User;
@@ -81,13 +85,14 @@ public class UnifiedMemberService {
     private final CardNumberGeneratorService cardNumberGenerator;
     private final UnifiedMemberMapper mapper;
     private final AuthorizationService authorizationService;
-    private final ProviderService providerService;
     private final MemberFinancialSummaryService financialSummaryService;
     private final JdbcTemplate jdbcTemplate;
     private final AuditLogService auditLogService;
     private final FamilyEligibilityService familyEligibilityService;
     private final MemberStatusTransitionService statusTransitionService;
     private final MemberPolicyResolver memberPolicyResolver;
+    private final MemberQueryAccessPolicy queryAccessPolicy;
+    private final MemberCommandAccessPolicy commandAccessPolicy;
 
     /**
      * Create a PRINCIPAL member (optionally with dependents inline).
@@ -110,8 +115,8 @@ public class UnifiedMemberService {
         // An EMPLOYER_ADMIN must not be able to enroll a member into a
         // different employer by sending an arbitrary employerId — force it
         // to their own employer regardless of what the request carries.
-        Long scopedEmployerId = authorizationService.resolveEmployerScope(
-                authorizationService.getCurrentUser(), dto.getEmployerId());
+        commandAccessPolicy.require(MemberOperation.CREATE_MEMBER, dto.getEmployerId());
+        Long scopedEmployerId = dto.getEmployerId();
         Employer employer = employerRepository.findById(scopedEmployerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Employer not found: " + scopedEmployerId));
 
@@ -198,6 +203,7 @@ public class UnifiedMemberService {
         // 1. Load principal member
         Member principal = memberRepository.findById(principalId)
                 .orElseThrow(() -> new ResourceNotFoundException("Principal member not found: " + principalId));
+        commandAccessPolicy.require(MemberOperation.ADD_DEPENDENT, employerIdOf(principal));
 
         // Validate principal is not a dependent
         if (principal.isDependent()) {
@@ -242,6 +248,7 @@ public class UnifiedMemberService {
         // 1. Load principal member
         Member principal = memberRepository.findById(dto.getParentId())
                 .orElseThrow(() -> new ResourceNotFoundException("Principal member not found: " + dto.getParentId()));
+        commandAccessPolicy.require(MemberOperation.ADD_DEPENDENT, employerIdOf(principal));
 
         // Validate principal is not a dependent
         if (principal.isDependent()) {
@@ -410,13 +417,7 @@ public class UnifiedMemberService {
 
         Member member = memberRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Member not found: " + id));
-
-        User currentUser = authorizationService.getCurrentUser();
-        if (!authorizationService.canAccessMember(currentUser, id)) {
-            log.warn("❌ Access denied: user {} attempted to update member {}",
-                    currentUser != null ? currentUser.getUsername() : "unknown", id);
-            throw new AccessDeniedException("Access denied to this member");
-        }
+        commandAccessPolicy.require(MemberOperation.EDIT_DEMOGRAPHICS, employerIdOf(member));
 
         rejectSensitiveFieldChanges(member, dto);
 
@@ -456,12 +457,10 @@ public class UnifiedMemberService {
     public MemberViewDto toggleActive(Long id, boolean active, String reason) {
         log.info("🔄 Setting active={} for member ID={}", active, id);
 
+        Member stored = requireStoredMember(id);
+        commandAccessPolicy.require(active ? MemberOperation.REINSTATE : MemberOperation.CHANGE_STATUS,
+                employerIdOf(stored));
         User currentUser = authorizationService.getCurrentUser();
-        if (!authorizationService.canAccessMember(currentUser, id)) {
-            log.warn("❌ Access denied: user {} attempted to toggle active status of member {}",
-                    currentUser != null ? currentUser.getUsername() : "unknown", id);
-            throw new AccessDeniedException("Access denied to this member");
-        }
         Long userId = currentUser != null ? currentUser.getId() : null;
 
         Member member = active
@@ -495,11 +494,13 @@ public class UnifiedMemberService {
         }
 
         User currentUser = authorizationService.getCurrentUser();
-        if (!authorizationService.canAccessMember(currentUser, id)) {
-            log.warn("❌ Access denied: user {} attempted to change status of member {}",
-                    currentUser != null ? currentUser.getUsername() : "unknown", id);
-            throw new AccessDeniedException("Access denied to this member");
-        }
+        Member stored = requireStoredMember(id);
+        MemberOperation operation = switch (newStatus) {
+            case ACTIVE -> MemberOperation.REINSTATE;
+            case TERMINATED -> MemberOperation.TERMINATE;
+            case SUSPENDED, PENDING -> MemberOperation.CHANGE_STATUS;
+        };
+        commandAccessPolicy.require(operation, employerIdOf(stored));
         Long userId = currentUser != null ? currentUser.getId() : null;
 
         Member member = switch (newStatus) {
@@ -526,10 +527,9 @@ public class UnifiedMemberService {
      */
     @Transactional
     public MemberViewDto reinstateTerminatedMember(Long id, String reason) {
+        Member stored = requireStoredMember(id);
+        commandAccessPolicy.require(MemberOperation.REINSTATE, employerIdOf(stored));
         User currentUser = authorizationService.getCurrentUser();
-        if (!authorizationService.canAccessMember(currentUser, id)) {
-            throw new AccessDeniedException("Access denied to this member");
-        }
         boolean isSuperAdmin = currentUser != null && "SUPER_ADMIN".equalsIgnoreCase(currentUser.getUserType());
         Member member = statusTransitionService.reinstateTerminated(id, reason,
                 currentUser != null ? currentUser.getId() : null, isSuperAdmin);
@@ -548,6 +548,8 @@ public class UnifiedMemberService {
      */
     @Transactional
     public MemberStatusTransitionService.FamilyRestoreResult restoreFamily(String transitionId) {
+        commandAccessPolicy.requireBulk(MemberOperation.REINSTATE,
+                statusTransitionService.familyCascadeEmployerIds(transitionId));
         User currentUser = authorizationService.getCurrentUser();
         Long userId = currentUser != null ? currentUser.getId() : null;
         return statusTransitionService.restoreFamily(transitionId, userId);
@@ -606,13 +608,7 @@ public class UnifiedMemberService {
     public MemberViewDto getMember(Long id) {
         Member member = memberRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Member not found: " + id));
-
-        User currentUser = authorizationService.getCurrentUser();
-        if (!authorizationService.canAccessMember(currentUser, id)) {
-            log.warn("❌ Access denied: user {} attempted to read member {}",
-                    currentUser != null ? currentUser.getUsername() : "unknown", id);
-            throw new AccessDeniedException("Access denied to this member");
-        }
+        queryAccessPolicy.requireMember(MemberOperation.VIEW_DETAILS, employerIdOf(member));
 
         if (member.isPrincipal()) {
             List<Member> dependents = memberRepository.findByParentId(member.getId());
@@ -643,6 +639,7 @@ public class UnifiedMemberService {
         // 1. Find principal by barcode
         Member principal = memberRepository.findByBarcode(barcode)
                 .orElseThrow(() -> new ResourceNotFoundException("No member found with barcode: " + barcode));
+        queryAccessPolicy.requireMember(MemberOperation.VIEW_DETAILS, employerIdOf(principal));
 
         // Validate it's a principal (should always be true if barcode exists)
         if (principal.isDependent()) {
@@ -746,12 +743,9 @@ public class UnifiedMemberService {
      */
     @Transactional
     public void terminateMembership(Long id, String reason) {
+        Member stored = requireStoredMember(id);
+        commandAccessPolicy.require(MemberOperation.TERMINATE, employerIdOf(stored));
         User currentUser = authorizationService.getCurrentUser();
-        if (!authorizationService.canAccessMember(currentUser, id)) {
-            log.warn("❌ Access denied: user {} attempted to terminate membership {}",
-                    currentUser != null ? currentUser.getUsername() : "unknown", id);
-            throw new AccessDeniedException("Access denied to this member");
-        }
         statusTransitionService.terminateMembership(id, reason,
                 currentUser != null ? currentUser.getId() : null, StatusSource.MANUAL);
         log.info("✅ Membership terminated for member ID={}", id);
@@ -768,12 +762,37 @@ public class UnifiedMemberService {
     @Deprecated
     @Transactional
     public void deleteMember(Long id) {
+        Member stored = requireStoredMember(id);
+        commandAccessPolicy.require(MemberOperation.TERMINATE, employerIdOf(stored));
         User currentUser = authorizationService.getCurrentUser();
-        if (!authorizationService.canAccessMember(currentUser, id)) {
-            throw new AccessDeniedException("Access denied to this member");
-        }
         statusTransitionService.terminateMembership(id, "LEGACY_TERMINATE_ENDPOINT",
                 currentUser != null ? currentUser.getId() : null, StatusSource.SYSTEM);
+    }
+
+    /**
+     * Compatibility bulk termination, deliberately atomic: every stored
+     * member is authorised before the first transition. A failure on any
+     * member rolls the whole transaction back, so the response can never
+     * claim a partially completed selection as a successful bulk action.
+     */
+    @Transactional
+    public void bulkTerminateMemberships(java.util.Collection<Long> memberIds) {
+        if (memberIds == null || memberIds.isEmpty()) {
+            throw new BusinessRuleException("يجب تحديد مستفيد واحد على الأقل");
+        }
+        java.util.List<Member> members = memberIds.stream()
+                .distinct()
+                .map(this::requireStoredMember)
+                .toList();
+        commandAccessPolicy.requireBulk(MemberOperation.BULK_OPERATION,
+                members.stream().map(this::employerIdOf).toList());
+
+        User currentUser = authorizationService.getCurrentUser();
+        Long userId = currentUser != null ? currentUser.getId() : null;
+        for (Member member : members) {
+            statusTransitionService.terminateMembership(member.getId(),
+                    "LEGACY_BULK_TERMINATE_ENDPOINT", userId, StatusSource.SYSTEM);
+        }
     }
 
     // ==================== ADDITIONAL METHODS FOR UNIFIED CONTROLLER
@@ -821,71 +840,6 @@ public class UnifiedMemberService {
     }
 
     /**
-     * Outcome of {@link #resolveEmployerScopeFilter(Long, String)}:
-     * {@code blocked=true} means the caller must return its own empty result
-     * (Page.empty()/0) without querying at all -- an EMPLOYER_ADMIN with the
-     * VIEW_MEMBERS feature disabled, or with no employerId assigned, must
-     * never fall through to an unfiltered query. {@code employerId} is the
-     * filter to apply when not blocked; null means "no filter" (internal or
-     * financial roles), never "blocked".
-     */
-    private record EmployerScopeFilter(boolean blocked, Long employerId) {
-        static EmployerScopeFilter allowed(Long employerId) {
-            return new EmployerScopeFilter(false, employerId);
-        }
-
-        static EmployerScopeFilter blockedResult() {
-            return new EmployerScopeFilter(true, null);
-        }
-    }
-
-    /**
-     * Single source of the EMPLOYER_ADMIN employer-lock rule: an
-     * EMPLOYER_ADMIN can only ever see their own employer's members, no
-     * matter what employerId a request asks for. Before this method existed,
-     * getAllMembers, searchMembers and countMembers each carried their own
-     * copy of this logic -- countMembers' copy was explicitly commented
-     * "COPIED from getAllMembers", which is exactly the failure mode this
-     * extraction removes: a fourth caller (or an edit to one copy) could
-     * silently drift from the other two and leak cross-employer data.
-     *
-     * SECURITY (2026-01-16, unchanged by this extraction):
-     * - EMPLOYER_ADMIN: locked to their own employer; blocked entirely if the
-     *   VIEW_MEMBERS feature is disabled for them or they have no employerId.
-     * - Every other role: the requested employerId passes through unchanged
-     *   (null means "no filter", which is intentional for internal/financial
-     *   roles that are allowed to see across employers).
-     *
-     * @param requestedEmployerId the employerId the caller's request asked for
-     * @param action              a short participle for the warning log
-     *                            ("view", "search", "count") -- the only
-     *                            thing that ever varied between the three
-     *                            copies this replaces
-     */
-    private EmployerScopeFilter resolveEmployerScopeFilter(Long requestedEmployerId, String action) {
-        User currentUser = authorizationService.getCurrentUser();
-        if (currentUser == null || !authorizationService.isEmployerAdmin(currentUser)) {
-            return EmployerScopeFilter.allowed(requestedEmployerId);
-        }
-
-        if (!authorizationService.canEmployerViewMembers(currentUser)) {
-            log.warn("❌ EMPLOYER_ADMIN user {} attempted to {} members but feature VIEW_MEMBERS is disabled",
-                    currentUser.getUsername(), action);
-            return EmployerScopeFilter.blockedResult();
-        }
-
-        Long employerFilter = authorizationService.getEmployerFilterForUser(currentUser);
-        if (employerFilter == null) {
-            log.warn("⚠️ EMPLOYER_ADMIN user {} has no employerId assigned", currentUser.getUsername());
-            return EmployerScopeFilter.blockedResult();
-        }
-
-        log.info("🔒 EMPLOYER_ADMIN filter applied: user={}, action={}, locked to employerId={}",
-                currentUser.getUsername(), action, employerFilter);
-        return EmployerScopeFilter.allowed(employerFilter);
-    }
-
-    /**
      * Get all members with pagination and optional filters.
      *
      * @param pageable   Pagination info
@@ -894,9 +848,9 @@ public class UnifiedMemberService {
      * @param type       Optional member type filter (PRINCIPAL/DEPENDENT)
      * @return Page of members
      *
-     *         SECURITY (2026-01-16):
-     *         - EMPLOYER_ADMIN: Automatically filtered to their employer only
-     *         - Internal/financial roles: No automatic filter when explicitly allowed by endpoint/service checks
+     *         SECURITY: the caller's reach is decided by MemberQueryAccessPolicy
+     *         and applied through MemberScopeFilter. A caller outside scope is
+     *         refused (403), not served an empty page.
      */
     @Transactional(readOnly = true)
     public Page<MemberViewDto> getAllMembers(
@@ -908,18 +862,13 @@ public class UnifiedMemberService {
         log.info("Fetching all members: page={}, size={}, employerId={}, status={}, type={}",
                 pageable.getPageNumber(), pageable.getPageSize(), employerId, status, type);
 
-        EmployerScopeFilter scope = resolveEmployerScopeFilter(employerId, "view");
-        if (scope.blocked()) {
-            return Page.empty();
-        }
-        final Long finalEmployerId = scope.employerId();
+        final AuthorizedMemberScope scope = queryAccessPolicy.requireListing(
+                MemberOperation.LIST, employerId);
 
         Specification<Member> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
 
-            if (finalEmployerId != null) {
-                predicates.add(cb.equal(root.get("employer").get("id"), finalEmployerId));
-            }
+            predicates.add(MemberScopeFilter.toPredicate(scope, root.get("employer").get("id"), cb));
 
             if (status != null && !status.trim().isEmpty()) {
                 predicates.add(cb.equal(root.get("status"), status));
@@ -1000,18 +949,17 @@ public class UnifiedMemberService {
     @Transactional(readOnly = true)
     public long countMembers(Long employerId, String status, String type) {
 
-        EmployerScopeFilter scope = resolveEmployerScopeFilter(employerId, "count");
-        if (scope.blocked()) {
-            return 0;
-        }
-        final Long finalEmployerId = scope.employerId();
+        // The same authorisation as getAllMembers, deliberately: a count is a
+        // listing whose rows were summed. Answering it under a looser rule
+        // would leak the size of a tenant's roster to someone barred from
+        // reading it.
+        final AuthorizedMemberScope scope = queryAccessPolicy.requireListing(
+                MemberOperation.LIST, employerId);
 
         Specification<Member> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
 
-            if (finalEmployerId != null) {
-                predicates.add(cb.equal(root.get("employer").get("id"), finalEmployerId));
-            }
+            predicates.add(MemberScopeFilter.toPredicate(scope, root.get("employer").get("id"), cb));
 
             if (status != null && !status.trim().isEmpty()) {
                 predicates.add(cb.equal(root.get("status"), status));
@@ -1054,9 +1002,9 @@ public class UnifiedMemberService {
      * @param pageable        Pagination info
      * @return Page of search results
      * 
-     *         SECURITY (2026-01-16):
-     *         - EMPLOYER_ADMIN: Automatically filtered to their employer only
-     *         - Internal/financial roles: No automatic filter when explicitly allowed by endpoint/service checks
+     *         SECURITY: the caller's reach is decided by MemberQueryAccessPolicy
+     *         and applied through MemberScopeFilter. A caller outside scope is
+     *         refused (403), not served an empty page.
      */
     @Transactional(readOnly = true)
     public Page<MemberViewDto> searchMembers(
@@ -1075,6 +1023,12 @@ public class UnifiedMemberService {
         log.info("Searching members: nameAr={}, nationalNumber={}, barcode={}, cardNumber={}",
                 nameAr, nationalNumber, barcode, cardNumber);
 
+        // Before the short-query shortcut, not after: authorisation decides
+        // whether this caller may search at all, and a refusal that arrives as
+        // an empty page is indistinguishable from a search that found nothing.
+        final AuthorizedMemberScope scope = queryAccessPolicy.requireListing(
+                MemberOperation.SEARCH, employerId);
+
         boolean hasNameSearch = hasText(nameAr) || hasText(nameEn);
         boolean hasExactIdentifierSearch = hasText(nationalNumber) || hasText(barcode) || hasText(cardNumber);
         if (hasNameSearch && !hasExactIdentifierSearch
@@ -1082,12 +1036,6 @@ public class UnifiedMemberService {
             log.info("Skipping member name search shorter than {} characters", MIN_MEMBER_TEXT_SEARCH_LENGTH);
             return Page.empty(pageable);
         }
-
-        EmployerScopeFilter scope = resolveEmployerScopeFilter(employerId, "search");
-        if (scope.blocked()) {
-            return Page.empty();
-        }
-        final Long finalEmployerId = scope.employerId();
 
         Specification<Member> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
@@ -1132,9 +1080,7 @@ public class UnifiedMemberService {
                 predicates.add(cb.like(root.get("cardNumber"), "%" + cardNumber + "%"));
             }
 
-            if (finalEmployerId != null) {
-                predicates.add(cb.equal(root.get("employer").get("id"), finalEmployerId));
-            }
+            predicates.add(MemberScopeFilter.toPredicate(scope, root.get("employer").get("id"), cb));
 
             if (benefitPolicyId != null) {
                 predicates.add(cb.equal(root.get("benefitPolicy").get("id"), benefitPolicyId));
@@ -1223,10 +1169,7 @@ public class UnifiedMemberService {
     public List<MemberViewDto> getDependents(Long principalId) {
         Member principal = memberRepository.findById(principalId)
                 .orElseThrow(() -> new ResourceNotFoundException("Principal member not found: " + principalId));
-
-        if (!authorizationService.canAccessMember(authorizationService.getCurrentUser(), principalId)) {
-            throw new AccessDeniedException("Access denied to this member");
-        }
+        queryAccessPolicy.requireMember(MemberOperation.VIEW_DETAILS, employerIdOf(principal));
 
         if (principal.isDependent()) {
             throw new BusinessRuleException("Member ID " + principalId + " is a Dependent, not a Principal");
@@ -1249,10 +1192,7 @@ public class UnifiedMemberService {
     public long countDependents(Long principalId) {
         Member principal = memberRepository.findById(principalId)
                 .orElseThrow(() -> new ResourceNotFoundException("Principal member not found: " + principalId));
-
-        if (!authorizationService.canAccessMember(authorizationService.getCurrentUser(), principalId)) {
-            throw new AccessDeniedException("Access denied to this member");
-        }
+        queryAccessPolicy.requireMember(MemberOperation.VIEW_DETAILS, employerIdOf(principal));
 
         if (principal.isDependent()) {
             throw new BusinessRuleException("Member ID " + principalId + " is a Dependent, not a Principal");
@@ -1274,7 +1214,7 @@ public class UnifiedMemberService {
     public MemberViewDto updateMemberPhoto(Long memberId, String photoPath) {
         log.info("📸 Updating photo for member: memberId={}, path={}", memberId, photoPath);
 
-        Member member = requirePhotoAccess(memberId);
+        Member member = requirePhotoWriteAccess(memberId);
 
         member.setProfilePhotoPath(photoPath);
 
@@ -1300,7 +1240,7 @@ public class UnifiedMemberService {
      */
     @Transactional(readOnly = true)
     public String getMemberPhotoPath(Long memberId) {
-        Member member = requirePhotoAccess(memberId);
+        Member member = requirePhotoReadAccess(memberId);
 
         return member.getProfilePhotoPath();
     }
@@ -1310,28 +1250,20 @@ public class UnifiedMemberService {
      */
     @Transactional(readOnly = true)
     public void assertCanAccessMemberPhoto(Long memberId) {
-        requirePhotoAccess(memberId);
+        requirePhotoWriteAccess(memberId);
     }
 
-    private Member requirePhotoAccess(Long memberId) {
-        User currentUser = authorizationService.requireCurrentUser();
+    private Member requirePhotoReadAccess(Long memberId) {
         Member member = memberRepository.findById(memberId)
                 .orElseThrow(() -> new ResourceNotFoundException("Member not found: " + memberId));
+        queryAccessPolicy.requireMember(MemberOperation.VIEW_DETAILS, employerIdOf(member));
+        return member;
+    }
 
-        boolean allowed = authorizationService.isInternalStaff(currentUser)
-                || authorizationService.canAccessMember(currentUser, memberId);
-
-        if (!allowed && authorizationService.isProvider(currentUser)
-                && currentUser.getProviderId() != null
-                && member.getEmployer() != null) {
-            allowed = providerService.getAllowedEmployerIds(currentUser.getProviderId())
-                    .contains(member.getEmployer().getId());
-        }
-
-        if (!allowed) {
-            throw new org.springframework.security.access.AccessDeniedException(
-                    "Access to member photo denied");
-        }
+    private Member requirePhotoWriteAccess(Long memberId) {
+        Member member = memberRepository.findById(memberId)
+                .orElseThrow(() -> new ResourceNotFoundException("Member not found: " + memberId));
+        commandAccessPolicy.require(MemberOperation.EDIT_DEMOGRAPHICS, employerIdOf(member));
         return member;
     }
 
@@ -1358,9 +1290,8 @@ public class UnifiedMemberService {
     public MemberViewDto restoreMember(Long memberId, String reason) {
         log.info("♻️ Restoring member: memberId={}", memberId);
 
-        if (!authorizationService.canAccessMember(authorizationService.getCurrentUser(), memberId)) {
-            throw new AccessDeniedException("Access denied to this member");
-        }
+        Member stored = requireStoredMember(memberId);
+        commandAccessPolicy.require(MemberOperation.REINSTATE, employerIdOf(stored));
         User currentUser = authorizationService.getCurrentUser();
 
         Member saved = statusTransitionService.restoreFromSuspended(memberId, reason,
@@ -1385,6 +1316,8 @@ public class UnifiedMemberService {
     public void hardDeleteMember(Long memberId, String reason) {
         log.warn("⚠️ HARD DELETE member: memberId={}", memberId);
 
+        Member stored = requireStoredMember(memberId);
+        commandAccessPolicy.require(MemberOperation.HARD_DELETE, employerIdOf(stored));
         User currentUser = authorizationService.getCurrentUser();
         boolean isSuperAdmin = currentUser != null && "SUPER_ADMIN".equalsIgnoreCase(currentUser.getUserType());
 
@@ -1394,5 +1327,14 @@ public class UnifiedMemberService {
                 isSuperAdmin);
 
         log.info("✅ Member hard deleted: memberId={}", memberId);
+    }
+
+    private Member requireStoredMember(Long memberId) {
+        return memberRepository.findById(memberId)
+                .orElseThrow(() -> new ResourceNotFoundException("Member not found: " + memberId));
+    }
+
+    private Long employerIdOf(Member member) {
+        return member.getEmployer() == null ? null : member.getEmployer().getId();
     }
 }

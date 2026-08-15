@@ -240,7 +240,10 @@ export const searchBeneficiaries = async (params = {}) => {
  */
 export const checkEligibility = async (barcode) => {
   try {
-    const response = await api.get(`${UNIFIED_MEMBERS_BASE_URL}/eligibility/${barcode}`);
+    const response = await api.post(`${UNIFIED_MEMBERS_BASE_URL}/eligibility/evaluations`, {
+      barcode,
+      serviceDate: new Date().toISOString().slice(0, 10)
+    });
     return response.data;
   } catch (error) {
     console.error('Error checking eligibility:', error);
@@ -464,42 +467,6 @@ export const countDependents = async (principalId) => {
 };
 
 /**
- * Import members from Excel file
- *
- * @param {File} file - Excel file
- * @returns {Promise<any>} Import result
- */
-export const importMembers = async (file, clearOldMembers = false, employerId = null) => {
-  try {
-    const formData = new FormData();
-    formData.append('file', file);
-    if (clearOldMembers) {
-      formData.append('clearOldMembers', clearOldMembers);
-    }
-    if (employerId) {
-      formData.append('employerId', employerId);
-    }
-    const response = await api.post(`${UNIFIED_MEMBERS_BASE_URL}/import`, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data'
-      },
-      timeout: 300000 // 5 minutes for large Excel files
-    });
-    return response.data;
-  } catch (error) {
-    console.error('Error importing members:', error);
-
-    // Preserve server response data for better error display
-    if (error.response?.data) {
-      error.importResult = error.response.data.data; // The ExcelImportResult
-      error.serverMessage = error.response.data.message;
-    }
-
-    throw error;
-  }
-};
-
-/**
  * Detect Excel columns and suggest mappings
  *
  * @param {File} file - Excel file
@@ -526,15 +493,20 @@ export const detectColumns = async (file) => {
  * @param {Object} customMappings - Optional mappings
  * @returns {Promise<any>} Preview result
  */
-export const previewImport = async (file, customMappings = null, headerRowNumber = null) => {
+export const previewImport = async (file, params = {}) => {
   try {
     const formData = new FormData();
     formData.append('file', file);
-    if (customMappings) {
-      formData.append('customMappings', JSON.stringify(customMappings));
+    if (params.employerId) {
+      formData.append('employerId', params.employerId);
     }
-    if (headerRowNumber !== null && headerRowNumber !== undefined) {
-      formData.append('headerRowNumber', headerRowNumber);
+    if (params.headerRowNumber !== null && params.headerRowNumber !== undefined) {
+      formData.append('headerRowNumber', params.headerRowNumber);
+    }
+    if (params.customMappings) {
+      Object.entries(params.customMappings).forEach(([column, field]) => {
+        formData.append(`customMappings[${column}]`, field);
+      });
     }
     const response = await api.post(`${UNIFIED_MEMBERS_BASE_URL}/import/preview`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' }

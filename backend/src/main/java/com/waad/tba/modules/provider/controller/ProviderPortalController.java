@@ -180,7 +180,7 @@ public class ProviderPortalController {
      * 
      * Example: GET /api/provider/eligibility/WAD-2026-00001234
      */
-    @GetMapping("/eligibility/{barcode}")
+    @PostMapping("/eligibility/evaluations/{barcode}")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF')")
     @Operation(
         summary = "Quick eligibility check by barcode (GET)",

@@ -7,6 +7,7 @@ import com.waad.tba.modules.member.exception.InvalidEligibilityInputException;
 import com.waad.tba.modules.member.exception.MemberNotFoundException;
 import com.waad.tba.modules.member.service.MemberFinancialSummaryService;
 import com.waad.tba.modules.member.service.UnifiedEligibilityService;
+import com.waad.tba.modules.member.security.MemberOperation;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -67,8 +68,9 @@ public class UnifiedEligibilityController {
         
         log.info("📊 Retrieving remaining limit for member: memberId={}", memberId);
         
-        try {
-            MemberFinancialSummaryDto summary = financialSummaryService.getFinancialSummary(memberId);
+        {
+            MemberFinancialSummaryDto summary = financialSummaryService.getAuthorizedFinancialSummary(
+                    memberId, MemberOperation.VIEW_COVERAGE_BALANCE);
             
             java.util.Map<String, Object> result = new java.util.HashMap<>();
             result.put("memberId", memberId);
@@ -85,16 +87,21 @@ public class UnifiedEligibilityController {
             log.info("✅ Remaining limit retrieved: memberId={}, remaining={}", 
                      memberId, summary.getRemainingCoverage());
             
+            result.put("financialDataAvailable", true);
             return ResponseEntity.ok(ApiResponse.success(result));
-        } catch (Exception e) {
-            log.warn("⚠️ Failed to get remaining limit for member {}: {}", memberId, e.getMessage());
-            java.util.Map<String, Object> fallback = new java.util.HashMap<>();
-            fallback.put("memberId", memberId);
-            fallback.put("annualLimit", 0);
-            fallback.put("usedAmount", 0);
-            fallback.put("remainingLimit", 0);
-            return ResponseEntity.ok(ApiResponse.success(fallback));
         }
+        // No catch-and-zero. It used to swallow every Exception -- a timeout, a
+        // lazy-init failure, a missing member -- and answer HTTP 200 with an
+        // annual limit of 0, 0 consumed and 0 remaining. Zero is a LEGITIMATE
+        // financial value that staff act on, so "could not read" arrived
+        // looking exactly like "policy exhausted": a covered patient turned
+        // away, with no error anywhere on the screen to say the figure was
+        // never actually known.
+        //
+        // The failure now propagates to GlobalExceptionHandler, which answers
+        // a real status. The barcode eligibility path already works this way
+        // (financialDataAvailable=false + "غير متاح"); this endpoint is one of
+        // the two that were never migrated to it.
     }
 
     /**
@@ -164,7 +171,7 @@ public class UnifiedEligibilityController {
             description = "Member not found (MEMBER_NOT_FOUND)"
         )
     })
-    @GetMapping("/eligibility")
+    @PostMapping("/eligibility/evaluations")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF')")
     public ResponseEntity<ApiResponse<EligibilityResultDto>> checkEligibility(
         @Parameter(
@@ -172,14 +179,16 @@ public class UnifiedEligibilityController {
             required = true,
             example = "1234567890"
         )
-        @RequestParam(name = "query") String query
+        @RequestBody EligibilityEvaluationRequest request
     ) {
         // Security: Don't log query content (may contain sensitive data)
         log.info("📥 [ELIGIBILITY-REQUEST] Received");
 
         try {
             // Perform eligibility check with auto-detection
-            EligibilityResultDto result = eligibilityService.checkEligibility(query);
+            EligibilityResultDto result = eligibilityService.checkEligibility(
+                    request == null ? null : request.query(),
+                    request == null ? null : request.serviceDate());
 
             // Strategic logging: Result already logged in service layer
             return ResponseEntity.ok(ApiResponse.success(result));
@@ -203,6 +212,8 @@ public class UnifiedEligibilityController {
                 .body(ApiResponse.error("Internal server error during eligibility check"));
         }
     }
+
+    public record EligibilityEvaluationRequest(String query, java.time.LocalDate serviceDate) {}
 
     /**
      * Global exception handler for this controller

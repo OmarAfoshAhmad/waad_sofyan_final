@@ -2,12 +2,11 @@ package com.waad.tba.modules.member.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.util.List;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -16,7 +15,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.security.access.AccessDeniedException;
 
 import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository;
 import com.waad.tba.modules.employer.entity.Employer;
@@ -24,8 +22,9 @@ import com.waad.tba.modules.employer.repository.EmployerRepository;
 import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.modules.member.mapper.UnifiedMemberMapper;
 import com.waad.tba.modules.member.repository.MemberRepository;
-import com.waad.tba.modules.provider.service.ProviderService;
-import com.waad.tba.modules.rbac.entity.User;
+import com.waad.tba.modules.member.security.MemberAccessDeniedException;
+import com.waad.tba.modules.member.security.MemberOperation;
+import com.waad.tba.modules.member.security.MemberQueryAccessPolicy;
 import com.waad.tba.modules.systemadmin.service.AuditLogService;
 import com.waad.tba.security.AuthorizationService;
 
@@ -39,17 +38,16 @@ class UnifiedMemberPhotoSecurityTest {
     @Mock private CardNumberGeneratorService cardNumberGenerator;
     @Mock private UnifiedMemberMapper mapper;
     @Mock private AuthorizationService authorizationService;
-    @Mock private ProviderService providerService;
     @Mock private MemberFinancialSummaryService financialSummaryService;
     @Mock private JdbcTemplate jdbcTemplate;
     @Mock private AuditLogService auditLogService;
     @Mock private com.waad.tba.modules.eligibility.service.FamilyEligibilityService familyEligibilityService;
     @Mock private com.waad.tba.modules.member.service.MemberStatusTransitionService statusTransitionService;
     @Mock private com.waad.tba.modules.member.service.MemberPolicyResolver memberPolicyResolver;
+    @Mock private MemberQueryAccessPolicy memberQueryAccessPolicy;
+    @Mock private com.waad.tba.modules.member.security.MemberCommandAccessPolicy memberCommandAccessPolicy;
 
     private UnifiedMemberService service;
-    private User currentUser;
-
     @BeforeEach
     void setUp() {
         service = new UnifiedMemberService(
@@ -60,35 +58,33 @@ class UnifiedMemberPhotoSecurityTest {
                 cardNumberGenerator,
                 mapper,
                 authorizationService,
-                providerService,
                 financialSummaryService,
                 jdbcTemplate,
                 auditLogService,
                 familyEligibilityService,
                 statusTransitionService,
-                memberPolicyResolver);
-        currentUser = mock(User.class);
-        when(authorizationService.requireCurrentUser()).thenReturn(currentUser);
+                memberPolicyResolver,
+                memberQueryAccessPolicy,
+                memberCommandAccessPolicy);
     }
 
     @Test
     void employerAdminCannotReadPhotoPathForAnotherEmployerMember() {
         Member member = member(10L, 2L, "members/photos/secret.jpg");
         when(memberRepository.findById(10L)).thenReturn(Optional.of(member));
-        when(authorizationService.canAccessMember(currentUser, 10L)).thenReturn(false);
+        doThrow(new MemberAccessDeniedException(MemberOperation.VIEW_DETAILS, "outside scope"))
+                .when(memberQueryAccessPolicy).requireMember(MemberOperation.VIEW_DETAILS, 2L);
 
-        assertThrows(AccessDeniedException.class, () -> service.getMemberPhotoPath(10L));
+        assertThrows(MemberAccessDeniedException.class, () -> service.getMemberPhotoPath(10L));
     }
 
     @Test
     void unrelatedProviderCannotModifyMemberPhoto() {
-        User providerUser = User.builder().userType("PROVIDER_STAFF").providerId(20L).build();
-        when(authorizationService.requireCurrentUser()).thenReturn(providerUser);
-        when(authorizationService.isProvider(providerUser)).thenReturn(true);
         when(memberRepository.findById(10L)).thenReturn(Optional.of(member(10L, 2L, "old.jpg")));
-        when(providerService.getAllowedEmployerIds(20L)).thenReturn(List.of(3L));
+        doThrow(new MemberAccessDeniedException(MemberOperation.EDIT_DEMOGRAPHICS, "read only"))
+                .when(memberCommandAccessPolicy).require(MemberOperation.EDIT_DEMOGRAPHICS, 2L);
 
-        assertThrows(AccessDeniedException.class,
+        assertThrows(MemberAccessDeniedException.class,
                 () -> service.updateMemberPhoto(10L, "members/photos/replacement.jpg"));
 
         verify(memberRepository, never()).save(org.mockito.ArgumentMatchers.any());
@@ -96,14 +92,11 @@ class UnifiedMemberPhotoSecurityTest {
 
     @Test
     void providerCanReadPhotoForMemberOfAllowedEmployer() {
-        User providerUser = User.builder().userType("PROVIDER_STAFF").providerId(20L).build();
-        when(authorizationService.requireCurrentUser()).thenReturn(providerUser);
-        when(authorizationService.isProvider(providerUser)).thenReturn(true);
         when(memberRepository.findById(10L))
                 .thenReturn(Optional.of(member(10L, 2L, "members/photos/allowed.jpg")));
-        when(providerService.getAllowedEmployerIds(20L)).thenReturn(List.of(2L));
 
         assertEquals("members/photos/allowed.jpg", service.getMemberPhotoPath(10L));
+        verify(memberQueryAccessPolicy).requireMember(MemberOperation.VIEW_DETAILS, 2L);
     }
 
     private Member member(Long id, Long employerId, String photoPath) {

@@ -30,6 +30,8 @@ import com.waad.tba.modules.member.dto.MemberViewDto;
 import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.modules.member.mapper.UnifiedMemberMapper;
 import com.waad.tba.modules.member.repository.MemberRepository;
+import com.waad.tba.modules.member.security.MemberOperation;
+import com.waad.tba.modules.member.security.MemberQueryAccessPolicy;
 
 /**
  * Characterization tests for UnifiedMemberService.checkFamilyEligibility
@@ -57,6 +59,7 @@ class UnifiedMemberServiceFamilyEligibilityTest {
     @Mock private MemberFinancialSummaryService financialSummaryService;
     @Mock private FamilyEligibilityService familyEligibilityService;
     @Mock private JdbcTemplate jdbcTemplate;
+    @Mock private MemberQueryAccessPolicy memberQueryAccessPolicy;
 
     @InjectMocks
     private UnifiedMemberService service;
@@ -102,6 +105,7 @@ class UnifiedMemberServiceFamilyEligibilityTest {
 
         service.checkFamilyEligibility("WAHA-2026-000100", null);
 
+        verify(memberQueryAccessPolicy).requireMember(MemberOperation.VIEW_DETAILS, 1L);
         verify(familyEligibilityService).resolveFamily(principal);
         verify(familyEligibilityService).evaluateFamily(principal, List.of(), null);
         verify(mapper).toFamilyEligibilityResponse(principal, List.of(), results);

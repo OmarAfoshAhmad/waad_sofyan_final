@@ -16,6 +16,8 @@ import com.waad.tba.modules.member.dto.MemberDuplicateGroupDto.DuplicateMemberIn
 import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.modules.member.repository.MemberAttributeRepository;
 import com.waad.tba.modules.member.repository.MemberRepository;
+import com.waad.tba.modules.member.security.MemberCommandAccessPolicy;
+import com.waad.tba.modules.member.security.MemberOperation;
 import com.waad.tba.modules.visit.entity.Visit;
 import com.waad.tba.modules.visit.repository.VisitRepository;
 
@@ -32,6 +34,7 @@ public class MemberDuplicateService {
     private final ClaimRepository claimRepository;
     private final MemberAttributeRepository memberAttributeRepository;
     private final CardNumberGeneratorService cardNumberGeneratorService;
+    private final MemberCommandAccessPolicy commandAccessPolicy;
 
     /**
      * Finds duplicate members across the entire system.
@@ -39,6 +42,7 @@ public class MemberDuplicateService {
      */
     @Transactional(readOnly = true)
     public List<MemberDuplicateGroupDto> findDuplicates() {
+        commandAccessPolicy.require(MemberOperation.RESOLVE_DUPLICATES, null);
         // Fetch all active members using lightweight projection to avoid N+1 and slow initialization
         List<com.waad.tba.modules.member.dto.MemberLightProjection> activeMembers = memberRepository.findAllActiveMembersLight(Member.MemberStatus.ACTIVE);
 
@@ -128,6 +132,7 @@ public class MemberDuplicateService {
      */
     @Transactional
     public void mergeDuplicates(Long primaryMemberId, List<Long> duplicateMemberIds) {
+        commandAccessPolicy.require(MemberOperation.RESOLVE_DUPLICATES, null);
         log.info("Merging duplicates {} into primary member {}", duplicateMemberIds, primaryMemberId);
 
         if (duplicateMemberIds == null || duplicateMemberIds.isEmpty()) return;

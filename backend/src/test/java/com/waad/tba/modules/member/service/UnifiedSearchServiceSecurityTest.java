@@ -1,89 +1,85 @@
 package com.waad.tba.modules.member.service;
 
+import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.modules.member.repository.MemberRepository;
-import com.waad.tba.modules.rbac.entity.User;
-import com.waad.tba.security.AuthorizationService;
-import com.waad.tba.security.QueryFilterService;
-import com.waad.tba.security.RoleService;
+import com.waad.tba.modules.member.security.AuthorizedMemberScope;
+import com.waad.tba.modules.member.security.MemberOperation;
+import com.waad.tba.modules.member.security.MemberQueryAccessPolicy;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 
-import java.util.Optional;
-
-import static org.mockito.Mockito.lenient;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/**
- * Regression coverage for a CRITICAL IDOR found while closing the employer
- * module: GET /unified-search allows EMPLOYER_ADMIN, and the employerId
- * query param was optional with no scope resolution — omitting it (or
- * sending another employer's id) returned name/barcode/card matches across
- * every employer. resolveEmployerScope() now forces it to the caller's own
- * employer.
- */
+/** Regression coverage for the unified-search tenant boundary. */
 @ExtendWith(MockitoExtension.class)
 class UnifiedSearchServiceSecurityTest {
 
-    @Mock
-    private MemberRepository memberRepository;
-    @Mock
-    private NameSearchService nameSearchService;
-    @Mock
-    private com.waad.tba.modules.rbac.repository.UserRepository userRepository;
-    @Mock
-    private RoleService roleService;
+    @Mock private MemberRepository memberRepository;
+    @Mock private MemberQueryAccessPolicy queryAccessPolicy;
+    @Mock private AuthorizedMemberScope authorizedScope;
 
     private UnifiedSearchService service;
-    private User employerAdmin;
 
     @BeforeEach
     void setUp() {
-        employerAdmin = User.builder().id(1L).username("employer-a-admin")
-                .userType("EMPLOYER_ADMIN").employerId(10L).build();
-
-        QueryFilterService queryFilterService = new QueryFilterService(roleService);
-        lenient().when(roleService.isEmployerAdmin(employerAdmin)).thenReturn(true);
-        AuthorizationService authorizationService = new AuthorizationService(userRepository, roleService,
-                null, queryFilterService, null);
-
-        service = new UnifiedSearchService(memberRepository, nameSearchService, authorizationService);
-
-        org.springframework.security.core.Authentication auth =
-                new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
-                        employerAdmin.getUsername(), null, java.util.List.of());
-        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(auth);
-        lenient().when(userRepository.findByUsername(employerAdmin.getUsername()))
-                .thenReturn(Optional.of(employerAdmin));
+        service = new UnifiedSearchService(memberRepository, queryAccessPolicy);
     }
 
     @Test
-    void employerAdminSearchIgnoresOmittedEmployerIdAndUsesOwnEmployer() {
-        when(memberRepository.searchByEmployerId("Ahmed", 10L)).thenReturn(java.util.List.of());
+    void omittedEmployerIsResolvedByPolicyAndAppliedInsidePagedSqlQuery() {
+        when(queryAccessPolicy.requireListing(MemberOperation.SEARCH, null)).thenReturn(authorizedScope);
+        when(memberRepository.findAll(any(Specification.class), any(Pageable.class))).thenReturn(Page.empty());
 
         service.search("Ahmed", null);
 
-        verify(memberRepository).searchByEmployerId("Ahmed", 10L);
+        verify(queryAccessPolicy).requireListing(MemberOperation.SEARCH, null);
+        verify(memberRepository).findAll(any(Specification.class), any(Pageable.class));
+        verify(memberRepository, never()).search(any(String.class));
+        verify(memberRepository, never()).searchByEmployerId(any(String.class), any(Long.class));
     }
 
     @Test
-    void employerAdminSearchIgnoresForeignEmployerIdAndUsesOwnEmployer() {
-        when(memberRepository.searchByEmployerId("Ahmed", 10L)).thenReturn(java.util.List.of());
+    void requestedEmployerIsNeverUsedWithoutPolicyApproval() {
+        when(queryAccessPolicy.requireListing(MemberOperation.SEARCH, 999L)).thenReturn(authorizedScope);
+        when(memberRepository.findAll(any(Specification.class), any(Pageable.class))).thenReturn(Page.empty());
 
         service.search("Ahmed", 999L);
 
-        verify(memberRepository).searchByEmployerId("Ahmed", 10L);
+        verify(queryAccessPolicy).requireListing(MemberOperation.SEARCH, 999L);
+        verify(memberRepository).findAll(any(Specification.class), any(Pageable.class));
     }
 
     @Test
-    void shortTextSearchDoesNotHitRepositoryOnLargeMemberTables() {
+    void shortTextStillRequiresAuthorizationButDoesNotQueryLargeMemberTable() {
+        when(queryAccessPolicy.requireListing(MemberOperation.SEARCH, null)).thenReturn(authorizedScope);
+
         service.search("Ah", null);
 
-        verify(memberRepository, never()).searchByEmployerId("Ah", 10L);
-        verify(memberRepository, never()).search("Ah");
+        verify(queryAccessPolicy).requireListing(MemberOperation.SEARCH, null);
+        verify(memberRepository, never()).findAll(any(Specification.class), any(Pageable.class));
+    }
+
+    @Test
+    void exactResultOutsideResolvedScopeIsRejectedThroughPolicy() {
+        Member member = Member.builder().id(7L).barcode("123e4567-e89b-12d3-a456-426614174000").build();
+        when(queryAccessPolicy.requireListing(MemberOperation.SEARCH, null)).thenReturn(authorizedScope);
+        when(memberRepository.findByBarcode(member.getBarcode())).thenReturn(java.util.Optional.of(member));
+        when(authorizedScope.covers(null)).thenReturn(false);
+        when(queryAccessPolicy.requireMember(MemberOperation.SEARCH, null))
+                .thenThrow(new IllegalStateException("denied"));
+
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
+                () -> service.search(member.getBarcode(), null));
+
+        verify(queryAccessPolicy).requireMember(MemberOperation.SEARCH, null);
     }
 }

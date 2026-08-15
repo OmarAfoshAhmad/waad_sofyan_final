@@ -42,6 +42,9 @@ import com.waad.tba.modules.member.repository.MemberAttributeRepository;
 import com.waad.tba.modules.member.repository.MemberImportErrorRepository;
 import com.waad.tba.modules.member.repository.MemberImportLogRepository;
 import com.waad.tba.modules.member.repository.MemberRepository;
+import com.waad.tba.modules.member.security.AuthorizedImportScope;
+import com.waad.tba.modules.member.security.MemberImportAccessPolicy;
+import com.waad.tba.modules.member.security.MemberOperation;
 import com.waad.tba.modules.rbac.entity.User;
 import com.waad.tba.modules.visit.repository.VisitRepository;
 import com.waad.tba.modules.claim.repository.ClaimRepository;
@@ -79,6 +82,7 @@ public class MemberExcelImportService {
     private final MemberStatusTransitionService statusTransitionService;
     private final MemberPolicyResolver memberPolicyResolver;
     private final com.waad.tba.modules.member.repository.MemberPolicyAssignmentRepository policyAssignmentRepository;
+    private final MemberImportAccessPolicy importAccessPolicy;
 
     private final VisitRepository visitRepository;
     private final ClaimRepository claimRepository;
@@ -127,6 +131,7 @@ public class MemberExcelImportService {
         int errorCount = 0;
         int validRows = 0;
         int invalidRows = 0;
+        Set<Long> resolvedEmployerIds = new HashSet<>();
 
         try (InputStream is = file.getInputStream();
                 Workbook workbook = new XSSFWorkbook(is)) {
@@ -188,6 +193,9 @@ public class MemberExcelImportService {
                     errorCount++;
                     invalidRows++;
                 } else {
+                    Employer resolvedEmployer = rowProcessor.resolveEmployerForRow(
+                            row, displayRowNumber, fieldToColumnIndex, defaultEmployer);
+                    resolvedEmployerIds.add(resolvedEmployer.getId());
                     newCount++;
                     validRows++;
                     if ("WARNING".equals(rowDto.getStatus())) warningCount++;
@@ -202,6 +210,8 @@ public class MemberExcelImportService {
             if (errorCount > 0) warnings.add(String.format("%d صف بها أخطاء - سيتم تخطيها", errorCount));
             if (importableCount == 0) warnings.add("لا يوجد صفوف صالحة للاستيراد");
 
+            importAccessPolicy.require(MemberOperation.IMPORT_PREVIEW, resolvedEmployerIds, false);
+
             return MemberImportPreviewDto.builder()
                     .batchId(batchId).fileName(file.getOriginalFilename()).totalRows(totalRows)
                     .validRows(validRows).invalidRows(invalidRows).newCount(newCount).updateCount(0)
@@ -210,6 +220,7 @@ public class MemberExcelImportService {
                     .errors(validationErrors).canProceed(importableCount > 0).matchKeyUsed("CARD_NUMBER").warnings(warnings)
                     .availableEmployers(loadEmployerOptions())
                     .availableBenefitPolicies(loadPolicyOptions())
+                    .resolvedEmployerIds(java.util.Set.copyOf(resolvedEmployerIds))
                     .build();
         }
     }
@@ -308,6 +319,9 @@ public class MemberExcelImportService {
 
         MemberImportPreviewDto previewGuard = parseAndPreview(file, null, headerRowNumber, employerId);
         if (previewGuard.getValidRows() <= 0) throw new BusinessRuleException("لا يوجد صفوف صالحة للاستيراد");
+        AuthorizedImportScope importScope = importAccessPolicy.require(
+                MemberOperation.IMPORT_EXECUTE,
+                previewGuard.getResolvedEmployerIds(), Boolean.TRUE.equals(clearOldMembers));
 
         byte[] fileBytes = file.getBytes();
         String fileHash = sha256Hex(fileBytes);
@@ -351,6 +365,12 @@ public class MemberExcelImportService {
 
         Employer defaultEmployer = employerId != null ? employerRepository.findById(employerId).orElseThrow(() -> new BusinessRuleException("صاحب العمل غير موجود")) : null;
         BenefitPolicy benefitPolicy = benefitPolicyId != null ? benefitPolicyRepository.findById(benefitPolicyId).orElseThrow(() -> new BusinessRuleException("وثيقة المنافع غير موجودة")) : null;
+        if (benefitPolicy != null) {
+            Long policyEmployerId = benefitPolicy.getEmployer() == null ? null : benefitPolicy.getEmployer().getId();
+            if (policyEmployerId == null || !importScope.covers(policyEmployerId)) {
+                throw new BusinessRuleException("وثيقة المنافع المختارة لا تنتمي إلى جهة ضمن نطاق الاستيراد");
+            }
+        }
 
         User currentUser = authorizationService.getCurrentUser();
         Long importLogId = auditRecorder.markStarted(batchId, file.getOriginalFilename(), file.getSize(), fileHash,
@@ -414,12 +434,24 @@ public class MemberExcelImportService {
                             parent = createDummyParent(parentCardNumber, row, rowNum, fieldToColumnIndex, defaultEmployer, benefitPolicy);
                             memberCache.put(parentCardKey, parent);
                         }
+                        if (!importScope.covers(parent.getEmployer() == null ? null : parent.getEmployer().getId())) {
+                            throw new MemberImportRowValidationException(
+                                    "الصف " + rowNum + ": الموظف الرئيسي خارج نطاق المستخدم");
+                        }
                     }
 
                     Member existingMember = null;
                     if (cardNumber != null && !cardNumber.isBlank()) {
                         String cardKey = cardNumber.trim().toUpperCase();
                         existingMember = memberCache.get(cardKey);
+                    }
+
+                    Employer rowEmployer = rowProcessor.resolveEmployerForRow(
+                            row, rowNum, fieldToColumnIndex, defaultEmployer);
+                    if (existingMember != null && existingMember.getEmployer() != null
+                            && !existingMember.getEmployer().getId().equals(rowEmployer.getId())) {
+                        throw new MemberImportRowValidationException(
+                                "الصف " + rowNum + ": لا يمكن نقل عضو قائم إلى جهة أخرى عبر الاستيراد");
                     }
 
                     member = rowProcessor.processRowForImport(row, rowNum, fieldToColumnIndex, defaultEmployer, benefitPolicy, parent, relationship, existingMember);

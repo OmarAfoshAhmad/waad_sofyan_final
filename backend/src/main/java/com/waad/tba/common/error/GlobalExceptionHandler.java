@@ -25,6 +25,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import com.waad.tba.common.exception.BusinessRuleException;
+import com.waad.tba.modules.member.security.MemberAccessDeniedException;
 import com.waad.tba.common.exception.ClaimStateTransitionException;
 import com.waad.tba.common.exception.CoverageValidationException;
 import com.waad.tba.common.exception.PolicyNotActiveException;
@@ -544,6 +545,40 @@ public class GlobalExceptionHandler {
         log.warn("Access denied - Path: {}, Message: {}, TrackingId: {}",
                 request.getRequestURI(), ex.getMessage(), trackingId);
         return build(HttpStatus.FORBIDDEN, ErrorCode.ACCESS_DENIED, "Access is denied", request, null);
+    }
+
+    /**
+     * A member operation refused on scope grounds - returns 403 Forbidden.
+     *
+     * Deliberately NOT an empty list. The screens this replaces rendered a
+     * refusal as "this employer has no members", which is a false statement
+     * about data the caller is not entitled to any statement about, and it
+     * hides a misconfigured account behind what looks like ordinary emptiness.
+     * The reason is carried through in Arabic so the operator can tell "you may
+     * not look here" from "your account has no employer".
+     */
+    @ExceptionHandler(MemberAccessDeniedException.class)
+    public ResponseEntity<ApiError> handleMemberAccessDenied(MemberAccessDeniedException ex,
+            HttpServletRequest request) {
+        String trackingId = generateTrackingId();
+        log.warn("Member access denied - Path: {}, Operation: {}, Reason: {}, TrackingId: {}",
+                request.getRequestURI(), ex.getOperation(), ex.getMessage(), trackingId);
+
+        Map<String, Object> details = new HashMap<>();
+        if (ex.getOperation() != null) {
+            details.put("operation", ex.getOperation().name());
+        }
+
+        ApiError error = ApiError.of(
+                ErrorCode.ACCESS_DENIED,
+                "Access is denied",
+                request.getRequestURI(),
+                details.isEmpty() ? null : details,
+                now(),
+                trackingId);
+        error.setMessageAr(ex.getMessage());
+
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);
     }
 
     // ========== Security Exceptions (Account Lockout, Email Verification,

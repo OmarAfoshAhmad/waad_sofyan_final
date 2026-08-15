@@ -88,8 +88,9 @@ const EligibilityCheckPage = () => {
     setLoading(true);
 
     try {
-      const response = await axiosClient.get('/members/eligibility', {
-        params: { query: query.trim() }
+      const response = await axiosClient.post('/members/eligibility/evaluations', {
+        query: query.trim(),
+        serviceDate: new Date().toISOString().slice(0, 10)
       });
 
       const data = response.data?.data;
