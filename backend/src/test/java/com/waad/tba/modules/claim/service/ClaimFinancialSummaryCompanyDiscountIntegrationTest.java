@@ -139,6 +139,7 @@ class ClaimFinancialSummaryCompanyDiscountIntegrationTest extends PostgresIntegr
                 .benefitPolicy(policy)
                 .active(true)
                 .build());
+        initializeTemporalAssignments(member);
 
         Provider provider = providerRepository.save(Provider.builder()
                 .name("Hospital " + suffix)

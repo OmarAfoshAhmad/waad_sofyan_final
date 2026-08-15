@@ -29,6 +29,7 @@ import com.waad.tba.modules.member.dto.MemberCreateDto;
 import com.waad.tba.modules.member.dto.MemberUpdateDto;
 import com.waad.tba.modules.member.dto.MemberViewDto;
 import com.waad.tba.modules.member.entity.Member;
+import com.waad.tba.modules.member.entity.EmployerAssignmentSource;
 import com.waad.tba.modules.member.entity.PolicyAssignmentSource;
 import com.waad.tba.modules.member.entity.StatusSource;
 import com.waad.tba.modules.member.mapper.UnifiedMemberMapper;
@@ -91,6 +92,7 @@ public class UnifiedMemberService {
     private final FamilyEligibilityService familyEligibilityService;
     private final MemberStatusTransitionService statusTransitionService;
     private final MemberPolicyResolver memberPolicyResolver;
+    private final MemberEmployerResolver memberEmployerResolver;
     private final MemberQueryAccessPolicy queryAccessPolicy;
     private final MemberCommandAccessPolicy commandAccessPolicy;
 
@@ -166,6 +168,7 @@ public class UnifiedMemberService {
 
         // 4. Save principal
         principal = memberRepository.save(principal);
+        recordInitialEmployerAssignment(principal, "تعيين جهة العمل عند إنشاء المستفيد");
         recordInitialPolicyAssignment(principal, "تعيين وثيقة عند إنشاء المستفيد");
         log.info("✅ Created PRINCIPAL member ID={}, barcode={}, cardNumber={}, employer={}",
                 principal.getId(), principal.getBarcode(), principal.getCardNumber(),
@@ -310,6 +313,7 @@ public class UnifiedMemberService {
 
         // 4. Save
         dependent = memberRepository.save(dependent);
+        recordInitialEmployerAssignment(dependent, "تعيين جهة العمل عند إنشاء التابع (موروثة من الموظف الرئيسي)");
         recordInitialPolicyAssignment(dependent, "تعيين وثيقة عند إنشاء التابع (موروثة من الموظف الرئيسي)");
         log.info("✅ Created DEPENDENT member ID={}, cardNumber={}, relationship={}",
                 dependent.getId(), dependent.getCardNumber(), dependent.getRelationship());
@@ -336,6 +340,17 @@ public class UnifiedMemberService {
         memberPolicyResolver.assignPolicy(member, member.getBenefitPolicy(),
                 member.getStartDate() != null ? member.getStartDate() : LocalDate.now(),
                 reason, PolicyAssignmentSource.MANUAL,
+                currentUser != null ? currentUser.getId() : null);
+    }
+
+    private void recordInitialEmployerAssignment(Member member, String reason) {
+        if (member.getEmployer() == null) {
+            throw new BusinessRuleException("جهة العمل إلزامية عند إنشاء المستفيد");
+        }
+        User currentUser = authorizationService.getCurrentUser();
+        memberEmployerResolver.assignEmployer(member, member.getEmployer(),
+                member.getStartDate() != null ? member.getStartDate() : LocalDate.now(),
+                reason, EmployerAssignmentSource.MANUAL,
                 currentUser != null ? currentUser.getId() : null);
     }
 

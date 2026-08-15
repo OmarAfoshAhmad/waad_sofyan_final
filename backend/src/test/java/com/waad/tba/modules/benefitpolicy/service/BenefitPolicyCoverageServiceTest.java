@@ -90,6 +90,11 @@ class BenefitPolicyCoverageServiceTest {
                 .code("SRV001")
                 .name("Consultation")
                 .build();
+
+        // Every coverage decision now resolves the policy on its explicit
+        // date; the pointer on this fixture is display-only.
+        lenient().when(memberPolicyResolver.resolveFor(any(Member.class), any(LocalDate.class)))
+                .thenReturn(Optional.of(testPolicy));
     }
 
     @Test

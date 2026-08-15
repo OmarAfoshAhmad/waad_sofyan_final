@@ -197,9 +197,10 @@ public class VisitService {
         }
         LocalDate visitDate = dto.getVisitDate();
 
-        if (member.getBenefitPolicy() != null) {
-            benefitPolicyCoverageService.validateCanCreateClaim(member, visitDate);
-        }
+        // Always resolve eligibility on the visit date. Guarding this call with
+        // the current convenience pointer made a missing/stale pointer bypass
+        // validation even when dated assignments existed (and vice versa).
+        benefitPolicyCoverageService.validateCanCreateClaim(member, visitDate);
 
         // --- SMART LOCK LOGIC ---
         // Prevent creating a new visit if there is already an open visit for the same member at the same provider

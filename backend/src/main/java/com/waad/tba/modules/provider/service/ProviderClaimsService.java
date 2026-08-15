@@ -82,7 +82,7 @@ public class ProviderClaimsService {
         Member member = validateMember(request.getMemberId(), request.getServiceDate());
 
         // Step 2: Check annual limit
-        AnnualLimitCheck annualLimitCheck = checkAnnualLimit(member, request.getClaimedAmount());
+        AnnualLimitCheck annualLimitCheck = checkAnnualLimit(member, request.getClaimedAmount(), request.getServiceDate());
 
         // Step 3: Check service-level limits
         // Note: serviceCode is derived from serviceCategoryId for now (deprecated flow)
@@ -142,19 +142,16 @@ public class ProviderClaimsService {
      * FIXED (Audit Fix): Now uses BenefitPolicyCoverageService for real annual
      * limit tracking.
      */
-    private AnnualLimitCheck checkAnnualLimit(Member member, BigDecimal claimedAmount) {
-        if (member.getBenefitPolicy() == null) {
-            throw new BusinessRuleException("Member has no benefit policy assigned");
-        }
-
-        BigDecimal annualLimit = member.getBenefitPolicy().getAnnualLimit();
+    private AnnualLimitCheck checkAnnualLimit(Member member, BigDecimal claimedAmount, LocalDate serviceDate) {
+        var policy = memberPolicyResolver.resolveForOrFail(member, serviceDate);
+        BigDecimal annualLimit = policy.getAnnualLimit();
         if (annualLimit == null || annualLimit.compareTo(BigDecimal.ZERO) <= 0) {
             // Unlimited policy
             return new AnnualLimitCheck(BigDecimal.ZERO, BigDecimal.ZERO, claimedAmount, BigDecimal.ZERO,
                     BigDecimal.ZERO, 0, 0, false, new ArrayList<>());
         }
 
-        BigDecimal remainingLimit = benefitPolicyCoverageService.getRemainingCoverage(member, LocalDate.now());
+        BigDecimal remainingLimit = benefitPolicyCoverageService.getRemainingCoverage(member, serviceDate);
         if (remainingLimit == null) {
             remainingLimit = annualLimit;
         }

@@ -55,6 +55,7 @@ public class ProviderPortalService {
     private final com.waad.tba.modules.visit.repository.VisitRepository visitRepository;
     private final com.waad.tba.security.ProviderContextGuard providerContextGuard;
     private final PreAuthorizationRepository preAuthorizationRepository;
+    private final com.waad.tba.modules.member.service.MemberPolicyResolver memberPolicyResolver;
     
     /**
      * Check Member Eligibility for Provider.
@@ -537,18 +538,7 @@ public class ProviderPortalService {
             return null;
         }
 
-        BenefitPolicy directPolicy = member.getBenefitPolicy();
-        if (directPolicy != null && directPolicy.isActive() && directPolicy.isEffectiveOn(asOfDate)) {
-            return directPolicy;
-        }
-
-        if (member.getEmployer() == null) {
-            return null;
-        }
-
-        return benefitPolicyRepository
-            .findActiveEffectivePolicyForEmployer(member.getEmployer().getId(), asOfDate)
-            .orElse(null);
+        return memberPolicyResolver.resolveFor(member, asOfDate).orElse(null);
     }
     
     /**

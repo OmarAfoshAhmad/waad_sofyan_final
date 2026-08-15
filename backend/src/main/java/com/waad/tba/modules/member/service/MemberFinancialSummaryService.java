@@ -3,7 +3,6 @@ package com.waad.tba.modules.member.service;
 import com.waad.tba.common.exception.ResourceNotFoundException;
 import com.waad.tba.common.exception.BusinessRuleException;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy;
-import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository;
 import com.waad.tba.modules.benefitpolicy.service.BenefitPolicyCoverageService;
 import com.waad.tba.modules.claim.projection.MemberFinancialAggregateProjection;
 import com.waad.tba.modules.claim.repository.ClaimRepository;
@@ -61,10 +60,10 @@ public class MemberFinancialSummaryService {
 
     private final MemberRepository memberRepository;
     private final BenefitPolicyCoverageService coverageService;
-    private final BenefitPolicyRepository benefitPolicyRepository;
     private final ClaimRepository claimRepository;
     private final MedicalServiceRepository medicalServiceRepository;
     private final MemberQueryAccessPolicy queryAccessPolicy;
+    private final MemberPolicyResolver memberPolicyResolver;
 
     /**
      * HTTP/read-model entry point. Internal eligibility batching deliberately uses
@@ -156,12 +155,7 @@ public class MemberFinancialSummaryService {
     private Map<Long, BenefitPolicy> resolvePolicies(List<Member> members, LocalDate asOfDate) {
         Map<Long, BenefitPolicy> byMember = new LinkedHashMap<>();
         for (Member member : members) {
-            BenefitPolicy policy = member.getBenefitPolicy();
-            if (policy == null && member.getEmployer() != null) {
-                policy = benefitPolicyRepository
-                        .findActiveEffectivePolicyForEmployer(member.getEmployer().getId(), asOfDate)
-                        .orElse(null);
-            }
+            BenefitPolicy policy = memberPolicyResolver.resolveFor(member, asOfDate).orElse(null);
             if (policy != null) {
                 byMember.put(member.getId(), policy);
             }

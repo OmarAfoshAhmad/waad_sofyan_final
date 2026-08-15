@@ -36,8 +36,10 @@ import com.waad.tba.modules.medicaltaxonomy.repository.MedicalCategoryRepository
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalServiceRepository;
 import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.modules.member.entity.PolicyAssignmentSource;
+import com.waad.tba.modules.member.entity.EmployerAssignmentSource;
 import com.waad.tba.modules.member.repository.MemberRepository;
 import com.waad.tba.modules.member.service.MemberPolicyResolver;
+import com.waad.tba.modules.member.service.MemberEmployerResolver;
 import com.waad.tba.modules.provider.entity.Provider;
 import com.waad.tba.modules.provider.entity.Provider.ProviderType;
 import com.waad.tba.modules.provider.repository.ProviderRepository;
@@ -79,6 +81,7 @@ class ClaimUsesServiceDatePolicyClosureIntegrationTest extends PostgresIntegrati
 
     @Autowired private ClaimService claimService;
     @Autowired private MemberPolicyResolver policyResolver;
+    @Autowired private MemberEmployerResolver employerResolver;
     @Autowired private MemberRepository memberRepository;
     @Autowired private EmployerRepository employerRepository;
     @Autowired private BenefitPolicyRepository policyRepository;
@@ -107,7 +110,8 @@ class ClaimUsesServiceDatePolicyClosureIntegrationTest extends PostgresIntegrati
     private static final BigDecimal EXPECTED_UNDER_A = new BigDecimal("800.00");
     private static final BigDecimal EXPECTED_UNDER_B = new BigDecimal("500.00");
 
-    private record Fixture(Member member, BenefitPolicy policyA, BenefitPolicy policyB,
+    private record Fixture(Member member, Employer employerA, Employer employerB,
+            BenefitPolicy policyA, BenefitPolicy policyB,
             Long assignmentA, Long assignmentB, Provider provider, ProviderContract contract,
             MedicalCategory category, String suffix) {}
 
@@ -127,16 +131,18 @@ class ClaimUsesServiceDatePolicyClosureIntegrationTest extends PostgresIntegrati
                         .username("admin").password("password").fullName("System Admin")
                         .email("admin@waad.ly").userType("SUPER_ADMIN").active(true).build()));
 
-        Employer employer = employerRepository.save(Employer.builder()
-                .name("Closure Co " + s).code("CL-" + s).active(true).build());
+        Employer employerA = employerRepository.save(Employer.builder()
+                .name("Closure Co A " + s).code("CL-A-" + s).active(true).build());
+        Employer employerB = employerRepository.save(Employer.builder()
+                .name("Closure Co B " + s).code("CL-B-" + s).active(true).build());
 
         BenefitPolicy policyA = policyRepository.save(BenefitPolicy.builder()
-                .name("Policy A " + s).policyCode("POL-A-" + s).employer(employer)
+                .name("Policy A " + s).policyCode("POL-A-" + s).employer(employerA)
                 .annualLimit(A_LIMIT).defaultCoveragePercent(A_COVERAGE)
                 .startDate(LocalDate.now().minusYears(2)).endDate(LocalDate.now().minusMonths(7))
                 .status(BenefitPolicyStatus.ACTIVE).active(true).build());
         BenefitPolicy policyB = policyRepository.save(BenefitPolicy.builder()
-                .name("Policy B " + s).policyCode("POL-B-" + s).employer(employer)
+                .name("Policy B " + s).policyCode("POL-B-" + s).employer(employerB)
                 .annualLimit(B_LIMIT).defaultCoveragePercent(B_COVERAGE)
                 .startDate(LocalDate.now().minusMonths(6)).endDate(LocalDate.now().plusYears(1))
                 .status(BenefitPolicyStatus.ACTIVE).active(true).build());
@@ -151,20 +157,28 @@ class ClaimUsesServiceDatePolicyClosureIntegrationTest extends PostgresIntegrati
                 .coveragePercent(B_COVERAGE).active(true).deleted(false).build());
 
         Member member = memberRepository.save(Member.builder()
-                .fullName("Closure Member " + s).employer(employer).benefitPolicy(policyA)
+                .fullName("Closure Member " + s).employer(employerA).benefitPolicy(policyA)
                 .cardNumber("CL" + s).barcode("CL" + s)
                 .status(Member.MemberStatus.ACTIVE).active(true).build());
+
+        employerResolver.assignEmployer(member, employerA, LocalDate.now().minusYears(2),
+                "initial employer", EmployerAssignmentSource.MANUAL, 1L);
 
         // Historical assignment to A, then the CURRENT assignment to B. This
         // also leaves members.benefit_policy_id pointing at B.
         Long assignmentA = policyResolver.assignPolicy(member, policyA, LocalDate.now().minusYears(2),
                 "initial coverage", PolicyAssignmentSource.MANUAL, 1L).getId();
+        employerResolver.assignEmployer(member, employerB, LocalDate.now().minusMonths(6),
+                "moved to the new employer", EmployerAssignmentSource.MANUAL, 1L);
         Long assignmentB = policyResolver.assignPolicy(member, policyB, LocalDate.now().minusMonths(6),
                 "moved to the new policy", PolicyAssignmentSource.MANUAL, 1L).getId();
         member = memberRepository.saveAndFlush(member);
         assertThat(member.getBenefitPolicy().getId())
                 .as("the fixture must leave the CURRENT pointer on B, so reading it would be wrong")
                 .isEqualTo(policyB.getId());
+        assertThat(member.getEmployer().getId())
+                .as("the fixture must leave the CURRENT employer pointer on B")
+                .isEqualTo(employerB.getId());
 
         Provider provider = providerRepository.save(Provider.builder()
                 .name("Hospital " + s).providerType(ProviderType.HOSPITAL)
@@ -183,7 +197,7 @@ class ClaimUsesServiceDatePolicyClosureIntegrationTest extends PostgresIntegrati
                 .discountPercent(BigDecimal.ZERO).discountBeforeRejection(false)
                 .changeReason("closure test terms").build());
 
-        return new Fixture(member, policyA, policyB, assignmentA, assignmentB,
+        return new Fixture(member, employerA, employerB, policyA, policyB, assignmentA, assignmentB,
                 provider, contract, category, s);
     }
 
@@ -275,6 +289,12 @@ class ClaimUsesServiceDatePolicyClosureIntegrationTest extends PostgresIntegrati
             BigDecimal persistedApproved = jdbc.queryForObject(
                     "SELECT approved_amount FROM claims WHERE id = ?", BigDecimal.class, claimId);
             assertThat(persistedApproved).isEqualByComparingTo(EXPECTED_UNDER_A);
+            Long batchEmployer = jdbc.queryForObject(
+                    "SELECT b.employer_id FROM claims c JOIN claim_batches b ON b.id = c.claim_batch_id "
+                            + "WHERE c.id = ?", Long.class, claimId);
+            assertThat(batchEmployer)
+                    .as("the historical claim must be grouped under historical employer A")
+                    .isEqualTo(f.employerA().getId());
             return null;
         });
     }
@@ -305,6 +325,12 @@ class ClaimUsesServiceDatePolicyClosureIntegrationTest extends PostgresIntegrati
                 assertThat(((Number) row.get("member_policy_assignment_id")).longValue())
                         .isEqualTo(f.assignmentB());
             }
+            Long batchEmployer = jdbc.queryForObject(
+                    "SELECT b.employer_id FROM claims c JOIN claim_batches b ON b.id = c.claim_batch_id "
+                            + "WHERE c.id = ?", Long.class, claim.getId());
+            assertThat(batchEmployer)
+                    .as("the current claim must be grouped under current employer B")
+                    .isEqualTo(f.employerB().getId());
             return null;
         });
     }

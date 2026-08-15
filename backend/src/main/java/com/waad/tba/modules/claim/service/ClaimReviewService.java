@@ -364,7 +364,11 @@ public class ClaimReviewService {
                     .userType(actorType != null ? actorType : "ACCOUNTANT")
                     .build();
 
-            LocalDate serviceDate = claim.getServiceDate() != null ? claim.getServiceDate() : LocalDate.now();
+            LocalDate serviceDate = claim.getServiceDate();
+            if (serviceDate == null) {
+                throw new BusinessRuleException(
+                        "تاريخ الخدمة إلزامي لمراجعة المطالبة، ولا يجوز استبداله بتاريخ اليوم");
+            }
             benefitPolicyCoverageService.validateMemberHasActivePolicy(claim.getMember(), serviceDate);
 
             // One canonical source for contract pricing, coverage, limits and the

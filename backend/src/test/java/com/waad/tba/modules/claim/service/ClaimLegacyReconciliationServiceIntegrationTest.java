@@ -150,6 +150,7 @@ class ClaimLegacyReconciliationServiceIntegrationTest extends PostgresIntegratio
         member = memberRepository.save(Member.builder()
                 .fullName("Repair Test Member " + suffix).barcode("BC-" + suffix)
                 .nationalNumber("NAT-" + suffix).employer(employer).benefitPolicy(policy).active(true).build());
+        initializeTemporalAssignments(member);
 
         provider = providerRepository.save(Provider.builder()
                 .name("Repair Test Hospital " + suffix).providerType(ProviderType.HOSPITAL)

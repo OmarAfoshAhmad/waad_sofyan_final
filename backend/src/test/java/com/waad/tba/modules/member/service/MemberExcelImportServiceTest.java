@@ -80,6 +80,10 @@ class MemberExcelImportServiceTest {
     @Mock
     private com.waad.tba.modules.member.repository.MemberPolicyAssignmentRepository policyAssignmentRepository;
     @Mock
+    private com.waad.tba.modules.member.repository.MemberEmployerAssignmentRepository employerAssignmentRepository;
+    @Mock
+    private MemberEmployerResolver memberEmployerResolver;
+    @Mock
     private com.waad.tba.modules.member.repository.MemberStatusHistoryRepository statusHistoryRepository;
     @Mock
     private com.waad.tba.modules.member.repository.MemberHardDeleteAuditRepository hardDeleteAuditRepository;
@@ -100,12 +104,14 @@ class MemberExcelImportServiceTest {
         MemberImportParser parser = new MemberImportParser();
         MemberImportMapper mapper = new MemberImportMapper(parser);
         MemberPolicyResolver policyResolverForStatus = new MemberPolicyResolver(
-                policyAssignmentRepository, benefitPolicyRepository, memberRepository);
+                policyAssignmentRepository, benefitPolicyRepository, memberRepository,
+                org.mockito.Mockito.mock(MemberEmployerResolver.class));
         MemberStatusTransitionService statusTransitionService = new MemberStatusTransitionService(
                 memberRepository, statusHistoryRepository, hardDeleteAuditRepository, benefitPolicyRepository,
                 statusTransitionJdbcTemplate, policyResolverForStatus);
         MemberPolicyResolver memberPolicyResolver = new MemberPolicyResolver(
-                policyAssignmentRepository, benefitPolicyRepository, memberRepository);
+                policyAssignmentRepository, benefitPolicyRepository, memberRepository,
+                org.mockito.Mockito.mock(MemberEmployerResolver.class));
         MemberImportRowProcessor rowProcessor = new MemberImportRowProcessor(
                 parser, employerRepository, benefitPolicyRepository, barcodeGeneratorService,
                 cardNumberGeneratorService, statusTransitionService);
@@ -125,6 +131,8 @@ class MemberExcelImportServiceTest {
                 barcodeGeneratorService,
                 auditRecorder,
                 statusTransitionService,
+                memberEmployerResolver,
+                employerAssignmentRepository,
                 memberPolicyResolver,
                 policyAssignmentRepository,
                 importAccessPolicy,
@@ -196,6 +204,10 @@ class MemberExcelImportServiceTest {
             }
             return member;
         });
+        when(memberRepository.findByIdWithLock(anyLong())).thenAnswer(invocation ->
+                Optional.of(Member.builder().id(invocation.getArgument(0)).employer(employer)
+                        .benefitPolicy(activePolicy).fullName("Imported Member").cardNumber("CARD-0001")
+                        .active(true).build()));
     }
 
     @Test

@@ -45,6 +45,8 @@ import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.modules.member.entity.MemberImportLog;
 import com.waad.tba.modules.member.repository.MemberImportLogRepository;
 import com.waad.tba.modules.member.repository.MemberRepository;
+import com.waad.tba.modules.member.repository.MemberEmployerAssignmentRepository;
+import com.waad.tba.modules.member.repository.MemberPolicyAssignmentRepository;
 import com.waad.tba.modules.member.security.AuthorizedImportScope;
 import com.waad.tba.modules.member.security.MemberImportAccessPolicy;
 import com.waad.tba.modules.rbac.entity.User;
@@ -96,6 +98,8 @@ class MemberExcelImportAtomicityIntegrationTest extends PostgresIntegrationTestB
     @Autowired private EmployerRepository employerRepository;
     @Autowired private BenefitPolicyRepository benefitPolicyRepository;
     @Autowired private UserRepository userRepository;
+    @Autowired private MemberEmployerAssignmentRepository employerAssignmentRepository;
+    @Autowired private MemberPolicyAssignmentRepository policyAssignmentRepository;
     @MockitoBean private MemberImportAccessPolicy importAccessPolicy;
 
     @BeforeEach
@@ -166,6 +170,17 @@ class MemberExcelImportAtomicityIntegrationTest extends PostgresIntegrationTestB
         assertThat(result.getCreatedCount()).isEqualTo(2);
         assertThat(memberRepository.findByCardNumber("CARD" + s)).isPresent();
         assertThat(memberRepository.findByCardNumber("CARD" + s + "S1")).isPresent();
+
+        Member principal = memberRepository.findByCardNumber("CARD" + s).orElseThrow();
+        Member dependent = memberRepository.findByCardNumber("CARD" + s + "S1").orElseThrow();
+        assertThat(employerAssignmentRepository.findByMemberIdOrderByAssignmentStartDateDesc(principal.getId()))
+                .hasSize(1);
+        assertThat(employerAssignmentRepository.findByMemberIdOrderByAssignmentStartDateDesc(dependent.getId()))
+                .hasSize(1);
+        assertThat(policyAssignmentRepository.findByMemberIdOrderByAssignmentStartDateDesc(principal.getId()))
+                .hasSize(1);
+        assertThat(policyAssignmentRepository.findByMemberIdOrderByAssignmentStartDateDesc(dependent.getId()))
+                .hasSize(1);
 
         MemberImportLog log = importLogRepository.findByImportBatchId("batch-valid-" + s).orElseThrow();
         assertThat(log.getStatus()).isEqualTo(MemberImportLog.ImportStatus.COMPLETED);

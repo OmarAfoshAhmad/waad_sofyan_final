@@ -227,6 +227,7 @@ class BenefitBucketConcurrencyIntegrationTest extends PostgresIntegrationTestBas
                 .nationalNumber("DEP-NAT-" + suffix).employer(principal.member().getEmployer())
                 .benefitPolicy(principal.policy()).parent(principal.member())
                 .relationship(Member.Relationship.SON).active(true).build());
+        initializeTemporalAssignments(dependentMember);
         Fixture dependent = new Fixture(dependentMember, principal.provider(), principal.service(),
                 principal.bucket(), principal.policy(), principal.rule());
 
@@ -405,6 +406,7 @@ class BenefitBucketConcurrencyIntegrationTest extends PostgresIntegrationTestBas
                 .fullName("Concurrent Member").barcode("BC-" + suffix)
                 .nationalNumber("NAT-" + suffix).employer(employer)
                 .benefitPolicy(policy).active(true).build());
+        initializeTemporalAssignments(member);
         Provider provider = providerRepository.save(Provider.builder()
                 .name("Concurrency Provider " + suffix).providerType(ProviderType.HOSPITAL)
                 .licenseNumber("LIC-" + suffix).allowAllEmployers(true).active(true).build());
