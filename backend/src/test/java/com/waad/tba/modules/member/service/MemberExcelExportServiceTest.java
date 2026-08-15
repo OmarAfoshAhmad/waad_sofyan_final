@@ -19,6 +19,9 @@ import com.waad.tba.common.exception.BusinessRuleException;
 import com.waad.tba.modules.employer.entity.Employer;
 import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.modules.member.repository.MemberRepository;
+import com.waad.tba.modules.member.security.AuthorizedMemberScope;
+import com.waad.tba.modules.member.security.MemberOperation;
+import com.waad.tba.modules.member.security.MemberQueryAccessPolicy;
 
 /**
  * Characterization tests for the streaming (SXSSFWorkbook) rewrite of
@@ -33,12 +36,17 @@ class MemberExcelExportServiceTest {
 
     @Mock
     private MemberRepository memberRepository;
+    @Mock
+    private MemberQueryAccessPolicy queryAccessPolicy;
+    @Mock
+    private AuthorizedMemberScope authorizedScope;
 
     private MemberExcelExportService service;
 
     @Test
     void exportToExcel_writesHeaderAndOneRowPerMember_withEmployerNamePopulated() throws Exception {
-        service = new MemberExcelExportService(memberRepository);
+        service = new MemberExcelExportService(memberRepository, queryAccessPolicy);
+        when(queryAccessPolicy.requireListing(MemberOperation.EXPORT, null)).thenReturn(authorizedScope);
 
         Employer employer = Employer.builder().id(1L).name("Employer One").build();
         Member member = Member.builder().id(100L).fullName("Ali Hasan").employer(employer).build();
@@ -64,7 +72,8 @@ class MemberExcelExportServiceTest {
 
     @Test
     void exportToExcel_exceedingMaxRows_failsClosedWithoutQueryingRows() {
-        service = new MemberExcelExportService(memberRepository);
+        service = new MemberExcelExportService(memberRepository, queryAccessPolicy);
+        when(queryAccessPolicy.requireListing(MemberOperation.EXPORT, null)).thenReturn(authorizedScope);
 
         when(memberRepository.count(any(org.springframework.data.jpa.domain.Specification.class))).thenReturn(50_001L);
 

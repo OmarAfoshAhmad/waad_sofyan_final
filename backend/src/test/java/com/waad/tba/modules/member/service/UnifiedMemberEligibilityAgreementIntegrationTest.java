@@ -24,6 +24,7 @@ import com.waad.tba.modules.employer.repository.EmployerRepository;
 import com.waad.tba.modules.member.dto.FamilyEligibilityResponseDto;
 import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.modules.member.repository.MemberRepository;
+import com.waad.tba.modules.member.security.MemberQueryAccessPolicy;
 import com.waad.tba.support.PostgresIntegrationTestBase;
 
 /**
@@ -54,6 +55,7 @@ class UnifiedMemberEligibilityAgreementIntegrationTest extends PostgresIntegrati
     @Autowired private MemberRepository memberRepository;
 
     @MockBean private MemberFinancialSummaryService financialSummaryService;
+    @MockBean private MemberQueryAccessPolicy memberQueryAccessPolicy;
 
     private Member persistPrincipal(String suffix, LocalDate policyStart, LocalDate policyEnd) {
         Employer employer = employerRepository.save(Employer.builder()

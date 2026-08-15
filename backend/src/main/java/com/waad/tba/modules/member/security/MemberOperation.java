@@ -15,6 +15,8 @@ public enum MemberOperation {
     SEARCH,
     /** A single member's own record. */
     VIEW_DETAILS,
+    /** Current coverage balance only, used while treating/entering a claim. */
+    VIEW_COVERAGE_BALANCE,
     /** Balances, limits and consumption -- a narrower grant than VIEW_DETAILS. */
     VIEW_FINANCIALS,
     /** Bulk extraction: the whole result set leaves the system as a file. */

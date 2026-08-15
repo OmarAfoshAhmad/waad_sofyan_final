@@ -18,6 +18,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.lenient;
@@ -44,6 +45,12 @@ class UnifiedMemberServiceSecurityTest {
     @Mock
     private JdbcTemplate jdbcTemplate;
 
+    @Mock
+    private com.waad.tba.modules.member.security.MemberCommandAccessPolicy commandAccessPolicy;
+
+    @Mock
+    private com.waad.tba.modules.member.security.MemberQueryAccessPolicy queryAccessPolicy;
+
     private UnifiedMemberService service;
 
     private com.waad.tba.modules.rbac.entity.User currentUser;
@@ -55,7 +62,7 @@ class UnifiedMemberServiceSecurityTest {
                 .id(1L).username("employer-a-admin").userType("EMPLOYER_ADMIN").employerId(10L).build();
         member = Member.builder().id(500L).build();
 
-        when(authorizationService.getCurrentUser()).thenReturn(currentUser);
+        lenient().when(authorizationService.getCurrentUser()).thenReturn(currentUser);
         lenient().when(memberRepository.findById(500L)).thenReturn(Optional.of(member));
 
         // Real (not mocked) MemberStatusTransitionService, backed by mocked
@@ -83,7 +90,6 @@ class UnifiedMemberServiceSecurityTest {
                 org.mockito.Mockito.mock(CardNumberGeneratorService.class),
                 org.mockito.Mockito.mock(com.waad.tba.modules.member.mapper.UnifiedMemberMapper.class),
                 authorizationService,
-                org.mockito.Mockito.mock(com.waad.tba.modules.provider.service.ProviderService.class),
                 org.mockito.Mockito.mock(MemberFinancialSummaryService.class),
                 jdbcTemplate,
                 org.mockito.Mockito.mock(com.waad.tba.modules.systemadmin.service.AuditLogService.class),
@@ -92,12 +98,15 @@ class UnifiedMemberServiceSecurityTest {
                 new com.waad.tba.modules.member.service.MemberPolicyResolver(
                         org.mockito.Mockito.mock(com.waad.tba.modules.member.repository.MemberPolicyAssignmentRepository.class),
                         org.mockito.Mockito.mock(com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository.class),
-                        memberRepository));
+                        memberRepository),
+                queryAccessPolicy,
+                commandAccessPolicy);
     }
 
     @Test
     void updateMemberDeniedWhenCallerCannotAccessMember() {
-        when(authorizationService.canAccessMember(currentUser, 500L)).thenReturn(false);
+        org.mockito.Mockito.doThrow(new AccessDeniedException("denied")).when(commandAccessPolicy)
+                .require(com.waad.tba.modules.member.security.MemberOperation.EDIT_DEMOGRAPHICS, null);
 
         assertThrows(AccessDeniedException.class,
                 () -> service.updateMember(500L, new MemberUpdateDto()));
@@ -107,7 +116,8 @@ class UnifiedMemberServiceSecurityTest {
 
     @Test
     void toggleActiveDeniedWhenCallerCannotAccessMember() {
-        when(authorizationService.canAccessMember(currentUser, 500L)).thenReturn(false);
+        org.mockito.Mockito.doThrow(new AccessDeniedException("denied")).when(commandAccessPolicy)
+                .require(com.waad.tba.modules.member.security.MemberOperation.CHANGE_STATUS, null);
 
         assertThrows(AccessDeniedException.class, () -> service.toggleActive(500L, false, "reason"));
 
@@ -116,9 +126,25 @@ class UnifiedMemberServiceSecurityTest {
 
     @Test
     void deleteMemberDeniedWhenCallerCannotAccessMember() {
-        when(authorizationService.canAccessMember(currentUser, 500L)).thenReturn(false);
+        org.mockito.Mockito.doThrow(new AccessDeniedException("denied")).when(commandAccessPolicy)
+                .require(com.waad.tba.modules.member.security.MemberOperation.TERMINATE, null);
 
         assertThrows(AccessDeniedException.class, () -> service.deleteMember(500L));
+
+        verify(memberRepository, never()).save(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void bulkTerminationAuthorizesTheWholeSelectionBeforeAnyWrite() {
+        Member second = Member.builder().id(501L).build();
+        when(memberRepository.findById(501L)).thenReturn(Optional.of(second));
+        org.mockito.Mockito.doThrow(new AccessDeniedException("one member is outside scope"))
+                .when(commandAccessPolicy)
+                .requireBulk(eq(com.waad.tba.modules.member.security.MemberOperation.BULK_OPERATION),
+                        anyCollection());
+
+        assertThrows(AccessDeniedException.class,
+                () -> service.bulkTerminateMemberships(java.util.List.of(500L, 501L)));
 
         verify(memberRepository, never()).save(org.mockito.ArgumentMatchers.any());
     }
@@ -132,28 +158,32 @@ class UnifiedMemberServiceSecurityTest {
 
     @Test
     void getMemberDeniedWhenCallerCannotAccessMember() {
-        when(authorizationService.canAccessMember(currentUser, 500L)).thenReturn(false);
+        org.mockito.Mockito.doThrow(new AccessDeniedException("denied")).when(queryAccessPolicy)
+                .requireMember(com.waad.tba.modules.member.security.MemberOperation.VIEW_DETAILS, null);
 
         assertThrows(AccessDeniedException.class, () -> service.getMember(500L));
     }
 
     @Test
     void getDependentsDeniedWhenCallerCannotAccessPrincipal() {
-        when(authorizationService.canAccessMember(currentUser, 500L)).thenReturn(false);
+        org.mockito.Mockito.doThrow(new AccessDeniedException("denied")).when(queryAccessPolicy)
+                .requireMember(com.waad.tba.modules.member.security.MemberOperation.VIEW_DETAILS, null);
 
         assertThrows(AccessDeniedException.class, () -> service.getDependents(500L));
     }
 
     @Test
     void countDependentsDeniedWhenCallerCannotAccessPrincipal() {
-        when(authorizationService.canAccessMember(currentUser, 500L)).thenReturn(false);
+        org.mockito.Mockito.doThrow(new AccessDeniedException("denied")).when(queryAccessPolicy)
+                .requireMember(com.waad.tba.modules.member.security.MemberOperation.VIEW_DETAILS, null);
 
         assertThrows(AccessDeniedException.class, () -> service.countDependents(500L));
     }
 
     @Test
     void restoreMemberDeniedWhenCallerCannotAccessMember() {
-        when(authorizationService.canAccessMember(currentUser, 500L)).thenReturn(false);
+        org.mockito.Mockito.doThrow(new AccessDeniedException("denied")).when(commandAccessPolicy)
+                .require(com.waad.tba.modules.member.security.MemberOperation.REINSTATE, null);
 
         assertThrows(AccessDeniedException.class, () -> service.restoreMember(500L, "سبب الاستعادة"));
 

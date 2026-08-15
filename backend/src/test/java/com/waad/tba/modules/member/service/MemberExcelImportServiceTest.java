@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.lenient;
 
 import java.io.ByteArrayOutputStream;
 import java.time.LocalDate;
@@ -84,6 +85,10 @@ class MemberExcelImportServiceTest {
     private com.waad.tba.modules.member.repository.MemberHardDeleteAuditRepository hardDeleteAuditRepository;
     @Mock
     private org.springframework.jdbc.core.JdbcTemplate statusTransitionJdbcTemplate;
+    @Mock
+    private com.waad.tba.modules.member.security.MemberImportAccessPolicy importAccessPolicy;
+    @Mock
+    private com.waad.tba.modules.member.security.AuthorizedImportScope authorizedImportScope;
 
     @InjectMocks
     private MemberExcelImportService service;
@@ -122,6 +127,7 @@ class MemberExcelImportServiceTest {
                 statusTransitionService,
                 memberPolicyResolver,
                 policyAssignmentRepository,
+                importAccessPolicy,
                 visitRepository,
                 claimRepository,
                 preAuthorizationRepository);
@@ -138,6 +144,11 @@ class MemberExcelImportServiceTest {
         when(benefitPolicyRepository.findActiveEffectivePolicyForEmployer(10L, LocalDate.now()))
                 .thenReturn(Optional.of(activePolicy));
         when(authorizationService.getCurrentUser()).thenReturn(User.builder().id(1L).username("tester").build());
+        lenient().when(importAccessPolicy.require(
+                org.mockito.ArgumentMatchers.any(com.waad.tba.modules.member.security.MemberOperation.class),
+                org.mockito.ArgumentMatchers.anyCollection(), org.mockito.ArgumentMatchers.anyBoolean()))
+                .thenReturn(authorizedImportScope);
+        lenient().when(authorizedImportScope.covers(org.mockito.ArgumentMatchers.anyLong())).thenReturn(true);
 
         when(employerRepository.findByNameIgnoreCase(eq("EMP1"))).thenReturn(Optional.empty());
         when(employerRepository.findByCode(eq("EMP1"))).thenReturn(Optional.of(employer));

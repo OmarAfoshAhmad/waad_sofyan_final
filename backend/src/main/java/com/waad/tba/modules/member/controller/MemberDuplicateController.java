@@ -15,12 +15,10 @@ import com.waad.tba.modules.member.dto.MemberDuplicateMergeRequestDto;
 import com.waad.tba.modules.member.service.MemberDuplicateService;
 
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.context.SecurityContextHolder;
-import com.waad.tba.common.exception.BusinessRuleException;
+import com.waad.tba.modules.member.service.MemberKinshipAdminService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
-import org.springframework.jdbc.core.JdbcTemplate;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 @RestController
@@ -31,7 +29,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 public class MemberDuplicateController {
 
     private final MemberDuplicateService duplicateService;
-    private final JdbcTemplate jdbcTemplate;
+    private final MemberKinshipAdminService kinshipAdminService;
 
     /**
      * Clears the kinship verification flag across EVERY member with a
@@ -49,18 +47,7 @@ public class MemberDuplicateController {
     @PostMapping("/reset-kinship")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ApiResponse<String> resetKinship(@RequestBody KinshipResetRequest request) {
-        if (request == null || request.reason() == null || request.reason().isBlank()) {
-            throw new BusinessRuleException(
-                    "إعادة تعيين التحقق من القرابة تتطلب سبباً صريحاً.");
-        }
-        String actor = SecurityContextHolder.getContext().getAuthentication() == null
-                ? "unknown" : SecurityContextHolder.getContext().getAuthentication().getName();
-
-        int updated = jdbcTemplate.update(
-                "UPDATE members SET kinship_verified = false WHERE relationship IS NOT NULL");
-
-        log.warn("[AUDIT] kinship verification reset across {} members by {} -- reason: {}",
-                updated, actor, request.reason());
+        int updated = kinshipAdminService.resetVerification(request == null ? null : request.reason());
         return ApiResponse.success("Reset " + updated + " members.", "Reset successful", "تم بنجاح");
     }
 

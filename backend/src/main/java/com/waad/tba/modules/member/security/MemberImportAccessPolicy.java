@@ -43,11 +43,17 @@ public class MemberImportAccessPolicy {
      */
     @Transactional(readOnly = true)
     public AuthorizedImportScope require(Collection<Long> rowEmployerIds, boolean clearAbsentMembers) {
+        return require(MemberOperation.IMPORT_EXECUTE, rowEmployerIds, clearAbsentMembers);
+    }
+
+    @Transactional(readOnly = true)
+    public AuthorizedImportScope require(MemberOperation operation, Collection<Long> rowEmployerIds,
+            boolean clearAbsentMembers) {
         User user = authorizationService.getCurrentUser();
         MemberAccessScope scope = scopeResolver.resolveFor(user);
 
         if (scope.isDenied()) {
-            throw new MemberAccessDeniedException(MemberOperation.IMPORT_EXECUTE, scope.reason());
+            throw new MemberAccessDeniedException(operation, scope.reason());
         }
 
         boolean superAdmin = authorizationService.isSuperAdmin(user);
@@ -55,27 +61,27 @@ public class MemberImportAccessPolicy {
         if (!superAdmin && !dataEntry) {
             // Matches the endpoint's own contract: importing is a data-entry
             // function, not something every administrator does.
-            throw new MemberAccessDeniedException(MemberOperation.IMPORT_EXECUTE,
+            throw new MemberAccessDeniedException(operation,
                     "استيراد المستفيدين غير مسموح لهذا الدور");
         }
 
         if (rowEmployerIds == null || rowEmployerIds.isEmpty()) {
             // A file whose employer could not be determined is not an empty
             // success; it is an operation whose target is unknown.
-            throw new MemberAccessDeniedException(MemberOperation.IMPORT_EXECUTE,
+            throw new MemberAccessDeniedException(operation,
                     "تعذر تحديد جهة العمل لصفوف الملف");
         }
 
         for (Long employerId : rowEmployerIds) {
             if (employerId == null) {
-                throw new MemberAccessDeniedException(MemberOperation.IMPORT_EXECUTE,
+                throw new MemberAccessDeniedException(operation,
                         "يوجد صف بلا جهة عمل محددة");
             }
             if (!scope.covers(employerId)) {
                 // The whole file, not just this row. Partial import leaves a
                 // silently incomplete roster that nobody can distinguish from
                 // a complete one.
-                throw new MemberAccessDeniedException(MemberOperation.IMPORT_EXECUTE,
+                throw new MemberAccessDeniedException(operation,
                         "الملف يحتوي صفوفاً خارج نطاق المستخدم؛ رُفضت العملية بالكامل");
             }
         }
@@ -84,7 +90,7 @@ public class MemberImportAccessPolicy {
         // and correct records; it may not end coverage, and doing it through
         // an import checkbox would be exactly the route around that rule.
         if (clearAbsentMembers && !superAdmin) {
-            throw new MemberAccessDeniedException(MemberOperation.IMPORT_EXECUTE,
+            throw new MemberAccessDeniedException(operation,
                     "إنهاء المستفيدين الغائبين عن الملف يتطلب صلاحية مدير النظام");
         }
 

@@ -7,6 +7,7 @@ import com.waad.tba.modules.member.exception.InvalidEligibilityInputException;
 import com.waad.tba.modules.member.exception.MemberNotFoundException;
 import com.waad.tba.modules.member.service.MemberFinancialSummaryService;
 import com.waad.tba.modules.member.service.UnifiedEligibilityService;
+import com.waad.tba.modules.member.security.MemberOperation;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -68,7 +69,8 @@ public class UnifiedEligibilityController {
         log.info("📊 Retrieving remaining limit for member: memberId={}", memberId);
         
         {
-            MemberFinancialSummaryDto summary = financialSummaryService.getFinancialSummary(memberId);
+            MemberFinancialSummaryDto summary = financialSummaryService.getAuthorizedFinancialSummary(
+                    memberId, MemberOperation.VIEW_COVERAGE_BALANCE);
             
             java.util.Map<String, Object> result = new java.util.HashMap<>();
             result.put("memberId", memberId);
@@ -169,7 +171,7 @@ public class UnifiedEligibilityController {
             description = "Member not found (MEMBER_NOT_FOUND)"
         )
     })
-    @GetMapping("/eligibility")
+    @PostMapping("/eligibility/evaluations")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF')")
     public ResponseEntity<ApiResponse<EligibilityResultDto>> checkEligibility(
         @Parameter(
@@ -177,14 +179,16 @@ public class UnifiedEligibilityController {
             required = true,
             example = "1234567890"
         )
-        @RequestParam(name = "query") String query
+        @RequestBody EligibilityEvaluationRequest request
     ) {
         // Security: Don't log query content (may contain sensitive data)
         log.info("📥 [ELIGIBILITY-REQUEST] Received");
 
         try {
             // Perform eligibility check with auto-detection
-            EligibilityResultDto result = eligibilityService.checkEligibility(query);
+            EligibilityResultDto result = eligibilityService.checkEligibility(
+                    request == null ? null : request.query(),
+                    request == null ? null : request.serviceDate());
 
             // Strategic logging: Result already logged in service layer
             return ResponseEntity.ok(ApiResponse.success(result));
@@ -208,6 +212,8 @@ public class UnifiedEligibilityController {
                 .body(ApiResponse.error("Internal server error during eligibility check"));
         }
     }
+
+    public record EligibilityEvaluationRequest(String query, java.time.LocalDate serviceDate) {}
 
     /**
      * Global exception handler for this controller

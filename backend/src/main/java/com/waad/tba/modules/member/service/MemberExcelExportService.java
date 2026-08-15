@@ -25,6 +25,10 @@ import org.springframework.transaction.annotation.Transactional;
 import com.waad.tba.common.exception.BusinessRuleException;
 import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.modules.member.repository.MemberRepository;
+import com.waad.tba.modules.member.security.AuthorizedMemberScope;
+import com.waad.tba.modules.member.security.MemberOperation;
+import com.waad.tba.modules.member.security.MemberQueryAccessPolicy;
+import com.waad.tba.modules.member.security.MemberScopeFilter;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -44,6 +48,7 @@ import lombok.extern.slf4j.Slf4j;
 public class MemberExcelExportService {
 
     private final MemberRepository memberRepository;
+    private final MemberQueryAccessPolicy queryAccessPolicy;
 
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
     private static final long DIRECT_EXPORT_MAX_ROWS = 50_000;
@@ -78,8 +83,12 @@ public class MemberExcelExportService {
         log.info("📊 [Excel Export] Starting export - Query: {}, Employer: {}, Policy: {}, Deleted: {}",
                 searchQuery, employerId, benefitPolicyId, includeDeleted);
 
-        // Build specification for filtering
-        Specification<Member> spec = buildSpecification(searchQuery, employerId, benefitPolicyId, includeDeleted);
+        AuthorizedMemberScope scope = queryAccessPolicy.requireListing(MemberOperation.EXPORT, employerId);
+
+        // Authorization is part of the query itself. A preliminary check followed
+        // by an unscoped export would still be an IDOR under a spoofed/null filter.
+        Specification<Member> spec = buildSpecification(
+                searchQuery, scope, benefitPolicyId, includeDeleted);
 
         long exportCount = memberRepository.count(spec);
         if (exportCount > DIRECT_EXPORT_MAX_ROWS) {
@@ -141,10 +150,11 @@ public class MemberExcelExportService {
      */
     private Specification<Member> buildSpecification(
             String searchQuery,
-            Long employerId,
+            AuthorizedMemberScope scope,
             Long benefitPolicyId,
             Boolean includeDeleted) {
-        Specification<Member> spec = (root, query, cb) -> cb.conjunction();
+        Specification<Member> spec = (root, query, cb) -> MemberScopeFilter.toPredicate(
+                scope, root.get("employer").get("id"), cb);
 
         // Search query
         if (searchQuery != null && !searchQuery.isBlank()) {
@@ -153,11 +163,6 @@ public class MemberExcelExportService {
                     cb.like(cb.lower(root.get("nationalNumber")), "%" + searchQuery.toLowerCase() + "%"),
                     cb.like(cb.lower(root.get("cardNumber")), "%" + searchQuery.toLowerCase() + "%"),
                     cb.like(cb.lower(root.get("barcode")), "%" + searchQuery.toLowerCase() + "%")));
-        }
-
-        // Employer filter
-        if (employerId != null) {
-            spec = spec.and((root, query, cb) -> cb.equal(root.get("employer").get("id"), employerId));
         }
 
         // Benefit policy filter

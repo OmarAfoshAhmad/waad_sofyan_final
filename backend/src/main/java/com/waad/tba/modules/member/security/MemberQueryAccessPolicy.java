@@ -64,6 +64,9 @@ public class MemberQueryAccessPolicy {
         if (scope.isDenied()) {
             return MemberAccessDecision.deny(operation, scope, scope.reason());
         }
+        if (!featureAllowsReading(user)) {
+            return MemberAccessDecision.deny(operation, scope, FEATURE_REFUSAL);
+        }
         if (PRIVILEGED.contains(operation) && !mayPerformPrivileged(user)) {
             return MemberAccessDecision.deny(operation, scope, privilegedRefusal(operation));
         }
@@ -79,6 +82,9 @@ public class MemberQueryAccessPolicy {
         if (scope.isDenied()) {
             return MemberAccessDecision.deny(operation, scope, scope.reason());
         }
+        if (!featureAllowsReading(user)) {
+            return MemberAccessDecision.deny(operation, scope, FEATURE_REFUSAL);
+        }
         if (!scope.covers(memberEmployerId)) {
             // The record exists and is not theirs. Answering "not found"
             // would be a lie, and answering with the record is the leak that
@@ -90,6 +96,26 @@ public class MemberQueryAccessPolicy {
             return MemberAccessDecision.deny(operation, scope, privilegedRefusal(operation));
         }
         return MemberAccessDecision.allow(operation, scope);
+    }
+
+    private static final String FEATURE_REFUSAL = "الاطلاع على المستفيدين معطّل لهذا الحساب";
+
+    /**
+     * The per-account VIEW_MEMBERS toggle, which an employer's contract can
+     * switch off.
+     *
+     * It was previously consulted by the listing, search and count paths only,
+     * which meant an employer administrator barred from the list could still
+     * open any one of its members by id. Reading it here applies it to every
+     * read instead: refusing the collection while serving its elements one at a
+     * time is not a restriction, it is a slower list.
+     *
+     * The underlying check already returns true for every role it does not
+     * govern, so this narrows nothing beyond the employer administrators the
+     * toggle was written for.
+     */
+    private boolean featureAllowsReading(com.waad.tba.modules.rbac.entity.User user) {
+        return authorizationService.canEmployerViewMembers(user);
     }
 
     /**

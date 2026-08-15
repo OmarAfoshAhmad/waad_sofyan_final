@@ -12,7 +12,7 @@ export const eligibilityService = {
    * Check eligibility for a single member
    */
   checkEligibility: (data) => {
-    return axiosServices.post(`${BASE_URL}/check`, data);
+    return axiosServices.post(`${BASE_URL}/evaluations`, data);
   },
 
   /**
@@ -22,7 +22,7 @@ export const eligibilityService = {
    */
   checkFamilyEligibility: (memberId, serviceDate = null) => {
     const params = serviceDate ? { serviceDate } : {};
-    return axiosServices.get(`${BASE_URL}/family/${memberId}`, { params });
+    return axiosServices.post(`${BASE_URL}/family/${memberId}/evaluations`, null, { params });
   },
 
   /**

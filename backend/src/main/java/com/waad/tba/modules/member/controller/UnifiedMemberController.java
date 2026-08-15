@@ -15,6 +15,7 @@ import com.waad.tba.modules.member.service.UnifiedMemberService;
 import com.waad.tba.modules.member.service.MemberExcelExportService;
 import com.waad.tba.modules.member.service.UnifiedSearchService;
 import com.waad.tba.modules.member.dto.MemberSearchDto;
+import com.waad.tba.modules.member.security.MemberOperation;
 import com.waad.tba.common.file.FileStorageService;
 import com.waad.tba.common.file.FileUploadResult;
 import com.waad.tba.services.pdf.HtmlToPdfService;
@@ -609,7 +610,7 @@ public class UnifiedMemberController {
          * @throws NotFoundException if Barcode not found
          * @throws BusinessException if Barcode belongs to Dependent (invalid)
          */
-        @GetMapping("/eligibility/{barcode}")
+        @PostMapping("/eligibility/evaluations")
         @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
         @Operation(summary = "Check Family Eligibility by Barcode", description = "Scans Principal's Barcode and returns entire family (Principal + Dependents) for member selection at point of service. "
                         +
@@ -626,8 +627,10 @@ public class UnifiedMemberController {
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Barcode format invalid or belongs to Dependent (Dependents do not have Barcodes)", content = @Content(mediaType = "application/json"))
         })
         public ResponseEntity<FamilyEligibilityResponseDto> checkEligibility(
-                        @PathVariable("barcode") String barcode,
-                        @RequestParam(name = "serviceDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) java.time.LocalDate serviceDate) {
+                        @RequestBody BarcodeEligibilityRequest request) {
+
+                String barcode = request == null ? null : request.barcode();
+                java.time.LocalDate serviceDate = request == null ? null : request.serviceDate();
 
                 log.info("Checking family eligibility: barcode={}, serviceDate={}", barcode, serviceDate);
 
@@ -638,6 +641,8 @@ public class UnifiedMemberController {
 
                 return ResponseEntity.ok(response);
         }
+
+        public record BarcodeEligibilityRequest(String barcode, java.time.LocalDate serviceDate) {}
 
         /**
          * Generate PDF Report for Beneficiaries (Insured Members)
@@ -788,8 +793,6 @@ public class UnifiedMemberController {
          * <ul>
          * <li>Personal information (names, birth date, gender, national number)</li>
          * <li>Contact information (phone, email, address)</li>
-         * <li>Organization/Benefit Policy (for Principals)</li>
-         * <li>Relationship (for Dependents)</li>
          * <li>Custom attributes</li>
          * </ul>
          * 
@@ -801,6 +804,8 @@ public class UnifiedMemberController {
          * <li>Card Number (cannot be changed)</li>
          * <li>Member Type (PRINCIPAL/DEPENDENT, cannot be changed)</li>
          * <li>Parent ID (cannot change family association)</li>
+         * <li>Employer, benefit policy, status, active flag, and relationship
+         * are owned by dedicated audited operations and are rejected here</li>
          * </ul>
          * 
          * @param id  Member ID
@@ -816,8 +821,8 @@ public class UnifiedMemberController {
                         "Supports updating personal information, contact details, and custom attributes. " +
                         "IMMUTABLE FIELDS: Barcode, Card Number, Member Type, Parent ID (cannot be changed). " +
                         "Validation enforced for all business rules. " +
-                        "For Dependents: Can update Relationship. " +
-                        "For Principals: Can update Organization/Benefit Policy.", parameters = {
+                        "Employer, benefit policy, status, active flag, relationship and family association " +
+                        "cannot be changed through this descriptive update endpoint.", parameters = {
                                         @Parameter(name = "id", description = "Member ID to update", required = true)
                         }, requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(required = true, content = @Content(mediaType = "application/json", schema = @Schema(implementation = MemberUpdateDto.class))))
         @ApiResponses(value = {
@@ -1017,22 +1022,9 @@ public class UnifiedMemberController {
         @Operation(summary = "Bulk Delete Members", description = "Deletes a list of members by IDs")
         public ResponseEntity<ApiResponse<Void>> bulkDeleteMembers(@RequestBody List<Long> ids) {
                 log.info("Bulk deleting {} members", ids.size());
-                int successCount = 0;
-                int failCount = 0;
-                for (Long id : ids) {
-                        try {
-                                unifiedMemberService.deleteMember(id);
-                                successCount++;
-                        } catch (Exception e) {
-                                log.warn("Bulk delete: skipped member id={}: {}", id, e.getMessage());
-                                failCount++;
-                        }
-                }
-                String msg = "تم حذف " + successCount + " مستفيد بنجاح";
-                if (failCount > 0) {
-                        msg += " (فشل حذف " + failCount + " مستفيد لارتباطهم بمعاملات)";
-                }
-                return ResponseEntity.ok(ApiResponse.success(msg, null));
+                unifiedMemberService.bulkTerminateMemberships(ids);
+                return ResponseEntity.ok(ApiResponse.success(
+                                "تم إنهاء عضوية " + ids.stream().distinct().count() + " مستفيد بنجاح", null));
         }
 
         // ==================== UTILITY OPERATIONS ====================
@@ -1124,7 +1116,8 @@ public class UnifiedMemberController {
 
                 log.info("📊 Retrieving remaining limit for member: memberId={}", memberId);
 
-                MemberFinancialSummaryDto summary = financialSummaryService.getFinancialSummary(memberId);
+                MemberFinancialSummaryDto summary = financialSummaryService.getAuthorizedFinancialSummary(
+                                memberId, MemberOperation.VIEW_COVERAGE_BALANCE);
 
                 java.util.Map<String, Object> result = new java.util.HashMap<>();
                 result.put("memberId", memberId);
@@ -1236,7 +1229,8 @@ public class UnifiedMemberController {
 
                 log.info("📊 Retrieving financial summary for member: memberId={}", memberId);
 
-                MemberFinancialSummaryDto summary = financialSummaryService.getFinancialSummary(memberId);
+                MemberFinancialSummaryDto summary = financialSummaryService.getAuthorizedFinancialSummary(
+                                memberId, MemberOperation.VIEW_FINANCIALS);
 
                 log.info("✅ Financial summary retrieved: memberId={}, utilization={}%",
                                 memberId, summary.getUtilizationPercent());
@@ -1292,7 +1286,11 @@ public class UnifiedMemberController {
 
                         return ResponseEntity.ok(ApiResponse.success("تم رفع الصورة بنجاح", updated));
 
-                } catch (AccessDeniedException e) {
+                } catch (AccessDeniedException | com.waad.tba.modules.member.security.MemberAccessDeniedException e) {
+                        throw e;
+                } catch (RuntimeException e) {
+                        // Access refusal and business limits must retain their 403/422
+                        // semantics in GlobalExceptionHandler, never become a false 500.
                         throw e;
                 } catch (Exception e) {
                         log.error("❌ Photo upload failed: memberId={}, error={}", id, e.getMessage(), e);
@@ -1330,7 +1328,7 @@ public class UnifiedMemberController {
                                         .contentType(MediaType.parseMediaType(contentType))
                                         .body(photoData);
 
-                } catch (AccessDeniedException e) {
+                } catch (AccessDeniedException | com.waad.tba.modules.member.security.MemberAccessDeniedException e) {
                         throw e;
                 } catch (Exception e) {
                         log.error("❌ Photo retrieval failed: memberId={}, error={}", id, e.getMessage());
@@ -1381,25 +1379,16 @@ public class UnifiedMemberController {
          * @return Restored member
          */
         @PutMapping("/{id}/restore")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY', 'EMPLOYER_ADMIN')")
-        @Operation(summary = "Restore Deleted Member", description = "Restore a soft-deleted member (unset deleted flag)")
+        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN')")
+        @Operation(summary = "Reinstate Member", description = "Performs an audited status transition back to ACTIVE; a reason is mandatory")
         public ResponseEntity<ApiResponse<MemberViewDto>> restoreMember(
                         @PathVariable("id") Long id,
                         @RequestParam(name = "reason") String reason) {
                 log.info("♻️ Restore request: memberId={}", id);
 
-                try {
-                        MemberViewDto restored = unifiedMemberService.restoreMember(id, reason);
-
-                        log.info("✅ Member restored: memberId={}", id);
-
-                        return ResponseEntity.ok(ApiResponse.success("تم استعادة العضو بنجاح", restored));
-
-                } catch (Exception e) {
-                        log.error("❌ Restore failed: memberId={}, error={}", id, e.getMessage(), e);
-                        return ResponseEntity.badRequest()
-                                        .body(ApiResponse.error("فشل استعادة العضو: " + e.getMessage()));
-                }
+                MemberViewDto restored = unifiedMemberService.restoreMember(id, reason);
+                log.info("✅ Member restored: memberId={}", id);
+                return ResponseEntity.ok(ApiResponse.success("تم استعادة العضو بنجاح", restored));
         }
 
         /**
@@ -1418,18 +1407,9 @@ public class UnifiedMemberController {
                         @RequestParam(name = "reason") String reason) {
                 log.warn("⚠️ HARD DELETE request: memberId={}", id);
 
-                try {
-                        unifiedMemberService.hardDeleteMember(id, reason);
-
-                        log.info("✅ Member hard deleted: memberId={}", id);
-
-                        return ResponseEntity.ok(ApiResponse.success("تم حذف العضو نهائياً", null));
-
-                } catch (Exception e) {
-                        log.error("❌ Hard delete failed: memberId={}, error={}", id, e.getMessage(), e);
-                        return ResponseEntity.badRequest()
-                                        .body(ApiResponse.error("فشل الحذف النهائي: " + e.getMessage()));
-                }
+                unifiedMemberService.hardDeleteMember(id, reason);
+                log.info("✅ Member hard deleted: memberId={}", id);
+                return ResponseEntity.ok(ApiResponse.success("تم حذف العضو نهائياً", null));
         }
 
         // ==================== EXCEL EXPORT ====================
@@ -1444,7 +1424,7 @@ public class UnifiedMemberController {
          * @return Excel file as byte array
          */
         @GetMapping("/export/excel")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY', 'EMPLOYER_ADMIN')")
+        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN')")
         @Operation(summary = "Export Members to Excel", description = "Export members list to Excel file with optional filters")
         public ResponseEntity<byte[]> exportMembersToExcel(
                         @RequestParam(name = "searchQuery", required = false) String searchQuery,
@@ -1476,6 +1456,9 @@ public class UnifiedMemberController {
                                         .headers(headers)
                                         .body(excelData);
 
+                } catch (RuntimeException e) {
+                        // Preserve access/business error semantics in the global handler.
+                        throw e;
                 } catch (Exception e) {
                         log.error("❌ Excel export failed: error={}", e.getMessage(), e);
                         return ResponseEntity.internalServerError().build();

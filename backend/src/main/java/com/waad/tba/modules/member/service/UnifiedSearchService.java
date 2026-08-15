@@ -4,15 +4,20 @@ import com.waad.tba.modules.member.dto.MemberAutocompleteDto;
 import com.waad.tba.modules.member.dto.MemberSearchDto;
 import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.modules.member.repository.MemberRepository;
-import com.waad.tba.security.AuthorizationService;
+import com.waad.tba.modules.member.security.AuthorizedMemberScope;
+import com.waad.tba.modules.member.security.MemberOperation;
+import com.waad.tba.modules.member.security.MemberQueryAccessPolicy;
+import com.waad.tba.modules.member.security.MemberScopeFilter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 /**
  * Unified Search Service - Phase 3: Barcode/QR Support
@@ -42,10 +47,10 @@ import java.util.stream.Collectors;
 public class UnifiedSearchService {
 
     private static final int MIN_TEXT_SEARCH_LENGTH = 3;
+    private static final int MAX_SEARCH_RESULTS = 20;
 
     private final MemberRepository memberRepository;
-    private final NameSearchService nameSearchService;
-    private final AuthorizationService authorizationService;
+    private final MemberQueryAccessPolicy queryAccessPolicy;
 
     /**
      * Main unified search method - auto-detects search type
@@ -59,16 +64,10 @@ public class UnifiedSearchService {
             return List.of();
         }
 
-        // An EMPLOYER_ADMIN must never see another employer's members just
-        // because the employerId param was omitted or spoofed — force it to
-        // their own employer. Other roles (PROVIDER_STAFF, MEDICAL_REVIEWER,
-        // SUPER_ADMIN) pass through unchanged; providers legitimately search
-        // across employers to find a patient regardless of who they work for.
-        Long scopedEmployerId = authorizationService.resolveEmployerScope(
-                authorizationService.getCurrentUser(), employerId);
+        AuthorizedMemberScope scope = queryAccessPolicy.requireListing(MemberOperation.SEARCH, employerId);
 
         String trimmedQuery = query.trim();
-        log.info("Unified search initiated for query: {}, employerId: {}", trimmedQuery, scopedEmployerId);
+        log.info("Unified search initiated for query: {}, requestedEmployerId: {}", trimmedQuery, employerId);
 
         // Detect search type
         SearchType searchType = detectSearchType(trimmedQuery);
@@ -77,13 +76,13 @@ public class UnifiedSearchService {
         // Execute appropriate search
         switch (searchType) {
             case BARCODE:
-                return searchByBarcode(trimmedQuery, scopedEmployerId);
+                return searchByBarcode(trimmedQuery, scope);
 
             case CARD_NUMBER:
-                return searchByCardNumber(trimmedQuery, scopedEmployerId);
+                return searchByCardNumber(trimmedQuery, scope);
 
             case NAME_FUZZY:
-                return searchByName(trimmedQuery, scopedEmployerId);
+                return searchByName(trimmedQuery, scope);
 
             default:
                 log.error("Unknown search type: {}", searchType);
@@ -95,8 +94,8 @@ public class UnifiedSearchService {
      * Search by barcode (UUID) - exact match
      * Performance: <50ms (indexed unique constraint)
      */
-    private List<MemberSearchDto> searchByBarcode(String barcode, Long employerId) {
-        log.info("Executing barcode search for: {}, employerId: {}", barcode, employerId);
+    private List<MemberSearchDto> searchByBarcode(String barcode, AuthorizedMemberScope scope) {
+        log.info("Executing barcode search for: {}", barcode);
 
         Member member = memberRepository.findByBarcode(barcode)
                 .orElse(null);
@@ -106,10 +105,7 @@ public class UnifiedSearchService {
             return List.of();
         }
         
-        if (employerId != null && member.getEmployer() != null && !member.getEmployer().getId().equals(employerId)) {
-            log.warn("Member found but employer does not match: {}", barcode);
-            return List.of();
-        }
+        requireMemberAccess(scope, member);
         
         MemberSearchDto dto = MemberSearchDto.fromMember(member, "BARCODE", null);
 
@@ -117,16 +113,15 @@ public class UnifiedSearchService {
         return List.of(dto);
     }
 
-    private List<MemberSearchDto> searchByCardNumber(String cardNumber, Long employerId) {
-        log.debug("Executing card number search for: {}, employerId: {}", cardNumber, employerId);
+    private List<MemberSearchDto> searchByCardNumber(String cardNumber, AuthorizedMemberScope scope) {
+        log.debug("Executing card number search for: {}", cardNumber);
 
         // 1. Try exact match first (Priority 1)
         Optional<Member> exactMatch = memberRepository.findByCardNumberWithDetails(cardNumber);
         if (exactMatch.isPresent()) {
             Member m = exactMatch.get();
-            if (employerId == null || (m.getEmployer() != null && m.getEmployer().getId().equals(employerId))) {
-                return List.of(MemberSearchDto.fromMember(m, "CARD_NUMBER", 1.0));
-            }
+            requireMemberAccess(scope, m);
+            return List.of(MemberSearchDto.fromMember(m, "CARD_NUMBER", 1.0));
         }
 
         // 2. Try ID exact match (Priority 2)
@@ -136,9 +131,8 @@ public class UnifiedSearchService {
                 Optional<Member> idMatch = memberRepository.findById(id);
                 if (idMatch.isPresent()) {
                     Member m = idMatch.get();
-                    if (employerId == null || (m.getEmployer() != null && m.getEmployer().getId().equals(employerId))) {
-                        return List.of(MemberSearchDto.fromMember(m, "DIRECT_ID", 1.0));
-                    }
+                    requireMemberAccess(scope, m);
+                    return List.of(MemberSearchDto.fromMember(m, "DIRECT_ID", 1.0));
                 }
             } catch (NumberFormatException e) {
                 // Ignore
@@ -147,28 +141,33 @@ public class UnifiedSearchService {
 
         // 3. Fallback to partial search (Priority 3)
         // This allows searching for '2025' to find 'JFZ2025...'
-        return searchByName(cardNumber, employerId);
+        return searchByName(cardNumber, scope);
     }
 
     /**
      * Search by name - stable pattern match with eager loading
      */
-    private List<MemberSearchDto> searchByName(String name, Long employerId) {
-        log.info("Executing stable name search for: {}, employerId: {}", name, employerId);
+    private List<MemberSearchDto> searchByName(String name, AuthorizedMemberScope scope) {
+        log.info("Executing scoped name search for: {}", name);
 
         if (name == null || name.trim().length() < MIN_TEXT_SEARCH_LENGTH) {
             log.info("Skipping member text search shorter than {} characters", MIN_TEXT_SEARCH_LENGTH);
             return List.of();
         }
 
-        // Use the robust search method with JOIN FETCH to prevent 500 errors (LazyInitialization)
-        // This method also searches by nationalNumber and cardNumber as fallback
-        List<Member> members;
-        if (employerId != null) {
-            members = memberRepository.searchByEmployerId(name, employerId);
-        } else {
-            members = memberRepository.search(name);
-        }
+        String pattern = "%" + name.trim().toLowerCase(java.util.Locale.ROOT) + "%";
+        Specification<Member> specification = (root, query, builder) -> builder.and(
+                MemberScopeFilter.toPredicate(scope, root.get("employer").get("id"), builder),
+                builder.or(
+                        builder.like(builder.lower(root.get("fullName")), pattern),
+                        builder.like(builder.lower(root.get("nationalNumber")), pattern),
+                        builder.like(builder.lower(root.get("barcode")), pattern),
+                        builder.like(builder.lower(root.get("cardNumber")), pattern)));
+
+        List<Member> members = memberRepository.findAll(
+                specification,
+                PageRequest.of(0, MAX_SEARCH_RESULTS, Sort.by(Sort.Direction.ASC, "id")))
+                .getContent();
 
         if (members.isEmpty()) {
             log.warn("No members found for query: {}", name);
@@ -177,9 +176,8 @@ public class UnifiedSearchService {
 
         // Convert entities to Search DTOs
         List<MemberSearchDto> results = members.stream()
-                .limit(20) // Safety limit
                 .map(member -> MemberSearchDto.fromMember(member, "NAME_PATTERN", 1.0))
-                .collect(Collectors.toList());
+                .toList();
 
         log.info("Found {} members for query: {}", results.size(), name);
         return results;
@@ -243,6 +241,23 @@ public class UnifiedSearchService {
         log.info("Fetching member by ID: {}", id);
 
         return memberRepository.findById(id)
-                .map(member -> MemberSearchDto.fromMember(member, "DIRECT_ID", null));
+                .map(member -> {
+                    Long employerId = memberEmployerId(member);
+                    queryAccessPolicy.requireMember(MemberOperation.VIEW_DETAILS, employerId);
+                    return MemberSearchDto.fromMember(member, "DIRECT_ID", null);
+                });
+    }
+
+    private void requireMemberAccess(AuthorizedMemberScope scope, Member member) {
+        Long employerId = memberEmployerId(member);
+        if (!scope.covers(employerId)) {
+            // Use the policy's standard denial and audit shape rather than
+            // disguising an out-of-scope exact match as "not found".
+            queryAccessPolicy.requireMember(MemberOperation.SEARCH, employerId);
+        }
+    }
+
+    private Long memberEmployerId(Member member) {
+        return member.getEmployer() == null ? null : member.getEmployer().getId();
     }
 }
