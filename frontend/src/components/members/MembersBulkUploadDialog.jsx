@@ -120,7 +120,8 @@ const MembersBulkUploadDialog = ({ open, onClose, onSuccess }) => {
     try {
       if (!preview) {
         const response = await previewImport(selectedFile, {
-          employerId: selectedEmployerId
+          employerId: selectedEmployerId,
+          clearOldMembers
         });
         const data = response?.data || response;
         stopProgressSimulation(100);

@@ -2,7 +2,9 @@ package com.waad.tba.modules.member.controller;
 
 import java.io.IOException;
 import java.util.Map;
-import java.util.UUID;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -29,6 +31,7 @@ import com.waad.tba.modules.member.repository.MemberImportLogRepository;
 import com.waad.tba.modules.member.service.ExcelColumnMappingService;
 import com.waad.tba.modules.member.service.MemberExcelImportService;
 import com.waad.tba.modules.member.service.MemberExcelTemplateService;
+import com.waad.tba.modules.member.service.MemberImportPreviewTicketService;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -57,6 +60,8 @@ public class MemberExcelTemplateController {
     private final ExcelColumnMappingService columnMappingService;
     private final MemberImportLogRepository importLogRepository;
     private final MemberImportErrorRepository importErrorRepository;
+    private final MemberImportPreviewTicketService previewTicketService;
+    private final ObjectMapper objectMapper;
     
     /**
      * Download Excel template for members import
@@ -156,12 +161,15 @@ public class MemberExcelTemplateController {
             @Parameter(description = "Excel file (.xlsx)")
             @RequestParam("file") MultipartFile file,
             @Parameter(description = "Custom column mappings (optional)")
-            @RequestParam(value = "customMappings", required = false) Map<String, String> customMappings,
+            @RequestParam(value = "customMappingsJson", required = false) String customMappingsJson,
             @Parameter(description = "Selected Employer ID (optional fallback for empty/invalid employer values)")
             @RequestParam(value = "employerId", required = false) Long employerId,
+            @RequestParam(value = "benefitPolicyId", required = false) Long benefitPolicyId,
+            @RequestParam(value = "clearOldMembers", required = false, defaultValue = "false") Boolean clearOldMembers,
             @Parameter(description = "Header row number (optional, 0-indexed)")
             @RequestParam(value = "headerRowNumber", required = false) Integer headerRowNumber) {
         
+        Map<String, String> customMappings = parseCustomMappings(customMappingsJson);
         log.info("📊 Preview import request: {} (mappings: {}, headerRow: {})", 
                 file.getOriginalFilename(), 
                 customMappings != null ? "yes" : "auto",
@@ -180,6 +188,9 @@ public class MemberExcelTemplateController {
         
         try {
             MemberImportPreviewDto preview = importService.parseAndPreview(file, customMappings, headerRowNumber, employerId);
+            preview.setBatchId(previewTicketService.issue(file, employerId, benefitPolicyId,
+                    preview.getResolvedHeaderRowNumber(),
+                    clearOldMembers, customMappings, preview.getResolvedEmployerIds()));
             String message = preview.getValidRows() > 0
                     ? "تم تحليل الملف بنجاح"
                     : "تم تحليل الملف: لا توجد صفوف صالحة حاليًا، يمكن اختيار جهة عمل موحدة ثم التنفيذ";
@@ -215,11 +226,13 @@ public class MemberExcelTemplateController {
             @RequestParam(value = "batchId", required = false) String batchId,
             @Parameter(description = "Header row number (0-indexed)")
             @RequestParam(value = "headerRowNumber", required = false) Integer headerRowNumber,
+            @RequestParam(value = "customMappingsJson", required = false) String customMappingsJson,
             @Parameter(description = "Import policy: CREATE_ONLY, UPDATE_ONLY, CREATE_OR_UPDATE")
             @RequestParam(value = "importPolicy", required = false) String importPolicy,
-            @Parameter(description = "Clear old members (only if they have no financial movements)")
+            @Parameter(description = "Replace the scoped member list: absent memberships are terminated logically; history is preserved")
             @RequestParam(value = "clearOldMembers", required = false, defaultValue = "false") Boolean clearOldMembers) {
         
+        Map<String, String> customMappings = parseCustomMappings(customMappingsJson);
         log.info("📥 Execute import: file={}, employer={}, policy={}, batch={}, clearOldMembers={}", 
                 file.getOriginalFilename(), employerId, benefitPolicyId, batchId, clearOldMembers);
         
@@ -229,12 +242,12 @@ public class MemberExcelTemplateController {
         }
         
         if (batchId == null || batchId.isBlank()) {
-            batchId = UUID.randomUUID().toString();
+            return ResponseEntity.badRequest().body(ApiResponse.error("يجب إجراء معاينة صالحة قبل التنفيذ"));
         }
         
         try {
-            MemberImportResultDto result = importService.executeImport(
-                file, batchId, employerId, benefitPolicyId, headerRowNumber, clearOldMembers);
+            MemberImportResultDto result = importService.executeConfirmedImport(
+                file, batchId, employerId, benefitPolicyId, headerRowNumber, clearOldMembers, customMappings);
             
             String status = result.getStatus();
             if ("COMPLETED".equals(status)) {
@@ -303,6 +316,16 @@ public class MemberExcelTemplateController {
                 PageRequest.of(Math.max(0, page - 1), size, Sort.by(Sort.Direction.DESC, "createdAt")));
         
         return ResponseEntity.ok(ApiResponse.success("Import logs retrieved", logs));
+    }
+
+    private Map<String, String> parseCustomMappings(String json) {
+        if (json == null || json.isBlank()) return Map.of();
+        try {
+            return objectMapper.readValue(json, new TypeReference<Map<String, String>>() {});
+        } catch (IOException ex) {
+            throw new com.waad.tba.common.exception.BusinessRuleException(
+                    "تنسيق مطابقة أعمدة الاستيراد غير صالح");
+        }
     }
 }
 

@@ -1476,6 +1476,8 @@ public class UnifiedMemberController {
                         @RequestParam(name = "searchQuery", required = false) String searchQuery,
                         @RequestParam(name = "employerId", required = false) Long employerId,
                         @RequestParam(name = "benefitPolicyId", required = false) Long benefitPolicyId,
+                        @RequestParam(name = "status", required = false) String status,
+                        @RequestParam(name = "type", required = false) String type,
                         @RequestParam(name = "includeDeleted", required = false, defaultValue = "false") Boolean includeDeleted) {
 
                 log.info("📊 Excel export request: query={}, employer={}, policy={}, deleted={}",
@@ -1483,7 +1485,7 @@ public class UnifiedMemberController {
 
                 try {
                         byte[] excelData = excelExportService.exportToExcel(
-                                        searchQuery, employerId, benefitPolicyId, includeDeleted);
+                                        searchQuery, employerId, benefitPolicyId, status, type, includeDeleted);
 
                         String filename = "Members_Export_" +
                                         LocalDate.now().format(
@@ -1509,6 +1511,28 @@ public class UnifiedMemberController {
                         log.error("❌ Excel export failed: error={}", e.getMessage(), e);
                         return ResponseEntity.internalServerError().build();
                 }
+        }
+
+        @GetMapping("/export/reimportable-excel")
+        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN')")
+        @Operation(summary = "Export re-importable member workbook",
+                        description = "Exports the canonical member-import schema. Unlike /export/excel, this file is intended for preview and re-import.")
+        public ResponseEntity<byte[]> exportReimportableMembers(
+                        @RequestParam(name = "searchQuery", required = false) String searchQuery,
+                        @RequestParam(name = "employerId", required = false) Long employerId,
+                        @RequestParam(name = "benefitPolicyId", required = false) Long benefitPolicyId,
+                        @RequestParam(name = "status", required = false) String status,
+                        @RequestParam(name = "type", required = false) String type,
+                        @RequestParam(name = "includeDeleted", required = false, defaultValue = "false") Boolean includeDeleted)
+                        throws IOException {
+                byte[] data = excelExportService.exportReimportableExcel(
+                                searchQuery, employerId, benefitPolicyId, status, type, includeDeleted);
+                String filename = "Members_Reimportable_" + LocalDate.now() + ".xlsx";
+                HttpHeaders headers = new HttpHeaders();
+                headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
+                headers.setContentDispositionFormData("attachment", filename);
+                headers.setContentLength(data.length);
+                return ResponseEntity.ok().headers(headers).body(data);
         }
 
         /**

@@ -503,10 +503,10 @@ export const previewImport = async (file, params = {}) => {
     if (params.headerRowNumber !== null && params.headerRowNumber !== undefined) {
       formData.append('headerRowNumber', params.headerRowNumber);
     }
+    if (params.benefitPolicyId) formData.append('benefitPolicyId', params.benefitPolicyId);
+    if (params.clearOldMembers !== undefined) formData.append('clearOldMembers', params.clearOldMembers);
     if (params.customMappings) {
-      Object.entries(params.customMappings).forEach(([column, field]) => {
-        formData.append(`customMappings[${column}]`, field);
-      });
+      formData.append('customMappingsJson', JSON.stringify(params.customMappings));
     }
     const response = await api.post(`${UNIFIED_MEMBERS_BASE_URL}/import/preview`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
@@ -540,6 +540,9 @@ export const executeImport = async (file, params) => {
     }
     if (params.clearOldMembers !== undefined) {
       formData.append('clearOldMembers', params.clearOldMembers);
+    }
+    if (params.customMappings) {
+      formData.append('customMappingsJson', JSON.stringify(params.customMappings));
     }
 
     const response = await api.post(`${UNIFIED_MEMBERS_BASE_URL}/import/execute`, formData, {
@@ -595,7 +598,14 @@ export const downloadTemplate = async () => {
 export const exportMembers = async (params = {}) => {
   try {
     const response = await api.get(`${UNIFIED_MEMBERS_BASE_URL}/export/excel`, {
-      params,
+      params: {
+        searchQuery: params.searchQuery ?? params.searchTerm,
+        employerId: params.employerId ?? params.organizationId,
+        benefitPolicyId: params.benefitPolicyId,
+        status: params.status,
+        type: params.type,
+        includeDeleted: params.includeDeleted ?? params.deleted ?? false
+      },
       responseType: 'blob'
     });
     return response.data;
@@ -603,6 +613,22 @@ export const exportMembers = async (params = {}) => {
     console.error('Error exporting members:', error);
     throw error;
   }
+};
+
+/** Canonical workbook that can be sent back through preview -> execute. */
+export const exportReimportableMembers = async (params = {}) => {
+  const response = await api.get(`${UNIFIED_MEMBERS_BASE_URL}/export/reimportable-excel`, {
+    params: {
+      searchQuery: params.searchQuery ?? params.searchTerm,
+      employerId: params.employerId ?? params.organizationId,
+      benefitPolicyId: params.benefitPolicyId,
+      status: params.status,
+      type: params.type,
+      includeDeleted: params.includeDeleted ?? params.deleted ?? false
+    },
+    responseType: 'blob'
+  });
+  return response.data;
 };
 
 /**
@@ -716,11 +742,11 @@ export default {
   hardDeleteMember,
   getDependents,
   countDependents,
-  importMembers,
   detectColumns,
   previewImport,
   executeImport,
   exportMembers,
+  exportReimportableMembers,
   downloadTemplate,
   uploadPhoto,
   deletePhoto,
