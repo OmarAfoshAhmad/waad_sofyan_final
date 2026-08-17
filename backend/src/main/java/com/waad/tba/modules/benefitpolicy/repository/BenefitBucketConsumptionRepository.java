@@ -374,6 +374,7 @@ public interface BenefitBucketConsumptionRepository extends JpaRepository<Benefi
           ) r on r.reversal_of_id = c.id
          where c.member_id = :memberId
            and c.preauth_id = :preauthId
+           and c.member_policy_assignment_id = :assignmentId
            and c.bucket_id is not distinct from :bucketId
            -- Explicit even though bucket_id already separates the two scopes
            -- (V174 forbids a general row from carrying a bucket): a rule that
@@ -385,6 +386,7 @@ public interface BenefitBucketConsumptionRepository extends JpaRepository<Benefi
         """, nativeQuery = true)
     BigDecimal sumOwnActiveReservation(@Param("memberId") Long memberId,
                                        @Param("preauthId") Long preauthId,
+                                       @Param("assignmentId") Long assignmentId,
                                        @Param("bucketId") Long bucketId,
                                        @Param("limitScope") String limitScope,
                                        @Param("periodStart") LocalDate periodStart,
@@ -407,6 +409,7 @@ public interface BenefitBucketConsumptionRepository extends JpaRepository<Benefi
           ) r on r.reversal_of_id = c.id
          where c.member_id = :memberId
            and c.preauth_id = :preauthId
+           and c.member_policy_assignment_id = :assignmentId
            and c.bucket_id is not distinct from :bucketId
            and c.limit_scope = :limitScope
            and c.status = 'RESERVED'
@@ -415,6 +418,7 @@ public interface BenefitBucketConsumptionRepository extends JpaRepository<Benefi
         """, nativeQuery = true)
     Integer sumOwnActiveReservationTimes(@Param("memberId") Long memberId,
                                          @Param("preauthId") Long preauthId,
+                                         @Param("assignmentId") Long assignmentId,
                                          @Param("bucketId") Long bucketId,
                                          @Param("limitScope") String limitScope,
                                          @Param("periodStart") LocalDate periodStart,

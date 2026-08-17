@@ -46,9 +46,7 @@ import com.waad.tba.modules.provider.entity.Provider;
 import com.waad.tba.modules.provider.repository.ProviderRepository;
 import com.waad.tba.modules.provider.service.ProviderNetworkService;
 import com.waad.tba.modules.preauthorization.entity.PreAuthorization;
-import com.waad.tba.modules.preauthorization.entity.PreAuthorization.PreAuthStatus;
 import com.waad.tba.modules.preauthorization.repository.PreAuthorizationRepository;
-import com.waad.tba.modules.preauthorization.service.PreAuthorizationService;
 import com.waad.tba.modules.visit.entity.Visit;
 import com.waad.tba.modules.visit.repository.VisitRepository;
 import com.waad.tba.modules.rbac.entity.User;
@@ -146,7 +144,6 @@ public class ClaimService {
     private final AtomicFinancialService atomicFinancialService;
 
     // Phase 5 (2026-02-02): Pre-Authorization Lifecycle Management
-    private final PreAuthorizationService preAuthorizationService;
 
     // PHASE NEXT (2026-02-12): Medical Reviewer Isolation
     private final ReviewerProviderIsolationService reviewerIsolationService;
@@ -439,37 +436,6 @@ public class ClaimService {
                     savedClaim.getProviderId(),
                     currentUser != null ? currentUser.getId() : null));
             log.info("📤 [EVENT] Published ClaimApprovedEvent for claim {} (direct entry)", savedClaim.getId());
-        }
-
-        // ═══════════════════════════════════════════════════════════════════════════
-        // PHASE 5: Auto-mark PreAuthorization as USED when linked to claim
-        // ═══════════════════════════════════════════════════════════════════════════
-        if (savedClaim.getStatus() == ClaimStatus.APPROVED
-                && savedClaim.getPreAuthorization() != null) {
-            PreAuthorization linkedPreAuth = savedClaim.getPreAuthorization();
-
-            // Auto-transition to USED if currently APPROVED or ACKNOWLEDGED
-            if (linkedPreAuth.getStatus() == PreAuthStatus.APPROVED ||
-                    linkedPreAuth.getStatus() == PreAuthStatus.ACKNOWLEDGED) {
-
-                String createdBy = currentUser != null ? currentUser.getUsername() : "system";
-                try {
-                    preAuthorizationService.markAsUsed(
-                            linkedPreAuth.getId(),
-                            savedClaim.getId().toString(),
-                            createdBy);
-                    log.info("✅ Pre-authorization {} auto-marked as USED (linked to claim {})",
-                            linkedPreAuth.getReferenceNumber(), savedClaim.getId());
-                } catch (Exception e) {
-                    log.warn("⚠️ Failed to auto-mark pre-authorization {} as USED: {}",
-                            linkedPreAuth.getId(), e.getMessage());
-                    // Non-critical: Don't fail claim creation if pre-auth update fails
-                }
-            } else {
-                log.warn(
-                        "⚠️ Pre-authorization {} has status {} (expected APPROVED or ACKNOWLEDGED). Not auto-marking as USED.",
-                        linkedPreAuth.getId(), linkedPreAuth.getStatus());
-            }
         }
 
         return claimMapper.toViewDto(savedClaim);

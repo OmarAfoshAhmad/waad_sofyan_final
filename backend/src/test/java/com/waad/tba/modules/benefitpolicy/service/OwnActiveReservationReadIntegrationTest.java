@@ -43,7 +43,8 @@ class OwnActiveReservationReadIntegrationTest extends PostgresIntegrationTestBas
         return UUID.randomUUID().toString().substring(0, 8);
     }
 
-    private record World(long memberId, long policyId, long bucketId, long ruleId, long preauthId) {}
+    private record World(long memberId, long policyId, long assignmentId,
+            long bucketId, long ruleId, long preauthId) {}
 
     private World world(String amountLimit, String alreadyCommitted) {
         String s = suffix();
@@ -58,8 +59,10 @@ class OwnActiveReservationReadIntegrationTest extends PostgresIntegrationTestBas
                 + "benefit_policy_id, card_number, barcode, status, active) VALUES (" + employerId
                 + ", 'Own Member', " + policyId + ", 'OR" + s + "', 'OR" + s
                 + "', 'ACTIVE', true) RETURNING id", Long.class);
-        jdbc.update("INSERT INTO member_policy_assignments (member_id, policy_id, assignment_start_date, "
-                + "assignment_source) VALUES (?, ?, CURRENT_DATE - 60, 'MANUAL')", memberId, policyId);
+        Long assignmentId = jdbc.queryForObject(
+                "INSERT INTO member_policy_assignments (member_id, policy_id, assignment_start_date, "
+                + "assignment_source) VALUES (?, ?, CURRENT_DATE - 60, 'MANUAL') RETURNING id",
+                Long.class, memberId, policyId);
         jdbc.update("INSERT INTO member_employer_assignments (member_id, employer_id, assignment_start_date, "
                 + "assignment_reason, assignment_source) VALUES (?, ?, CURRENT_DATE - 60, "
                 + "'test enrollment', 'MANUAL')", memberId, employerId);
@@ -93,7 +96,7 @@ class OwnActiveReservationReadIntegrationTest extends PostgresIntegrationTestBas
                     + alreadyCommitted + ", 0, 1, ?, 'COMMITTED', 'OPENING_IMPORT', 'BUCKET', now())",
                     policyId, memberId, bucketId, "ORC-" + s);
         }
-        return new World(memberId, policyId, bucketId, ruleId, preauthId);
+        return new World(memberId, policyId, assignmentId, bucketId, ruleId, preauthId);
     }
 
     /** Places a hold owned by the given pre-authorization. */
@@ -102,10 +105,10 @@ class OwnActiveReservationReadIntegrationTest extends PostgresIntegrationTestBas
         Long lineId = jdbc.queryForObject("INSERT INTO pre_authorization_lines (pre_authorization_id, "
                 + "requested_amount) VALUES (" + preauthId + ", " + amount + ") RETURNING id", Long.class);
         return jdbc.queryForObject("INSERT INTO benefit_bucket_consumptions (policy_id, member_id, "
-                + "bucket_id, preauth_id, preauth_line_id, period_start, period_end, approved_amount, "
+                + "bucket_id, preauth_id, preauth_line_id, member_policy_assignment_id, period_start, period_end, approved_amount, "
                 + "times_consumed, calculation_version, idempotency_key, status, source_type, limit_scope, "
                 + "created_at) VALUES (" + w.policyId() + ", " + w.memberId() + ", " + w.bucketId() + ", "
-                + preauthId + ", " + lineId + ", DATE_TRUNC('year', CURRENT_DATE)::date, "
+                + preauthId + ", " + lineId + ", " + w.assignmentId() + ", DATE_TRUNC('year', CURRENT_DATE)::date, "
                 + "(DATE_TRUNC('year', CURRENT_DATE) + INTERVAL '1 year - 1 day')::date, " + amount
                 + ", 0, 1, 'ORH-" + s + "', 'RESERVED', 'PREAUTH', 'BUCKET', now()) RETURNING id",
                 Long.class);
@@ -147,7 +150,7 @@ class OwnActiveReservationReadIntegrationTest extends PostgresIntegrationTestBas
 
         var ordinary = balanceReader.read(w.memberId(), limitsFor(w), null);
         var forClaim = balanceReader.readForPreauthorizedClaim(
-                w.memberId(), limitsFor(w), null, w.preauthId());
+                w.memberId(), limitsFor(w), null, w.preauthId(), w.assignmentId());
 
         // The ordinary read protects the hold from everyone.
         assertThat(bucketBalance(ordinary, w.bucketId()).reservableAvailable())
@@ -171,7 +174,7 @@ class OwnActiveReservationReadIntegrationTest extends PostgresIntegrationTestBas
         hold(w, w.preauthId(), "600.00");
 
         var balance = ownBucket(balanceReader.readForPreauthorizedClaim(
-                w.memberId(), limitsFor(w), null, w.preauthId()), w.bucketId());
+                w.memberId(), limitsFor(w), null, w.preauthId(), w.assignmentId()), w.bucketId());
 
         // 100 free + 600 own = 700, which is exactly what is left. The own
         // hold is returned, not stacked on top of the member's real balance.
@@ -192,7 +195,7 @@ class OwnActiveReservationReadIntegrationTest extends PostgresIntegrationTestBas
         hold(w, otherPreauth, "500.00");
 
         var forClaim = balanceReader.readForPreauthorizedClaim(
-                w.memberId(), limitsFor(w), null, w.preauthId());
+                w.memberId(), limitsFor(w), null, w.preauthId(), w.assignmentId());
 
         // 200 free + its own 300 = 500. The neighbour's 500 stays protected --
         // returning it would let one approval spend another's promised limit.
@@ -208,15 +211,15 @@ class OwnActiveReservationReadIntegrationTest extends PostgresIntegrationTestBas
         // Half of it was already released.
         String s = suffix();
         jdbc.update("INSERT INTO benefit_bucket_consumptions (policy_id, member_id, bucket_id, preauth_id, "
-                + "preauth_line_id, period_start, period_end, approved_amount, times_consumed, "
+                + "preauth_line_id, member_policy_assignment_id, period_start, period_end, approved_amount, times_consumed, "
                 + "calculation_version, idempotency_key, status, source_type, limit_scope, reversal_of_id, "
                 + "reversal_reason, created_at) SELECT policy_id, member_id, bucket_id, preauth_id, "
-                + "preauth_line_id, period_start, period_end, 300.00, 0, 1, 'ORR-" + s + "', 'REVERSED', "
+                + "preauth_line_id, member_policy_assignment_id, period_start, period_end, 300.00, 0, 1, 'ORR-" + s + "', 'REVERSED', "
                 + "source_type, limit_scope, id, 'PREAUTH_RELEASE', now() "
                 + "FROM benefit_bucket_consumptions WHERE id = ?", holdId);
 
         var forClaim = balanceReader.readForPreauthorizedClaim(
-                w.memberId(), limitsFor(w), null, w.preauthId());
+                w.memberId(), limitsFor(w), null, w.preauthId(), w.assignmentId());
 
         // 700 free (1000 - the 300 still held) plus the 300 still outstanding.
         // Returning the original 600 would hand back money already given back.
@@ -233,7 +236,7 @@ class OwnActiveReservationReadIntegrationTest extends PostgresIntegrationTestBas
         hold(other, other.preauthId(), "600.00");
 
         var forClaim = balanceReader.readForPreauthorizedClaim(
-                w.memberId(), limitsFor(w), null, w.preauthId());
+                w.memberId(), limitsFor(w), null, w.preauthId(), w.assignmentId());
 
         // Nothing is held against THIS member, so nothing comes back.
         assertThat(ownBucket(forClaim, w.bucketId()).ownActiveReservation())
@@ -270,7 +273,7 @@ class OwnActiveReservationReadIntegrationTest extends PostgresIntegrationTestBas
         holdGeneral(w, w.preauthId(), "250.00");
 
         var forClaim = balanceReader.readForPreauthorizedClaim(
-                w.memberId(), limitsFor(w), null, w.preauthId());
+                w.memberId(), limitsFor(w), null, w.preauthId(), w.assignmentId());
 
         assertThat(ownBucket(forClaim, w.bucketId()).ownActiveReservation())
                 .isEqualByComparingTo("400.00");
@@ -286,7 +289,7 @@ class OwnActiveReservationReadIntegrationTest extends PostgresIntegrationTestBas
                 "(DATE_TRUNC('year', CURRENT_DATE) - INTERVAL '1 day')::date");
 
         var forClaim = balanceReader.readForPreauthorizedClaim(
-                w.memberId(), limitsFor(w), null, w.preauthId());
+                w.memberId(), limitsFor(w), null, w.preauthId(), w.assignmentId());
 
         // Last year's hold belongs to last year's ceiling. Returning it here
         // would hand this year's claim money from a period it cannot spend.
@@ -301,7 +304,7 @@ class OwnActiveReservationReadIntegrationTest extends PostgresIntegrationTestBas
                 "DATE_TRUNC('year', CURRENT_DATE)::date", "NULL");
 
         var forClaim = balanceReader.readForPreauthorizedClaim(
-                w.memberId(), limitsFor(w), null, w.preauthId());
+                w.memberId(), limitsFor(w), null, w.preauthId(), w.assignmentId());
 
         // A null upper bound is a different period, not "any period".
         assertThat(ownBucket(forClaim, w.bucketId()).ownActiveReservation())
@@ -316,7 +319,7 @@ class OwnActiveReservationReadIntegrationTest extends PostgresIntegrationTestBas
         holdTimes(w, w.preauthId(), "100.00", 1);
 
         var forClaim = balanceReader.readForPreauthorizedClaim(
-                w.memberId(), limitsFor(w), null, w.preauthId());
+                w.memberId(), limitsFor(w), null, w.preauthId(), w.assignmentId());
         var own = ownBucket(forClaim, w.bucketId());
 
         // Without this, an approval that took the last visit would block the
@@ -334,9 +337,10 @@ class OwnActiveReservationReadIntegrationTest extends PostgresIntegrationTestBas
         Long lineId = jdbc.queryForObject("INSERT INTO pre_authorization_lines (pre_authorization_id, "
                 + "requested_amount) VALUES (" + preauthId + ", " + amount + ") RETURNING id", Long.class);
         jdbc.update("INSERT INTO benefit_bucket_consumptions (policy_id, member_id, preauth_id, "
-                + "preauth_line_id, period_start, period_end, approved_amount, times_consumed, "
+                + "preauth_line_id, member_policy_assignment_id, period_start, period_end, approved_amount, times_consumed, "
                 + "calculation_version, idempotency_key, status, source_type, limit_scope, created_at) "
                 + "VALUES (" + w.policyId() + ", " + w.memberId() + ", " + preauthId + ", " + lineId
+                + ", " + w.assignmentId()
                 + ", DATE_TRUNC('year', CURRENT_DATE)::date, "
                 + "(DATE_TRUNC('year', CURRENT_DATE) + INTERVAL '1 year - 1 day')::date, " + amount
                 + ", 0, 1, 'ORG-" + s + "', 'RESERVED', 'PREAUTH', 'POLICY_GENERAL', now())");
@@ -347,10 +351,10 @@ class OwnActiveReservationReadIntegrationTest extends PostgresIntegrationTestBas
         Long lineId = jdbc.queryForObject("INSERT INTO pre_authorization_lines (pre_authorization_id, "
                 + "requested_amount) VALUES (" + preauthId + ", " + amount + ") RETURNING id", Long.class);
         jdbc.update("INSERT INTO benefit_bucket_consumptions (policy_id, member_id, bucket_id, preauth_id, "
-                + "preauth_line_id, period_start, period_end, approved_amount, times_consumed, "
+                + "preauth_line_id, member_policy_assignment_id, period_start, period_end, approved_amount, times_consumed, "
                 + "calculation_version, idempotency_key, status, source_type, limit_scope, created_at) "
                 + "VALUES (" + w.policyId() + ", " + w.memberId() + ", " + w.bucketId() + ", " + preauthId
-                + ", " + lineId + ", " + start + ", " + end + ", " + amount
+                + ", " + lineId + ", " + w.assignmentId() + ", " + start + ", " + end + ", " + amount
                 + ", 0, 1, 'ORP-" + s + "', 'RESERVED', 'PREAUTH', 'BUCKET', now())");
     }
 
@@ -359,10 +363,10 @@ class OwnActiveReservationReadIntegrationTest extends PostgresIntegrationTestBas
         Long lineId = jdbc.queryForObject("INSERT INTO pre_authorization_lines (pre_authorization_id, "
                 + "requested_amount) VALUES (" + preauthId + ", " + amount + ") RETURNING id", Long.class);
         jdbc.update("INSERT INTO benefit_bucket_consumptions (policy_id, member_id, bucket_id, preauth_id, "
-                + "preauth_line_id, period_start, period_end, approved_amount, times_consumed, "
+                + "preauth_line_id, member_policy_assignment_id, period_start, period_end, approved_amount, times_consumed, "
                 + "calculation_version, idempotency_key, status, source_type, limit_scope, created_at) "
                 + "VALUES (" + w.policyId() + ", " + w.memberId() + ", " + w.bucketId() + ", " + preauthId
-                + ", " + lineId + ", DATE_TRUNC('year', CURRENT_DATE)::date, "
+                + ", " + lineId + ", " + w.assignmentId() + ", DATE_TRUNC('year', CURRENT_DATE)::date, "
                 + "(DATE_TRUNC('year', CURRENT_DATE) + INTERVAL '1 year - 1 day')::date, " + amount
                 + ", " + times + ", 1, 'ORT-" + s + "', 'RESERVED', 'PREAUTH', 'BUCKET', now())");
     }
