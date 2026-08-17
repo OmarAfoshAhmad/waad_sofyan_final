@@ -20,12 +20,16 @@ import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import com.waad.tba.modules.preauthorization.entity.PreauthDecisionSnapshot;
+
 /** The only live adapter from claim entities to the canonical financial engine. */
 @Service
 @RequiredArgsConstructor
 public class ClaimFinancialAdjudicationService {
     private final BenefitPolicyRepository policyRepository;
     private final com.waad.tba.modules.member.service.MemberPolicyResolver memberPolicyResolver;
+    private final com.waad.tba.modules.preauthorization.repository.PreauthDecisionSnapshotRepository
+            decisionSnapshotRepository;
     private final EffectiveLimitResolver effectiveLimitResolver;
     private final LimitBalanceReader balanceReader;
     private final MultiLineMultiBucketEngine multiLineEngine;
@@ -44,6 +48,32 @@ public class ClaimFinancialAdjudicationService {
                 () -> new IllegalArgumentException("serviceDate is required"));
         BenefitPolicy policy = resolvePolicy(claim, serviceDate);
         Long memberId = claim.getMember().getId();
+
+        // READ from the approval's own decision, never re-derived here.
+        //
+        // "Which enrollment period holds this reservation" has a recorded
+        // answer: the decision snapshot wrote it when the hold was placed,
+        // against the EXPECTED service date. Re-deriving it from the claim's
+        // ACTUAL service date asks a different question and can get a
+        // different answer -- returning a member to a policy they held before
+        // opens a second assignment row for the same policy, so a service
+        // delivered later than expected resolves to an id the hold does not
+        // carry.
+        //
+        // The failure would be silent and expensive: the own-reservation
+        // lookup matches on the assignment and finds nothing, while the
+        // ordinary reserved total still subtracts the hold. The claim is
+        // capped as though its own approval were somebody else's spending,
+        // and the difference lands on the patient as a limit excess. Every
+        // constraint passes -- same member, same policy, same bucket, same
+        // period -- so nothing anywhere reports a problem.
+        Long assignmentId = claim.getPreAuthorization() == null ? null
+                : decisionSnapshotRepository
+                        .findFirstByPreauthIdOrderByCalculationVersionDesc(
+                                claim.getPreAuthorization().getId())
+                        .map(PreauthDecisionSnapshot::getMemberPolicyAssignmentId)
+                        .orElse(null);
+
         List<MultiLineMultiBucketEngine.LineInput> inputs = new ArrayList<>();
 
         for (int index = 0; index < claim.getLines().size(); index++) {
@@ -56,7 +86,11 @@ public class ClaimFinancialAdjudicationService {
             }
             var effective = effectiveLimitResolver.resolve(policy.getId(), line.getAppliedRuleId(), memberId,
                     serviceDate, claim.getEncounterType());
-            var balances = balanceReader.read(memberId, effective, claim.getId());
+            var balances = claim.getPreAuthorization() == null
+                    ? balanceReader.read(memberId, effective, claim.getId())
+                    : balanceReader.readForPreauthorizedClaim(memberId, effective, claim.getId(),
+                            claim.getPreAuthorization().getId(), assignmentId)
+                            .asFinancialEngineInput();
             BigDecimal requested = requiredPositive(line.getRequestedTotal(), "requestedTotal", index);
             BigDecimal contractualUnit = requiredPositive(line.getContractUnitPrice(), "contractUnitPrice", index);
             int quantity = line.getQuantity() == null ? 0 : line.getQuantity();

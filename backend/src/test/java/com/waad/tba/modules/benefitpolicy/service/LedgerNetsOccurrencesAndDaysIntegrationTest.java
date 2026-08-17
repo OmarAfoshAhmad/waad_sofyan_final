@@ -64,6 +64,9 @@ class LedgerNetsOccurrencesAndDaysIntegrationTest extends PostgresIntegrationTes
                 + "benefit_policy_id, card_number, barcode, status, active) VALUES (" + employerId
                 + ", 'Net Member', " + policyId + ", 'NT" + s + "', 'NT" + s
                 + "', 'ACTIVE', true) RETURNING id", Long.class);
+        jdbc.update("INSERT INTO member_policy_assignments (member_id, policy_id, "
+                + "assignment_start_date, assignment_source) VALUES (?, ?, CURRENT_DATE - 60, 'MANUAL')",
+                memberId, policyId);
         Long groupId = jdbc.queryForObject("INSERT INTO benefit_groups (policy_id, code, name_ar, "
                 + "aggregation_mode) VALUES (" + policyId + ", 'NTG-" + s
                 + "', 'مجموعة', 'INDIVIDUAL') RETURNING id", Long.class);
@@ -123,10 +126,15 @@ class LedgerNetsOccurrencesAndDaysIntegrationTest extends PostgresIntegrationTes
         jdbc.update("INSERT INTO benefit_bucket_consumptions (policy_id, member_id, bucket_id, preauth_id, "
                 + "preauth_line_id, period_start, period_end, approved_amount, times_consumed, "
                 + "calculation_version, idempotency_key, status, source_type, limit_scope, reversal_of_id, "
-                + "reversal_reason, created_at) SELECT policy_id, member_id, bucket_id, preauth_id, "
+                // Carried over from the original, as the production writer
+                // does: a release filed under a different enrolment period
+                // would hand the money back to a period that never held it.
+                + "reversal_reason, member_policy_assignment_id, created_at) "
+                + "SELECT policy_id, member_id, bucket_id, preauth_id, "
                 + "preauth_line_id, period_start, period_end, " + amount + ", " + times
                 + ", 1, 'NTPR-" + s + "', 'REVERSED', source_type, limit_scope, id, 'PREAUTH_RELEASE', "
-                + "now() FROM benefit_bucket_consumptions WHERE id = ?", originalId);
+                + "member_policy_assignment_id, now() FROM benefit_bucket_consumptions WHERE id = ?",
+                originalId);
     }
 
     // ── occurrences ─────────────────────────────────────────────────────
@@ -159,9 +167,12 @@ class LedgerNetsOccurrencesAndDaysIntegrationTest extends PostgresIntegrationTes
         Long holdId = jdbc.queryForObject("INSERT INTO benefit_bucket_consumptions (policy_id, member_id, "
                 + "bucket_id, preauth_id, preauth_line_id, period_start, period_end, approved_amount, "
                 + "times_consumed, calculation_version, idempotency_key, status, source_type, limit_scope, "
-                + "created_at) VALUES (" + w.policyId() + ", " + w.memberId() + ", " + w.bucketId() + ", "
+                + "member_policy_assignment_id, created_at) VALUES (" + w.policyId() + ", " + w.memberId()
+                + ", " + w.bucketId() + ", "
                 + preauthId + ", " + lineId + ", DATE '" + periodStart() + "', DATE '" + periodEnd()
-                + "', 300.00, 3, 1, 'NTH-" + s + "', 'RESERVED', 'PREAUTH', 'BUCKET', now()) RETURNING id",
+                + "', 300.00, 3, 1, 'NTH-" + s + "', 'RESERVED', 'PREAUTH', 'BUCKET', "
+                + "(SELECT id FROM member_policy_assignments WHERE member_id = " + w.memberId()
+                + " ORDER BY id LIMIT 1), now()) RETURNING id",
                 Long.class);
 
         releaseHold(holdId, "100.00", 1);

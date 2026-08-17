@@ -60,6 +60,7 @@ public class PreAuthorizationService {
     private final VisitRepository visitRepository;
     private final ProviderContractService providerContractService;
     private final PreAuthorizationAuditService auditService;
+    private final PreAuthReservationLedgerService reservationLedgerService;
     private final AuthorizationService authorizationService;
     private final ProviderContextGuard providerContextGuard;
     private final BenefitPolicyCoverageService benefitPolicyCoverageService;
@@ -875,13 +876,15 @@ public class PreAuthorizationService {
     public PreAuthorizationResponseDto cancelPreAuthorization(Long id, String cancelReason, String cancelledBy) {
         log.info("[PRE-AUTH] Cancelling pre-authorization {}", id);
 
+        // Through the ledger, not around it. Setting the status here would
+        // leave the reservation rows RESERVED while the approval says it is
+        // cancelled -- a hold nothing will ever release, quietly shrinking the
+        // member's limit for the rest of the period.
+        int released = reservationLedgerService.cancelAndRelease(id, cancelReason, cancelledBy);
+
         PreAuthorization preAuth = preAuthorizationRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("PreAuthorization not found with ID: " + id));
-
-        preAuth.cancel(cancelReason, cancelledBy);
-
-        preAuth = preAuthorizationRepository.save(preAuth);
-        log.info("[PRE-AUTH] Cancelled pre-authorization {}", id);
+        log.info("[PRE-AUTH] Cancelled pre-authorization {} ({} reservation(s) released)", id, released);
 
         // Log audit trail
         auditService.logCancel(id, preAuth.getReferenceNumber(), cancelledBy, cancelReason);
@@ -933,47 +936,6 @@ public class PreAuthorizationService {
     }
 
     // ==================== MARK AS USED ====================
-
-    /**
-     * Mark pre-authorization as USED (called when linked to a claim)
-     * Lifecycle: APPROVED/ACKNOWLEDGED → USED
-     * 
-     * This is typically called automatically by ClaimService when a claim is
-     * created with a pre-auth.
-     */
-    @Transactional
-    public PreAuthorizationResponseDto markAsUsed(Long id, String claimNumber, String updatedBy) {
-        log.info("[PRE-AUTH] Marking pre-authorization {} as USED (linked to claim {})", id, claimNumber);
-
-        PreAuthorization preAuth = preAuthorizationRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("PreAuthorization not found with ID: " + id));
-
-        // Validation: Only APPROVED or ACKNOWLEDGED pre-auths can be marked as USED
-        if (preAuth.getStatus() != PreAuthStatus.APPROVED && preAuth.getStatus() != PreAuthStatus.ACKNOWLEDGED) {
-            throw new IllegalStateException(
-                    String.format(
-                            "Only APPROVED or ACKNOWLEDGED pre-authorizations can be marked as USED. Current status: %s",
-                            preAuth.getStatus()));
-        }
-
-        // Transition to USED
-        PreAuthStatus oldStatus = preAuth.getStatus();
-        preAuth.setStatus(PreAuthStatus.USED);
-        preAuth.setUpdatedBy(updatedBy);
-
-        preAuth = preAuthorizationRepository.save(preAuth);
-        log.info("✅ Pre-authorization {} marked as USED (claim: {})", id, claimNumber);
-
-        // Log audit trail
-        auditService.logUpdate(id, preAuth.getReferenceNumber(), updatedBy,
-                "status", oldStatus.toString(), PreAuthStatus.USED.toString());
-
-        // Fetch related entities for response
-        Member member = memberRepository.findById(preAuth.getMemberId()).orElse(null);
-        Provider provider = providerRepository.findById(preAuth.getProviderId()).orElse(null);
-
-        return mapToResponseDto(preAuth, member, provider, null);
-    }
 
     // ==================== DELETE ====================
 
@@ -1347,14 +1309,15 @@ public class PreAuthorizationService {
     public int markExpiredPreAuthorizations() {
         log.info("[PRE-AUTH] Marking expired pre-authorizations");
 
-        List<PreAuthorization> expiredList = preAuthorizationRepository.findExpiredPreAuthorizations(LocalDate.now());
+        LocalDate today = LocalDate.now();
+        List<PreAuthorization> expiredList = preAuthorizationRepository.findExpiredPreAuthorizations(today);
 
+        // One at a time through the ledger, so an expiring approval hands its
+        // hold back instead of stranding it. The event id is the sweep's own
+        // date: running the job twice in a day releases once.
         for (PreAuthorization preAuth : expiredList) {
-            preAuth.markAsExpired();
-        }
-
-        if (!expiredList.isEmpty()) {
-            preAuthorizationRepository.saveAll(expiredList);
+            reservationLedgerService.expireAndRelease(
+                    preAuth.getId(), "EXPIRY_SWEEP:" + today);
         }
 
         log.info("[PRE-AUTH] Marked {} expired pre-authorizations", expiredList.size());

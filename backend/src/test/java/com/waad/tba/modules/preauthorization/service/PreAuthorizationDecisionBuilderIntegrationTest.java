@@ -257,10 +257,13 @@ class PreAuthorizationDecisionBuilderIntegrationTest extends PostgresIntegration
                 + "requested_amount) VALUES (" + preauthTwo + ", 600.00) RETURNING id", Long.class);
         jdbc.update("INSERT INTO benefit_bucket_consumptions (policy_id, member_id, bucket_id, preauth_id, "
                 + "preauth_line_id, period_start, period_end, approved_amount, times_consumed, "
-                + "calculation_version, idempotency_key, status, source_type, limit_scope, created_at) VALUES ("
+                + "calculation_version, idempotency_key, status, source_type, limit_scope, "
+                + "member_policy_assignment_id, created_at) VALUES ("
                 + "?, ?, ?, ?, ?, DATE_TRUNC('year', CURRENT_DATE)::date, "
                 + "(DATE_TRUNC('year', CURRENT_DATE) + INTERVAL '1 year - 1 day')::date, "
-                + "600.00, 0, 1, ?, 'RESERVED', 'PREAUTH', 'BUCKET', now())",
+                + "600.00, 0, 1, ?, 'RESERVED', 'PREAUTH', 'BUCKET', "
+                + "(SELECT id FROM member_policy_assignments WHERE member_id = " + sc.memberId()
+                + " ORDER BY id LIMIT 1), now())",
                 sc.policyId(), sc.memberId(), sc.bucketId(), preauthTwo, lineTwo, "HOLD-" + suffix());
 
         PreAuthorizationDecision decision = builder.build(sc.preauthId(), 1);
@@ -634,10 +637,13 @@ class PreAuthorizationDecisionBuilderIntegrationTest extends PostgresIntegration
                 + "requested_amount) VALUES (" + otherPreauth + ", 100.00) RETURNING id", Long.class);
         jdbc.update("INSERT INTO benefit_bucket_consumptions (policy_id, member_id, bucket_id, preauth_id, "
                 + "preauth_line_id, period_start, period_end, approved_amount, times_consumed, "
-                + "calculation_version, idempotency_key, status, source_type, limit_scope, created_at) VALUES ("
+                + "calculation_version, idempotency_key, status, source_type, limit_scope, "
+                + "member_policy_assignment_id, created_at) VALUES ("
                 + "?, ?, ?, ?, ?, DATE_TRUNC('year', CURRENT_DATE)::date, "
                 + "(DATE_TRUNC('year', CURRENT_DATE) + INTERVAL '1 year - 1 day')::date, "
-                + "0.00, 1, 1, ?, 'RESERVED', 'PREAUTH', 'BUCKET', now())",
+                + "0.00, 1, 1, ?, 'RESERVED', 'PREAUTH', 'BUCKET', "
+                + "(SELECT id FROM member_policy_assignments WHERE member_id = " + sc.memberId()
+                + " ORDER BY id LIMIT 1), now())",
                 sc.policyId(), sc.memberId(), sc.bucketId(), otherPreauth, otherLine, "TH-" + suffix());
 
         PreAuthorizationDecision decision = builder.build(sc.preauthId(), 1);

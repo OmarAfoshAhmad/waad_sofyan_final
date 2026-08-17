@@ -252,10 +252,18 @@ class BenefitBucketConcurrencyIntegrationTest extends PostgresIntegrationTestBas
                         + "VALUES (?, 60.00) RETURNING id",
                 Long.class, dependentPreauthId);
 
+        // Which enrolment period the hold sits in. V187 requires every PREAUTH
+        // row to name one, so a hold without it is a row the approval service
+        // can no longer produce.
+        Long dependentAssignmentId = jdbcTemplate.queryForObject(
+                "SELECT id FROM member_policy_assignments WHERE member_id = ? ORDER BY id LIMIT 1",
+                Long.class, dependent.member().getId());
+
         new TransactionTemplate(transactionManager).executeWithoutResult(status ->
             consumptionRepository.save(BenefitBucketConsumption.builder()
                     .policy(principal.policy())
                     .memberId(dependent.member().getId()).bucket(principal.bucket())
+                    .memberPolicyAssignmentId(dependentAssignmentId)
                     .periodStart(LocalDate.of(LocalDate.now().getYear(), 1, 1))
                     .periodEnd(LocalDate.of(LocalDate.now().getYear(), 12, 31))
                     .approvedAmount(new BigDecimal("60.00")).timesConsumed(1)

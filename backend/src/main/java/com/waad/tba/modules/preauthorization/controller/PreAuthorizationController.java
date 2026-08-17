@@ -321,32 +321,6 @@ public class PreAuthorizationController {
 
     // ==================== MARK AS USED ====================
 
-    /**
-     * Mark pre-authorization as USED (typically called by ClaimService)
-     * POST /api/v1/pre-authorizations/{id}/mark-used
-     * 
-     * Lifecycle: APPROVED/ACKNOWLEDGED → USED
-     * Note: This is usually automatic when a claim is created, but exposed for manual use if needed
-     */
-    @PostMapping("/{id:\\d+}/mark-used")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER')")
-    public ResponseEntity<ApiResponse<PreAuthorizationResponse>> markPreAuthorizationAsUsed(
-            @PathVariable("id") Long id,
-            @RequestParam(name = "claimNumber", required = false) String claimNumber,
-            Authentication authentication) {
-        
-        log.info("[API v1] Marking pre-authorization {} as USED", id);
-        
-        String updatedBy = authentication != null ? authentication.getName() : "system";
-        String claim = claimNumber != null ? claimNumber : "Manual";
-        PreAuthorizationResponseDto internalResponse = preAuthorizationService.markAsUsed(id, claim, updatedBy);
-        
-        // Convert internal DTO to API response
-        PreAuthorizationResponse response = apiMapper.toResponse(internalResponse);
-        
-        return ResponseEntity.ok(ApiResponse.success("Pre-authorization marked as used", response));
-    }
-
     // ==================== DELETE ====================
 
     /**

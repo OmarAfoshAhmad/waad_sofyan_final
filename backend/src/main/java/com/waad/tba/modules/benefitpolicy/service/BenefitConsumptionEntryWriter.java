@@ -99,6 +99,7 @@ public class BenefitConsumptionEntryWriter {
      */
     public BenefitBucketConsumption appendPreAuthReservation(
             Long preauthId, Long preauthLineId, BenefitPolicy policy, Long memberId,
+            Long memberPolicyAssignmentId,
             BenefitLimitBucket bucket, BenefitBucketConsumption.LimitScope scope,
             LocalDate periodStart, LocalDate periodEnd, BigDecimal amount, int times,
             Integer calculationVersion, String idempotencyKey) {
@@ -113,6 +114,7 @@ public class BenefitConsumptionEntryWriter {
         return consumptionRepository.save(BenefitBucketConsumption.builder()
                 .policy(policy).memberId(memberId).bucket(bucket)
                 .preauthId(preauthId).preauthLineId(preauthLineId)
+                .memberPolicyAssignmentId(memberPolicyAssignmentId)
                 .periodStart(periodStart).periodEnd(periodEnd)
                 .approvedAmount(amount).timesConsumed(times)
                 .status(BenefitBucketConsumption.Status.RESERVED)
@@ -133,7 +135,8 @@ public class BenefitConsumptionEntryWriter {
         requireSomeMovement(amount, times);
         if (reason != BenefitBucketConsumption.ReversalReason.PREAUTH_RELEASE
                 && reason != BenefitBucketConsumption.ReversalReason.PREAUTH_EXPIRY
-                && reason != BenefitBucketConsumption.ReversalReason.PREAUTH_CANCELLATION) {
+                && reason != BenefitBucketConsumption.ReversalReason.PREAUTH_CANCELLATION
+                && reason != BenefitBucketConsumption.ReversalReason.PREAUTH_CONVERSION_RELEASE) {
             throw new IllegalArgumentException(
                     "A pre-authorization release must state a pre-authorization reason, not " + reason);
         }
@@ -141,6 +144,7 @@ public class BenefitConsumptionEntryWriter {
         return consumptionRepository.save(BenefitBucketConsumption.builder()
                 .policy(original.getPolicy()).memberId(original.getMemberId()).bucket(original.getBucket())
                 .preauthId(original.getPreauthId()).preauthLineId(original.getPreauthLineId())
+                .memberPolicyAssignmentId(original.getMemberPolicyAssignmentId())
                 .periodStart(original.getPeriodStart()).periodEnd(original.getPeriodEnd())
                 .approvedAmount(amount).timesConsumed(times)
                 .status(BenefitBucketConsumption.Status.REVERSED)

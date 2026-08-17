@@ -85,8 +85,22 @@ public class PreAuthReservationLedgerService {
             PreAuthorization.PreAuthStatus.RESUBMITTED,
             PreAuthorization.PreAuthStatus.APPROVAL_IN_PROGRESS);
 
-    /** Statuses a hold may still be released from. */
+    /** Statuses that can still be holding something. */
     private static final List<PreAuthorization.PreAuthStatus> RELEASABLE = List.of(
+            PreAuthorization.PreAuthStatus.APPROVED,
+            PreAuthorization.PreAuthStatus.PARTIALLY_APPROVED,
+            PreAuthorization.PreAuthStatus.ACKNOWLEDGED);
+
+    /**
+     * Statuses cancellation may act from.
+     *
+     * Wider than RELEASABLE by one: a PENDING approval holds nothing, and
+     * cancelling it is perfectly ordinary. Refusing it because there is no
+     * hold to release would make the ledger's bookkeeping veto a decision
+     * that has nothing to do with the ledger.
+     */
+    private static final List<PreAuthorization.PreAuthStatus> CANCELLABLE = List.of(
+            PreAuthorization.PreAuthStatus.PENDING,
             PreAuthorization.PreAuthStatus.APPROVED,
             PreAuthorization.PreAuthStatus.PARTIALLY_APPROVED,
             PreAuthorization.PreAuthStatus.ACKNOWLEDGED);
@@ -152,7 +166,7 @@ public class PreAuthReservationLedgerService {
         if (reason == null || reason.isBlank()) {
             throw new BusinessRuleException("إلغاء الموافقة يتطلب سبباً صريحاً.");
         }
-        return release(preauthId,
+        return release(preauthId, CANCELLABLE,
                 BenefitBucketConsumption.ReversalReason.PREAUTH_CANCELLATION,
                 PreAuthorization.PreAuthStatus.CANCELLED,
                 "PREAUTH_CANCEL", reason, actor, null);
@@ -164,13 +178,45 @@ public class PreAuthReservationLedgerService {
      */
     @Transactional
     public int expireAndRelease(Long preauthId, String eventId) {
-        return release(preauthId,
+        return release(preauthId, RELEASABLE,
                 BenefitBucketConsumption.ReversalReason.PREAUTH_EXPIRY,
                 PreAuthorization.PreAuthStatus.EXPIRED,
                 "PREAUTH_EXPIRE", "انتهت صلاحية الموافقة المسبقة", "SYSTEM", eventId);
     }
 
-    private int release(Long preauthId, BenefitBucketConsumption.ReversalReason reason,
+    /**
+     * Whether any hold placed by this approval is still outstanding.
+     *
+     * Exposed so the conversion step can ask the ledger rather than infer it
+     * from a status, which a second writer could set without moving anything.
+     */
+    @Transactional(readOnly = true)
+    public boolean hasOutstandingReservation(Long preauthId) {
+        return consumptionRepository.findActiveReservationsForPreauth(preauthId).stream()
+                .anyMatch(original -> outstandingAmount(original).signum() > 0
+                        || outstandingTimes(original) > 0);
+    }
+
+    /**
+     * Finalizes a hold after its owning claim has posted consumption. This is
+     * intentionally the same ledger writer used by cancellation and expiry:
+     * the conversion finalizer may coordinate the lifecycle, but it may not
+     * become a third writer of reservation movements.
+     */
+    @Transactional
+    public int releaseOnConversion(Long preauthId, Long claimId, String actor) {
+        if (claimId == null) {
+            throw new IllegalArgumentException("claimId is required");
+        }
+        return release(preauthId, RELEASABLE,
+                BenefitBucketConsumption.ReversalReason.PREAUTH_CONVERSION_RELEASE,
+                PreAuthorization.PreAuthStatus.USED,
+                "PREAUTH_CONVERT", "حُوّلت الموافقة إلى المطالبة " + claimId,
+                actor, String.valueOf(claimId));
+    }
+
+    private int release(Long preauthId, List<PreAuthorization.PreAuthStatus> actableFrom,
+            BenefitBucketConsumption.ReversalReason reason,
             PreAuthorization.PreAuthStatus finalStatus, String keyPrefix, String note,
             String actor, String eventId) {
 
@@ -186,7 +232,7 @@ public class PreAuthReservationLedgerService {
             throw new BusinessRuleException(
                     "لا يمكن إلغاء أو إنهاء موافقة تحولت إلى مطالبة.");
         }
-        if (!RELEASABLE.contains(preauth.getStatus())) {
+        if (!actableFrom.contains(preauth.getStatus())) {
             throw new BusinessRuleException(
                     "لا توجد حجوزات قابلة للتحرير في الحالة الحالية: "
                             + preauth.getStatus().getArabicLabel());
@@ -369,6 +415,7 @@ public class PreAuthReservationLedgerService {
 
         entryWriter.appendPreAuthReservation(
                 decision.preauthId(), lineSnapshot.getPreauthLineId(), policy, decision.memberId(),
+                decision.basis().memberPolicyAssignmentId(),
                 bucket,
                 "POLICY_GENERAL".equals(hold.limitScope())
                         ? BenefitBucketConsumption.LimitScope.POLICY_GENERAL

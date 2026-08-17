@@ -104,7 +104,29 @@ public class LimitBalanceReader {
             Long memberId,
             Long preAuthorizationId,
             List<PreauthorizedClaimBalance> limits,
-            BigDecimal bindingAvailableForThisClaim) {}
+            BigDecimal bindingAvailableForThisClaim) {
+
+        /**
+         * Adapter for the financial engine. The ordinary balances remain
+         * unchanged and auditable above; only this claim-specific projection
+         * exposes the amount/times that the owner of the hold may spend.
+         */
+        public BalanceSet asFinancialEngineInput() {
+            List<LimitBalance> projected = limits.stream().map(item -> {
+                LimitBalance b = item.balance();
+                return new LimitBalance(b.limit(), b.committed(), b.reserved(),
+                        b.actualRemaining(), item.availableForThisClaim(),
+                        b.timesLimit(), b.committedTimes(), b.reservedTimes(),
+                        b.actualRemainingTimes(), item.availableTimesForThisClaim());
+            }).toList();
+            List<String> bindingKeys = projected.stream()
+                    .filter(b -> b.reservableAvailable() != null
+                            && bindingAvailableForThisClaim != null
+                            && b.reservableAvailable().compareTo(bindingAvailableForThisClaim) == 0)
+                    .map(b -> b.limit().definition().semanticKey()).toList();
+            return new BalanceSet(memberId, projected, bindingAvailableForThisClaim, bindingKeys);
+        }
+    }
 
     private record BalanceKey(Long bucketId, LocalDate start, LocalDate end, Status status) {}
 
@@ -129,10 +151,13 @@ public class LimitBalanceReader {
     @Transactional(readOnly = true)
     public PreauthorizedClaimBalanceSet readForPreauthorizedClaim(Long memberId,
             List<EffectiveLimitResolver.EffectiveLimit> limits, Long excludeClaimId,
-            Long preAuthorizationId) {
+            Long preAuthorizationId, Long memberPolicyAssignmentId) {
 
         if (preAuthorizationId == null) {
             throw new IllegalArgumentException("preAuthorizationId is required");
+        }
+        if (memberPolicyAssignmentId == null) {
+            throw new IllegalArgumentException("memberPolicyAssignmentId is required");
         }
         BalanceSet base = read(memberId, limits, excludeClaimId);
 
@@ -143,7 +168,7 @@ public class LimitBalanceReader {
                     ? "POLICY_GENERAL" : "BUCKET";
 
             BigDecimal own = Optional.ofNullable(consumptionRepository.sumOwnActiveReservation(
-                    memberId, preAuthorizationId, definition.bucketId(), scope,
+                    memberId, preAuthorizationId, memberPolicyAssignmentId, definition.bucketId(), scope,
                     definition.periodStart(), definition.periodEnd())).orElse(BigDecimal.ZERO);
 
             // Added BACK, then capped: the hold returns to its owner, but never
@@ -155,7 +180,7 @@ public class LimitBalanceReader {
             Integer availableTimes = null;
             if (balance.timesLimit() != null) {
                 ownTimes = Optional.ofNullable(consumptionRepository.sumOwnActiveReservationTimes(
-                        memberId, preAuthorizationId, definition.bucketId(), scope,
+                        memberId, preAuthorizationId, memberPolicyAssignmentId, definition.bucketId(), scope,
                         definition.periodStart(), definition.periodEnd())).orElse(0);
                 // The same rule in occurrences: an approval that took the last
                 // visit must not block the claim it was granted for.
