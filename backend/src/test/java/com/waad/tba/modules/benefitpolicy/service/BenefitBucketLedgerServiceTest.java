@@ -33,6 +33,7 @@ class BenefitBucketLedgerServiceTest {
     @Mock BenefitRuleBucketRepository ruleBucketRepository;
     @Mock BenefitLimitBucketRepository bucketRepository;
     @Mock BenefitBucketConsumptionRepository consumptionRepository;
+    @Mock LimitBalanceReader limitBalanceReader;
 
     private BenefitBucketLedgerService service;
     private BenefitPolicy policy;
@@ -51,7 +52,7 @@ class BenefitBucketLedgerServiceTest {
                 claimRepository, memberPolicyResolver, benefitPolicyRepository, ruleBucketRepository,
                 bucketRepository, consumptionRepository,
                 new BenefitConsumptionEntryWriter(consumptionRepository),
-                new TimesLimitEvaluator());
+                new TimesLimitEvaluator(), limitBalanceReader);
 
         policy = BenefitPolicy.builder()
                 .id(1L)
@@ -99,6 +100,8 @@ class BenefitBucketLedgerServiceTest {
         lenient().when(bucketRepository.findByIdForUpdate(70L)).thenReturn(Optional.of(bucket));
         lenient().when(consumptionRepository.existsByIdempotencyKey(anyString())).thenReturn(false);
         lenient().when(consumptionRepository.existsUnledgeredApprovedBucketClaim(anyLong(), anyLong(), any()))
+                .thenReturn(false);
+        lenient().when(consumptionRepository.existsUnledgeredApprovedGeneralClaim(anyLong(), anyLong(), any()))
                 .thenReturn(false);
         lenient().when(consumptionRepository.sumCommittedAmount(any(), any(), any(), any(), any()))
                 .thenReturn(new BigDecimal("1300.00"));
@@ -187,6 +190,36 @@ class BenefitBucketLedgerServiceTest {
 
         assertTrue(error.getMessage().contains("لم تُرحّل إلى دفتر سقوف المنافع"));
         verify(bucketRepository, never()).findByIdForUpdate(anyLong());
+        verify(consumptionRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("مطالبة معتمدة سابقة بلا قيد سقف عام توقف الاعتماد اللاحق")
+    void unledgeredPreviousApprovedGeneralClaimFailsClosed() {
+        when(consumptionRepository.existsUnledgeredApprovedGeneralClaim(eq(10L), eq(20L), any())).thenReturn(true);
+
+        RuntimeException error = assertThrows(RuntimeException.class, () -> service.commitClaim(20L));
+
+        assertTrue(error.getMessage().contains("لم تُرحّل استهلاكها إلى السقف العام"));
+        verify(bucketRepository, never()).findByIdForUpdate(anyLong());
+        verify(consumptionRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("السقف العام يُقرأ من الدفتر لا من claim_lines، ويوقف الاعتماد عند تجاوزه")
+    void generalCeilingReadFromLedgerBlocksOverdraw() {
+        policy.setAnnualLimit(new BigDecimal("1000.00"));
+        when(benefitPolicyRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(policy));
+        when(limitBalanceReader.readGeneralCeiling(eq(10L), eq(1L), eq(new BigDecimal("1000.00")), any(), any(), eq(20L)))
+                .thenReturn(new LimitBalanceReader.GeneralCeilingBalance(
+                        new BigDecimal("1000.00"), new BigDecimal("900.00"), BigDecimal.ZERO,
+                        new BigDecimal("100.00"), new BigDecimal("100.00")));
+
+        // this claim's own line consumes 200, which added to the 900 already
+        // committed (per the ledger) exceeds the 1000 ceiling.
+        RuntimeException error = assertThrows(RuntimeException.class, () -> service.commitClaim(20L));
+
+        assertTrue(error.getMessage().contains("تجاوز السقف العام"));
         verify(consumptionRepository, never()).save(any());
     }
 

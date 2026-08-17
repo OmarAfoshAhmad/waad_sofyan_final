@@ -747,7 +747,12 @@ public class PreAuthorizationService {
                 LocalDate decisionDate = preAuth.getExpectedServiceDate();
                 var policyOnServiceDate = memberPolicyResolver.resolveForOrFail(member, decisionDate);
                 try {
-                    benefitPolicyCoverageService.validateAmountLimits(
+                    // Reservation-aware: approving this pre-authorization places a
+                    // new hold, so it must be measured against what is still
+                    // reservable, not merely what has been spent -- otherwise two
+                    // approvals in a row can each individually fit under the
+                    // ceiling while jointly exceeding it.
+                    benefitPolicyCoverageService.validateReservableAmountLimits(
                             member, policyOnServiceDate, approvedAmount, decisionDate);
                     log.debug("✅ BenefitPolicy amount validation passed");
                 } catch (Exception e) {

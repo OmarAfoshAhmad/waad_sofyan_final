@@ -88,6 +88,38 @@ public interface BenefitBucketConsumptionRepository extends JpaRepository<Benefi
                                                   @Param("currentClaimId") Long currentClaimId,
                                                   @Param("annualLimit") BigDecimal annualLimit);
 
+    /**
+     * The same fail-closed guard as {@link #existsUnledgeredApprovedBucketClaim},
+     * for the POLICY_GENERAL ceiling instead of a bucket. Reading the ceiling
+     * from the ledger (V189) instead of {@code claim_lines} is only safe once
+     * every APPROVED/BATCHED/SETTLED claim that ever spent it actually posted a
+     * COMMITTED POLICY_GENERAL row -- {@code postGeneralCeiling} writes one row
+     * per claim (via its claim_id), never per bucket, so this checks existence
+     * at the claim level directly, with no bucket join at all.
+     */
+    @Query(value = """
+        select exists (
+            select 1
+              from claims c
+              join claim_lines cl on cl.claim_id = c.id
+             where c.member_id = :memberId
+               and c.id <> :currentClaimId
+               and c.active = true
+               and c.status in ('APPROVED', 'BATCHED', 'SETTLED')
+               and cl.applied_rule_id is not null
+               and coalesce(cl.company_share, 0) > 0
+               and coalesce(cl.limit_consumption, 0) > 0
+               and :annualLimit is not null
+               and not exists (
+                   select 1 from benefit_bucket_consumptions bc
+                    where bc.claim_id = c.id and bc.limit_scope = 'POLICY_GENERAL' and bc.status = 'COMMITTED'
+               )
+        )
+        """, nativeQuery = true)
+    boolean existsUnledgeredApprovedGeneralClaim(@Param("memberId") Long memberId,
+                                                   @Param("currentClaimId") Long currentClaimId,
+                                                   @Param("annualLimit") BigDecimal annualLimit);
+
     default BigDecimal sumCommittedAmount(Long memberId, Long bucketId, LocalDate periodStart,
                                           LocalDate periodEnd, Long excludeClaimId) {
         return periodEnd == null

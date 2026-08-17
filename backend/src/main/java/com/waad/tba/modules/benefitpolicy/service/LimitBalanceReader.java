@@ -131,6 +131,35 @@ public class LimitBalanceReader {
     private record BalanceKey(Long bucketId, LocalDate start, LocalDate end, Status status) {}
 
     /**
+     * The POLICY_GENERAL ceiling read in isolation, for callers that have no
+     * {@code benefitRuleId} to hand {@link #read} -- {@code validateAmountLimits}
+     * checks a member's annual ceiling independent of any one claim line, so it
+     * cannot go through the rule-bucket resolution path {@link #read} requires.
+     * Same source, same two figures, same meaning as the POLICY_GENERAL branch
+     * of {@link #read}: committed and reserved both come from the ledger.
+     */
+    public record GeneralCeilingBalance(
+            BigDecimal limit, BigDecimal committed, BigDecimal reserved,
+            BigDecimal actualRemaining, BigDecimal reservableAvailable) {}
+
+    /**
+     * @return null when the policy carries no positive annual limit -- there is
+     *         no ceiling to report, not a ceiling of zero.
+     */
+    @Transactional(readOnly = true)
+    public GeneralCeilingBalance readGeneralCeiling(Long memberId, Long policyId, BigDecimal annualLimit,
+            LocalDate periodStart, LocalDate periodEnd, Long excludeClaimId) {
+        if (annualLimit == null || annualLimit.signum() <= 0) return null;
+        BigDecimal committed = consumptionRepository.sumGeneralScopeCommitted(
+                memberId, policyId, periodStart, periodEnd, excludeClaimId);
+        BigDecimal reserved = consumptionRepository.sumGeneralScopeReserved(
+                memberId, policyId, periodStart, periodEnd);
+        BigDecimal actualRemaining = annualLimit.subtract(committed);
+        BigDecimal reservableAvailable = actualRemaining.subtract(reserved);
+        return new GeneralCeilingBalance(annualLimit, committed, reserved, actualRemaining, reservableAvailable);
+    }
+
+    /**
      * The balance a claim born from a pre-authorization may spend against.
      *
      * A hold protects limit FROM other decisions, but it was placed FOR this

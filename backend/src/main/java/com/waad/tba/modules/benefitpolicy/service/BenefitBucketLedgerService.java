@@ -41,6 +41,7 @@ public class BenefitBucketLedgerService {
     // the append itself, so the ledger has one place to enforce invariants.
     private final BenefitConsumptionEntryWriter entryWriter;
     private final TimesLimitEvaluator timesLimitEvaluator;
+    private final LimitBalanceReader limitBalanceReader;
 
     /**
      * One-time operational repair for an already approved legacy claim.
@@ -90,6 +91,11 @@ public class BenefitBucketLedgerService {
         if (consumptionRepository.existsUnledgeredApprovedBucketClaim(memberId, claimId, policy.getAnnualLimit())) {
             throw new BusinessRuleException(
                     "يوجد للمستفيد مطالبة معتمدة سابقة لم تُرحّل إلى دفتر سقوف المنافع. "
+                    + "تم إيقاف الاعتماد لمنع تجاوز السقف؛ راجع سلامة دفتر المنافع ثم أعد المحاولة.");
+        }
+        if (consumptionRepository.existsUnledgeredApprovedGeneralClaim(memberId, claimId, policy.getAnnualLimit())) {
+            throw new BusinessRuleException(
+                    "يوجد للمستفيد مطالبة معتمدة سابقة لم تُرحّل استهلاكها إلى السقف العام في دفتر المنافع. "
                     + "تم إيقاف الاعتماد لمنع تجاوز السقف؛ راجع سلامة دفتر المنافع ثم أعد المحاولة.");
         }
         Set<TimesLimitEvaluator.CountedKey> countedOnce = new HashSet<>();
@@ -181,8 +187,12 @@ public class BenefitBucketLedgerService {
         BenefitPolicy lockedPolicy = benefitPolicyRepository.findByIdForUpdate(policy.getId()).orElseThrow();
         LocalDate yearStart = LocalDate.of(serviceDate.getYear(), 1, 1);
         LocalDate yearEnd = LocalDate.of(serviceDate.getYear(), 12, 31);
-        BigDecimal previouslyUsed = claimRepository.sumLimitConsumptionByMemberAndPeriodExcludingClaim(
-                memberId, yearStart, yearEnd, claim.getId());
+        // Read from the ledger (V189), not claim_lines -- the two guards above
+        // just proved every approved claim for this member has a COMMITTED
+        // POLICY_GENERAL row, so the ledger's committed figure is complete.
+        var ceiling = limitBalanceReader.readGeneralCeiling(
+                memberId, lockedPolicy.getId(), lockedPolicy.getAnnualLimit(), yearStart, yearEnd, claim.getId());
+        BigDecimal previouslyUsed = ceiling == null ? BigDecimal.ZERO : ceiling.committed();
         BigDecimal current = claim.getLines().stream()
                 .map(line -> Optional.ofNullable(line.getLimitConsumption()).orElse(BigDecimal.ZERO))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
