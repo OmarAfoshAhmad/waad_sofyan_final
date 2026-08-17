@@ -405,12 +405,27 @@ class ClaimCopayDiscountRejectionOrderingIntegrationTest extends PostgresIntegra
 
         // The benefit bucket consumes the contractual settlement value (500),
         // not the insurer's final payment (350).
+        // Scoped to the bucket on purpose. The same 500 is also committed
+        // against the policy's general ceiling, and summing both would report
+        // 1000 -- which would look like a double charge while actually being
+        // one amount measured against two different ceilings.
         BigDecimal committedInLedger = benefitBucketConsumptionRepository
                 .findByClaimIdAndStatus(claim.getId(), BenefitBucketConsumption.Status.COMMITTED)
                 .stream()
+                .filter(c -> c.getLimitScope() == BenefitBucketConsumption.LimitScope.BUCKET)
                 .map(BenefitBucketConsumption::getApprovedAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         assertThat(committedInLedger).isEqualByComparingTo("500.00");
+
+        BigDecimal committedAgainstGeneralCeiling = benefitBucketConsumptionRepository
+                .findByClaimIdAndStatus(claim.getId(), BenefitBucketConsumption.Status.COMMITTED)
+                .stream()
+                .filter(c -> c.getLimitScope() == BenefitBucketConsumption.LimitScope.POLICY_GENERAL)
+                .map(BenefitBucketConsumption::getApprovedAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        assertThat(committedAgainstGeneralCeiling)
+                .as("the same settlement value, measured against the annual limit")
+                .isEqualByComparingTo("500.00");
 
         // What is ACTUALLY persisted on Claim.approvedAmount -- the number the
         // annual policy ceiling sums across all of this member's claims. Today

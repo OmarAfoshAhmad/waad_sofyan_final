@@ -231,14 +231,20 @@ public class LimitBalanceReader {
             BigDecimal committed;
             BigDecimal reserved;
             if (definition.benefitScopeType() == BenefitScopeType.POLICY_GENERAL) {
-                committed = claimRepository.sumLimitConsumptionByMemberAndPeriodExcludingClaim(
-                        memberId, definition.periodStart(), definition.periodEnd(), excludeClaimId);
-                // Read from the general ceiling's OWN reservation rows (V174).
-                // Still never derived from bucket rows: one line can map to
-                // several buckets, so summing them would count the same money
-                // repeatedly. Until the approval service starts writing holds
-                // this is legitimately zero -- but it is now zero because
-                // nothing is reserved, not because it cannot be expressed.
+                // Both halves from the ledger now (V189). Committed used to be
+                // summed out of claim_lines while reserved was read here, so
+                // one subtraction drew on two sources and only one of them
+                // could represent a movement that was not a claim. An imported
+                // opening balance is exactly such a movement, and under the old
+                // arrangement the only way to make it count was to fabricate
+                // the claim it was not.
+                //
+                // Neither figure is ever derived from bucket rows: one line can
+                // map to several buckets, so summing those would count the same
+                // money once per category it happened to fall into.
+                committed = consumptionRepository.sumGeneralScopeCommitted(
+                        memberId, definition.policyId(), definition.periodStart(),
+                        definition.periodEnd(), excludeClaimId);
                 reserved = consumptionRepository.sumGeneralScopeReserved(
                         memberId, definition.policyId(), definition.periodStart(), definition.periodEnd());
             } else {

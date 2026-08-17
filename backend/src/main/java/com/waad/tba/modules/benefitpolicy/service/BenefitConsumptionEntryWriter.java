@@ -70,6 +70,40 @@ public class BenefitConsumptionEntryWriter {
                 .committedAt(LocalDateTime.now()).build());
     }
 
+    /**
+     * A claim consuming the policy's GENERAL ceiling.
+     *
+     * One movement per line, never per bucket: a line can map to several
+     * buckets, and the general ceiling is spent once by the line whatever
+     * those buckets are. Deriving the general figure by summing bucket rows
+     * would count the same money as many times as it was categorised.
+     *
+     * It carries no bucket because the general ceiling is a scope rather than
+     * a bucket -- there is no row for it to point at.
+     */
+    public BenefitBucketConsumption appendClaimGeneralCommit(
+            Claim claim, ClaimLine line, BenefitPolicy policy, Long memberId,
+            LocalDate periodStart, LocalDate periodEnd, BigDecimal amount,
+            Integer calculationVersion, String idempotencyKey) {
+
+        if (claim == null || line == null) {
+            throw new IllegalArgumentException("A claim movement needs both its claim and its line");
+        }
+        requireKey(idempotencyKey);
+        requireNonNegativeDimensions(amount, 0);
+        requireSomeMovement(amount, 0);
+
+        return consumptionRepository.save(BenefitBucketConsumption.builder()
+                .claim(claim).claimLine(line).policy(policy).memberId(memberId)
+                .periodStart(periodStart).periodEnd(periodEnd)
+                .approvedAmount(amount).timesConsumed(0)
+                .status(BenefitBucketConsumption.Status.COMMITTED)
+                .sourceType(BenefitBucketConsumption.SourceType.CLAIM)
+                .limitScope(BenefitBucketConsumption.LimitScope.POLICY_GENERAL)
+                .calculationVersion(calculationVersion).idempotencyKey(idempotencyKey)
+                .committedAt(LocalDateTime.now()).build());
+    }
+
     /** The compensating movement that releases a claim's consumption. */
     public BenefitBucketConsumption appendClaimReversal(
             BenefitBucketConsumption original, BigDecimal amount, int times,
@@ -156,6 +190,76 @@ public class BenefitConsumptionEntryWriter {
     }
 
     /**
+     * Spending this system never saw, carried in from whatever kept the
+     * member's balance before it.
+     *
+     * COMMITTED, not RESERVED: a balance brought forward is already spent. It
+     * names no claim, because no claim of ours produced it -- that is the
+     * whole point of the source type, and the reason a fabricated claim is not
+     * an acceptable substitute.
+     *
+     * @param bucket null for the policy's general ceiling, which is a scope
+     *               rather than a bucket and has no row to point at
+     */
+    public BenefitBucketConsumption appendOpeningConsumption(
+            BenefitPolicy policy, Long memberId, Long openingBatchId, BenefitLimitBucket bucket,
+            BenefitBucketConsumption.LimitScope scope, LocalDate periodStart, LocalDate periodEnd,
+            BigDecimal amount, int times, String idempotencyKey) {
+
+        requireOpeningShape(openingBatchId, bucket, scope, idempotencyKey);
+        requireNonNegativeDimensions(amount, times);
+        requireSomeMovement(amount, times);
+
+        return consumptionRepository.save(BenefitBucketConsumption.builder()
+                .policy(policy).memberId(memberId).bucket(bucket)
+                .openingBatchId(openingBatchId)
+                .periodStart(periodStart).periodEnd(periodEnd)
+                .approvedAmount(amount).timesConsumed(times)
+                .status(BenefitBucketConsumption.Status.COMMITTED)
+                .sourceType(BenefitBucketConsumption.SourceType.OPENING_IMPORT)
+                .limitScope(scope)
+                .calculationVersion(1).idempotencyKey(idempotencyKey)
+                .committedAt(LocalDateTime.now()).build());
+    }
+
+    /**
+     * The compensating movement that corrects an imported balance.
+     *
+     * It carries the CORRECTING batch, not the corrected one. A release
+     * inherits its hold's attribution because the two are one act; a
+     * correction is a later decision by a named person for a stated reason,
+     * and filing it under the original batch would hide that anyone
+     * intervened. The database enforces the difference.
+     */
+    public BenefitBucketConsumption appendOpeningCorrection(
+            BenefitBucketConsumption original, Long correctingBatchId, BigDecimal amount, int times,
+            String idempotencyKey, LocalDateTime reversedAt) {
+
+        requireOriginal(original, BenefitBucketConsumption.SourceType.OPENING_IMPORT);
+        requireNonNegativeDimensions(amount, times);
+        requireSomeMovement(amount, times);
+        if (correctingBatchId == null) {
+            throw new IllegalArgumentException("A correction must name the batch that performed it");
+        }
+        if (correctingBatchId.equals(original.getOpeningBatchId())) {
+            throw new IllegalArgumentException(
+                    "A correction may not be filed under the batch it corrects");
+        }
+
+        return consumptionRepository.save(BenefitBucketConsumption.builder()
+                .policy(original.getPolicy()).memberId(original.getMemberId()).bucket(original.getBucket())
+                .openingBatchId(correctingBatchId)
+                .periodStart(original.getPeriodStart()).periodEnd(original.getPeriodEnd())
+                .approvedAmount(amount).timesConsumed(times)
+                .status(BenefitBucketConsumption.Status.REVERSED)
+                .reversalReason(BenefitBucketConsumption.ReversalReason.OPENING_CORRECTION)
+                .sourceType(BenefitBucketConsumption.SourceType.OPENING_IMPORT)
+                .limitScope(original.getLimitScope())
+                .calculationVersion(original.getCalculationVersion()).idempotencyKey(idempotencyKey)
+                .reversalOf(original).reversedAt(reversedAt).build());
+    }
+
+    /**
      * One flush per operational unit, not one per line. Batching is what keeps
      * a many-line claim from issuing a round trip per bucket, and the caller
      * translates constraint violations around this single point.
@@ -172,6 +276,25 @@ public class BenefitConsumptionEntryWriter {
         }
         if (bucket == null) {
             throw new IllegalArgumentException("A claim movement consumes a bucket");
+        }
+        requireKey(key);
+    }
+
+    private void requireOpeningShape(Long openingBatchId, BenefitLimitBucket bucket,
+            BenefitBucketConsumption.LimitScope scope, String key) {
+        if (openingBatchId == null) {
+            throw new IllegalArgumentException(
+                    "An opening balance must name the batch that imported it");
+        }
+        if (scope == null) {
+            throw new IllegalArgumentException("A movement must name the ceiling it measures against");
+        }
+        if (scope == BenefitBucketConsumption.LimitScope.BUCKET && bucket == null) {
+            throw new IllegalArgumentException("A bucket-scoped movement needs its bucket");
+        }
+        if (scope == BenefitBucketConsumption.LimitScope.POLICY_GENERAL && bucket != null) {
+            throw new IllegalArgumentException(
+                    "A general-ceiling movement measures the policy, not a bucket");
         }
         requireKey(key);
     }

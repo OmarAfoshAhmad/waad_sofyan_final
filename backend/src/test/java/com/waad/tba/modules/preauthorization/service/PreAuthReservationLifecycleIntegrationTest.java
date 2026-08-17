@@ -191,10 +191,10 @@ class PreAuthReservationLifecycleIntegrationTest extends PostgresIntegrationTest
         // Consume the whole bucket first.
         jdbc.update("INSERT INTO benefit_bucket_consumptions (policy_id, member_id, bucket_id, period_start, "
                 + "period_end, approved_amount, times_consumed, calculation_version, idempotency_key, status, "
-                + "source_type, limit_scope, created_at) VALUES (?, ?, ?, "
+                + "source_type, limit_scope, opening_batch_id, created_at) VALUES (?, ?, ?, "
                 + "DATE_TRUNC('year', CURRENT_DATE)::date, "
                 + "(DATE_TRUNC('year', CURRENT_DATE) + INTERVAL '1 year - 1 day')::date, "
-                + "1000.00, 0, 1, ?, 'COMMITTED', 'OPENING_IMPORT', 'BUCKET', now())",
+                + "1000.00, 0, 1, ?, 'COMMITTED', 'OPENING_IMPORT', 'BUCKET', " + openingBatch() + ", now())",
                 sc.policyId(), sc.memberId(), sc.bucketId(), "EX-" + suffix());
 
         var snapshot = service.approveAndReserve(sc.preauthId(), 0L, "reviewer");
@@ -449,4 +449,22 @@ class PreAuthReservationLifecycleIntegrationTest extends PostgresIntegrationTest
         assertThat(bucketHold).isEqualByComparingTo("1000.00");
         assertThat(generalHold).isEqualByComparingTo("800.00");
     }
+
+    /**
+     * The import batch a seeded opening balance belongs to.
+     *
+     * These fixtures use OPENING_IMPORT to mean "already spent before this
+     * scenario starts", which is what the source type is for. Since V188 such
+     * a movement must name the batch that brought it in -- an opening balance
+     * nobody can attribute is the thing that column exists to prevent -- so
+     * the fixture creates one rather than writing a row production could not.
+     */
+    private Long openingBatch() {
+        return jdbc.queryForObject(
+                "INSERT INTO member_opening_balance_batches (batch_reference, reason, performed_by, "
+                        + "source_reference) VALUES (?, 'رصيد افتتاحي للاختبار', 'tester', "
+                        + "'prior system export') RETURNING id",
+                Long.class, "TEST-BATCH-" + java.util.UUID.randomUUID());
+    }
+
 }

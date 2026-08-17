@@ -90,10 +90,10 @@ class OwnActiveReservationReadIntegrationTest extends PostgresIntegrationTestBas
         if (alreadyCommitted != null) {
             jdbc.update("INSERT INTO benefit_bucket_consumptions (policy_id, member_id, bucket_id, "
                     + "period_start, period_end, approved_amount, times_consumed, calculation_version, "
-                    + "idempotency_key, status, source_type, limit_scope, created_at) VALUES (?, ?, ?, "
+                    + "idempotency_key, status, source_type, limit_scope, opening_batch_id, created_at) VALUES (?, ?, ?, "
                     + "DATE_TRUNC('year', CURRENT_DATE)::date, "
                     + "(DATE_TRUNC('year', CURRENT_DATE) + INTERVAL '1 year - 1 day')::date, "
-                    + alreadyCommitted + ", 0, 1, ?, 'COMMITTED', 'OPENING_IMPORT', 'BUCKET', now())",
+                    + alreadyCommitted + ", 0, 1, ?, 'COMMITTED', 'OPENING_IMPORT', 'BUCKET', " + openingBatch() + ", now())",
                     policyId, memberId, bucketId, "ORC-" + s);
         }
         return new World(memberId, policyId, assignmentId, bucketId, ruleId, preauthId);
@@ -370,4 +370,22 @@ class OwnActiveReservationReadIntegrationTest extends PostgresIntegrationTestBas
                 + "(DATE_TRUNC('year', CURRENT_DATE) + INTERVAL '1 year - 1 day')::date, " + amount
                 + ", " + times + ", 1, 'ORT-" + s + "', 'RESERVED', 'PREAUTH', 'BUCKET', now())");
     }
+
+    /**
+     * The import batch a seeded opening balance belongs to.
+     *
+     * These fixtures use OPENING_IMPORT to mean "already spent before this
+     * scenario starts", which is what the source type is for. Since V188 such
+     * a movement must name the batch that brought it in -- an opening balance
+     * nobody can attribute is the thing that column exists to prevent -- so
+     * the fixture creates one rather than writing a row production could not.
+     */
+    private Long openingBatch() {
+        return jdbc.queryForObject(
+                "INSERT INTO member_opening_balance_batches (batch_reference, reason, performed_by, "
+                        + "source_reference) VALUES (?, 'رصيد افتتاحي للاختبار', 'tester', "
+                        + "'prior system export') RETURNING id",
+                Long.class, "TEST-BATCH-" + java.util.UUID.randomUUID());
+    }
+
 }

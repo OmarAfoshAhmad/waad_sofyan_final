@@ -97,6 +97,18 @@ public class BenefitBucketLedgerService {
 
         for (ClaimLine line : claim.getLines()) {
             if (line.getAppliedRuleId() == null || amount(line).signum() <= 0) continue;
+
+            // The general ceiling, once per line and before its buckets.
+            //
+            // The ledger could not previously say what a claim had spent
+            // against the policy's own annual limit -- that figure was summed
+            // out of claim_lines while the ceiling's reservations lived here,
+            // so the two halves of "limit - committed - reserved" came from
+            // different places. Anything general that is not a claim, which is
+            // precisely what an imported opening balance is, fell into the gap
+            // between them and was invisible to every decision.
+            postGeneralCeiling(claim, line, policy, memberId, serviceDate);
+
             LinkedHashMap<Long, BenefitLimitBucket> buckets = new LinkedHashMap<>();
             for (BenefitRuleBucket link : ruleBucketRepository.findByRuleIdOrderByConsumptionOrder(line.getAppliedRuleId())) {
                 addWithParents(link.getBucket(), buckets);
@@ -137,6 +149,33 @@ public class BenefitBucketLedgerService {
                     || (bucket.getBenefitGroup() != null && "G-GENERAL".equalsIgnoreCase(bucket.getBenefitGroup().getCode())));
     }
 
+    /**
+     * The policy's general annual ceiling, spent by one claim line.
+     *
+     * The window is the calendar year of the service date, which is what
+     * BucketPeriodCalculator returns for an ANNUAL period -- the same window
+     * the reservation rows and the balance reader already use. Deriving it any
+     * other way here would put the committed and reserved halves of one
+     * ceiling in different periods.
+     */
+    private void postGeneralCeiling(Claim claim, ClaimLine line, BenefitPolicy policy, Long memberId,
+            LocalDate serviceDate) {
+
+        if (policy.getAnnualLimit() == null || policy.getAnnualLimit().signum() <= 0) return;
+
+        BigDecimal consumed = line.getLimitConsumption();
+        if (consumed == null || consumed.signum() <= 0) return;
+
+        String key = "CLAIM:" + claim.getId() + ":LINE:" + line.getId()
+                + ":GENERAL:V" + line.getCalculationVersion();
+        if (consumptionRepository.existsByIdempotencyKey(key)) return;
+
+        LocalDate start = LocalDate.of(serviceDate.getYear(), 1, 1);
+        LocalDate end = LocalDate.of(serviceDate.getYear(), 12, 31);
+        entryWriter.appendClaimGeneralCommit(claim, line, policy, memberId, start, end, consumed,
+                line.getCalculationVersion(), key);
+    }
+
     private void validatePolicyAnnualLimit(Claim claim, BenefitPolicy policy, Long memberId, LocalDate serviceDate) {
         if (policy.getAnnualLimit() == null || policy.getAnnualLimit().signum() <= 0) return;
         BenefitPolicy lockedPolicy = benefitPolicyRepository.findByIdForUpdate(policy.getId()).orElseThrow();
@@ -167,7 +206,12 @@ public class BenefitBucketLedgerService {
                 claimId, BenefitBucketConsumption.Status.COMMITTED)) {
             String key = original.getIdempotencyKey() + ":REVERSAL";
             if (consumptionRepository.existsByIdempotencyKey(key)) continue;
-            bucketRepository.findByIdForUpdate(original.getBucket().getId()).orElseThrow();
+            // A general-ceiling movement has no bucket to lock. It measures the
+            // policy itself, and the member row this transaction already holds
+            // is what serialises it -- there is no narrower row to take.
+            if (original.getBucket() != null) {
+                bucketRepository.findByIdForUpdate(original.getBucket().getId()).orElseThrow();
+            }
             LocalDateTime now = LocalDateTime.now();
             // The original is NOT touched. It stays COMMITTED forever, and the
             // compensating row below is what removes the money from the

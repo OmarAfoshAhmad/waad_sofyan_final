@@ -478,4 +478,46 @@ public interface BenefitBucketConsumptionRepository extends JpaRepository<Benefi
                                        @Param("policyId") Long policyId,
                                        @Param("periodStart") LocalDate periodStart,
                                        @Param("periodEnd") LocalDate periodEnd);
+
+    /**
+     * Net COMMITTED amount spent against the POLICY_GENERAL ceiling, from
+     * whatever spent it.
+     *
+     * This is the half that used to be summed out of claim_lines while its
+     * reserved counterpart was read here, so one ceiling's arithmetic came
+     * from two places and only one of them was the ledger. Anything general
+     * that is not a claim -- an imported opening balance above all -- could
+     * not be represented in the claim-table half at all, short of fabricating
+     * a claim for it.
+     *
+     * Source-agnostic on purpose: a claim, an opening import and a manual
+     * adjustment all spend the same ceiling, and a filter on source_type here
+     * would silently exclude whichever kind was added last.
+     */
+    @Query(value = """
+        select coalesce(sum(c.approved_amount - coalesce(r.reversed_amount, 0)), 0)
+          from benefit_bucket_consumptions c
+          left join (
+                select reversal_of_id, sum(approved_amount) as reversed_amount
+                  from benefit_bucket_consumptions
+                 where status = 'REVERSED' and reversal_of_id is not null
+                 group by reversal_of_id
+          ) r on r.reversal_of_id = c.id
+         where c.member_id = :memberId
+           and c.policy_id = :policyId
+           and c.limit_scope = 'POLICY_GENERAL'
+           and c.status = 'COMMITTED'
+           and c.period_start = :periodStart
+           and c.period_end is not distinct from cast(:periodEnd as date)
+           -- The claim being adjudicated must not count against itself. An
+           -- opening balance carries no claim_id, and `is distinct from`
+           -- keeps a null on the left TRUE here -- so it stays counted, which
+           -- is the whole reason it was imported.
+           and (:excludeClaimId is null or c.claim_id is distinct from :excludeClaimId)
+        """, nativeQuery = true)
+    BigDecimal sumGeneralScopeCommitted(@Param("memberId") Long memberId,
+                                        @Param("policyId") Long policyId,
+                                        @Param("periodStart") LocalDate periodStart,
+                                        @Param("periodEnd") LocalDate periodEnd,
+                                        @Param("excludeClaimId") Long excludeClaimId);
 }
