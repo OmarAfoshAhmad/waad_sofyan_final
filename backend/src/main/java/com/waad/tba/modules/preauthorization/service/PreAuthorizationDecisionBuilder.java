@@ -306,7 +306,14 @@ public class PreAuthorizationDecisionBuilder {
                 // discountBeforeRejection matter at all.
                 explicitRejected,
                 fullyRejected,
-                approvedQuantity));
+                // The engine's OWN quantity invariant (must be > 0, and never
+                // used to derive an output -- see WaadFinancialEngine.Input's
+                // javadoc): this is the line's shape, not the reviewer's
+                // verdict. Passing approvedQuantity here sent 0 for every
+                // fully-rejected line and made the engine refuse to evaluate
+                // it at all, so a request could never mix a rejected line
+                // with an approved one.
+                requestedQuantity));
 
         // ── the occurrence dimension ────────────────────────────────────
         // A ceiling on OCCURRENCES constrains the decision independently of
@@ -381,7 +388,7 @@ public class PreAuthorizationDecisionBuilder {
                 coveragePercent,
                 terms == null ? BigDecimal.ZERO : terms.getDiscountPercent(),
                 terms != null && Boolean.TRUE.equals(terms.getDiscountBeforeRejection()),
-                explicitRejected, fullyRejected, approvedQuantity));
+                explicitRejected, fullyRejected, requestedQuantity));
         BigDecimal companyShareBeforeLimit = scaled(uncapped.insurerFinalPayment());
 
         BigDecimal rejectedForLine = fullyRejected

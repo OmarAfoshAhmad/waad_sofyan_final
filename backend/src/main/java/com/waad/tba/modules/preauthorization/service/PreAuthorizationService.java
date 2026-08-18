@@ -716,58 +716,21 @@ public class PreAuthorizationService {
                         "PreAuthorization is not in APPROVAL_IN_PROGRESS status: " + preAuth.getStatus());
             }
 
-            BigDecimal approvedAmount = resolveApprovedAmount(preAuth, dto);
-            BigDecimal copayPercentage = resolveCopayPercentage(preAuth, dto);
-
-            // Validate approved amount against contract price
-            if (preAuth.getContractPrice() != null && approvedAmount.compareTo(preAuth.getContractPrice()) > 0) {
-                log.warn("[PRE-AUTH] Approved amount {} exceeds contract price {}",
-                        approvedAmount, preAuth.getContractPrice());
-            }
-
-            // Calculate copay
-            BigDecimal copayAmount = preAuth.calculateCopay(approvedAmount, copayPercentage);
-
-            // Validate coverage if member has benefit policy
-            Member member = memberRepository.findById(preAuth.getMemberId()).orElse(null);
-            if (member != null) {
-                // The EXPECTED SERVICE DATE decides the policy -- not the
-                // request date, and never today. A pre-authorization is a
-                // decision about a future service, so it must be evaluated
-                // against the policy that will apply when that service
-                // happens. Falling back to requestDate (or worse, now())
-                // silently approved against the wrong policy whenever the two
-                // straddled a policy change. Missing expectedServiceDate fails
-                // closed rather than being guessed.
-                if (preAuth.getExpectedServiceDate() == null) {
-                    throw new BusinessRuleException(
-                            "تاريخ الخدمة المتوقع مطلوب لاعتماد الموافقة المسبقة: "
-                                    + "لا يمكن تحديد الوثيقة والسقوف بدونه");
-                }
-                LocalDate decisionDate = preAuth.getExpectedServiceDate();
-                var policyOnServiceDate = memberPolicyResolver.resolveForOrFail(member, decisionDate);
-                try {
-                    // Reservation-aware: approving this pre-authorization places a
-                    // new hold, so it must be measured against what is still
-                    // reservable, not merely what has been spent -- otherwise two
-                    // approvals in a row can each individually fit under the
-                    // ceiling while jointly exceeding it.
-                    benefitPolicyCoverageService.validateReservableAmountLimits(
-                            member, policyOnServiceDate, approvedAmount, decisionDate);
-                    log.debug("✅ BenefitPolicy amount validation passed");
-                } catch (Exception e) {
-                    log.error("❌ BenefitPolicy coverage validation failed: {}", e.getMessage());
-                    throw new IllegalStateException("فشل التحقق من التغطية: " + e.getMessage());
-                }
-            }
-
-            // Approve
-            preAuth.approve(approvedAmount, copayAmount, approvedBy);
-            preAuth.setCopayPercentage(copayPercentage);
-
-            preAuth = preAuthorizationRepository.save(preAuth);
-            log.info("[PRE-AUTH] Approved pre-authorization {} with amount {} and copay {}",
-                    id, approvedAmount, copayAmount);
+            // Delegates to the single financial engine -- the same one the
+            // reviewer's /finalize path uses. dto.approvedAmount/copayPercentage
+            // (already documented on the DTO as no longer strict) have no
+            // effect on the decision: approveAndReserve derives it from each
+            // line's reviewDecision (defaulting an unreviewed line to fully
+            // requested, which is exactly what "/approve with no line review"
+            // has always meant here), resolves every applicable bucket and the
+            // general ceiling via ApplicableLimitResolver, and reserves under
+            // lock in the same transaction that sets the approved status --
+            // so a reservation failure rolls back the status change with it,
+            // never leaving APPROVED with nothing held.
+            var snapshot = reservationLedgerService.approveAndReserve(id, null, approvedBy);
+            preAuth = preAuthorizationRepository.findById(id).orElseThrow();
+            log.info("[PRE-AUTH] Approved pre-authorization {} with amount {} (snapshot {})",
+                    id, preAuth.getApprovedTotalAmount(), snapshot.getId());
 
             // Note: visit status is NOT auto-set to COMPLETED here.
             // A visit may have multiple pre-authorizations and claims.
@@ -777,8 +740,7 @@ public class PreAuthorizationService {
 
             // Log audit trail
             auditService.logApprove(id, preAuth.getReferenceNumber(), approvedBy,
-                    "Approved amount: " + approvedAmount +
-                            ", Copay: " + copayPercentage + "%");
+                    "Approved amount: " + preAuth.getApprovedTotalAmount());
 
             log.info("✅ [SPLIT-PHASE] Phase 2 complete: PreAuth {} approved successfully", id);
 
