@@ -13,6 +13,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -133,6 +134,47 @@ class OpeningConsumptionImportServiceTest {
                 eq(new BigDecimal("100.0")), eq(2), anyString());
         verify(ticketService).consume("TOKEN-1", file, referenceDate);
         verify(entryWriter).flush();
+    }
+
+    /**
+     * This is a CONTRACT test, not an implementation detail: it is the
+     * guardrail behind the "opening days is N/A" decision in
+     * docs/MEMBER_CLOSURE_PLAN.md. Days limits live only on BUCKET-scoped
+     * buckets; POLICY_GENERAL has no days concept at all. Because this
+     * service never posts a BUCKET-scoped opening row, there is no
+     * production path today that can create an opening "days already
+     * used" that the days-limit queries (which INNER JOIN through
+     * claim_id, and OPENING_IMPORT rows are structurally forbidden from
+     * carrying one) would then miscount.
+     *
+     * If a future change makes this test fail -- i.e. teaches this service
+     * to post a BUCKET-scoped opening row -- that change MUST also design
+     * how an opening days count is represented and read, not just start
+     * writing amount/times against a bucket and silently reopen the days
+     * blind spot this decision closed.
+     */
+    @Test
+    @DisplayName("CONTRACT: opening import only ever posts POLICY_GENERAL scope, never a bucket -- "
+            + "this is what makes the days-limit blind spot unreachable today")
+    void openingImportNeverPostsBucketScope_daysLimitBlindSpotIsCurrentlyUnreachable() throws Exception {
+        Member member = Member.builder().id(1L).fullName("Ali").build();
+        BenefitPolicy policy = BenefitPolicy.builder().id(9L).annualLimit(new BigDecimal("10000")).build();
+        when(memberRepository.findById(1L)).thenReturn(Optional.of(member));
+        when(memberPolicyResolver.resolveFor(eq(member), eq(referenceDate))).thenReturn(Optional.of(policy));
+        when(jdbc.queryForObject(anyString(), eq(Long.class), any(), any(), any(), any())).thenReturn(700L);
+
+        var file = workbookWithRows(new Object[]{1, 250.00, 0, "carried forward"});
+        service.executeConfirmedImport(file, referenceDate, "TOKEN-2", "BATCH-2", "opening balances", "legacy");
+
+        ArgumentCaptor<BenefitBucketConsumption.LimitScope> scopeCaptor =
+                ArgumentCaptor.forClass(BenefitBucketConsumption.LimitScope.class);
+        ArgumentCaptor<com.waad.tba.modules.benefitpolicy.entity.BenefitLimitBucket> bucketCaptor =
+                ArgumentCaptor.forClass(com.waad.tba.modules.benefitpolicy.entity.BenefitLimitBucket.class);
+        verify(entryWriter).appendOpeningConsumption(any(), any(), any(), bucketCaptor.capture(),
+                scopeCaptor.capture(), any(), any(), any(), anyInt(), anyString());
+
+        assertThat(scopeCaptor.getValue()).isEqualTo(BenefitBucketConsumption.LimitScope.POLICY_GENERAL);
+        assertThat(bucketCaptor.getValue()).isNull();
     }
 
     @Test
