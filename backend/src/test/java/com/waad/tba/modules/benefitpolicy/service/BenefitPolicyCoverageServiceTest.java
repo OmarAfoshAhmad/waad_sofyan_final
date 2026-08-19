@@ -329,6 +329,22 @@ class BenefitPolicyCoverageServiceTest {
     }
 
     @Test
+    @DisplayName("getRemainingCoverage reads the ledger filtered to THIS policy, not the unfiltered claim_lines total -- "
+            + "a member who switched policies mid-year must not have a former policy's spending count against this one")
+    void getRemainingCoverage_ReadsPolicyFilteredLedger_NotUnfilteredClaimLinesTotal() {
+        when(limitBalanceReader.readGeneralCeiling(eq(1L), eq(1L), eq(new BigDecimal("10000.00")), any(), any(), isNull()))
+                .thenReturn(new LimitBalanceReader.GeneralCeilingBalance(
+                        new BigDecimal("10000.00"), new BigDecimal("3000.00"), BigDecimal.ZERO,
+                        new BigDecimal("7000.00"), new BigDecimal("7000.00")));
+
+        BigDecimal remaining = coverageService.getRemainingCoverage(testPolicy, 1L, LocalDate.now());
+
+        assertEquals(0, new BigDecimal("7000.00").compareTo(remaining));
+        verify(claimRepository, never())
+                .sumLimitConsumptionByMemberAndPeriodExcludingClaim(anyLong(), any(), any(), any());
+    }
+
+    @Test
     @DisplayName("getLimitConsumedForYear queries the calendar-year window on the limit-consumption axis")
     void getLimitConsumedForYear_QueriesCalendarYearWindow() {
         when(claimRepository.sumLimitConsumptionByMemberAndPeriodExcludingClaim(

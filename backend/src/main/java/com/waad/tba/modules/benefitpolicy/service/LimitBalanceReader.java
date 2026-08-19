@@ -160,6 +160,47 @@ public class LimitBalanceReader {
     }
 
     /**
+     * Bulk counterpart of {@link #readGeneralCeiling}'s committed figure --
+     * one query for the whole batch, same O(1) shape
+     * {@code MemberFinancialSummaryService.getFinancialSummaries} already
+     * guarantees. Committed only: bulk display reads (a member-financial-summary
+     * screen, a family eligibility check) show what has actually been spent,
+     * never a reservation.
+     *
+     * A member absent from {@code policyIdByMemberId} or with no committed rows
+     * under THEIR OWN policy id is present in the result with ZERO, never
+     * absent -- a caller that skips a missing key while trusting a present
+     * zero is exactly the bug this method exists to prevent for members who
+     * changed policies mid-period (whose historical rows sit under a DIFFERENT
+     * policy id and must not be added to the current policy's ceiling).
+     *
+     * @param policyIdByMemberId each member's policy AS OF THE DATE that produced
+     *                           periodStart/periodEnd -- never the member's
+     *                           current pointer, for the same reason
+     *                           {@link #readGeneralCeiling} takes an explicit
+     *                           policyId rather than resolving one itself
+     */
+    @Transactional(readOnly = true)
+    public java.util.Map<Long, BigDecimal> readGeneralCeilingCommittedBulk(
+            java.util.Map<Long, Long> policyIdByMemberId, LocalDate periodStart, LocalDate periodEnd,
+            Long excludeClaimId) {
+        java.util.Map<Long, BigDecimal> result = new HashMap<>();
+        for (Long memberId : policyIdByMemberId.keySet()) {
+            result.put(memberId, BigDecimal.ZERO);
+        }
+        if (policyIdByMemberId.isEmpty()) return result;
+
+        for (var row : consumptionRepository.sumGeneralScopeCommittedBulk(
+                policyIdByMemberId.keySet(), periodStart, periodEnd, excludeClaimId)) {
+            Long currentPolicyId = policyIdByMemberId.get(row.getMemberId());
+            if (currentPolicyId != null && currentPolicyId.equals(row.getPolicyId())) {
+                result.put(row.getMemberId(), row.getAmount());
+            }
+        }
+        return result;
+    }
+
+    /**
      * The balance a claim born from a pre-authorization may spend against.
      *
      * A hold protects limit FROM other decisions, but it was placed FOR this

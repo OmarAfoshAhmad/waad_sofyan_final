@@ -887,10 +887,15 @@ public class BenefitPolicyCoverageService {
 
     /**
      * Get remaining coverage given an already-resolved policy (supports
-     * employer-level fallback). WAAD-FIN-1.0 S4: "remaining" is
-     * {@code annualLimit - consumed}, where consumed is limit consumption
-     * (settlement value), never approvedAmount -- see
-     * {@link #getLimitConsumedForYear(Long, int, Long)}.
+     * employer-level fallback). WAAD-FIN-1.0 S4 + finance-08: "remaining" is
+     * {@code annualLimit - consumed}, read from the ledger and filtered to
+     * THIS policy's own rows via {@link LimitBalanceReader#readGeneralCeiling}
+     * -- never {@link #getLimitConsumedForYear(Long, int, Long)}'s
+     * unfiltered-by-policy total, which sums a member's consumption across
+     * every policy they held that calendar year. A member who changed
+     * policies mid-year has two distinct ceilings; the old, unfiltered read
+     * let one policy's remaining balance be understated by spending under a
+     * DIFFERENT policy the member no longer has.
      */
     public BigDecimal getRemainingCoverage(BenefitPolicy policy, Long memberId, LocalDate asOfDate) {
         if (policy == null) {
@@ -902,8 +907,9 @@ public class BenefitPolicyCoverageService {
             return null; // Unlimited or not configured
         }
 
-        BigDecimal used = getLimitConsumedForYear(memberId, asOfDate.getYear(), null);
-        return annualLimit.subtract(used).max(BigDecimal.ZERO);
+        var ceiling = limitBalanceReader.readGeneralCeiling(memberId, policy.getId(), annualLimit,
+                LocalDate.of(asOfDate.getYear(), 1, 1), LocalDate.of(asOfDate.getYear(), 12, 31), null);
+        return ceiling.actualRemaining().max(BigDecimal.ZERO);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════

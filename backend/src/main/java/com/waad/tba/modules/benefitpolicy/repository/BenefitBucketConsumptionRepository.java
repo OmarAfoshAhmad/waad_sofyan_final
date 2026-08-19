@@ -552,4 +552,48 @@ public interface BenefitBucketConsumptionRepository extends JpaRepository<Benefi
                                         @Param("periodStart") LocalDate periodStart,
                                         @Param("periodEnd") LocalDate periodEnd,
                                         @Param("excludeClaimId") Long excludeClaimId);
+
+    interface GeneralCeilingBulkProjection {
+        Long getMemberId();
+        Long getPolicyId();
+        BigDecimal getAmount();
+    }
+
+    /**
+     * Bulk counterpart of {@link #sumGeneralScopeCommitted} -- one query for an
+     * entire batch of members instead of one per member, the same O(1) shape
+     * {@code MemberFinancialSummaryService.getFinancialSummaries} already
+     * guarantees for its other reads.
+     *
+     * Grouped by (member_id, policy_id) rather than pre-filtered to one policy
+     * per member: a member who changed policies mid-period has committed rows
+     * under BOTH policy ids in the same calendar window, and each policy's own
+     * annual limit must only ever be measured against ITS OWN rows. The caller
+     * is the one who knows which policy_id is the member's CURRENT one and
+     * picks that row; a row for a policy the member has since left is not
+     * silently added to a limit it was never spent against.
+     */
+    @Query(value = """
+        select c.member_id as memberId, c.policy_id as policyId,
+               coalesce(sum(c.approved_amount - coalesce(r.reversed_amount, 0)), 0) as amount
+          from benefit_bucket_consumptions c
+          left join (
+                select reversal_of_id, sum(approved_amount) as reversed_amount
+                  from benefit_bucket_consumptions
+                 where status = 'REVERSED' and reversal_of_id is not null
+                 group by reversal_of_id
+          ) r on r.reversal_of_id = c.id
+         where c.member_id in (:memberIds)
+           and c.limit_scope = 'POLICY_GENERAL'
+           and c.status = 'COMMITTED'
+           and c.period_start = :periodStart
+           and c.period_end is not distinct from cast(:periodEnd as date)
+           and (:excludeClaimId is null or c.claim_id is distinct from :excludeClaimId)
+         group by c.member_id, c.policy_id
+        """, nativeQuery = true)
+    List<GeneralCeilingBulkProjection> sumGeneralScopeCommittedBulk(
+            @Param("memberIds") java.util.Collection<Long> memberIds,
+            @Param("periodStart") LocalDate periodStart,
+            @Param("periodEnd") LocalDate periodEnd,
+            @Param("excludeClaimId") Long excludeClaimId);
 }
