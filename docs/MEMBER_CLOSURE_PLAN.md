@@ -246,10 +246,25 @@ OpenEnded`, `existsCommittedForServiceDay` — تنضم لـ`claims` عبر `cla
 التغيير — لا استيراد وعاء بمبلغ ومرات فقط ثم إصلاح الأيام لاحقاً. **شرط إعادة
 الفتح:** إدخال استيراد افتتاحي على مستوى الوعاء (مبلغ + مرات + أيام بعقد واحد).
 
+**القراءة الزمنية للوثيقة — مُغلقة** (`07aba8af`): `getRemainingCoverage` و`MemberFinancialSummaryService`
+كانتا تقرآن استهلاك السقف من `claim_lines` بلا فلتر `policy_id` — على عكس
+`validateAmountLimits`/`validateReservableAmountLimits`/`validatePolicyAnnualLimit`
+اللواتي انتقلن بالفعل إلى `LimitBalanceReader.readGeneralCeiling` المفلتَر
+بالوثيقة (بوابة التصحيح أعلاه). مستفيد بدّل وثيقته منتصف السنة كان استهلاكه
+تحت الوثيقة القديمة يُضاف لرصيد الوثيقة الجديدة المتبقي. `getRemainingCoverage(BenefitPolicy,...)`
+تقرأ الآن `readGeneralCeiling` بمعرّف الوثيقة نفسها. النسخة المجمَّعة
+(`MemberFinancialSummaryService`) احتاجت نظيراً مجمَّعاً يحافظ على ضمانها
+الموثَّق (استعلام واحد للدفعة كلها): `sumGeneralScopeCommittedBulk` يُجمِّع حسب
+(`member_id`, `policy_id`) — لأن المستفيد الذي بدّل وثيقته لديه صفوف تحت
+**كلا** المعرّفين في نفس نافذة السنة — و`readGeneralCeilingCommittedBulk` يختار
+صف الوثيقة **الحالية** لكل عضو فقط، لا جمعاً عبر الوثائق. `getLimitConsumedForYear`
+(النسختان) بقيتا كما هما — صحيحتان لِما تقيسانه فعلاً (إجمالي الاستهلاك بصرف
+النظر عن تاريخ الوثائق)، لكنهما لم تعودا مصدر "المتبقي على الوثيقة الحالية".
+اختبارات: `LimitBalanceReaderTest` (سيناريو التبديل منتصف السنة تحديداً)،
+`BenefitPolicyCoverageServiceTest`، `MemberFinancialSummaryServiceTest` — 978
+اختباراً backend، صفر فشل وصفر خطأ.
+
 **قرارات أُخرى أُعلنت ولا تزال قائمة (لم تُحسم في هذه المرحلة):**
-   - **القراءة الجديدة تفلتر بالوثيقة والقديمة لا تفعل.** مستفيد انتقل بين
-     وثيقتين في منتصف السنة يتغيّر رصيده. قد يكون الجديد أصحّ، لكنه **تغيّر
-     رصيد** يجب أن يُقرَّر عمداً لا أن يمرّ.
    - `ApplicableLimitResolver` يُصدر تعريفاً عاماً عند `annualLimit != null`
      بينما الكاتب يشترط `> 0`. لا أثر في القرار اليوم (المحرّك يقصّ بـ
      `max(ZERO)`)، لكنه تباين معلن بين كاتب وقارئ.
