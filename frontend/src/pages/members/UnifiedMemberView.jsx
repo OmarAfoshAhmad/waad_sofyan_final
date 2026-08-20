@@ -96,6 +96,8 @@ import { openSnackbar } from 'api/snackbar';
 import { RELATIONSHIP_AR } from './member.shared';
 import api from 'utils/axios';
 import MemberLifecycleDialog from './MemberLifecycleDialog';
+import useAuth from 'hooks/useAuth';
+import { getMemberCapabilities } from './memberCapabilities';
 
 const unwrapApi = (response) => response?.data?.data ?? response?.data ?? response;
 
@@ -156,6 +158,8 @@ const UnifiedMemberView = () => {
   const theme = useTheme();
   const navigate = useNavigate();
   const { id } = useParams();
+  const { user } = useAuth();
+  const capabilities = getMemberCapabilities(user);
 
   const [loading, setLoading] = useState(true);
   const [member, setMember] = useState(null);
@@ -227,11 +231,7 @@ const UnifiedMemberView = () => {
     const targetId = statusMenuTargetId;
     setStatusMenuAnchor(null);
     setStatusMenuTargetId(null);
-    if (targetStatus === 'SUSPENDED') {
-      setStatusChangeDialog({ open: true, targetId, targetStatus, reason: '' });
-      return;
-    }
-    applyStatusChange(targetId, targetStatus, null);
+    setStatusChangeDialog({ open: true, targetId, targetStatus, reason: '' });
   };
 
   const handleChangePage = (event, newPage) => {
@@ -518,12 +518,12 @@ const UnifiedMemberView = () => {
             <Button variant="outlined" startIcon={<ArrowBackIcon />} onClick={() => navigate('/members')}>
               رجوع
             </Button>
-            <Button variant="outlined" color="primary" startIcon={<EditIcon />} onClick={() => navigate(`/members/${id}/edit`)}>
+            {capabilities.edit && <Button variant="outlined" color="primary" startIcon={<EditIcon />} onClick={() => navigate(`/members/${id}/edit`)}>
               تعديل
-            </Button>
-            <Button variant="outlined" color="error" startIcon={<DeleteIcon />} onClick={() => handleDeleteConfirm(member)}>
-              حذف
-            </Button>
+            </Button>}
+            {capabilities.lifecycle && <Button variant="outlined" color="error" startIcon={<DeleteIcon />} onClick={() => handleDeleteConfirm(member)}>
+              إنهاء العضوية
+            </Button>}
           </Stack>
         }
       />
@@ -608,7 +608,7 @@ const UnifiedMemberView = () => {
                           title={
                             member.status === 'SUSPENDED' && member.blockedReason
                               ? `سبب الإيقاف: ${member.blockedReason}`
-                              : 'اضغط لتغيير حالة المستفيد'
+                              : capabilities.lifecycle ? 'اضغط لتغيير حالة المستفيد' : 'حالة المستفيد'
                           }
                         >
                           <Chip
@@ -621,11 +621,11 @@ const UnifiedMemberView = () => {
                               'default'
                             }
                             size="small"
-                            onClick={(e) => handleOpenStatusMenu(e, member.id)}
-                            sx={{ height: '1.5rem', fontSize: '0.75rem', cursor: 'pointer' }}
+                            onClick={capabilities.lifecycle ? (e) => handleOpenStatusMenu(e, member.id) : undefined}
+                            sx={{ height: '1.5rem', fontSize: '0.75rem', cursor: capabilities.lifecycle ? 'pointer' : 'default' }}
                           />
                         </Tooltip>
-                        <Menu anchorEl={statusMenuAnchor} open={Boolean(statusMenuAnchor)} onClose={() => setStatusMenuAnchor(null)}>
+                        {capabilities.lifecycle && <Menu anchorEl={statusMenuAnchor} open={Boolean(statusMenuAnchor)} onClose={() => setStatusMenuAnchor(null)}>
                           {MEMBER_STATUS_OPTIONS.filter((opt) => {
                             const currentStatus =
                               statusMenuTargetId === member.id
@@ -637,7 +637,7 @@ const UnifiedMemberView = () => {
                               {opt.label}
                             </MenuItem>
                           ))}
-                        </Menu>
+                        </Menu>}
                       </Stack>
 
                       <Divider flexItem sx={{ width: '100%', my: 0.5 }} />
@@ -851,14 +851,14 @@ const UnifiedMemberView = () => {
                       }
                     />
                   </Stack>
-                  <Button
+                  {capabilities.create && <Button
                     variant="contained"
                     startIcon={<AddIcon />}
                     onClick={handleAddClick}
                     disabled={showDeleted} // Disable add in deleted view
                   >
                     إضافة تابع
-                  </Button>
+                  </Button>}
                 </Stack>
 
                 <Divider />
@@ -927,7 +927,7 @@ const UnifiedMemberView = () => {
                                       title={
                                         dep.status === 'SUSPENDED' && dep.blockedReason
                                           ? `سبب الإيقاف: ${dep.blockedReason}`
-                                          : 'اضغط لتغيير حالة التابع'
+                                          : capabilities.lifecycle ? 'اضغط لتغيير حالة التابع' : 'حالة التابع'
                                       }
                                     >
                                       <Chip
@@ -942,8 +942,8 @@ const UnifiedMemberView = () => {
                                           ] || 'default'
                                         }
                                         size="small"
-                                        onClick={(e) => handleOpenStatusMenu(e, dep.id)}
-                                        sx={{ height: '1.5rem', cursor: 'pointer' }}
+                                        onClick={capabilities.lifecycle ? (e) => handleOpenStatusMenu(e, dep.id) : undefined}
+                                        sx={{ height: '1.5rem', cursor: capabilities.lifecycle ? 'pointer' : 'default' }}
                                       />
                                     </Tooltip>
                                   </TableCell>
@@ -951,29 +951,29 @@ const UnifiedMemberView = () => {
                                     <Stack direction="row" spacing={1} justifyContent="center">
                                       {showDeleted ? (
                                         <>
-                                          <Tooltip title="استعادة">
+                                          {capabilities.lifecycle && <Tooltip title="استعادة">
                                             <IconButton size="small" color="success" onClick={() => handleRestore(dep.id)}>
                                               <RestoreFromTrashIcon fontSize="small" />
                                             </IconButton>
-                                          </Tooltip>
-                                          <Tooltip title="حذف نهائي">
+                                          </Tooltip>}
+                                          {capabilities.hardDelete && <Tooltip title="حذف نهائي">
                                             <IconButton size="small" color="error" onClick={() => handleHardDeleteDepConfirm(dep)}>
                                               <DeleteIcon fontSize="small" />
                                             </IconButton>
-                                          </Tooltip>
+                                          </Tooltip>}
                                         </>
                                       ) : (
                                         <>
-                                          <Tooltip title="تعديل">
+                                          {capabilities.edit && <Tooltip title="تعديل">
                                             <IconButton size="small" color="secondary" onClick={() => handleEditClick(dep)}>
                                               <EditIcon fontSize="small" />
                                             </IconButton>
-                                          </Tooltip>
-                                          <Tooltip title="حذف">
+                                          </Tooltip>}
+                                          {capabilities.lifecycle && <Tooltip title="إنهاء العضوية">
                                             <IconButton size="small" color="error" onClick={() => handleDeleteConfirm(dep)}>
                                               <DeleteIcon fontSize="small" />
                                             </IconButton>
-                                          </Tooltip>
+                                          </Tooltip>}
                                         </>
                                       )}
                                     </Stack>
@@ -1213,15 +1213,18 @@ const UnifiedMemberView = () => {
         maxWidth="xs"
         fullWidth
       >
-        <DialogTitle>تعليق المستفيد</DialogTitle>
+        <DialogTitle>تغيير حالة المستفيد</DialogTitle>
         <DialogContent>
-          <DialogContentText sx={{ mb: 2 }}>يرجى توضيح سبب تعليق هذا المستفيد.</DialogContentText>
+          <DialogContentText sx={{ mb: 2 }}>
+            الحالة الجديدة: {MEMBER_STATUS_OPTIONS.find((option) => option.value === statusChangeDialog.targetStatus)?.label || statusChangeDialog.targetStatus}.
+            يرجى توضيح سبب التغيير ليُحفظ في سجل التدقيق.
+          </DialogContentText>
           <TextField
             autoFocus
             fullWidth
             multiline
             minRows={2}
-            label="سبب التعليق"
+            label="سبب تغيير الحالة"
             value={statusChangeDialog.reason}
             onChange={(e) => setStatusChangeDialog((prev) => ({ ...prev, reason: e.target.value }))}
           />
@@ -1232,11 +1235,11 @@ const UnifiedMemberView = () => {
           </Button>
           <Button
             variant="contained"
-            color="warning"
+            color="primary"
             disabled={statusChangeLoading || !statusChangeDialog.reason.trim()}
             onClick={() => applyStatusChange(statusChangeDialog.targetId, statusChangeDialog.targetStatus, statusChangeDialog.reason)}
           >
-            تأكيد التعليق
+            تأكيد تغيير الحالة
           </Button>
         </DialogActions>
       </Dialog>
