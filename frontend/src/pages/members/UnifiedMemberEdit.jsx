@@ -19,7 +19,6 @@ import {
   FormControl,
   InputLabel,
   Select,
-  FormHelperText,
   CircularProgress,
   Alert,
   Box,
@@ -54,15 +53,19 @@ import ModernPageHeader from 'components/tba/ModernPageHeader';
 import {
   getMember,
   updateMember,
-  changeMemberStatus,
   uploadPhoto,
   deletePhoto,
-  RELATIONSHIPS,
   GENDERS
 } from 'services/api/unified-members.service';
 import axiosClient from 'utils/axios';
 import { openSnackbar } from 'api/snackbar';
 import { MemberAvatar } from '../../components/tba';
+
+const RELATIONSHIP_LABELS = {
+  WIFE: 'زوجة', HUSBAND: 'زوج', SON: 'ابن', DAUGHTER: 'ابنة',
+  FATHER: 'أب', MOTHER: 'أم', BROTHER: 'أخ', SISTER: 'أخت'
+};
+const STATUS_LABELS = { ACTIVE: 'نشط', SUSPENDED: 'موقوف', PENDING: 'قيد المراجعة', TERMINATED: 'منتهي' };
 
 /**
  * Unified Member Edit Component
@@ -120,10 +123,7 @@ const UnifiedMemberEdit = () => {
 
   // Lookup Data
   const [employers, setEmployers] = useState([]);
-  const [benefitPolicies, setBenefitPolicies] = useState([]);
   const [isPrincipal, setIsPrincipal] = useState(false);
-  const [initialStatus, setInitialStatus] = useState('ACTIVE');
-  const [statusReason, setStatusReason] = useState('');
 
   /**
    * Helper to check if a tab has validation errors
@@ -184,7 +184,6 @@ const UnifiedMemberEdit = () => {
             : null,
         hasExistingPhoto: !!data.profilePhotoPath
       });
-      setInitialStatus(data.status || 'ACTIVE');
     } catch (error) {
       console.error('Error fetching member:', error);
       setFetchError('فشل في تحميل بيانات المنتفع');
@@ -195,12 +194,8 @@ const UnifiedMemberEdit = () => {
 
   const fetchLookupData = async () => {
     try {
-      const [orgsRes, policiesRes] = await Promise.all([
-        axiosClient.get('/employers/selectors'),
-        axiosClient.get('/benefit-policies', { params: { size: 1000 } })
-      ]);
+      const [orgsRes] = await Promise.all([axiosClient.get('/employers/selectors')]);
       setEmployers(orgsRes.data?.data || []);
-      setBenefitPolicies(policiesRes.data?.data?.content || []);
     } catch (error) {
       console.error('Error fetching lookup data:', error);
     }
@@ -298,12 +293,6 @@ const UnifiedMemberEdit = () => {
   const handleSubmit = async () => {
     if (!validateForm()) return;
 
-    if (form.status !== initialStatus && form.status === 'SUSPENDED' && !statusReason.trim()) {
-      setErrors((prev) => ({ ...prev, statusReason: 'سبب الإيقاف مطلوب' }));
-      setTabValue(0);
-      return;
-    }
-
     try {
       setSaving(true);
       const payload = {
@@ -318,10 +307,8 @@ const UnifiedMemberEdit = () => {
         employeeNumber: form.employeeNumber || null,
         joinDate: form.joinDate ? dayjs(form.joinDate).format('YYYY-MM-DD') : null,
         occupation: form.occupation || null,
-        // status/active are intentionally NOT part of this payload — they're saved separately
-        // via changeMemberStatus() below, which enforces the reason-for-SUSPENDED rule, syncs
-        // active, cascades to dependents, and writes an audit log entry. Sending them here would
-        // silently bypass all of that.
+        // status/active are intentionally NOT part of this descriptive update.
+        // Lifecycle transitions use the dedicated audited dialog/endpoints.
         startDate: form.startDate ? dayjs(form.startDate).format('YYYY-MM-DD') : null,
         endDate: form.endDate ? dayjs(form.endDate).format('YYYY-MM-DD') : null,
         notes: form.notes || null
@@ -334,11 +321,6 @@ const UnifiedMemberEdit = () => {
       // keeps this payload honest about what it is allowed to modify.
 
       await updateMember(id, payload);
-
-      if (form.status !== initialStatus) {
-        await changeMemberStatus(id, form.status, form.status === 'SUSPENDED' ? statusReason.trim() : undefined);
-        setInitialStatus(form.status);
-      }
 
       if (form.photoFile) {
         try {
@@ -549,37 +531,14 @@ const UnifiedMemberEdit = () => {
 
                     {!isPrincipal && (
                       <Grid size={{ xs: 12, md: 4 }}>
-                        <FormControl fullWidth required error={!!errors.relationship} size="small">
-                          <InputLabel>صلة القرابة</InputLabel>
-                          <Select
-                            value={form.relationship}
-                            onChange={handleChange('relationship')}
-                            label="صلة القرابة"
-                            MenuProps={menuProps}
-                          >
-                            {Object.entries(RELATIONSHIPS).map(([key, value]) => (
-                              <MenuItem key={key} value={value}>
-                                {value === 'WIFE'
-                                  ? 'زوجة'
-                                  : value === 'HUSBAND'
-                                    ? 'زوج'
-                                    : value === 'SON'
-                                      ? 'ابن'
-                                      : value === 'DAUGHTER'
-                                        ? 'ابنة'
-                                        : value === 'FATHER'
-                                          ? 'أب'
-                                          : value === 'MOTHER'
-                                            ? 'أم'
-                                            : value === 'BROTHER'
-                                              ? 'أخ'
-                                              : value === 'SISTER'
-                                                ? 'أخت'
-                                                : value}
-                              </MenuItem>
-                            ))}
-                          </Select>
-                        </FormControl>
+                        <TextField
+                          fullWidth
+                          label="صلة القرابة"
+                          value={RELATIONSHIP_LABELS[form.relationship] || form.relationship || '-'}
+                          slotProps={{ input: { readOnly: true } }}
+                          helperText="تغيير القرابة عملية أسرية مستقلة ومدققة."
+                          size="small"
+                        />
                       </Grid>
                     )}
                     <Grid size={{ xs: 12, md: 6 }}>
@@ -587,36 +546,20 @@ const UnifiedMemberEdit = () => {
                     </Grid>
 
                     <Grid size={{ xs: 12, md: 6 }}>
-                      <FormControl fullWidth size="small">
-                        <InputLabel>حالة المستفيد</InputLabel>
-                        <Select value={form.status || 'ACTIVE'} label="حالة المستفيد" onChange={handleChange('status')} MenuProps={menuProps}>
-                          <MenuItem value="ACTIVE">نشط</MenuItem>
-                          <MenuItem value="SUSPENDED">موقوف</MenuItem>
-                          <MenuItem value="PENDING">قيد المراجعة</MenuItem>
-                          <MenuItem value="TERMINATED">منتهي</MenuItem>
-                        </Select>
-                        <FormHelperText>تؤثر الحالة على الأهلية والبحث في البوابة.</FormHelperText>
-                      </FormControl>
+                      <TextField
+                        fullWidth
+                        label="حالة المستفيد"
+                        value={STATUS_LABELS[form.status] || form.status || '-'}
+                        slotProps={{ input: { readOnly: true } }}
+                        helperText="غيّر الحالة من الإجراء المستقل لضمان السبب والتدقيق وأثر الأسرة."
+                        size="small"
+                      />
                     </Grid>
-                    {form.status === 'SUSPENDED' && form.status === initialStatus && form.blockedReason && (
+                    {form.status === 'SUSPENDED' && form.blockedReason && (
                       <Grid size={{ xs: 12, md: 6 }} sx={{ display: 'flex', alignItems: 'center' }}>
                         <Tooltip title={form.blockedReason}>
                           <Chip label={`سبب الإيقاف: ${form.blockedReason}`} color="warning" variant="outlined" sx={{ maxWidth: '100%' }} />
                         </Tooltip>
-                      </Grid>
-                    )}
-                    {form.status === 'SUSPENDED' && form.status !== initialStatus && (
-                      <Grid size={{ xs: 12, md: 6 }}>
-                        <TextField
-                          fullWidth
-                          required
-                          label="سبب الإيقاف"
-                          value={statusReason}
-                          onChange={(e) => setStatusReason(e.target.value)}
-                          error={!!errors.statusReason}
-                          helperText={errors.statusReason}
-                          size="small"
-                        />
                       </Grid>
                     )}
                   </Grid>
@@ -705,20 +648,14 @@ const UnifiedMemberEdit = () => {
                 {isPrincipal ? (
                   <>
                     <Grid size={{ xs: 12 }}>
-                      <FormControl fullWidth required error={!!errors.employerId} size="small">
-                        <InputLabel>جهة العمل</InputLabel>
-                        <Select value={form.employerId} onChange={handleChange('employerId')} label="جهة العمل" MenuProps={menuProps}>
-                          <MenuItem value="">
-                            <em>اختر جهة العمل...</em>
-                          </MenuItem>
-                          {Array.isArray(employers) &&
-                            employers.map((emp) => (
-                              <MenuItem key={emp.id} value={emp.id}>
-                                {emp.label}
-                              </MenuItem>
-                            ))}
-                        </Select>
-                      </FormControl>
+                      <TextField
+                        fullWidth
+                        label="جهة العمل"
+                        value={employers.find((emp) => String(emp.id) === String(form.employerId))?.label || form.employerId || '-'}
+                        slotProps={{ input: { readOnly: true } }}
+                        helperText="نقل جهة العمل عملية مستقلة ومؤرخة ولا يتم من التعديل العام."
+                        size="small"
+                      />
                     </Grid>
                     <Grid size={{ xs: 12, md: 4 }}>
                       <TextField
