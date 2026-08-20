@@ -92,7 +92,6 @@ import { formatDate } from 'utils/formatters';
 import MemberLifecycleDialog from './MemberLifecycleDialog';
 
 const MIN_MEMBER_SEARCH_LENGTH = 3;
-const MAX_SELECT_ALL_MEMBERS = 5000;
 
 /**
  * Unified Members List Component
@@ -281,7 +280,7 @@ const UnifiedMembersList = () => {
   const handleConfirmAction = async (actionFn, defaultSuccessMessage, defaultErrorMessage) => {
     try {
       const result = await actionFn();
-      const message = typeof result === 'string' ? result : (result?.message || defaultSuccessMessage);
+      const message = typeof result === 'string' ? result : result?.message || defaultSuccessMessage;
       enqueueSnackbar(message, { variant: 'success' });
     } catch (error) {
       console.error('Action failed:', error);
@@ -294,45 +293,11 @@ const UnifiedMembersList = () => {
   };
 
   // Selection Handlers
-  const handleSelectAllClick = async (event) => {
+  const handleSelectAllClick = (event) => {
     if (event.target.checked) {
-      if (totalCount > members.length) {
-        if (totalCount > MAX_SELECT_ALL_MEMBERS) {
-          enqueueSnackbar(
-            `عدد النتائج كبير (${totalCount}). يرجى تضييق البحث أو الفلاتر قبل تحديد الكل.`,
-            { variant: 'warning' }
-          );
-          event.target.checked = false;
-          return;
-        }
-        enqueueSnackbar('جاري تحديد جميع السجلات المطابقة...', { variant: 'info' });
-        try {
-          const effectiveSearchTerm = getEffectiveSearchTerm();
-          const hasSearch = !!effectiveSearchTerm;
-          const params = {
-            page: 0,
-            size: totalCount > 0 ? totalCount : 100000,
-            sort: sortBy,
-            direction: sortDirection.toUpperCase(),
-            deleted: showDeleted,
-            ...(filters.organizationId && { employerId: filters.organizationId }),
-            ...(filters.type && { type: filters.type }),
-            ...(filters.status && { status: filters.status }),
-            ...(hasSearch && { fullName: effectiveSearchTerm })
-          };
-          const response = await searchMembers(params);
-          const pageData = response?.data || response;
-          const allIds = (pageData?.content || []).map((n) => n.id);
-          setSelectedMembers(allIds);
-          enqueueSnackbar(`تم تحديد ${allIds.length} مستفيد بنجاح`, { variant: 'success' });
-        } catch (error) {
-          console.error('Error fetching all members for selection:', error);
-          enqueueSnackbar('حدث خطأ أثناء تحديد جميع السجلات', { variant: 'error' });
-        }
-      } else {
-        const newSelected = members.map((n) => n.id);
-        setSelectedMembers(newSelected);
-      }
+      const pageIds = members.map((member) => member.id);
+      setSelectedMembers(pageIds);
+      enqueueSnackbar(`تم تحديد الصفحة الحالية (${pageIds.length} مستفيد)`, { variant: 'info' });
       return;
     }
     setSelectedMembers([]);
@@ -368,7 +333,7 @@ const UnifiedMembersList = () => {
             const res = await bulkDeleteMembers(selectedMembers);
             setSelectedMembers([]); // clear selection
             if (res?.message && res.message.includes('فشل حذف')) {
-                throw new Error(res.message);
+              throw new Error(res.message);
             }
             return res?.message || 'تم إرسال طلب الحذف بنجاح';
           },
@@ -498,7 +463,11 @@ const UnifiedMembersList = () => {
         );
 
       case 'birthDate':
-        return <Typography variant="body2" dir="ltr">{formatDate(member.birthDate)}</Typography>;
+        return (
+          <Typography variant="body2" dir="ltr">
+            {formatDate(member.birthDate)}
+          </Typography>
+        );
 
       case 'relationship': {
         if (member.type === MEMBER_TYPES.PRINCIPAL) {
@@ -695,12 +664,7 @@ const UnifiedMembersList = () => {
             >
               تصدير لإكسل
             </Button>
-            <Button
-              variant="outlined"
-              onClick={handleReimportableExport}
-              startIcon={<FileDownloadIcon />}
-              sx={{ minWidth: '12rem' }}
-            >
+            <Button variant="outlined" onClick={handleReimportableExport} startIcon={<FileDownloadIcon />} sx={{ minWidth: '12rem' }}>
               تصدير قابل لإعادة الاستيراد
             </Button>
 

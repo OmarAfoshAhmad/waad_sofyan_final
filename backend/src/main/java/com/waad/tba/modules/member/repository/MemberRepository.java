@@ -103,6 +103,17 @@ public interface MemberRepository extends JpaRepository<Member, Long>, JpaSpecif
        @org.springframework.data.jpa.repository.EntityGraph(attributePaths = { "employer", "benefitPolicy" })
        List<Member> findAll(org.springframework.data.jpa.domain.Specification<Member> spec, Sort sort);
 
+       /**
+        * Canonical paged member listing/search query.
+        *
+        * <p>The DTO mapper reads employer, policy and (for dependents) parent. Keeping
+        * those to-one associations lazy here makes the query count grow with the page
+        * size even though dependents are batch-loaded separately by the service.</p>
+        */
+       @Override
+       @org.springframework.data.jpa.repository.EntityGraph(attributePaths = { "employer", "benefitPolicy", "parent" })
+       Page<Member> findAll(org.springframework.data.jpa.domain.Specification<Member> spec, Pageable pageable);
+
        @Query(value = "SELECT m FROM Member m LEFT JOIN FETCH m.employer LEFT JOIN FETCH m.benefitPolicy WHERE " +
                      "m.active = true AND (" +
                      "LOWER(m.fullName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
