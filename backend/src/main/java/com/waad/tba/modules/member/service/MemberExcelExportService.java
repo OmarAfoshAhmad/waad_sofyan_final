@@ -98,8 +98,8 @@ public class MemberExcelExportService {
 
         // Authorization is part of the query itself. A preliminary check followed
         // by an unscoped export would still be an IDOR under a spoofed/null filter.
-        Specification<Member> spec = buildSpecification(
-                searchQuery, scope, benefitPolicyId, status, type, includeDeleted);
+        Specification<Member> spec = MemberFilter.export(
+                searchQuery, benefitPolicyId, status, type, includeDeleted).toSpecification(scope);
 
         long exportCount = memberRepository.count(spec);
         if (exportCount > DIRECT_EXPORT_MAX_ROWS) {
@@ -166,8 +166,8 @@ public class MemberExcelExportService {
     public byte[] exportReimportableExcel(String searchQuery, Long employerId,
             Long benefitPolicyId, String status, String type, Boolean includeDeleted) throws IOException {
         AuthorizedMemberScope scope = queryAccessPolicy.requireListing(MemberOperation.EXPORT, employerId);
-        Specification<Member> spec = buildSpecification(
-                searchQuery, scope, benefitPolicyId, status, type, includeDeleted);
+        Specification<Member> spec = MemberFilter.export(
+                searchQuery, benefitPolicyId, status, type, includeDeleted).toSpecification(scope);
         long exportCount = memberRepository.count(spec);
         if (exportCount > DIRECT_EXPORT_MAX_ROWS) {
             throw new BusinessRuleException("نتيجة التصدير القابل لإعادة الاستيراد تتجاوز الحد "
@@ -224,60 +224,6 @@ public class MemberExcelExportService {
         createCell(row, column++, member.getGender() == null ? "" : member.getGender().name(), style);
         createCell(row, column, member.getBenefitPolicy() == null ? ""
                 : member.getBenefitPolicy().getPolicyCode(), style);
-    }
-
-    /**
-     * Build specification for filtering members
-     */
-    private Specification<Member> buildSpecification(
-            String searchQuery,
-            AuthorizedMemberScope scope,
-            Long benefitPolicyId,
-            String status,
-            String type,
-            Boolean includeDeleted) {
-        Specification<Member> spec = (root, query, cb) -> MemberScopeFilter.toPredicate(
-                scope, root.get("employer").get("id"), cb);
-
-        // Search query
-        if (searchQuery != null && !searchQuery.isBlank()) {
-            spec = spec.and((root, query, cb) -> cb.or(
-                    cb.like(cb.lower(root.get("fullName")), "%" + searchQuery.toLowerCase() + "%"),
-                    cb.like(cb.lower(root.get("nationalNumber")), "%" + searchQuery.toLowerCase() + "%"),
-                    cb.like(cb.lower(root.get("cardNumber")), "%" + searchQuery.toLowerCase() + "%"),
-                    cb.like(cb.lower(root.get("barcode")), "%" + searchQuery.toLowerCase() + "%")));
-        }
-
-        // Benefit policy filter
-        if (benefitPolicyId != null) {
-            spec = spec.and((root, query, cb) -> cb.equal(root.get("benefitPolicy").get("id"), benefitPolicyId));
-        }
-
-        if (status != null && !status.isBlank()) {
-            Member.MemberStatus parsed;
-            try {
-                parsed = Member.MemberStatus.valueOf(status.trim().toUpperCase());
-            } catch (IllegalArgumentException ex) {
-                throw new BusinessRuleException("حالة المستفيد غير معروفة: " + status);
-            }
-            spec = spec.and((root, query, cb) -> cb.equal(root.get("status"), parsed));
-        }
-        if (type != null && !type.isBlank()) {
-            if ("PRINCIPAL".equalsIgnoreCase(type)) {
-                spec = spec.and((root, query, cb) -> cb.isNull(root.get("parent")));
-            } else if ("DEPENDENT".equalsIgnoreCase(type)) {
-                spec = spec.and((root, query, cb) -> cb.isNotNull(root.get("parent")));
-            } else {
-                throw new BusinessRuleException("نوع المستفيد غير معروف: " + type);
-            }
-        }
-
-        // Active filter (soft delete)
-        if (includeDeleted == null || !includeDeleted) {
-            spec = spec.and((root, query, cb) -> cb.isTrue(root.get("active")));
-        }
-
-        return spec;
     }
 
     /**

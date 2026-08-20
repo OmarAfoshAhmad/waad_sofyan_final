@@ -884,34 +884,7 @@ public class UnifiedMemberService {
         final AuthorizedMemberScope scope = queryAccessPolicy.requireListing(
                 MemberOperation.LIST, employerId);
 
-        Specification<Member> spec = (root, query, cb) -> {
-            List<Predicate> predicates = new ArrayList<>();
-
-            predicates.add(MemberScopeFilter.toPredicate(scope, root.get("employer").get("id"), cb));
-
-            if (status != null && !status.trim().isEmpty()) {
-                predicates.add(cb.equal(root.get("status"), status));
-            }
-
-            if (type != null && !type.trim().isEmpty()) {
-                if ("PRINCIPAL".equalsIgnoreCase(type)) {
-                    predicates.add(cb.isNull(root.get("parent")));
-                } else if ("DEPENDENT".equalsIgnoreCase(type)) {
-                    predicates.add(cb.isNotNull(root.get("parent")));
-                } else {
-                    // Try to filter by specific relationship
-                    try {
-                        Member.Relationship rel = Member.Relationship.valueOf(type.toUpperCase());
-                        predicates.add(cb.equal(root.get("relationship"), rel));
-                        predicates.add(cb.isNotNull(root.get("parent")));
-                    } catch (IllegalArgumentException e) {
-                        // Invalid relationship type, ignore or fallback
-                    }
-                }
-            }
-
-            return cb.and(predicates.toArray(new Predicate[0]));
-        };
+        Specification<Member> spec = MemberFilter.listing(status, type).toSpecification(scope);
 
         // Fix Pageable sort since 'type' is transient
         org.springframework.data.domain.Pageable safePageable = pageable;
@@ -947,12 +920,14 @@ public class UnifiedMemberService {
 
         // Map to DTOs using Page.map() to preserve metadata
         final Map<Long, List<Member>> finalDependentsMap = dependentsMap;
+        final com.waad.tba.modules.member.mapper.UnifiedMemberMapper.ReadContext readContext =
+                new com.waad.tba.modules.member.mapper.UnifiedMemberMapper.ReadContext(scope.maskSensitiveFields());
         return membersPage.map(member -> {
             if (member.isPrincipal()) {
                 List<Member> dependents = finalDependentsMap.getOrDefault(member.getId(), List.of());
-                return mapper.toViewDto(member, dependents);
+                return mapper.toViewDto(member, dependents, readContext);
             }
-            return mapper.toViewDto(member);
+            return mapper.toViewDto(member, List.of(), readContext);
         });
     }
 
@@ -975,33 +950,7 @@ public class UnifiedMemberService {
         final AuthorizedMemberScope scope = queryAccessPolicy.requireListing(
                 MemberOperation.LIST, employerId);
 
-        Specification<Member> spec = (root, query, cb) -> {
-            List<Predicate> predicates = new ArrayList<>();
-
-            predicates.add(MemberScopeFilter.toPredicate(scope, root.get("employer").get("id"), cb));
-
-            if (status != null && !status.trim().isEmpty()) {
-                predicates.add(cb.equal(root.get("status"), status));
-            }
-
-            if (type != null && !type.trim().isEmpty()) {
-                if ("PRINCIPAL".equalsIgnoreCase(type)) {
-                    predicates.add(cb.isNull(root.get("parent")));
-                } else if ("DEPENDENT".equalsIgnoreCase(type)) {
-                    predicates.add(cb.isNotNull(root.get("parent")));
-                } else {
-                    try {
-                        Member.Relationship rel = Member.Relationship.valueOf(type.toUpperCase());
-                        predicates.add(cb.equal(root.get("relationship"), rel));
-                        predicates.add(cb.isNotNull(root.get("parent")));
-                    } catch (IllegalArgumentException e) {
-                        // Ignore
-                    }
-                }
-            }
-
-            return cb.and(predicates.toArray(new Predicate[0]));
-        };
+        Specification<Member> spec = MemberFilter.listing(status, type).toSpecification(scope);
 
         return memberRepository.count(spec);
     }
@@ -1056,84 +1005,10 @@ public class UnifiedMemberService {
             return Page.empty(pageable);
         }
 
-        Specification<Member> spec = (root, query, cb) -> {
-            List<Predicate> predicates = new ArrayList<>();
-
-            if (nameAr != null && !nameAr.trim().isEmpty()) {
-                String searchAr = "%" + nameAr.toLowerCase() + "%";
-                if (nameEn != null && !nameEn.trim().isEmpty() && !nameEn.equalsIgnoreCase(nameAr)) {
-                    // If both are provided and different, combine with OR to search fullName
-                    String searchEn = "%" + nameEn.toLowerCase() + "%";
-                    predicates.add(cb.or(
-                            cb.like(cb.lower(root.get("fullName")), searchAr),
-                            cb.like(cb.lower(root.get("fullName")), searchEn),
-                            cb.like(cb.lower(root.get("cardNumber")), searchAr),
-                            cb.like(cb.lower(root.get("cardNumber")), searchEn),
-                            cb.like(cb.lower(root.get("nationalNumber")), searchAr),
-                            cb.like(root.get("barcode"), searchAr)));
-                } else {
-                    predicates.add(cb.or(
-                            cb.like(cb.lower(root.get("fullName")), searchAr),
-                            cb.like(cb.lower(root.get("cardNumber")), searchAr),
-                            cb.like(cb.lower(root.get("nationalNumber")), searchAr),
-                            cb.like(root.get("barcode"), searchAr)));
-                }
-            } else if (nameEn != null && !nameEn.trim().isEmpty()) {
-                String searchEn = "%" + nameEn.toLowerCase() + "%";
-                predicates.add(cb.or(
-                        cb.like(cb.lower(root.get("fullName")), searchEn),
-                        cb.like(cb.lower(root.get("cardNumber")), searchEn),
-                        cb.like(cb.lower(root.get("nationalNumber")), searchEn),
-                        cb.like(root.get("barcode"), searchEn)));
-            }
-
-            if (nationalNumber != null && !nationalNumber.trim().isEmpty()) {
-                predicates.add(cb.like(root.get("nationalNumber"), "%" + nationalNumber + "%"));
-            }
-
-            if (barcode != null && !barcode.trim().isEmpty()) {
-                predicates.add(cb.like(root.get("barcode"), "%" + barcode + "%"));
-            }
-
-            if (cardNumber != null && !cardNumber.trim().isEmpty()) {
-                predicates.add(cb.like(root.get("cardNumber"), "%" + cardNumber + "%"));
-            }
-
-            predicates.add(MemberScopeFilter.toPredicate(scope, root.get("employer").get("id"), cb));
-
-            if (benefitPolicyId != null) {
-                predicates.add(cb.equal(root.get("benefitPolicy").get("id"), benefitPolicyId));
-            }
-
-            if (status != null && !status.trim().isEmpty()) {
-                predicates.add(cb.equal(root.get("status"), status));
-            }
-
-            if (type != null && !type.trim().isEmpty()) {
-                if ("PRINCIPAL".equalsIgnoreCase(type)) {
-                    predicates.add(cb.isNull(root.get("parent")));
-                } else if ("DEPENDENT".equalsIgnoreCase(type)) {
-                    predicates.add(cb.isNotNull(root.get("parent")));
-                } else {
-                    try {
-                        Member.Relationship rel = Member.Relationship.valueOf(type.toUpperCase());
-                        predicates.add(cb.equal(root.get("relationship"), rel));
-                        predicates.add(cb.isNotNull(root.get("parent")));
-                    } catch (IllegalArgumentException e) {
-                        // Ignore
-                    }
-                }
-            }
-
-            // active / soft-delete filter
-            if (deleted) {
-                predicates.add(cb.equal(root.get("active"), false));
-            } else {
-                predicates.add(cb.or(cb.isNull(root.get("active")), cb.equal(root.get("active"), true)));
-            }
-
-            return cb.and(predicates.toArray(new Predicate[0]));
-        };
+        Specification<Member> spec = new MemberFilter(nameAr, nameEn, nationalNumber, barcode, cardNumber,
+                benefitPolicyId, status, type,
+                deleted ? MemberFilter.DeletedMode.DELETED_ONLY : MemberFilter.DeletedMode.ACTIVE_ONLY)
+                .toSpecification(scope);
 
         // Fix Pageable sort since 'type' is transient
         org.springframework.data.domain.Pageable safePageable = pageable;
@@ -1169,12 +1044,14 @@ public class UnifiedMemberService {
 
         // Map to DTOs using Page.map() to preserve metadata
         final Map<Long, List<Member>> finalDependentsMap = dependentsMap;
+        final com.waad.tba.modules.member.mapper.UnifiedMemberMapper.ReadContext readContext =
+                new com.waad.tba.modules.member.mapper.UnifiedMemberMapper.ReadContext(scope.maskSensitiveFields());
         return membersPage.map(member -> {
             if (member.isPrincipal()) {
                 List<Member> dependents = finalDependentsMap.getOrDefault(member.getId(), List.of());
-                return mapper.toViewDto(member, dependents);
+                return mapper.toViewDto(member, dependents, readContext);
             }
-            return mapper.toViewDto(member);
+            return mapper.toViewDto(member, List.of(), readContext);
         });
     }
 

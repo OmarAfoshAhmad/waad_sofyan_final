@@ -19,10 +19,17 @@ public final class AuthorizedMemberScope {
 
     private final MemberOperation operation;
     private final MemberAccessScope scope;
+    private final boolean maskSensitiveFields;
 
-    AuthorizedMemberScope(MemberOperation operation, MemberAccessScope scope) {
+    AuthorizedMemberScope(MemberOperation operation, MemberAccessScope scope, boolean maskSensitiveFields) {
         this.operation = operation;
         this.scope = scope;
+        this.maskSensitiveFields = maskSensitiveFields;
+    }
+
+    /** Command authorization does not expose a read payload, so masking is irrelevant. */
+    AuthorizedMemberScope(MemberOperation operation, MemberAccessScope scope) {
+        this(operation, scope, false);
     }
 
     public MemberOperation operation() {
@@ -45,5 +52,10 @@ public final class AuthorizedMemberScope {
 
     public boolean covers(Long employerId) {
         return scope.covers(employerId);
+    }
+
+    /** PII presentation is part of the authorised read, resolved once per request. */
+    public boolean maskSensitiveFields() {
+        return maskSensitiveFields;
     }
 }
