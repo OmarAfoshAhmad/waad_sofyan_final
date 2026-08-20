@@ -60,7 +60,6 @@ import {
   Business as BusinessIcon,
   Star as VIPIcon,
   Bolt as FlashIcon,
-  CheckCircle as CheckCircleIcon,
   Search as SearchIcon,
   Close as CloseIcon,
   UploadFile as UploadFileIcon,
@@ -83,13 +82,14 @@ import {
   restoreMember,
   hardDeleteMember,
   toggleMemberActive,
-  MEMBER_TYPES,
-  MEMBER_STATUSES
+  MEMBER_TYPES
 } from 'services/api/unified-members.service';
 import axiosClient from 'utils/axios';
 import { RELATIONSHIP_CONFIG } from 'components/insurance/MemberTypeIndicator';
 import { formatDate } from 'utils/formatters';
 import MemberLifecycleDialog from './MemberLifecycleDialog';
+import useAuth from 'hooks/useAuth';
+import { getMemberCapabilities } from './memberCapabilities';
 
 const MIN_MEMBER_SEARCH_LENGTH = 3;
 
@@ -99,6 +99,10 @@ const MIN_MEMBER_SEARCH_LENGTH = 3;
 const UnifiedMembersList = () => {
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
+  const { user } = useAuth();
+  // Mirrors MemberCommandAccessPolicy/MemberImportAccessPolicy. These flags
+  // improve the UI only; backend resource-scope checks remain authoritative.
+  const capabilities = getMemberCapabilities(user);
 
   // ════════════════════════════════════════════════════════════════════════
   // STATE
@@ -556,16 +560,16 @@ const UnifiedMembersList = () => {
           // Actions for deleted members
           return (
             <Stack direction="row" spacing={0.5}>
-              <Tooltip title="استعادة">
+              {capabilities.lifecycle && <Tooltip title="استعادة">
                 <IconButton size="small" color="success" onClick={() => handleRestoreClick(member)}>
                   <UndoIcon fontSize="small" />
                 </IconButton>
-              </Tooltip>
-              <Tooltip title="حذف نهائي">
+              </Tooltip>}
+              {capabilities.hardDelete && <Tooltip title="حذف نهائي">
                 <IconButton size="small" color="error" onClick={() => handleHardDeleteClick(member)}>
                   <DeleteIcon fontSize="small" />
                 </IconButton>
-              </Tooltip>
+              </Tooltip>}
             </Stack>
           );
         }
@@ -573,28 +577,21 @@ const UnifiedMembersList = () => {
         // Actions for active members
         return (
           <Stack direction="row" spacing={0.5}>
-            {member.status === MEMBER_STATUSES.PENDING && (
-              <Tooltip title="اعتماد العضوية">
-                <IconButton size="small" color="success">
-                  <CheckCircleIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-            )}
             <Tooltip title="عرض التفاصيل">
               <IconButton size="small" color="info" onClick={() => navigate(`/members/${member.id}`)}>
                 <VisibilityIcon fontSize="small" />
               </IconButton>
             </Tooltip>
-            <Tooltip title="تعديل">
+            {capabilities.edit && <Tooltip title="تعديل">
               <IconButton size="small" color="primary" onClick={() => navigate(`/members/${member.id}/edit`)}>
                 <EditIcon fontSize="small" />
               </IconButton>
-            </Tooltip>
-            <Tooltip title="حذف">
+            </Tooltip>}
+            {capabilities.lifecycle && <Tooltip title="إنهاء العضوية">
               <IconButton size="small" color="error" onClick={() => handleDeleteClick(member)}>
                 <DeleteIcon fontSize="small" />
               </IconButton>
-            </Tooltip>
+            </Tooltip>}
           </Stack>
         );
 
@@ -617,7 +614,7 @@ const UnifiedMembersList = () => {
         actions={
           <Stack direction="row" spacing={1} flexWrap="wrap">
             {/* Bulk Action Buttons */}
-            {selectedMembers.length > 0 && (
+            {capabilities.bulkTerminate && selectedMembers.length > 0 && (
               <Button
                 variant="contained"
                 color="error"
@@ -632,7 +629,7 @@ const UnifiedMembersList = () => {
             )}
 
             {/* Excel Buttons Group — template download is available inside the import dialog. */}
-            <Button
+            {capabilities.import && <Button
               variant="outlined"
               onClick={handleImportClick}
               startIcon={<UploadFileIcon />}
@@ -647,8 +644,8 @@ const UnifiedMembersList = () => {
               }}
             >
               استيراد من إكسل
-            </Button>
-            <Button
+            </Button>}
+            {capabilities.export && <Button
               variant="outlined"
               onClick={() => setExportWizardOpen(true)}
               startIcon={<FileDownloadIcon />}
@@ -663,17 +660,17 @@ const UnifiedMembersList = () => {
               }}
             >
               تصدير لإكسل
-            </Button>
-            <Button variant="outlined" onClick={handleReimportableExport} startIcon={<FileDownloadIcon />} sx={{ minWidth: '12rem' }}>
+            </Button>}
+            {capabilities.export && <Button variant="outlined" onClick={handleReimportableExport} startIcon={<FileDownloadIcon />} sx={{ minWidth: '12rem' }}>
               تصدير قابل لإعادة الاستيراد
-            </Button>
+            </Button>}
 
             {/* Deleted Members Toggle */}
             <SoftDeleteToggle showDeleted={showDeleted} onToggle={() => setShowDeleted(!showDeleted)} />
 
-            <Button variant="contained" startIcon={<AddIcon />} onClick={() => navigate('/members/add')}>
+            {capabilities.create && <Button variant="contained" startIcon={<AddIcon />} onClick={() => navigate('/members/add')}>
               إضافة مستفيد
-            </Button>
+            </Button>}
           </Stack>
         }
         sx={{ mb: 0.5 }}
@@ -823,7 +820,7 @@ const UnifiedMembersList = () => {
         getRowKey={(member) => member.id}
         emptyMessage={showDeleted ? 'لا توجد مستفيدين محذوفين' : 'لا توجد مستفيدين'}
         loadingMessage="جارِ التحميل..."
-        selectable={!showDeleted}
+        selectable={!showDeleted && capabilities.bulkTerminate}
         selectedRows={selectedMembers}
         onSelectAllClick={handleSelectAllClick}
         onSelectRow={handleSelectRow}
