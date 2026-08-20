@@ -214,7 +214,7 @@ const MainRoutes = {
         {
           path: 'add',
           element: (
-            <PermissionGuard isRouteGuard>
+            <PermissionGuard allowedRoles={['EMPLOYER_ADMIN', 'DATA_ENTRY']} isRouteGuard>
               <UnifiedMemberCreate />
             </PermissionGuard>
           )
@@ -230,7 +230,7 @@ const MainRoutes = {
         {
           path: ':id/edit',
           element: (
-            <PermissionGuard isRouteGuard>
+            <PermissionGuard allowedRoles={['EMPLOYER_ADMIN', 'DATA_ENTRY']} isRouteGuard>
               <UnifiedMemberEdit />
             </PermissionGuard>
           )
@@ -238,7 +238,7 @@ const MainRoutes = {
         {
           path: ':id/add-dependent',
           element: (
-            <PermissionGuard isRouteGuard>
+            <PermissionGuard allowedRoles={['EMPLOYER_ADMIN', 'DATA_ENTRY']} isRouteGuard>
               <AddDependent />
             </PermissionGuard>
           )
