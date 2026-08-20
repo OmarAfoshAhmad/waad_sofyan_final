@@ -692,6 +692,8 @@ export default function ClaimBatchEntry() {
   const {
     data: financialSummary,
     isFetching: loadingSummary,
+    isError: financialSummaryError,
+    error: financialSummaryFailure,
     refetch: refetchFinancialSummary
   } = useQuery({
     queryKey: ['member-financial-summary', member?.id],
@@ -701,10 +703,10 @@ export default function ClaimBatchEntry() {
   });
 
   useEffect(() => {
-    if (financialSummary) {
-      setMemberFinancialSummary(financialSummary);
-    }
-  }, [financialSummary]);
+    // Never retain another member's figures while the new summary is loading
+    // or has failed. A stale balance is more dangerous than no balance.
+    setMemberFinancialSummary(financialSummary || null);
+  }, [member?.id, financialSummary]);
 
   // ── Load Existing Claim for Edit ───────────────────────────────────────
   const { data: editingClaim, isLoading: loadingClaim } = useQuery({
@@ -1567,6 +1569,11 @@ export default function ClaimBatchEntry() {
   const handleSave = async (resetAfter = false) => {
     if (isSavingRef.current) return;
 
+    if (member?.id && (financialSummaryError || !memberFinancialSummary)) {
+      enqueueSnackbar('لا يمكن حفظ المطالبة قبل نجاح قراءة البيانات المالية للمستفيد.', { variant: 'error' });
+      return;
+    }
+
     // التحقق من الحقول المطلوبة بشكل احترافي
     const missingFields = [];
     if (!member) missingFields.push('المستفيد');
@@ -2055,6 +2062,13 @@ export default function ClaimBatchEntry() {
                 t={t}
                 showValidationErrors={showValidationErrors}
               />
+              {member?.id && financialSummaryError && (
+                <Alert severity="error" sx={{ mt: 1 }}
+                  action={<Button color="inherit" size="small" onClick={() => refetchFinancialSummary()}>إعادة المحاولة</Button>}>
+                  تعذر تحميل الرصيد المالي للمستفيد. أُوقف الحفظ حتى تنجح القراءة
+                  {financialSummaryFailure?.response?.data?.message ? `: ${financialSummaryFailure.response.data.message}` : ''}
+                </Alert>
+              )}
             </Box>
 
             <Divider />
@@ -2384,6 +2398,7 @@ export default function ClaimBatchEntry() {
               saving={saving}
               isDirty={isDirty}
               coveragePending={lines.some((line) => (line.service || line.serviceName) && !line.rejected && line.coveragePending)}
+              financialDataUnavailable={Boolean(member?.id) && (loadingSummary || financialSummaryError || !memberFinancialSummary)}
               hasUncoveredLines={lines.some(
                 (line) => (line.service || line.serviceName) && !line.rejected && (line.notCovered || (Number(line.coveragePercent) || 0) <= 0)
               )}

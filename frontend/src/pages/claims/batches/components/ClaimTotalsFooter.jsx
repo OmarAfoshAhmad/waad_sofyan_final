@@ -8,6 +8,7 @@ export const ClaimTotalsFooter = ({
   saving,
   isDirty,
   coveragePending,
+  financialDataUnavailable,
   hasUncoveredLines,
   setIsClaimRejected,
   setIsDirty,
@@ -49,7 +50,7 @@ export const ClaimTotalsFooter = ({
           }
           handleSave(true);
         }}
-        disabled={saving || !isDirty || coveragePending}
+        disabled={saving || !isDirty || coveragePending || financialDataUnavailable}
         sx={{ px: '2.0rem', fontWeight: 600 }}
       >
         {saving ? t('claimEntry.saving') : showRejected ? 'حفظ (مرفوضة)' : requiresClaimRejection ? 'رفض وحفظ المطالبة' : t('claimEntry.saveAndAdd')}
