@@ -87,6 +87,8 @@ public class MemberExcelImportService {
     private final VisitRepository visitRepository;
     private final ClaimRepository claimRepository;
     private final PreAuthorizationRepository preAuthorizationRepository;
+    private final MemberFinancialActivityChecker financialActivityChecker;
+    private final com.waad.tba.modules.member.repository.MemberImportBatchRowRepository importBatchRowRepository;
 
     public MemberImportPreviewDto parseAndPreview(MultipartFile file) throws Exception {
         return parseAndPreview(file, null, null, null);
@@ -385,7 +387,12 @@ public class MemberExcelImportService {
         // assignments can be recorded once at the end -- in ONE bulk lookup
         // rather than a per-row query.
         List<Member> processedMembers = new ArrayList<>();
-        int totalProcessed = 0, createdCount = 0, skippedCount = 0, errorCount = 0;
+        // One entry per successfully processed row, in the same order as
+        // processedMembers -- turned into member_import_batch_rows AFTER the
+        // flush below, once every member (including buffered dependents) has
+        // its real id. previousSnapshotJson is null for a CREATED row.
+        List<PendingBatchRow> pendingBatchRows = new ArrayList<>();
+        int totalProcessed = 0, createdCount = 0, updatedCount = 0, skippedCount = 0, errorCount = 0;
 
         try (InputStream is = new java.io.ByteArrayInputStream(fileBytes); Workbook workbook = new XSSFWorkbook(is)) {
             // Runs INSIDE this transaction, after the idempotency
@@ -454,7 +461,16 @@ public class MemberExcelImportService {
                                 "الصف " + rowNum + ": لا يمكن نقل عضو قائم إلى جهة أخرى عبر الاستيراد");
                     }
 
+                    // Captured BEFORE processRowForImport overwrites the
+                    // existing entity's fields -- this is the "before" a
+                    // rollback restores. Null for a brand-new member: there
+                    // is nothing to revert to.
+                    String previousSnapshotJson = existingMember == null ? null
+                            : toJsonOrNull(com.waad.tba.modules.member.dto.MemberImportFieldSnapshot.of(existingMember));
+                    boolean isUpdate = existingMember != null;
+
                     member = rowProcessor.processRowForImport(row, rowNum, fieldToColumnIndex, defaultEmployer, benefitPolicy, parent, relationship, existingMember);
+                    pendingBatchRows.add(new PendingBatchRow(member, isUpdate, previousSnapshotJson));
                 } catch (MemberImportRowValidationException parseFailure) {
                     // Expected/business-level row failure ONLY -- this exact
                     // type is thrown exclusively by rowProcessor/parser
@@ -494,7 +510,11 @@ public class MemberExcelImportService {
                 }
                 processedMembers.add(member);
 
-                createdCount++;
+                if (pendingBatchRows.get(pendingBatchRows.size() - 1).isUpdate()) {
+                    updatedCount++;
+                } else {
+                    createdCount++;
+                }
                 if (memberBuffer.size() >= BATCH_SIZE) {
                     memberRepository.saveAll(memberBuffer);
                     memberBuffer.clear();
@@ -513,6 +533,7 @@ public class MemberExcelImportService {
                     .orElseThrow(() -> new IllegalStateException("Import log vanished mid-import: " + importLogId));
             importLog.setTotalRows(totalRows);
             importLog.setCreatedCount(createdCount);
+            importLog.setUpdatedCount(updatedCount);
             importLog.setErrorCount(errorCount);
             importLog.setEmployerId(employerId);
             importLog.setFileHash(fileHash);
@@ -524,12 +545,31 @@ public class MemberExcelImportService {
             // back every member this transaction just wrote, together with it.
             importLogRepository.saveAndFlush(importLog);
 
+            // Every member is guaranteed a real id by now (the flush above),
+            // whether it was saved directly or through memberBuffer -- safe
+            // to record which batch touched it.
+            if (!pendingBatchRows.isEmpty()) {
+                List<com.waad.tba.modules.member.entity.MemberImportBatchRow> batchRows = new ArrayList<>();
+                for (PendingBatchRow pending : pendingBatchRows) {
+                    batchRows.add(com.waad.tba.modules.member.entity.MemberImportBatchRow.builder()
+                            .importLogId(importLogId)
+                            .memberId(pending.member().getId())
+                            .action(pending.isUpdate()
+                                    ? com.waad.tba.modules.member.entity.MemberImportBatchRow.Action.UPDATED
+                                    : com.waad.tba.modules.member.entity.MemberImportBatchRow.Action.CREATED)
+                            .previousSnapshot(pending.previousSnapshotJson())
+                            .build());
+                }
+                importBatchRowRepository.saveAll(batchRows);
+            }
+
             return MemberImportResultDto.builder()
                     .batchId(batchId).status(importLog.getStatus().name()).totalProcessed(totalProcessed)
-                    .createdCount(createdCount).updatedCount(0).skippedCount(skippedCount).errorCount(errorCount)
+                    .createdCount(createdCount).updatedCount(updatedCount).skippedCount(skippedCount).errorCount(errorCount)
                     .processingTimeMs(importLog.getProcessingTimeMs()).completedAt(importLog.getCompletedAt())
-                    .successRate(totalProcessed > 0 ? (double) createdCount / totalProcessed * 100 : 0)
-                    .errors(errors).message(String.format("تم استيراد %d عضو بنجاح، %d أخطاء", createdCount, errorCount))
+                    .successRate(totalProcessed > 0 ? (double) (createdCount + updatedCount) / totalProcessed * 100 : 0)
+                    .errors(errors).message(String.format("تم استيراد %d عضو جديد و%d تعديل بنجاح، %d أخطاء",
+                            createdCount, updatedCount, errorCount))
                     .build();
         } catch (Exception e) {
             log.error("[MemberImport] فشل الحفظ، تراجع كامل عن الدفعة: {}", e.getMessage(), e);
@@ -611,6 +651,20 @@ public class MemberExcelImportService {
         try { return objectMapper.writeValueAsString(data); } catch (JsonProcessingException e) { return "{}"; }
     }
 
+    /** A row processed successfully, awaiting a real member id before it can become a batch-row record. */
+    private record PendingBatchRow(Member member, boolean isUpdate, String previousSnapshotJson) {}
+
+    private String toJsonOrNull(com.waad.tba.modules.member.dto.MemberImportFieldSnapshot snapshot) {
+        try {
+            return objectMapper.writeValueAsString(snapshot);
+        } catch (JsonProcessingException e) {
+            // A snapshot that cannot be serialized cannot be restored either --
+            // fail the row's rollback-tracking loudly rather than silently
+            // recording an update with no way back.
+            throw new IllegalStateException("تعذّر حفظ نسخة العضو قبل التعديل", e);
+        }
+    }
+
     private void clearOldMembers(Long employerId) {
         log.info("🧹 Clearing old members for employerId={} who do not have financial movements", employerId);
         List<Member> allMembers = memberRepository.findByEmployerId(employerId);
@@ -625,22 +679,10 @@ public class MemberExcelImportService {
             memberMap.put(m.getId(), m);
         }
 
-        // Fetch movements in bulk (3 fast queries)
-        Set<Long> idsWithMovements = new HashSet<>();
-        idsWithMovements.addAll(visitRepository.findMemberIdsWithVisits(allMemberIds));
-        idsWithMovements.addAll(claimRepository.findMemberIdsWithClaims(allMemberIds));
-        idsWithMovements.addAll(preAuthorizationRepository.findMemberIdsWithPreAuths(allMemberIds));
-
-        // Determine which members to keep:
-        // A member is kept if they have movements, or if they are a principal and have a dependent with movements.
-        Set<Long> keepIds = new HashSet<>();
-        for (Long id : idsWithMovements) {
-            keepIds.add(id);
-            Member m = memberMap.get(id);
-            if (m != null && m.getParent() != null) {
-                keepIds.add(m.getParent().getId());
-            }
-        }
+        // Single source of truth for "has this member ever moved money" --
+        // also used by the import-rollback feature, so both answer the
+        // exact same question the exact same way.
+        Set<Long> keepIds = financialActivityChecker.membersToKeep(allMemberIds);
 
         // Members to delete are those not in keepIds
         Set<Long> memberIdsToDelete = new HashSet<>(allMemberIds);

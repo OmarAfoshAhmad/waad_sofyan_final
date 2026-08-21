@@ -509,7 +509,10 @@ export const previewImport = async (file, params = {}) => {
       });
     }
     const response = await api.post(`${UNIFIED_MEMBERS_BASE_URL}/import/preview`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
+      headers: { 'Content-Type': 'multipart/form-data' },
+      // Same reasoning as executeImport's timeout: parsing a large file for
+      // preview is real work too, not just a quick round trip.
+      timeout: 1800000
     });
     return response.data;
   } catch (error) {
@@ -544,7 +547,13 @@ export const executeImport = async (file, params) => {
 
     const response = await api.post(`${UNIFIED_MEMBERS_BASE_URL}/import/execute`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
-      timeout: 300000
+      // A real import batch (tens of thousands of rows) can legitimately run
+      // for many minutes. 5 minutes was aborting a request the server was
+      // still correctly processing -- the browser gave up, not the backend.
+      // 30 minutes is a generous ceiling, not a claim about how long it
+      // SHOULD take; the real fix is surfacing genuine progress (see the
+      // upload dialog), not guessing a bigger constant.
+      timeout: 1800000
     });
     return response.data;
   } catch (error) {
@@ -565,6 +574,72 @@ export const getImportStatus = async (batchId) => {
     return response.data;
   } catch (error) {
     console.error('Error fetching import status:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get paginated import batch history ("سجل استيراد الأعضاء").
+ *
+ * @param {number} page - 1-based page number
+ * @param {number} size - page size
+ * @returns {Promise<any>} Paginated import logs
+ */
+export const getImportLogs = async (page = 1, size = 20) => {
+  try {
+    const response = await api.get(`${UNIFIED_MEMBERS_BASE_URL}/import/logs`, { params: { page, size } });
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching import logs:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get the row-level errors recorded for an import batch.
+ *
+ * @param {string} batchId
+ * @returns {Promise<any>} Error rows
+ */
+export const getImportErrors = async (batchId) => {
+  try {
+    const response = await api.get(`${UNIFIED_MEMBERS_BASE_URL}/import/errors/${batchId}`);
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching import errors:', error);
+    throw error;
+  }
+};
+
+/**
+ * Preview what rolling back this batch would do -- no writes.
+ *
+ * @param {string} batchId
+ * @returns {Promise<any>} Preview counts + who would be skipped and why
+ */
+export const previewImportRollback = async (batchId) => {
+  try {
+    const response = await api.get(`${UNIFIED_MEMBERS_BASE_URL}/import/${batchId}/rollback/preview`);
+    return response.data;
+  } catch (error) {
+    console.error('Error previewing import rollback:', error);
+    throw error;
+  }
+};
+
+/**
+ * Actually roll back an import batch. SUPER_ADMIN only.
+ *
+ * @param {string} batchId
+ * @param {string} reason - mandatory
+ * @returns {Promise<any>} Rollback result
+ */
+export const executeImportRollback = async (batchId, reason) => {
+  try {
+    const response = await api.post(`${UNIFIED_MEMBERS_BASE_URL}/import/${batchId}/rollback`, { reason });
+    return response.data;
+  } catch (error) {
+    console.error('Error executing import rollback:', error);
     throw error;
   }
 };
@@ -716,11 +791,14 @@ export default {
   hardDeleteMember,
   getDependents,
   countDependents,
-  importMembers,
   detectColumns,
   previewImport,
   executeImport,
   exportMembers,
+  getImportLogs,
+  getImportErrors,
+  previewImportRollback,
+  executeImportRollback,
   downloadTemplate,
   uploadPhoto,
   deletePhoto,

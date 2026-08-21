@@ -26,9 +26,13 @@ import com.waad.tba.modules.member.dto.MemberImportResultDto;
 import com.waad.tba.modules.member.entity.MemberImportLog;
 import com.waad.tba.modules.member.repository.MemberImportErrorRepository;
 import com.waad.tba.modules.member.repository.MemberImportLogRepository;
+import com.waad.tba.modules.member.dto.MemberImportRollbackPreviewDto;
+import com.waad.tba.modules.member.dto.MemberImportRollbackResultDto;
 import com.waad.tba.modules.member.service.ExcelColumnMappingService;
 import com.waad.tba.modules.member.service.MemberExcelImportService;
 import com.waad.tba.modules.member.service.MemberExcelTemplateService;
+import com.waad.tba.modules.member.service.MemberImportRollbackService;
+import com.waad.tba.security.AuthorizationService;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -57,6 +61,8 @@ public class MemberExcelTemplateController {
     private final ExcelColumnMappingService columnMappingService;
     private final MemberImportLogRepository importLogRepository;
     private final MemberImportErrorRepository importErrorRepository;
+    private final MemberImportRollbackService rollbackService;
+    private final AuthorizationService authorizationService;
     
     /**
      * Download Excel template for members import
@@ -303,6 +309,52 @@ public class MemberExcelTemplateController {
                 PageRequest.of(Math.max(0, page - 1), size, Sort.by(Sort.Direction.DESC, "createdAt")));
         
         return ResponseEntity.ok(ApiResponse.success("Import logs retrieved", logs));
+    }
+
+    // ==================== ROLLBACK ====================
+
+    public record RollbackRequest(String reason) {}
+
+    /**
+     * Preview what rolling back this batch would do -- no writes.
+     *
+     * GET /api/v1/unified-members/import/{batchId}/rollback/preview
+     */
+    @GetMapping("/{batchId}/rollback/preview")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Operation(summary = "Preview an import batch rollback")
+    public ResponseEntity<ApiResponse<MemberImportRollbackPreviewDto>> previewRollback(
+            @PathVariable("batchId") String batchId) {
+        Long importLogId = resolveImportLogId(batchId);
+        return ResponseEntity.ok(ApiResponse.success("Rollback preview computed", rollbackService.preview(importLogId)));
+    }
+
+    /**
+     * Actually rolls back the batch: created members with no financial
+     * activity are deleted, updated members are restored to their values
+     * before this import. SUPER_ADMIN only -- this is a direct write to
+     * member records outside the normal edit screens.
+     *
+     * POST /api/v1/unified-members/import/{batchId}/rollback
+     */
+    @PostMapping("/{batchId}/rollback")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Operation(summary = "Roll back an import batch")
+    public ResponseEntity<ApiResponse<MemberImportRollbackResultDto>> executeRollback(
+            @PathVariable("batchId") String batchId,
+            @org.springframework.web.bind.annotation.RequestBody RollbackRequest request) {
+        Long importLogId = resolveImportLogId(batchId);
+        var currentUser = authorizationService.getCurrentUser();
+        String performedBy = currentUser != null ? currentUser.getUsername() : "system";
+        var result = rollbackService.execute(importLogId, request.reason(), performedBy);
+        return ResponseEntity.ok(ApiResponse.success("Rollback executed", result));
+    }
+
+    private Long resolveImportLogId(String batchId) {
+        return importLogRepository.findByImportBatchId(batchId)
+                .orElseThrow(() -> new com.waad.tba.common.exception.ResourceNotFoundException(
+                        "MemberImportLog", "batchId", batchId))
+                .getId();
     }
 }
 

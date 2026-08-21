@@ -89,6 +89,10 @@ class MemberExcelImportServiceTest {
     private com.waad.tba.modules.member.security.MemberImportAccessPolicy importAccessPolicy;
     @Mock
     private com.waad.tba.modules.member.security.AuthorizedImportScope authorizedImportScope;
+    @Mock
+    private MemberFinancialActivityChecker financialActivityChecker;
+    @Mock
+    private com.waad.tba.modules.member.repository.MemberImportBatchRowRepository importBatchRowRepository;
 
     @InjectMocks
     private MemberExcelImportService service;
@@ -130,7 +134,9 @@ class MemberExcelImportServiceTest {
                 importAccessPolicy,
                 visitRepository,
                 claimRepository,
-                preAuthorizationRepository);
+                preAuthorizationRepository,
+                financialActivityChecker,
+                importBatchRowRepository);
 
         employer = Employer.builder().id(10L).code("EMP1").name("Employer One").active(true).build();
 

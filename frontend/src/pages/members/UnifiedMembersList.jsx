@@ -657,6 +657,13 @@ const UnifiedMembersList = () => {
             </Button>
             <Button
               variant="outlined"
+              onClick={() => navigate('/members/import-history')}
+              sx={{ minWidth: '9.6875rem' }}
+            >
+              سجل الاستيراد
+            </Button>
+            <Button
+              variant="outlined"
               onClick={() => setExportWizardOpen(true)}
               startIcon={<FileDownloadIcon />}
               sx={{
