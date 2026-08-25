@@ -122,6 +122,11 @@ public class User {
     @Column(name = "last_login_at")
     private LocalDateTime lastLoginAt;
 
+    /** Monotonic marker changed whenever role, scope or permissions change. */
+    @Column(name = "authorization_version", nullable = false)
+    @Builder.Default
+    private Long authorizationVersion = 0L;
+
     @CreatedDate
     @Column(updatable = false)
     private LocalDateTime createdAt;
