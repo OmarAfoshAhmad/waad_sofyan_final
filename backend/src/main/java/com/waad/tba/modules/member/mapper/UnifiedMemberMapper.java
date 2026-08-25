@@ -299,6 +299,7 @@ public class UnifiedMemberMapper {
 
         return DependentViewDto.builder()
                 .id(entity.getId())
+                .version(entity.getVersion())
                 .relationship(entity.getRelationship())
                 .fullName(entity.getFullName())
                 .nationalNumber(maskNationalNumber(entity.getNationalNumber(), maskSensitiveFields))

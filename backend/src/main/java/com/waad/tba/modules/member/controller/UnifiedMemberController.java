@@ -177,6 +177,26 @@ public class UnifiedMemberController {
                                 memberFamilyService.reorderFamily(id, request)));
         }
 
+        @GetMapping("/{id}/employer-transfer/preview")
+        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN')")
+        @Operation(summary = "معاينة نقل رئيس أسرة وأسرته إلى جهة عمل أخرى", description = "قراءة فقط: يعرض الجهة الحالية والجديدة وكل أفراد الأسرة المتأثرين بنسخهم الحالية، دون أي كتابة.")
+        public ResponseEntity<ApiResponse<com.waad.tba.modules.member.dto.MemberEmployerTransferPreviewDto>> previewEmployerTransfer(
+                        @PathVariable("id") Long id,
+                        @RequestParam("newEmployerId") Long newEmployerId) {
+                return ResponseEntity.ok(ApiResponse.success("معاينة نقل الأسرة",
+                                memberFamilyService.previewTransferPrincipalToEmployer(id, newEmployerId)));
+        }
+
+        @PostMapping("/{id}/employer-transfer")
+        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN')")
+        @Operation(summary = "نقل رئيس أسرة وأسرته إلى جهة عمل أخرى", description = "عملية ذرية مؤرخة: كل أفراد الأسرة ينتقلون معاً أو لا أحد. لا تُمس أي مطالبة أو تعيين سابق لتاريخ السريان.")
+        public ResponseEntity<ApiResponse<List<MemberViewDto>>> transferEmployerFamily(
+                        @PathVariable("id") Long id,
+                        @Valid @RequestBody com.waad.tba.modules.member.dto.MemberEmployerTransferRequest request) {
+                return ResponseEntity.ok(ApiResponse.success("تم نقل الأسرة إلى جهة العمل الجديدة",
+                                memberFamilyService.transferPrincipalToEmployer(id, request)));
+        }
+
         // ==================== CREATE OPERATIONS ====================
 
         /**

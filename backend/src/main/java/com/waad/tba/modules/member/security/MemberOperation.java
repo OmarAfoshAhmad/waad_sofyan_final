@@ -28,6 +28,8 @@ public enum MemberOperation {
     ADD_DEPENDENT,
     /** Move an existing dependent to another principal with dated context. */
     TRANSFER_DEPENDENT,
+    /** Move a principal and their whole family to another employer, dated, all-or-nothing. */
+    TRANSFER_EMPLOYER,
     /** Correct the declared kinship without changing family ownership. */
     CORRECT_RELATIONSHIP,
     CHANGE_POLICY,

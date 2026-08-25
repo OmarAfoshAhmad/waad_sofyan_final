@@ -14,6 +14,11 @@ import org.springframework.transaction.annotation.Transactional;
 import com.waad.tba.common.exception.BusinessRuleException;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository;
+import com.waad.tba.modules.employer.entity.Employer;
+import com.waad.tba.modules.employer.repository.EmployerRepository;
+import com.waad.tba.modules.member.dto.MemberEmployerTransferPreviewDto;
+import com.waad.tba.modules.member.dto.MemberEmployerTransferPreviewDto.FamilyMemberSnapshot;
+import com.waad.tba.modules.member.dto.MemberEmployerTransferRequest;
 import com.waad.tba.modules.member.dto.MemberFamilyTransferRequest;
 import com.waad.tba.modules.member.dto.MemberFamilyPolicyChangeRequest;
 import com.waad.tba.modules.member.dto.MemberFamilyReorderRequest;
@@ -44,6 +49,7 @@ public class MemberFamilyService {
     private final UnifiedMemberMapper mapper;
     private final JdbcTemplate jdbcTemplate;
     private final BenefitPolicyRepository policyRepository;
+    private final EmployerRepository employerRepository;
 
     @Transactional
     public MemberViewDto transferDependent(Long memberId, MemberFamilyTransferRequest request) {
@@ -196,6 +202,106 @@ public class MemberFamilyService {
                 request.relationship(), LocalDate.now(), request.reason().trim(),
                 "RELATIONSHIP_CORRECTION", actor.getId());
         return mapper.toViewDto(member);
+    }
+
+    /**
+     * Read-only impact preview: current -> new employer, and every family
+     * member (principal + dependents) with the version the caller must echo
+     * back in the execute request. No write of any kind happens here.
+     */
+    @Transactional(readOnly = true)
+    public MemberEmployerTransferPreviewDto previewTransferPrincipalToEmployer(Long principalId, Long newEmployerId) {
+        Member principal = memberRepository.findById(principalId)
+                .orElseThrow(() -> new BusinessRuleException("رئيس الأسرة غير موجود"));
+        if (!principal.isPrincipal()) {
+            throw new BusinessRuleException("نقل جهة العمل يبدأ من رئيس الأسرة فقط");
+        }
+        Employer newEmployer = employerRepository.findById(newEmployerId)
+                .orElseThrow(() -> new BusinessRuleException("جهة العمل الجديدة غير موجودة"));
+
+        List<Member> dependents = memberRepository.findByParentId(principalId);
+        List<FamilyMemberSnapshot> family = java.util.stream.Stream.concat(
+                java.util.stream.Stream.of(principal), dependents.stream())
+                .map(m -> new FamilyMemberSnapshot(m.getId(), m.getFullName(), m.isPrincipal(),
+                        m.getRelationship() != null ? m.getRelationship().name() : null, m.getVersion()))
+                .toList();
+
+        Employer currentEmployer = principal.getEmployer();
+        return new MemberEmployerTransferPreviewDto(principalId,
+                currentEmployer != null ? currentEmployer.getId() : null,
+                currentEmployer != null ? currentEmployer.getName() : null,
+                newEmployer.getId(), newEmployer.getName(), family);
+    }
+
+    /**
+     * Moves the principal and every one of their dependents to a new employer
+     * (and, unless explicitly declined, a new policy) as of one effective
+     * date, inside one transaction: every family member moves together or
+     * none does. Reuses the same dated, append-only assignment writers
+     * {@link MemberEmployerResolver#assignEmployer} and
+     * {@link MemberPolicyResolver#assignPolicy} that transferDependent
+     * already relies on for a single member -- this is family-wide
+     * orchestration on top of them, not new write machinery.
+     */
+    @Transactional
+    public List<MemberViewDto> transferPrincipalToEmployer(Long principalId, MemberEmployerTransferRequest request) {
+        requireReason(request.reason());
+        if (request.effectiveDate().isAfter(LocalDate.now())) {
+            throw new BusinessRuleException(
+                    "لا يجوز نقل جهة العمل بتاريخ مستقبلي لأن مؤشر الجهة/الوثيقة الحالي سيتغير فوراً");
+        }
+        if (!request.noPolicy() && request.newPolicyId() == null) {
+            throw new BusinessRuleException(
+                    "يجب تحديد وثيقة المنافع الجديدة صراحة، أو تأكيد عدم وجود وثيقة لهذه الأسرة");
+        }
+
+        Member compassPrincipal = memberRepository.findById(principalId)
+                .orElseThrow(() -> new BusinessRuleException("رئيس الأسرة غير موجود"));
+        if (!compassPrincipal.isPrincipal()) {
+            throw new BusinessRuleException("نقل جهة العمل يبدأ من رئيس الأسرة فقط");
+        }
+        Employer newEmployer = employerRepository.findById(request.newEmployerId())
+                .orElseThrow(() -> new BusinessRuleException("جهة العمل الجديدة غير موجودة"));
+
+        List<Long> ids = java.util.stream.Stream.concat(java.util.stream.Stream.of(principalId),
+                memberRepository.findByParentId(principalId).stream().map(Member::getId))
+                .distinct().sorted().toList();
+        if (!request.expectedVersions().keySet().equals(new java.util.HashSet<>(ids))) {
+            throw new BusinessRuleException("يجب إرسال نسخة كل فرد في الأسرة؛ لا يسمح بنقل جزئي صامت");
+        }
+        List<Member> locked = ids.stream().map(id -> memberRepository.findByIdWithLock(id)
+                .orElseThrow(() -> new BusinessRuleException("تغيرت الأسرة أثناء العملية؛ أعد المحاولة"))).toList();
+
+        for (Member member : locked) {
+            requireVersion(member, request.expectedVersions().get(member.getId()));
+            commandAccessPolicy.require(MemberOperation.TRANSFER_EMPLOYER, member.getEmployer().getId());
+        }
+        commandAccessPolicy.require(MemberOperation.TRANSFER_EMPLOYER, newEmployer.getId());
+
+        BenefitPolicy newPolicy = null;
+        if (!request.noPolicy()) {
+            newPolicy = policyRepository.findById(request.newPolicyId())
+                    .orElseThrow(() -> new BusinessRuleException("وثيقة المنافع غير موجودة"));
+            if (newPolicy.getStatus() != BenefitPolicy.BenefitPolicyStatus.ACTIVE) {
+                throw new BusinessRuleException("لا يمكن تعيين وثيقة غير فعّالة (" + newPolicy.getStatus() + ")");
+            }
+            Long policyEmployerId = newPolicy.getEmployer() != null ? newPolicy.getEmployer().getId() : null;
+            if (!Objects.equals(policyEmployerId, newEmployer.getId())) {
+                throw new BusinessRuleException("الوثيقة المحددة لا تتبع جهة العمل الجديدة");
+            }
+        }
+
+        User actor = authorizationService.requireCurrentUser();
+        String reason = request.reason().trim();
+        for (Member member : locked) {
+            employerResolver.assignEmployer(member, newEmployer, request.effectiveDate(), reason,
+                    EmployerAssignmentSource.MANUAL, actor.getId());
+            if (newPolicy != null) {
+                policyResolver.assignPolicy(member, newPolicy, request.effectiveDate(), reason,
+                        PolicyAssignmentSource.MANUAL, actor.getId());
+            }
+        }
+        return locked.stream().map(mapper::toViewDto).toList();
     }
 
     private void appendHistory(Member member, Long oldParent, Long newParent,

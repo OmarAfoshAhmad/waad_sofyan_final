@@ -447,6 +447,32 @@ export const reorderFamily = async (principalId, { dependentIds, expectedVersion
   return response.data;
 };
 
+/** Read-only impact preview for transferring a principal and their whole family to another employer. */
+export const previewEmployerTransfer = async (principalId, newEmployerId) => {
+  const response = await api.get(`${UNIFIED_MEMBERS_BASE_URL}/${principalId}/employer-transfer/preview`, {
+    params: { newEmployerId }
+  });
+  return response.data;
+};
+
+/**
+ * Moves a principal and their whole family to another employer as of an
+ * effective date. All-or-nothing: expectedVersions must name every family
+ * member's current version. Pass noPolicy:true instead of newPolicyId only
+ * to explicitly confirm the family should carry no policy for now.
+ */
+export const transferEmployerFamily = async (principalId, { newEmployerId, newPolicyId, noPolicy, effectiveDate, reason, expectedVersions }) => {
+  const response = await api.post(`${UNIFIED_MEMBERS_BASE_URL}/${principalId}/employer-transfer`, {
+    newEmployerId,
+    newPolicyId: noPolicy ? null : newPolicyId,
+    noPolicy: Boolean(noPolicy),
+    effectiveDate,
+    reason,
+    expectedVersions
+  });
+  return response.data;
+};
+
 /**
  * Change a member's membership status (ACTIVE / SUSPENDED / PENDING / TERMINATED)
  *
@@ -820,5 +846,7 @@ export default {
   transferDependent,
   correctRelationship,
   changeFamilyPolicy,
-  reorderFamily
+  reorderFamily,
+  previewEmployerTransfer,
+  transferEmployerFamily
 };

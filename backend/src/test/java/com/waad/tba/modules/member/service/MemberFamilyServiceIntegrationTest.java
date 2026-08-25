@@ -25,6 +25,7 @@ import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy.BenefitPolicyStat
 import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository;
 import com.waad.tba.modules.employer.entity.Employer;
 import com.waad.tba.modules.employer.repository.EmployerRepository;
+import com.waad.tba.modules.member.dto.MemberEmployerTransferRequest;
 import com.waad.tba.modules.member.dto.MemberFamilyTransferRequest;
 import com.waad.tba.modules.member.dto.MemberRelationshipCorrectionRequest;
 import com.waad.tba.modules.member.dto.MemberFamilyPolicyChangeRequest;
@@ -176,6 +177,68 @@ class MemberFamilyServiceIntegrationTest extends PostgresIntegrationTestBase {
         assertThat(secondAfter.getCardNumber()).isEqualTo(secondCard);
         assertThat(firstAfter.getBarcode()).isEqualTo(firstCard);
         assertThat(secondAfter.getBarcode()).isEqualTo(secondCard);
+    }
+
+    @Test
+    void employerTransferMovesPrincipalAndDependentTogetherAndLeavesOldAssignmentClosed() {
+        Fixture f = fixture(true);
+        Member principal = memberRepository.findById(f.oldPrincipal().getId()).orElseThrow();
+        Member dependent = memberRepository.findById(f.dependent().getId()).orElseThrow();
+        Employer target = f.newPrincipal().getEmployer();
+        BenefitPolicy targetPolicy = f.newPrincipal().getBenefitPolicy();
+        var versions = java.util.Map.of(principal.getId(), principal.getVersion(), dependent.getId(), dependent.getVersion());
+
+        familyService.transferPrincipalToEmployer(principal.getId(), new MemberEmployerTransferRequest(
+                target.getId(), targetPolicy.getId(), false, LocalDate.now(), "نقل الأسرة كاملة", versions));
+
+        Member principalAfter = memberRepository.findById(principal.getId()).orElseThrow();
+        Member dependentAfter = memberRepository.findById(dependent.getId()).orElseThrow();
+        assertThat(employerResolver.resolveForOrFail(principalAfter, LocalDate.now()).getId()).isEqualTo(target.getId());
+        assertThat(employerResolver.resolveForOrFail(dependentAfter, LocalDate.now()).getId()).isEqualTo(target.getId());
+        assertThat(policyResolver.resolveForOrFail(principalAfter, LocalDate.now()).getId()).isEqualTo(targetPolicy.getId());
+        assertThat(policyResolver.resolveForOrFail(dependentAfter, LocalDate.now()).getId()).isEqualTo(targetPolicy.getId());
+        // A claim dated before the transfer still resolves the OLD employer/policy -- history is never rewritten.
+        assertThat(employerResolver.resolveForOrFail(principalAfter, LocalDate.now().minusDays(5)).getId())
+                .isEqualTo(f.oldPrincipal().getEmployer().getId());
+    }
+
+    @Test
+    void employerTransferIsAllOrNothingOnStaleVersion() {
+        Fixture f = fixture(true);
+        Member principal = memberRepository.findById(f.oldPrincipal().getId()).orElseThrow();
+        Member dependent = memberRepository.findById(f.dependent().getId()).orElseThrow();
+        long staleDependentVersion = dependent.getVersion() + 1; // never actually persisted
+        var versions = java.util.Map.of(principal.getId(), principal.getVersion(), dependent.getId(), staleDependentVersion);
+
+        assertThatThrownBy(() -> familyService.transferPrincipalToEmployer(principal.getId(),
+                new MemberEmployerTransferRequest(f.newPrincipal().getEmployer().getId(),
+                        f.newPrincipal().getBenefitPolicy().getId(), false, LocalDate.now(), "يجب أن يُرفض كاملاً", versions)))
+                .isInstanceOf(BusinessRuleException.class);
+
+        Member principalAfter = memberRepository.findById(principal.getId()).orElseThrow();
+        assertThat(employerResolver.resolveForOrFail(principalAfter, LocalDate.now()).getId())
+                .isEqualTo(f.oldPrincipal().getEmployer().getId());
+    }
+
+    @Test
+    void employerTransferRejectsAnInactivePolicy() {
+        Fixture f = fixture(true);
+        Member principal = memberRepository.findById(f.oldPrincipal().getId()).orElseThrow();
+        Member dependent = memberRepository.findById(f.dependent().getId()).orElseThrow();
+        BenefitPolicy draft = policyRepository.save(BenefitPolicy.builder()
+                .name("DRAFT-" + UUID.randomUUID().toString().substring(0, 6))
+                .policyCode("DRAFT-" + UUID.randomUUID().toString().substring(0, 6))
+                .employer(f.newPrincipal().getEmployer())
+                .annualLimit(new BigDecimal("10000")).defaultCoveragePercent(80)
+                .startDate(LocalDate.now().minusYears(1)).endDate(LocalDate.now().plusYears(1))
+                .status(BenefitPolicyStatus.DRAFT).active(true).build());
+        var versions = java.util.Map.of(principal.getId(), principal.getVersion(), dependent.getId(), dependent.getVersion());
+
+        assertThatThrownBy(() -> familyService.transferPrincipalToEmployer(principal.getId(),
+                new MemberEmployerTransferRequest(f.newPrincipal().getEmployer().getId(), draft.getId(), false,
+                        LocalDate.now(), "وثيقة غير فعالة", versions)))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("فعّالة");
     }
 
     private boolean transferAs(String username, Long memberId, MemberFamilyTransferRequest request) {
