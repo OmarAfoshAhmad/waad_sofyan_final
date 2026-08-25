@@ -69,7 +69,8 @@ import {
   ReceiptLong as ClaimIcon,
   FactCheck as PreAuthIcon,
   Search as SearchIcon,
-  Visibility as VisibilityIcon
+  Visibility as VisibilityIcon,
+  Undo as UndoIcon
 } from '@mui/icons-material';
 import DatePicker from 'components/common/SystemDatePicker';
 import { TablePagination } from '@mui/material';
@@ -87,6 +88,8 @@ import {
   hardDeleteMember,
   restoreMember,
   changeMemberStatus,
+  reinstateTerminatedMember,
+  restoreFamily,
   MEMBER_TYPES,
   GENDERS,
   RELATIONSHIPS
@@ -203,10 +206,39 @@ const UnifiedMemberView = () => {
     { value: 'TERMINATED', label: 'منتهي' }
   ];
 
-  const applyStatusChange = async (targetId, targetStatus, reason) => {
+  /**
+   * Only the transitions MemberStatusTransitionService actually accepts from
+   * each status -- offering more here just means the request reaches the
+   * server and bounces. TERMINATED -> ACTIVE is the one exception: it is not
+   * changeStatus's ACTIVE case (restoreFromSuspended, which refuses a
+   * TERMINATED member outright) but the separate reinstate operation, gated
+   * to SUPER_ADMIN. DUPLICATE_MERGED has no valid outgoing transition at all.
+   */
+  const VALID_STATUS_TRANSITIONS = {
+    ACTIVE: [
+      { value: 'SUSPENDED', label: 'تعليق' },
+      { value: 'TERMINATED', label: 'إنهاء عضوية' }
+    ],
+    SUSPENDED: [
+      { value: 'ACTIVE', label: 'استعادة' },
+      { value: 'TERMINATED', label: 'إنهاء عضوية' }
+    ],
+    PENDING: [
+      { value: 'ACTIVE', label: 'اعتماد وتفعيل' },
+      { value: 'TERMINATED', label: 'إنهاء عضوية' }
+    ],
+    TERMINATED: capabilities.hardDelete ? [{ value: 'ACTIVE', label: 'إعادة عضوية استثنائية', reinstate: true }] : [],
+    DUPLICATE_MERGED: []
+  };
+
+  const applyStatusChange = async (targetId, targetStatus, reason, reinstate) => {
     setStatusChangeLoading(true);
     try {
-      await changeMemberStatus(targetId, targetStatus, reason);
+      if (reinstate) {
+        await reinstateTerminatedMember(targetId, reason);
+      } else {
+        await changeMemberStatus(targetId, targetStatus, reason);
+      }
       openSnackbar({ open: true, message: 'تم تحديث حالة المستفيد بنجاح', variant: 'alert', alert: { color: 'success' } });
       setStatusChangeDialog({ open: false, targetId: null, targetStatus: null, reason: '' });
       fetchMemberData();
@@ -222,16 +254,42 @@ const UnifiedMemberView = () => {
     }
   };
 
+  const handleRestoreFamily = async (transitionId) => {
+    setStatusChangeLoading(true);
+    try {
+      const res = await restoreFamily(transitionId);
+      const data = res?.data || res;
+      const restoredCount = data?.restoredMemberIds?.length || 0;
+      const skippedCount = data?.skipped?.length || 0;
+      openSnackbar({
+        open: true,
+        message: `تمت استعادة ${restoredCount} من أفراد الأسرة${skippedCount ? `، وتعذّرت استعادة ${skippedCount}` : ''}`,
+        variant: 'alert',
+        alert: { color: skippedCount ? 'warning' : 'success' }
+      });
+      fetchMemberData();
+    } catch (err) {
+      openSnackbar({
+        open: true,
+        message: err?.response?.data?.message || 'تعذرت استعادة الأسرة',
+        variant: 'alert',
+        alert: { color: 'error' }
+      });
+    } finally {
+      setStatusChangeLoading(false);
+    }
+  };
+
   const handleOpenStatusMenu = (event, targetId) => {
     setStatusMenuAnchor(event.currentTarget);
     setStatusMenuTargetId(targetId);
   };
 
-  const handleSelectStatus = (targetStatus) => {
+  const handleSelectStatus = (targetStatus, reinstate) => {
     const targetId = statusMenuTargetId;
     setStatusMenuAnchor(null);
     setStatusMenuTargetId(null);
-    setStatusChangeDialog({ open: true, targetId, targetStatus, reason: '' });
+    setStatusChangeDialog({ open: true, targetId, targetStatus, reason: '', reinstate: Boolean(reinstate) });
   };
 
   const handleChangePage = (event, newPage) => {
@@ -626,19 +684,39 @@ const UnifiedMemberView = () => {
                           />
                         </Tooltip>
                         {capabilities.lifecycle && <Menu anchorEl={statusMenuAnchor} open={Boolean(statusMenuAnchor)} onClose={() => setStatusMenuAnchor(null)}>
-                          {MEMBER_STATUS_OPTIONS.filter((opt) => {
+                          {(() => {
                             const currentStatus =
                               statusMenuTargetId === member.id
                                 ? member.status
                                 : dependents.find((d) => d.id === statusMenuTargetId)?.status;
-                            return opt.value !== currentStatus;
-                          }).map((opt) => (
-                            <MenuItem key={opt.value} onClick={() => handleSelectStatus(opt.value)}>
-                              {opt.label}
-                            </MenuItem>
-                          ))}
+                            const options = VALID_STATUS_TRANSITIONS[currentStatus] || [];
+                            if (options.length === 0) {
+                              return <MenuItem disabled>لا توجد إجراءات متاحة لهذه الحالة</MenuItem>;
+                            }
+                            return options.map((opt) => (
+                              <MenuItem key={opt.value} onClick={() => handleSelectStatus(opt.value, opt.reinstate)}>
+                                {opt.label}
+                              </MenuItem>
+                            ));
+                          })()}
                         </Menu>}
                       </Stack>
+
+                      {capabilities.lifecycle && isPrincipal && member.statusTransitionId && (
+                        <Tooltip title="يستعيد بالضبط التابعين الذين تأثروا بآخر عملية تعليق/إنهاء جماعية لهذه الأسرة، ويتخطى من تغيّرت حالته بشكل مستقل منذ ذلك">
+                          <span>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              startIcon={<UndoIcon fontSize="small" />}
+                              onClick={() => handleRestoreFamily(member.statusTransitionId)}
+                              disabled={statusChangeLoading}
+                            >
+                              استعادة الأسرة بعد التعليق/الإنهاء
+                            </Button>
+                          </span>
+                        </Tooltip>
+                      )}
 
                       <Divider flexItem sx={{ width: '100%', my: 0.5 }} />
 
@@ -1213,11 +1291,13 @@ const UnifiedMemberView = () => {
         maxWidth="xs"
         fullWidth
       >
-        <DialogTitle>تغيير حالة المستفيد</DialogTitle>
+        <DialogTitle>{statusChangeDialog.reinstate ? 'إعادة عضوية استثنائية' : 'تغيير حالة المستفيد'}</DialogTitle>
         <DialogContent>
           <DialogContentText sx={{ mb: 2 }}>
-            الحالة الجديدة: {MEMBER_STATUS_OPTIONS.find((option) => option.value === statusChangeDialog.targetStatus)?.label || statusChangeDialog.targetStatus}.
-            يرجى توضيح سبب التغيير ليُحفظ في سجل التدقيق.
+            {statusChangeDialog.reinstate
+              ? 'سيُعاد المستفيد من حالة "منتهية العضوية" إلى نشط. لا يُمس أي سجل مالي أو طبي سابق.'
+              : `الحالة الجديدة: ${MEMBER_STATUS_OPTIONS.find((option) => option.value === statusChangeDialog.targetStatus)?.label || statusChangeDialog.targetStatus}.`}
+            {' '}يرجى توضيح سبب التغيير ليُحفظ في سجل التدقيق.
           </DialogContentText>
           <TextField
             autoFocus
@@ -1237,9 +1317,11 @@ const UnifiedMemberView = () => {
             variant="contained"
             color="primary"
             disabled={statusChangeLoading || !statusChangeDialog.reason.trim()}
-            onClick={() => applyStatusChange(statusChangeDialog.targetId, statusChangeDialog.targetStatus, statusChangeDialog.reason)}
+            onClick={() =>
+              applyStatusChange(statusChangeDialog.targetId, statusChangeDialog.targetStatus, statusChangeDialog.reason, statusChangeDialog.reinstate)
+            }
           >
-            تأكيد تغيير الحالة
+            {statusChangeDialog.reinstate ? 'تأكيد إعادة العضوية' : 'تأكيد تغيير الحالة'}
           </Button>
         </DialogActions>
       </Dialog>
