@@ -31,7 +31,12 @@ import {
   IconButton,
   Tooltip,
   Badge,
-  Chip
+  Chip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions
 } from '@mui/material';
 import {
   Save as SaveIcon,
@@ -43,7 +48,8 @@ import {
   Delete as DeleteIcon,
   PhotoCamera as PhotoCameraIcon,
   Edit as EditIcon,
-  CloudUpload as CloudUploadIcon
+  CloudUpload as CloudUploadIcon,
+  SwapHoriz as SwapHorizIcon
 } from '@mui/icons-material';
 import DatePicker from 'components/common/SystemDatePicker';
 import dayjs from 'dayjs';
@@ -55,11 +61,16 @@ import {
   updateMember,
   uploadPhoto,
   deletePhoto,
+  previewEmployerTransfer,
+  transferEmployerFamily,
   GENDERS
 } from 'services/api/unified-members.service';
+import { getBenefitPoliciesByEmployer } from 'services/api/benefit-policies.service';
 import axiosClient from 'utils/axios';
 import { openSnackbar } from 'api/snackbar';
 import { MemberAvatar } from '../../components/tba';
+import useAuth from 'hooks/useAuth';
+import { getMemberCapabilities } from './memberCapabilities';
 
 const RELATIONSHIP_LABELS = {
   WIFE: 'زوجة', HUSBAND: 'زوج', SON: 'ابن', DAUGHTER: 'ابنة',
@@ -73,6 +84,8 @@ const STATUS_LABELS = { ACTIVE: 'نشط', SUSPENDED: 'موقوف', PENDING: 'ق�
 const UnifiedMemberEdit = () => {
   const navigate = useNavigate();
   const { id } = useParams();
+  const { user } = useAuth();
+  const capabilities = getMemberCapabilities(user);
 
   // Tab State
   const [tabValue, setTabValue] = useState(0);
@@ -124,6 +137,20 @@ const UnifiedMemberEdit = () => {
   // Lookup Data
   const [employers, setEmployers] = useState([]);
   const [isPrincipal, setIsPrincipal] = useState(false);
+
+  // Batch هـ -- whole-family employer transfer
+  const [employerTransferDialog, setEmployerTransferDialog] = useState({
+    open: false,
+    step: 'select', // 'select' -> 'preview'
+    newEmployerId: '',
+    policyOptions: [],
+    newPolicyId: '',
+    noPolicy: false,
+    effectiveDate: new Date().toISOString().slice(0, 10),
+    reason: '',
+    preview: null,
+    loading: false
+  });
 
   /**
    * Helper to check if a tab has validation errors
@@ -198,6 +225,93 @@ const UnifiedMemberEdit = () => {
       setEmployers(orgsRes.data?.data || []);
     } catch (error) {
       console.error('Error fetching lookup data:', error);
+    }
+  };
+
+  const openEmployerTransferDialog = () => {
+    setEmployerTransferDialog({
+      open: true,
+      step: 'select',
+      newEmployerId: '',
+      policyOptions: [],
+      newPolicyId: '',
+      noPolicy: false,
+      effectiveDate: new Date().toISOString().slice(0, 10),
+      reason: '',
+      preview: null,
+      loading: false
+    });
+  };
+
+  const selectNewEmployerForTransfer = async (newEmployerId) => {
+    setEmployerTransferDialog((prev) => ({ ...prev, newEmployerId, newPolicyId: '', noPolicy: false, policyOptions: [] }));
+    if (!newEmployerId) return;
+    try {
+      const policies = await getBenefitPoliciesByEmployer(newEmployerId);
+      const list = Array.isArray(policies) ? policies : policies?.content || [];
+      setEmployerTransferDialog((prev) => (prev.newEmployerId === newEmployerId ? { ...prev, policyOptions: list } : prev));
+    } catch {
+      // Leave policyOptions empty -- forces an explicit "no policy" choice rather than a guess.
+    }
+  };
+
+  const loadTransferPreview = async () => {
+    const { newEmployerId } = employerTransferDialog;
+    if (!newEmployerId) {
+      openSnackbar({ open: true, message: 'اختر جهة العمل الجديدة أولاً', variant: 'alert', alert: { color: 'warning' } });
+      return;
+    }
+    setEmployerTransferDialog((prev) => ({ ...prev, loading: true }));
+    try {
+      const res = await previewEmployerTransfer(id, newEmployerId);
+      const preview = res?.data || res;
+      setEmployerTransferDialog((prev) => ({ ...prev, step: 'preview', preview, loading: false }));
+    } catch (err) {
+      openSnackbar({
+        open: true,
+        message: err?.response?.data?.message || 'تعذّر تحميل معاينة النقل',
+        variant: 'alert',
+        alert: { color: 'error' }
+      });
+      setEmployerTransferDialog((prev) => ({ ...prev, loading: false }));
+    }
+  };
+
+  const confirmEmployerTransfer = async () => {
+    const { newEmployerId, newPolicyId, noPolicy, effectiveDate, reason, preview } = employerTransferDialog;
+    if (!noPolicy && !newPolicyId) {
+      openSnackbar({ open: true, message: 'حدّد الوثيقة الجديدة، أو أكّد عدم وجود وثيقة لهذه الأسرة', variant: 'alert', alert: { color: 'warning' } });
+      return;
+    }
+    if (!reason.trim()) {
+      openSnackbar({ open: true, message: 'سبب نقل جهة العمل إلزامي', variant: 'alert', alert: { color: 'warning' } });
+      return;
+    }
+    const expectedVersions = {};
+    (preview?.familyMembers || []).forEach((m) => {
+      expectedVersions[m.memberId] = m.version;
+    });
+    setEmployerTransferDialog((prev) => ({ ...prev, loading: true }));
+    try {
+      await transferEmployerFamily(id, {
+        newEmployerId,
+        newPolicyId: noPolicy ? null : newPolicyId,
+        noPolicy,
+        effectiveDate,
+        reason: reason.trim(),
+        expectedVersions
+      });
+      openSnackbar({ open: true, message: 'تم نقل الأسرة إلى جهة العمل الجديدة بنجاح', variant: 'alert', alert: { color: 'success' } });
+      setEmployerTransferDialog((prev) => ({ ...prev, open: false, loading: false }));
+      fetchMemberData();
+    } catch (err) {
+      openSnackbar({
+        open: true,
+        message: err?.response?.data?.message || 'تعذّر نقل الأسرة -- تأكد أن بيانات الأسرة لم تتغيّر أثناء المعاينة',
+        variant: 'alert',
+        alert: { color: 'error' }
+      });
+      setEmployerTransferDialog((prev) => ({ ...prev, loading: false }));
     }
   };
 
@@ -648,14 +762,21 @@ const UnifiedMemberEdit = () => {
                 {isPrincipal ? (
                   <>
                     <Grid size={{ xs: 12 }}>
-                      <TextField
-                        fullWidth
-                        label="جهة العمل"
-                        value={employers.find((emp) => String(emp.id) === String(form.employerId))?.label || form.employerId || '-'}
-                        slotProps={{ input: { readOnly: true } }}
-                        helperText="نقل جهة العمل عملية مستقلة ومؤرخة ولا يتم من التعديل العام."
-                        size="small"
-                      />
+                      <Stack direction="row" spacing={1} alignItems="flex-start">
+                        <TextField
+                          fullWidth
+                          label="جهة العمل"
+                          value={employers.find((emp) => String(emp.id) === String(form.employerId))?.label || form.employerId || '-'}
+                          slotProps={{ input: { readOnly: true } }}
+                          helperText="نقل جهة العمل عملية مستقلة ومؤرخة ولا يتم من التعديل العام."
+                          size="small"
+                        />
+                        {capabilities.lifecycle && (
+                          <Button variant="outlined" size="small" startIcon={<SwapHorizIcon />} onClick={openEmployerTransferDialog} sx={{ mt: 0.5, whiteSpace: 'nowrap' }}>
+                            نقل إلى جهة أخرى
+                          </Button>
+                        )}
+                      </Stack>
                     </Grid>
                     <Grid size={{ xs: 12, md: 4 }}>
                       <TextField
@@ -780,6 +901,119 @@ const UnifiedMemberEdit = () => {
           </Button>
         </Box>
       </MainCard>
+
+      {/* نقل رئيس أسرة وأسرته إلى جهة عمل أخرى -- عملية مستقلة كاملة */}
+      <Dialog
+        open={employerTransferDialog.open}
+        onClose={() => (employerTransferDialog.loading ? null : setEmployerTransferDialog((prev) => ({ ...prev, open: false })))}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>نقل الأسرة إلى جهة عمل أخرى</DialogTitle>
+        <DialogContent>
+          {employerTransferDialog.step === 'select' ? (
+            <Stack spacing={2} sx={{ mt: 1 }}>
+              <DialogContentText>
+                سينتقل رئيس الأسرة وكل تابعيه معاً إلى الجهة الجديدة، أو لا أحد ينتقل. لن يتأثر أي سجل مالي أو مطالبة سابقة لتاريخ السريان.
+              </DialogContentText>
+              <FormControl fullWidth size="small">
+                <InputLabel>جهة العمل الجديدة</InputLabel>
+                <Select
+                  label="جهة العمل الجديدة"
+                  value={employerTransferDialog.newEmployerId}
+                  onChange={(e) => selectNewEmployerForTransfer(e.target.value)}
+                >
+                  {employers
+                    .filter((emp) => String(emp.id) !== String(form.employerId))
+                    .map((emp) => (
+                      <MenuItem key={emp.id} value={emp.id}>
+                        {emp.label}
+                      </MenuItem>
+                    ))}
+                </Select>
+              </FormControl>
+            </Stack>
+          ) : (
+            <Stack spacing={2} sx={{ mt: 1 }}>
+              <DialogContentText>
+                {employerTransferDialog.preview?.currentEmployerName} ← {employerTransferDialog.preview?.newEmployerName}
+              </DialogContentText>
+              <Paper variant="outlined" sx={{ p: 1.5 }}>
+                <Typography variant="subtitle2" gutterBottom>
+                  أفراد الأسرة المتأثرون ({employerTransferDialog.preview?.familyMembers?.length || 0})
+                </Typography>
+                {(employerTransferDialog.preview?.familyMembers || []).map((m) => (
+                  <Typography key={m.memberId} variant="body2" color="text.secondary">
+                    {m.principal ? '(رئيس الأسرة) ' : ''}
+                    {m.fullName} {m.relationship ? `(${RELATIONSHIP_LABELS[m.relationship] || m.relationship})` : ''}
+                  </Typography>
+                ))}
+              </Paper>
+              <FormControl fullWidth size="small">
+                <InputLabel>الوثيقة الجديدة</InputLabel>
+                <Select
+                  label="الوثيقة الجديدة"
+                  value={employerTransferDialog.noPolicy ? '__NONE__' : employerTransferDialog.newPolicyId}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (value === '__NONE__') {
+                      setEmployerTransferDialog((prev) => ({ ...prev, noPolicy: true, newPolicyId: '' }));
+                    } else {
+                      setEmployerTransferDialog((prev) => ({ ...prev, noPolicy: false, newPolicyId: value }));
+                    }
+                  }}
+                >
+                  {employerTransferDialog.policyOptions.map((p) => (
+                    <MenuItem key={p.id} value={p.id}>
+                      {p.policyName || p.name || `وثيقة #${p.id}`}
+                    </MenuItem>
+                  ))}
+                  <MenuItem value="__NONE__">
+                    <em>بلا وثيقة بعد (تأكيد صريح)</em>
+                  </MenuItem>
+                </Select>
+              </FormControl>
+              <TextField
+                type="date"
+                label="تاريخ السريان"
+                fullWidth
+                size="small"
+                InputLabelProps={{ shrink: true }}
+                value={employerTransferDialog.effectiveDate}
+                onChange={(e) => setEmployerTransferDialog((prev) => ({ ...prev, effectiveDate: e.target.value }))}
+              />
+              <TextField
+                label="سبب النقل"
+                required
+                fullWidth
+                multiline
+                minRows={2}
+                value={employerTransferDialog.reason}
+                onChange={(e) => setEmployerTransferDialog((prev) => ({ ...prev, reason: e.target.value }))}
+              />
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEmployerTransferDialog((prev) => ({ ...prev, open: false }))} disabled={employerTransferDialog.loading}>
+            إلغاء
+          </Button>
+          {employerTransferDialog.step === 'select' ? (
+            <Button variant="contained" disabled={!employerTransferDialog.newEmployerId || employerTransferDialog.loading} onClick={loadTransferPreview}>
+              {employerTransferDialog.loading ? 'جارِ التحميل...' : 'متابعة'}
+            </Button>
+          ) : (
+            <Button
+              variant="contained"
+              color="warning"
+              disabled={employerTransferDialog.loading || !employerTransferDialog.reason.trim() || (!employerTransferDialog.noPolicy && !employerTransferDialog.newPolicyId)}
+              onClick={confirmEmployerTransfer}
+            >
+              {employerTransferDialog.loading ? 'جارِ النقل...' : 'تأكيد نقل الأسرة'}
+            </Button>
+          )}
+        </DialogActions>
+      </Dialog>
     </>
   );
 };
