@@ -58,8 +58,17 @@ public record MemberFilter(
                     }
                 }
             }
-            if (deletedMode == DeletedMode.ACTIVE_ONLY) predicates.add(cb.isTrue(root.get("active")));
-            if (deletedMode == DeletedMode.DELETED_ONLY) predicates.add(cb.isFalse(root.get("active")));
+            // An explicit status is a complete answer on its own: the caller asked
+            // for SUSPENDED, not for "SUSPENDED and also active=true". Layering the
+            // active/inactive gate on top of it would make an explicit status filter
+            // silently return nothing whenever it names a status the gate excludes
+            // (e.g. SUSPENDED under the default ACTIVE_ONLY search). The gate still
+            // applies to the undifferentiated "no status chosen" case, where it is
+            // the only thing distinguishing an active roster from a terminated one.
+            if (parsedStatus == null) {
+                if (deletedMode == DeletedMode.ACTIVE_ONLY) predicates.add(cb.isTrue(root.get("active")));
+                if (deletedMode == DeletedMode.DELETED_ONLY) predicates.add(cb.isFalse(root.get("active")));
+            }
             return cb.and(predicates.toArray(Predicate[]::new));
         };
     }

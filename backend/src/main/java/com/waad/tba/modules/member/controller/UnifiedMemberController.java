@@ -270,7 +270,7 @@ public class UnifiedMemberController {
          *                             within the same employer)
          */
         @PostMapping
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN')")
+        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN', 'DATA_ENTRY')")
         @Operation(summary = "Create Principal Member with inline Dependents", description = "Creates a new Principal Member with auto-generated Barcode (WAHA-YYYY-NNNNNN) and Card Number (NNNNNN). "
                         +
                         "Supports inline creation of 0 to N Dependents. Each Dependent receives a Card Number with suffix (e.g., 000123-01). "
@@ -352,7 +352,7 @@ public class UnifiedMemberController {
          *                           violated
          */
         @PostMapping("/{principalId}/dependents")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN')")
+        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN', 'DATA_ENTRY')")
         @Operation(summary = "Add Dependent to existing Principal", description = "Adds a new Dependent member to an existing Principal. "
                         +
                         "Auto-generates Card Number with suffix based on existing Dependents count (e.g., 000123-03). "
@@ -861,7 +861,7 @@ public class UnifiedMemberController {
          * @throws ValidationException if validation fails
          */
         @PutMapping("/{id}")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN')")
+        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN', 'DATA_ENTRY')")
         @Operation(summary = "Update Member data", description = "Updates an existing Member (Principal or Dependent). "
                         +
                         "Supports updating personal information, contact details, and custom attributes. " +
@@ -1065,12 +1065,14 @@ public class UnifiedMemberController {
 
         @PostMapping("/bulk-delete")
         @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN')")
-        @Operation(summary = "Bulk Delete Members", description = "Deletes a list of members by IDs")
-        public ResponseEntity<ApiResponse<Void>> bulkDeleteMembers(@RequestBody List<Long> ids) {
-                log.info("Bulk deleting {} members", ids.size());
-                unifiedMemberService.bulkTerminateMemberships(ids);
+        @Operation(summary = "Bulk Terminate Members", description = "Ends membership for a list of members by IDs. Nothing is deleted -- status becomes TERMINATED for each, recorded in the append-only status history with the given reason.")
+        public ResponseEntity<ApiResponse<Void>> bulkDeleteMembers(
+                        @RequestBody com.waad.tba.modules.member.dto.BulkTerminateRequestDto request) {
+                log.info("Bulk terminating {} members", request.getIds() == null ? 0 : request.getIds().size());
+                unifiedMemberService.bulkTerminateMemberships(request.getIds(), request.getReason());
                 return ResponseEntity.ok(ApiResponse.success(
-                                "تم إنهاء عضوية " + ids.stream().distinct().count() + " مستفيد بنجاح", null));
+                                "تم إنهاء عضوية " + request.getIds().stream().distinct().count() + " مستفيد بنجاح",
+                                null));
         }
 
         // ==================== UTILITY OPERATIONS ====================

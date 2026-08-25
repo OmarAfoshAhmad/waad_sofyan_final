@@ -82,7 +82,8 @@ import {
   restoreMember,
   hardDeleteMember,
   toggleMemberActive,
-  MEMBER_TYPES
+  MEMBER_TYPES,
+  MEMBER_STATUSES
 } from 'services/api/unified-members.service';
 import axiosClient from 'utils/axios';
 import { RELATIONSHIP_CONFIG } from 'components/insurance/MemberTypeIndicator';
@@ -132,6 +133,11 @@ const UnifiedMembersList = () => {
   // Import/Export Dialogs
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [exportWizardOpen, setExportWizardOpen] = useState(false);
+
+  // Bulk termination requires a stated reason -- rare, high-impact, no shortcut.
+  const [bulkTerminateDialog, setBulkTerminateDialog] = useState(false);
+  const [bulkTerminateReason, setBulkTerminateReason] = useState('');
+  const [bulkTerminateLoading, setBulkTerminateLoading] = useState(false);
 
   // Confirmation Dialog
   const [confirmDialog, setConfirmDialog] = useState({
@@ -324,27 +330,27 @@ const UnifiedMembersList = () => {
   };
 
   const handleBulkDelete = () => {
-    setConfirmDialog({
-      open: true,
-      title: 'حذف المستفيدين المحددين',
-      content: `هل أنت متأكد من حذف ${selectedMembers.length} مستفيد؟ سيتم حذف التابعين أيضاً إذا كان هناك موظف محدد.`,
-      severity: 'error',
-      confirmText: 'حذف',
-      cancelText: 'إلغاء',
-      onConfirm: () =>
-        handleConfirmAction(
-          async () => {
-            const res = await bulkDeleteMembers(selectedMembers);
-            setSelectedMembers([]); // clear selection
-            if (res?.message && res.message.includes('فشل حذف')) {
-              throw new Error(res.message);
-            }
-            return res?.message || 'تم إرسال طلب الحذف بنجاح';
-          },
-          'تم إرسال طلب الحذف بنجاح',
-          'فشل طلب الحذف المتعدد'
-        )
-    });
+    setBulkTerminateReason('');
+    setBulkTerminateDialog(true);
+  };
+
+  const confirmBulkTerminate = async () => {
+    if (!bulkTerminateReason.trim()) {
+      enqueueSnackbar('سبب إنهاء العضوية إلزامي', { variant: 'warning' });
+      return;
+    }
+    setBulkTerminateLoading(true);
+    try {
+      const res = await bulkDeleteMembers(selectedMembers, bulkTerminateReason.trim());
+      setSelectedMembers([]);
+      enqueueSnackbar(res?.message || 'تم إنهاء العضوية بنجاح', { variant: 'success' });
+      setBulkTerminateDialog(false);
+      await fetchMembers();
+    } catch (error) {
+      enqueueSnackbar(error?.response?.data?.message || 'فشل إنهاء عضوية المحدد', { variant: 'error' });
+    } finally {
+      setBulkTerminateLoading(false);
+    }
   };
 
   const handleDeleteClick = (member) => {
@@ -624,7 +630,7 @@ const UnifiedMembersList = () => {
                   minWidth: '9.6875rem'
                 }}
               >
-                حذف المحدد ({selectedMembers.length})
+                إنهاء عضوية المحدد ({selectedMembers.length})
               </Button>
             )}
 
@@ -787,7 +793,8 @@ const UnifiedMembersList = () => {
               <MenuItem value={MEMBER_STATUSES.ACTIVE}>نشط</MenuItem>
               <MenuItem value={MEMBER_STATUSES.SUSPENDED}>موقوف</MenuItem>
               <MenuItem value={MEMBER_STATUSES.PENDING}>قيد المراجعة</MenuItem>
-              <MenuItem value={MEMBER_STATUSES.TERMINATED}>منتهي</MenuItem>
+              <MenuItem value={MEMBER_STATUSES.TERMINATED}>منتهية العضوية</MenuItem>
+              <MenuItem value={MEMBER_STATUSES.DUPLICATE_MERGED}>مدموج</MenuItem>
             </TextField>
 
             {/* Reset Button */}
@@ -858,6 +865,40 @@ const UnifiedMembersList = () => {
         onConfirm={confirmDialog.onConfirm}
         onClose={closeDialog}
       />
+
+      {/* Bulk Terminate Dialog -- reason is mandatory, this is rare and high-impact */}
+      <Dialog open={bulkTerminateDialog} onClose={() => (bulkTerminateLoading ? null : setBulkTerminateDialog(false))} maxWidth="sm" fullWidth>
+        <DialogTitle>إنهاء عضوية {selectedMembers.length} مستفيد</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            سيتم إنهاء عضوية {selectedMembers.length} مستفيد محدد. سيُلغى التابعون النشطون أيضاً إذا كان هناك موظف
+            رئيسي ضمن التحديد. لا يُحذف شيء فعلياً -- تصبح الحالة "منتهية العضوية" ويبقى السجل والتاريخ المالي كما هو.
+          </DialogContentText>
+          <TextField
+            label="سبب إنهاء العضوية"
+            required
+            fullWidth
+            multiline
+            minRows={2}
+            value={bulkTerminateReason}
+            onChange={(e) => setBulkTerminateReason(e.target.value)}
+            disabled={bulkTerminateLoading}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setBulkTerminateDialog(false)} disabled={bulkTerminateLoading}>
+            إلغاء
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            disabled={bulkTerminateLoading || !bulkTerminateReason.trim()}
+            onClick={confirmBulkTerminate}
+          >
+            {bulkTerminateLoading ? 'جارِ الإنهاء...' : 'تأكيد إنهاء العضوية'}
+          </Button>
+        </DialogActions>
+      </Dialog>
       <MemberLifecycleDialog
         open={lifecycleDialog.open}
         action={lifecycleDialog.action}

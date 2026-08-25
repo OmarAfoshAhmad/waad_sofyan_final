@@ -310,9 +310,9 @@ export const terminateMembership = async (id, reason) => {
  * @param {Array<number>} ids - Array of Member IDs
  * @returns {Promise<Object>} Response
  */
-export const bulkDeleteMembers = async (ids) => {
+export const bulkDeleteMembers = async (ids, reason) => {
   try {
-    const response = await api.post(`${UNIFIED_MEMBERS_BASE_URL}/bulk-delete`, ids);
+    const response = await api.post(`${UNIFIED_MEMBERS_BASE_URL}/bulk-delete`, { ids, reason });
     return response.data;
   } catch (error) {
     console.error('Error bulk deleting members:', error);
@@ -662,7 +662,17 @@ export const MEMBER_STATUSES = {
   ACTIVE: 'ACTIVE',
   SUSPENDED: 'SUSPENDED',
   TERMINATED: 'TERMINATED',
-  PENDING: 'PENDING'
+  PENDING: 'PENDING',
+  DUPLICATE_MERGED: 'DUPLICATE_MERGED'
+};
+
+/** Arabic display labels. TERMINATED reads as "ended membership", not "deleted" -- the record still exists. */
+export const MEMBER_STATUS_LABELS = {
+  ACTIVE: 'نشط',
+  SUSPENDED: 'معلّق',
+  PENDING: 'قيد المراجعة',
+  TERMINATED: 'منتهية العضوية',
+  DUPLICATE_MERGED: 'مدموج'
 };
 
 /**
@@ -754,5 +764,6 @@ export default {
   RELATIONSHIPS,
   GENDERS,
   MEMBER_STATUSES,
+  MEMBER_STATUS_LABELS,
   MEMBER_TYPES
 };

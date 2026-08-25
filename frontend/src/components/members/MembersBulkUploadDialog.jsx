@@ -25,6 +25,7 @@ import {
 import { useSnackbar } from 'notistack';
 import { downloadTemplate, previewImport, executeImport } from 'services/api/unified-members.service';
 import EmployerFilterSelector from 'components/tba/EmployerFilterSelector';
+import useAuth from 'hooks/useAuth';
 
 // Static Arabic labels
 const LABELS = {
@@ -46,6 +47,8 @@ const LABELS = {
 
 const MembersBulkUploadDialog = ({ open, onClose, onSuccess }) => {
   const { enqueueSnackbar } = useSnackbar();
+  const { user } = useAuth();
+  const isSuperAdmin = (user?.roles?.[0] || user?.role || '').replace(/^ROLE_/, '') === 'SUPER_ADMIN';
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -272,25 +275,27 @@ const MembersBulkUploadDialog = ({ open, onClose, onSuccess }) => {
                   )}
                 </Stack>
               </Box>
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={clearOldMembers}
-                    onChange={(e) => {
-                      setClearOldMembers(e.target.checked);
-                      setPreview(null);
-                    }}
-                    color="primary"
-                    disabled={uploading}
-                  />
-                }
-                label={
-                  <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
-                    مسح المستفيدين القدامى قبل الاستيراد (سيتم الإبقاء على المستفيدين الذين لديهم حركات مالية)
-                  </Typography>
-                }
-                sx={{ alignSelf: 'flex-start', mt: 1 }}
-              />
+              {isSuperAdmin && (
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={clearOldMembers}
+                      onChange={(e) => {
+                        setClearOldMembers(e.target.checked);
+                        setPreview(null);
+                      }}
+                      color="primary"
+                      disabled={uploading}
+                    />
+                  }
+                  label={
+                    <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                      مسح المستفيدين القدامى قبل الاستيراد (سيتم الإبقاء على المستفيدين الذين لديهم حركات مالية)
+                    </Typography>
+                  }
+                  sx={{ alignSelf: 'flex-start', mt: 1 }}
+                />
+              )}
             </>
           )}
 

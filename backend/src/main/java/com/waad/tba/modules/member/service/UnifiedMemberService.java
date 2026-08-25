@@ -796,8 +796,22 @@ public class UnifiedMemberService {
      */
     @Transactional
     public void bulkTerminateMemberships(java.util.Collection<Long> memberIds) {
+        bulkTerminateMemberships(memberIds, "LEGACY_BULK_TERMINATE_ENDPOINT");
+    }
+
+    /**
+     * @param reason must be the caller's actual justification, not a
+     *               placeholder -- this ends coverage for every id in the
+     *               batch and is recorded once per member in the same
+     *               append-only status history a single termination uses.
+     */
+    @Transactional
+    public void bulkTerminateMemberships(java.util.Collection<Long> memberIds, String reason) {
         if (memberIds == null || memberIds.isEmpty()) {
             throw new BusinessRuleException("يجب تحديد مستفيد واحد على الأقل");
+        }
+        if (reason == null || reason.isBlank()) {
+            throw new BusinessRuleException("سبب إنهاء العضوية إلزامي");
         }
         java.util.List<Member> members = memberIds.stream()
                 .distinct()
@@ -810,7 +824,7 @@ public class UnifiedMemberService {
         Long userId = currentUser != null ? currentUser.getId() : null;
         for (Member member : members) {
             statusTransitionService.terminateMembership(member.getId(),
-                    "LEGACY_BULK_TERMINATE_ENDPOINT", userId, StatusSource.SYSTEM);
+                    reason, userId, StatusSource.SYSTEM);
         }
     }
 
