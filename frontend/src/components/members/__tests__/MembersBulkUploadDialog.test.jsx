@@ -8,6 +8,9 @@ import { executeImport, previewImport } from 'services/api/unified-members.servi
 const enqueueSnackbar = vi.fn();
 
 vi.mock('notistack', () => ({ useSnackbar: () => ({ enqueueSnackbar }) }));
+vi.mock('hooks/useAuth', () => ({
+  default: () => ({ user: { role: 'DATA_ENTRY' } })
+}));
 vi.mock('services/api/unified-members.service', () => ({
   downloadTemplate: vi.fn(), previewImport: vi.fn(), executeImport: vi.fn()
 }));

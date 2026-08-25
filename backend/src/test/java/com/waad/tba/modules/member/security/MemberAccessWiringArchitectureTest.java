@@ -47,6 +47,37 @@ class MemberAccessWiringArchitectureTest {
         assertThat(member).contains("@PostMapping(\"/eligibility/evaluations\")");
     }
 
+    @Test
+    void dataEntryCommandRoutesHaveTheReadAndSelectorDependenciesTheyNeed() {
+        String member = read(MAIN.resolve("controller/UnifiedMemberController.java"));
+        String employer = read(Path.of(
+                "src/main/java/com/waad/tba/modules/employer/controller/EmployerController.java"));
+
+        assertThat(annotationBefore(member, "@GetMapping(\"/search\")"))
+                .contains("'DATA_ENTRY'");
+        assertThat(annotationBefore(member, "@GetMapping(\"/count\")"))
+                .contains("'DATA_ENTRY'");
+        assertThat(annotationBefore(member, "@GetMapping(\"/{id}\")"))
+                .contains("'DATA_ENTRY'");
+        assertThat(annotationBefore(member, "@GetMapping(\"/unified-search\")"))
+                .contains("'DATA_ENTRY'");
+        assertThat(annotationBefore(member, "@GetMapping(\"/{id}/details\")"))
+                .contains("'DATA_ENTRY'");
+        assertThat(annotationBefore(employer, "@GetMapping({ \"selectors\", \"/selector\" })"))
+                .contains("'DATA_ENTRY'")
+                .contains("'EMPLOYER_ADMIN'");
+    }
+
+    private static String annotationBefore(String source, String mapping) {
+        int mappingIndex = source.indexOf(mapping);
+        if (mappingIndex < 0) {
+            throw new IllegalStateException("Mapping not found: " + mapping);
+        }
+        // In these controllers PreAuthorize follows the mapping; inspect the
+        // compact route block rather than relying on the order of annotations.
+        return source.substring(mappingIndex, Math.min(source.length(), mappingIndex + 320));
+    }
+
     private static String read(Path path) {
         try {
             return Files.readString(path);

@@ -426,7 +426,7 @@ public class UnifiedMemberController {
          * @throws NotFoundException if Member not found
          */
         @GetMapping("/{id}")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
+        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN', 'DATA_ENTRY', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
         @Operation(summary = "Get Member by ID", description = "Retrieves a Member by ID. If the Member is a Principal, returns Principal data with list of Dependents. "
                         +
                         "If the Member is a Dependent, returns only the Dependent's data without nested children. " +
@@ -451,7 +451,7 @@ public class UnifiedMemberController {
         }
 
         @GetMapping("/count")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN')")
+        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN', 'DATA_ENTRY')")
         @Operation(summary = "Count members", description = "Returns the count of members matching the criteria.")
         public ResponseEntity<Long> countMembers(
                         @RequestParam(name = "employerId", required = false) Long employerId,
@@ -486,7 +486,7 @@ public class UnifiedMemberController {
          * @return ResponseEntity with paginated Member list
          */
         @GetMapping
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN', 'MEDICAL_REVIEWER')")
+        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN', 'DATA_ENTRY', 'MEDICAL_REVIEWER')")
         @Operation(summary = "Get all Members with pagination", description = "Retrieves paginated list of all Members (Principals and Dependents). "
                         +
                         "Supports filtering by Organization, Status, and Member Type. " +
@@ -557,7 +557,7 @@ public class UnifiedMemberController {
          * @return ResponseEntity with search results
          */
         @GetMapping("/search")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
+        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN', 'DATA_ENTRY', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
         @Operation(summary = "Advanced Member search", description = "Searches Members using multiple criteria. Supports partial matching for names, national number, Barcode, and Card Number. "
                         +
                         "Combines filters with AND logic. Returns paginated results. " +
@@ -1564,7 +1564,7 @@ public class UnifiedMemberController {
          * @return List of matching members
          */
         @GetMapping("/unified-search")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
+        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN', 'DATA_ENTRY', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
         @Operation(summary = "Unified member search (Auto-detect type)", description = "Search members by card number, name (fuzzy), or barcode/QR.")
         public ResponseEntity<ApiResponse<List<MemberSearchDto>>> unifiedSearch(
                         @RequestParam(name = "query") String query,
@@ -1578,7 +1578,7 @@ public class UnifiedMemberController {
          * Get member details by ID - for detailed view after search
          */
         @GetMapping("/{id}/details")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
+        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN', 'DATA_ENTRY', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
         @Operation(summary = "Get member details by ID", description = "Retrieve complete member info after search selection")
         public ResponseEntity<ApiResponse<MemberSearchDto>> getMemberDetails(
                         @PathVariable("id") Long id) {

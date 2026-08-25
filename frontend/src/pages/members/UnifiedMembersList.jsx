@@ -25,6 +25,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Autocomplete,
+  Alert,
   Box,
   Button,
   Chip,
@@ -111,6 +112,7 @@ const UnifiedMembersList = () => {
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [totalCount, setTotalCount] = useState(0);
+  const [loadError, setLoadError] = useState('');
 
   // Pagination
   const [page, setPage] = useState(0);
@@ -186,12 +188,22 @@ const UnifiedMembersList = () => {
       const response = await searchMembers(params);
       const pageData = response?.data || response;
 
+      setLoadError('');
       setMembers(pageData?.content || []);
       setTotalCount(pageData?.totalElements || 0);
       setSelectedMembers([]); // Clear selection on page change or fetch
     } catch (error) {
       console.error('Error fetching members:', error);
-      enqueueSnackbar('خطأ في جلب المستفيدين', { variant: 'error' });
+      const message = error?.response?.data?.messageAr
+        || error?.response?.data?.message
+        || error?.response?.data?.error
+        || error?.message
+        || 'تعذر جلب المستفيدين';
+      setMembers([]);
+      setTotalCount(0);
+      setSelectedMembers([]);
+      setLoadError(message);
+      enqueueSnackbar(message, { variant: 'error' });
     } finally {
       setLoading(false);
     }
@@ -681,6 +693,14 @@ const UnifiedMembersList = () => {
         }
         sx={{ mb: 0.5 }}
       />
+
+      {loadError && (
+        <Alert severity="error" sx={{ mb: 1, flexShrink: 0 }} action={
+          <Button color="inherit" size="small" onClick={fetchMembers}>إعادة المحاولة</Button>
+        }>
+          {loadError}
+        </Alert>
+      )}
 
       <MainCard sx={{ mb: 1, flexShrink: 0 }}>
         {/* FILTERS AND SEARCH ROW */}
