@@ -377,8 +377,12 @@ const UnifiedMemberEdit = () => {
     const newErrors = {};
     if (!form.fullName?.trim()) newErrors.fullName = 'الاسم الكامل مطلوب';
 
-    if (isPrincipal && !form.employerId) newErrors.employerId = 'جهة العمل مطلوبة';
-    if (!isPrincipal && !form.relationship) newErrors.relationship = 'صلة القرابة مطلوبة';
+    // employerId and relationship are deliberately NOT validated here: both
+    // fields are read-only in this form (moved to the dedicated employer-
+    // transfer and relationship-correction operations), so requiring them
+    // would block saving an ordinary metadata edit (phone, address...) on
+    // any legacy record that happens to be missing one -- the user has no
+    // way to fix that field from this screen at all.
 
     if (form.nationalNumber && form.nationalNumber.length !== 12) {
       newErrors.nationalNumber = 'الرقم الوطني يجب أن يتكون من 12 خانة';
@@ -390,10 +394,8 @@ const UnifiedMemberEdit = () => {
 
     setErrors(newErrors);
 
-    if (newErrors.fullName || newErrors.nationalNumber || newErrors.relationship) {
+    if (newErrors.fullName || newErrors.nationalNumber) {
       setTabValue(0);
-    } else if (newErrors.employerId) {
-      setTabValue(1);
     } else if (newErrors.phone || newErrors.email) {
       setTabValue(2);
     }

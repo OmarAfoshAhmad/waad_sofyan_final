@@ -264,6 +264,19 @@ const UnifiedMemberView = () => {
     DUPLICATE_MERGED: []
   };
 
+  // Standard reasons for frequent, low-risk transitions -- picking one is
+  // instant, but "أخرى" always falls back to free text so nothing forces a
+  // reason that doesn't fit. TERMINATE, reinstate, and the four family
+  // operations stay free-text-only: rare and high-impact, not sped up.
+  const STANDARD_REASONS = {
+    SUSPENDED: ['غياب عن العمل', 'إجراء إداري مؤقت', 'بطلب جهة العمل'],
+    RESTORE: ['انتهاء فترة الإيقاف', 'تصحيح إداري']
+  };
+  const PENDING_ACTIVATION_REASON = 'اعتماد بيانات العضو';
+
+  const currentStatusOf = (targetId) =>
+    targetId === member.id ? member.status : dependents.find((d) => d.id === targetId)?.status;
+
   const applyStatusChange = async (targetId, targetStatus, reason, reinstate) => {
     setStatusChangeLoading(true);
     try {
@@ -486,9 +499,19 @@ const UnifiedMemberView = () => {
 
   const handleSelectStatus = (targetStatus, reinstate) => {
     const targetId = statusMenuTargetId;
+    const currentStatus = currentStatusOf(targetId);
     setStatusMenuAnchor(null);
     setStatusMenuTargetId(null);
-    setStatusChangeDialog({ open: true, targetId, targetStatus, reason: '', reinstate: Boolean(reinstate) });
+    const isPendingActivation = !reinstate && currentStatus === 'PENDING' && targetStatus === 'ACTIVE';
+    setStatusChangeDialog({
+      open: true,
+      targetId,
+      targetStatus,
+      reason: isPendingActivation ? PENDING_ACTIVATION_REASON : '',
+      reinstate: Boolean(reinstate),
+      currentStatus,
+      isPendingActivation
+    });
   };
 
   const handleChangePage = (event, newPage) => {
@@ -1518,17 +1541,64 @@ const UnifiedMemberView = () => {
             {statusChangeDialog.reinstate
               ? 'سيُعاد المستفيد من حالة "منتهية العضوية" إلى نشط. لا يُمس أي سجل مالي أو طبي سابق.'
               : `الحالة الجديدة: ${MEMBER_STATUS_OPTIONS.find((option) => option.value === statusChangeDialog.targetStatus)?.label || statusChangeDialog.targetStatus}.`}
-            {' '}يرجى توضيح سبب التغيير ليُحفظ في سجل التدقيق.
+            {!statusChangeDialog.isPendingActivation && ' يرجى توضيح سبب التغيير ليُحفظ في سجل التدقيق.'}
           </DialogContentText>
-          <TextField
-            autoFocus
-            fullWidth
-            multiline
-            minRows={2}
-            label="سبب تغيير الحالة"
-            value={statusChangeDialog.reason}
-            onChange={(e) => setStatusChangeDialog((prev) => ({ ...prev, reason: e.target.value }))}
-          />
+          {statusChangeDialog.isPendingActivation ? (
+            <Typography variant="body2" color="text.secondary">
+              يُسجَّل السبب تلقائياً: "{PENDING_ACTIVATION_REASON}".
+            </Typography>
+          ) : !statusChangeDialog.reinstate &&
+            statusChangeDialog.targetStatus !== 'TERMINATED' &&
+            (STANDARD_REASONS[statusChangeDialog.targetStatus] ||
+              (statusChangeDialog.targetStatus === 'ACTIVE' && STANDARD_REASONS.RESTORE)) ? (
+            <Stack spacing={2}>
+              <TextField
+                select
+                fullWidth
+                label="السبب"
+                value={
+                  (STANDARD_REASONS[statusChangeDialog.targetStatus] || STANDARD_REASONS.RESTORE).includes(statusChangeDialog.reason)
+                    ? statusChangeDialog.reason
+                    : statusChangeDialog.reason
+                      ? '__OTHER__'
+                      : ''
+                }
+                onChange={(e) =>
+                  setStatusChangeDialog((prev) => ({ ...prev, reason: e.target.value === '__OTHER__' ? '' : e.target.value }))
+                }
+              >
+                {(STANDARD_REASONS[statusChangeDialog.targetStatus] || STANDARD_REASONS.RESTORE).map((r) => (
+                  <MenuItem key={r} value={r}>
+                    {r}
+                  </MenuItem>
+                ))}
+                <MenuItem value="__OTHER__">
+                  <em>سبب آخر...</em>
+                </MenuItem>
+              </TextField>
+              {(!(STANDARD_REASONS[statusChangeDialog.targetStatus] || STANDARD_REASONS.RESTORE).includes(statusChangeDialog.reason)) && (
+                <TextField
+                  autoFocus
+                  fullWidth
+                  multiline
+                  minRows={2}
+                  label="اذكر السبب"
+                  value={statusChangeDialog.reason}
+                  onChange={(e) => setStatusChangeDialog((prev) => ({ ...prev, reason: e.target.value }))}
+                />
+              )}
+            </Stack>
+          ) : (
+            <TextField
+              autoFocus
+              fullWidth
+              multiline
+              minRows={2}
+              label="سبب تغيير الحالة"
+              value={statusChangeDialog.reason}
+              onChange={(e) => setStatusChangeDialog((prev) => ({ ...prev, reason: e.target.value }))}
+            />
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setStatusChangeDialog({ open: false, targetId: null, targetStatus: null, reason: '' })} disabled={statusChangeLoading}>
