@@ -398,6 +398,56 @@ export const restoreFamily = async (transitionId) => {
 };
 
 /**
+ * Move a dependent to a different principal's family. Atomic, dated,
+ * requires the dependent's current row version to guard against a
+ * concurrent edit.
+ */
+export const transferDependent = async (dependentId, { newPrincipalId, relationship, effectiveDate, reason, expectedVersion }) => {
+  const response = await api.post(`${UNIFIED_MEMBERS_BASE_URL}/${dependentId}/family-transfer`, {
+    newPrincipalId,
+    relationship,
+    effectiveDate,
+    reason,
+    expectedVersion
+  });
+  return response.data;
+};
+
+/** Corrects a dependent's kinship/relationship value -- a dedicated, audited operation, not a field edit. */
+export const correctRelationship = async (dependentId, { relationship, reason, expectedVersion }) => {
+  const response = await api.post(`${UNIFIED_MEMBERS_BASE_URL}/${dependentId}/relationship-correction`, {
+    relationship,
+    reason,
+    expectedVersion
+  });
+  return response.data;
+};
+
+/**
+ * Changes the whole family's benefit policy as of an effective date. All or
+ * nothing: expectedVersions must name every affected member's current
+ * version or the whole call is rejected.
+ */
+export const changeFamilyPolicy = async (principalId, { policyId, effectiveDate, reason, expectedVersions }) => {
+  const response = await api.post(`${UNIFIED_MEMBERS_BASE_URL}/${principalId}/family-policy`, {
+    policyId,
+    effectiveDate,
+    reason,
+    expectedVersions
+  });
+  return response.data;
+};
+
+/** Reorders a family's dependents for display only -- never touches card number or barcode. */
+export const reorderFamily = async (principalId, { dependentIds, expectedVersions }) => {
+  const response = await api.post(`${UNIFIED_MEMBERS_BASE_URL}/${principalId}/family-order`, {
+    dependentIds,
+    expectedVersions
+  });
+  return response.data;
+};
+
+/**
  * Change a member's membership status (ACTIVE / SUSPENDED / PENDING / TERMINATED)
  *
  * @param {number} id - Member ID
@@ -765,5 +815,10 @@ export default {
   GENDERS,
   MEMBER_STATUSES,
   MEMBER_STATUS_LABELS,
-  MEMBER_TYPES
+  MEMBER_TYPES,
+  restoreFamily,
+  transferDependent,
+  correctRelationship,
+  changeFamilyPolicy,
+  reorderFamily
 };

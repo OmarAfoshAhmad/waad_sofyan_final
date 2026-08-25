@@ -70,7 +70,10 @@ import {
   FactCheck as PreAuthIcon,
   Search as SearchIcon,
   Visibility as VisibilityIcon,
-  Undo as UndoIcon
+  Undo as UndoIcon,
+  SwapHoriz as SwapHorizIcon,
+  Reorder as ReorderIcon,
+  CompareArrows as CompareArrowsIcon
 } from '@mui/icons-material';
 import DatePicker from 'components/common/SystemDatePicker';
 import { TablePagination } from '@mui/material';
@@ -90,11 +93,17 @@ import {
   changeMemberStatus,
   reinstateTerminatedMember,
   restoreFamily,
+  transferDependent,
+  correctRelationship,
+  changeFamilyPolicy,
+  reorderFamily,
+  searchMembers,
   MEMBER_TYPES,
   GENDERS,
   RELATIONSHIPS
 } from 'services/api/unified-members.service';
 import { openSnackbar } from 'api/snackbar';
+import { getBenefitPoliciesByEmployer } from 'services/api/benefit-policies.service';
 
 import { RELATIONSHIP_AR } from './member.shared';
 import api from 'utils/axios';
@@ -197,6 +206,30 @@ const UnifiedMemberView = () => {
   const [statusMenuAnchor, setStatusMenuAnchor] = useState(null);
   const [statusMenuTargetId, setStatusMenuTargetId] = useState(null);
   const [statusChangeDialog, setStatusChangeDialog] = useState({ open: false, targetId: null, targetStatus: null, reason: '' });
+
+  // Batch ج -- the four atomic family operations, previously endpoints with no UI caller.
+  const [correctionDialog, setCorrectionDialog] = useState({ open: false, dependent: null, relationship: '', reason: '' });
+  const [correctionLoading, setCorrectionLoading] = useState(false);
+
+  const [transferDialog, setTransferDialog] = useState({
+    open: false,
+    dependent: null,
+    searchQuery: '',
+    searchResults: [],
+    searching: false,
+    newPrincipalId: null,
+    newPrincipalLabel: '',
+    relationship: '',
+    effectiveDate: '',
+    reason: ''
+  });
+  const [transferLoading, setTransferLoading] = useState(false);
+
+  const [policyDialog, setPolicyDialog] = useState({ open: false, policyId: '', policyOptions: [], effectiveDate: '', reason: '' });
+  const [policyLoading, setPolicyLoading] = useState(false);
+
+  const [reorderDialog, setReorderDialog] = useState({ open: false, ordered: [] });
+  const [reorderLoading, setReorderLoading] = useState(false);
   const [statusChangeLoading, setStatusChangeLoading] = useState(false);
 
   const MEMBER_STATUS_OPTIONS = [
@@ -277,6 +310,172 @@ const UnifiedMemberView = () => {
       });
     } finally {
       setStatusChangeLoading(false);
+    }
+  };
+
+  // ── تصحيح صلة القرابة ──────────────────────────────────────────────────
+  const openCorrectionDialog = (dependent) => {
+    setCorrectionDialog({ open: true, dependent, relationship: dependent.relationship || '', reason: '' });
+  };
+
+  const submitCorrection = async () => {
+    const { dependent, relationship, reason } = correctionDialog;
+    if (!reason.trim()) {
+      openSnackbar({ open: true, message: 'سبب التصحيح إلزامي', variant: 'alert', alert: { color: 'warning' } });
+      return;
+    }
+    setCorrectionLoading(true);
+    try {
+      await correctRelationship(dependent.id, { relationship, reason: reason.trim(), expectedVersion: dependent.version });
+      openSnackbar({ open: true, message: 'تم تصحيح صلة القرابة', variant: 'alert', alert: { color: 'success' } });
+      setCorrectionDialog({ open: false, dependent: null, relationship: '', reason: '' });
+      fetchMemberData();
+    } catch (err) {
+      openSnackbar({
+        open: true,
+        message: err?.response?.data?.message || 'تعذر تصحيح صلة القرابة',
+        variant: 'alert',
+        alert: { color: 'error' }
+      });
+    } finally {
+      setCorrectionLoading(false);
+    }
+  };
+
+  // ── نقل تابع إلى رئيس أسرة آخر ─────────────────────────────────────────
+  const openTransferDialog = (dependent) => {
+    setTransferDialog({
+      open: true,
+      dependent,
+      searchQuery: '',
+      searchResults: [],
+      searching: false,
+      newPrincipalId: null,
+      newPrincipalLabel: '',
+      relationship: dependent.relationship || '',
+      effectiveDate: new Date().toISOString().slice(0, 10),
+      reason: ''
+    });
+  };
+
+  const searchNewPrincipal = async (query) => {
+    setTransferDialog((prev) => ({ ...prev, searchQuery: query, searching: true }));
+    try {
+      const res = await searchMembers({ nameAr: query, nationalNumber: query, cardNumber: query, type: 'PRINCIPAL', size: 10 });
+      const data = res?.data || res;
+      const results = data?.content || data?.items || (Array.isArray(data) ? data : []);
+      setTransferDialog((prev) => (prev.searchQuery === query ? { ...prev, searchResults: results, searching: false } : prev));
+    } catch {
+      setTransferDialog((prev) => ({ ...prev, searchResults: [], searching: false }));
+    }
+  };
+
+  const submitTransfer = async () => {
+    const { dependent, newPrincipalId, relationship, effectiveDate, reason } = transferDialog;
+    if (!newPrincipalId || !relationship || !effectiveDate || !reason.trim()) {
+      openSnackbar({ open: true, message: 'جميع الحقول إلزامية لنقل التابع', variant: 'alert', alert: { color: 'warning' } });
+      return;
+    }
+    setTransferLoading(true);
+    try {
+      await transferDependent(dependent.id, {
+        newPrincipalId,
+        relationship,
+        effectiveDate,
+        reason: reason.trim(),
+        expectedVersion: dependent.version
+      });
+      openSnackbar({ open: true, message: 'تم نقل التابع بنجاح', variant: 'alert', alert: { color: 'success' } });
+      setTransferDialog((prev) => ({ ...prev, open: false }));
+      fetchMemberData();
+    } catch (err) {
+      openSnackbar({
+        open: true,
+        message: err?.response?.data?.message || 'تعذر نقل التابع',
+        variant: 'alert',
+        alert: { color: 'error' }
+      });
+    } finally {
+      setTransferLoading(false);
+    }
+  };
+
+  // ── تغيير وثيقة الأسرة ─────────────────────────────────────────────────
+  const openPolicyDialog = async () => {
+    setPolicyDialog({ open: true, policyId: '', policyOptions: [], effectiveDate: new Date().toISOString().slice(0, 10), reason: '' });
+    try {
+      const policies = await getBenefitPoliciesByEmployer(member.employerId);
+      const list = Array.isArray(policies) ? policies : policies?.content || [];
+      setPolicyDialog((prev) => ({ ...prev, policyOptions: list }));
+    } catch {
+      // Leave the list empty -- the select will show nothing to choose from,
+      // which is a safer failure than pretending policies loaded.
+    }
+  };
+
+  const submitPolicyChange = async () => {
+    const { policyId, effectiveDate, reason } = policyDialog;
+    if (!policyId || !effectiveDate || !reason.trim()) {
+      openSnackbar({ open: true, message: 'جميع الحقول إلزامية لتغيير وثيقة الأسرة', variant: 'alert', alert: { color: 'warning' } });
+      return;
+    }
+    const expectedVersions = { [member.id]: member.version };
+    dependents.forEach((d) => {
+      expectedVersions[d.id] = d.version;
+    });
+    setPolicyLoading(true);
+    try {
+      await changeFamilyPolicy(member.id, { policyId, effectiveDate, reason: reason.trim(), expectedVersions });
+      openSnackbar({ open: true, message: 'تم تغيير وثيقة الأسرة', variant: 'alert', alert: { color: 'success' } });
+      setPolicyDialog({ open: false, policyId: '', policyOptions: [], effectiveDate: '', reason: '' });
+      fetchMemberData();
+    } catch (err) {
+      openSnackbar({
+        open: true,
+        message: err?.response?.data?.message || 'تعذر تغيير وثيقة الأسرة -- تأكد أن بيانات الأسرة لم تتغير أثناء العملية',
+        variant: 'alert',
+        alert: { color: 'error' }
+      });
+    } finally {
+      setPolicyLoading(false);
+    }
+  };
+
+  // ── إعادة ترتيب التابعين ───────────────────────────────────────────────
+  const openReorderDialog = () => {
+    setReorderDialog({ open: true, ordered: [...dependents] });
+  };
+
+  const moveDependent = (index, direction) => {
+    setReorderDialog((prev) => {
+      const ordered = [...prev.ordered];
+      const target = index + direction;
+      if (target < 0 || target >= ordered.length) return prev;
+      [ordered[index], ordered[target]] = [ordered[target], ordered[index]];
+      return { ...prev, ordered };
+    });
+  };
+
+  const submitReorder = async () => {
+    const expectedVersions = {};
+    reorderDialog.ordered.forEach((d) => {
+      expectedVersions[d.id] = d.version;
+    });
+    setReorderLoading(true);
+    try {
+      await reorderFamily(member.id, { dependentIds: reorderDialog.ordered.map((d) => d.id), expectedVersions });
+      openSnackbar({ open: true, message: 'تم تحديث ترتيب الأسرة', variant: 'alert', alert: { color: 'success' } });
+      setReorderDialog({ open: false, ordered: [] });
+      fetchMemberData();
+    } catch (err) {
+      openSnackbar({
+        open: true,
+        message: err?.response?.data?.message || 'تعذرت إعادة الترتيب -- تأكد أن بيانات الأسرة لم تتغير أثناء العملية',
+        variant: 'alert',
+        alert: { color: 'error' }
+      });
+    } finally {
+      setReorderLoading(false);
     }
   };
 
@@ -929,14 +1128,26 @@ const UnifiedMemberView = () => {
                       }
                     />
                   </Stack>
-                  {capabilities.create && <Button
-                    variant="contained"
-                    startIcon={<AddIcon />}
-                    onClick={handleAddClick}
-                    disabled={showDeleted} // Disable add in deleted view
-                  >
-                    إضافة تابع
-                  </Button>}
+                  <Stack direction="row" spacing={1}>
+                    {capabilities.lifecycle && dependents.length > 0 && !showDeleted && (
+                      <Button size="small" variant="outlined" startIcon={<SwapHorizIcon />} onClick={openPolicyDialog}>
+                        تغيير وثيقة الأسرة
+                      </Button>
+                    )}
+                    {capabilities.lifecycle && dependents.length > 1 && !showDeleted && (
+                      <Button size="small" variant="outlined" startIcon={<ReorderIcon />} onClick={openReorderDialog}>
+                        إعادة ترتيب التابعين
+                      </Button>
+                    )}
+                    {capabilities.create && <Button
+                      variant="contained"
+                      startIcon={<AddIcon />}
+                      onClick={handleAddClick}
+                      disabled={showDeleted} // Disable add in deleted view
+                    >
+                      إضافة تابع
+                    </Button>}
+                  </Stack>
                 </Stack>
 
                 <Divider />
@@ -1045,6 +1256,16 @@ const UnifiedMemberView = () => {
                                           {capabilities.edit && <Tooltip title="تعديل">
                                             <IconButton size="small" color="secondary" onClick={() => handleEditClick(dep)}>
                                               <EditIcon fontSize="small" />
+                                            </IconButton>
+                                          </Tooltip>}
+                                          {capabilities.lifecycle && <Tooltip title="تصحيح صلة القرابة">
+                                            <IconButton size="small" color="info" onClick={() => openCorrectionDialog(dep)}>
+                                              <FamilyRestroomIcon fontSize="small" />
+                                            </IconButton>
+                                          </Tooltip>}
+                                          {capabilities.lifecycle && <Tooltip title="نقل إلى رئيس أسرة آخر">
+                                            <IconButton size="small" color="info" onClick={() => openTransferDialog(dep)}>
+                                              <CompareArrowsIcon fontSize="small" />
                                             </IconButton>
                                           </Tooltip>}
                                           {capabilities.lifecycle && <Tooltip title="إنهاء العضوية">
@@ -1322,6 +1543,206 @@ const UnifiedMemberView = () => {
             }
           >
             {statusChangeDialog.reinstate ? 'تأكيد إعادة العضوية' : 'تأكيد تغيير الحالة'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* تصحيح صلة القرابة */}
+      <Dialog open={correctionDialog.open} onClose={() => (correctionLoading ? null : setCorrectionDialog({ ...correctionDialog, open: false }))} maxWidth="xs" fullWidth>
+        <DialogTitle>تصحيح صلة قرابة {correctionDialog.dependent?.fullName}</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <TextField
+              select
+              fullWidth
+              label="صلة القرابة الصحيحة"
+              value={correctionDialog.relationship}
+              onChange={(e) => setCorrectionDialog((prev) => ({ ...prev, relationship: e.target.value }))}
+            >
+              {Object.entries(RELATIONSHIP_AR).map(([value, label]) => (
+                <MenuItem key={value} value={value}>
+                  {label}
+                </MenuItem>
+              ))}
+            </TextField>
+            <TextField
+              label="سبب التصحيح"
+              required
+              fullWidth
+              multiline
+              minRows={2}
+              value={correctionDialog.reason}
+              onChange={(e) => setCorrectionDialog((prev) => ({ ...prev, reason: e.target.value }))}
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCorrectionDialog({ ...correctionDialog, open: false })} disabled={correctionLoading}>
+            إلغاء
+          </Button>
+          <Button variant="contained" disabled={correctionLoading || !correctionDialog.reason.trim()} onClick={submitCorrection}>
+            {correctionLoading ? 'جارِ التصحيح...' : 'تأكيد التصحيح'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* نقل تابع إلى رئيس أسرة آخر */}
+      <Dialog open={transferDialog.open} onClose={() => (transferLoading ? null : setTransferDialog((prev) => ({ ...prev, open: false })))} maxWidth="sm" fullWidth>
+        <DialogTitle>نقل {transferDialog.dependent?.fullName} إلى رئيس أسرة آخر</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <TextField
+              label="ابحث عن رئيس الأسرة الجديد (اسم / رقم وطني / رقم بطاقة)"
+              fullWidth
+              value={transferDialog.searchQuery}
+              onChange={(e) => searchNewPrincipal(e.target.value)}
+              InputProps={{ endAdornment: transferDialog.searching ? <CircularProgress size={16} /> : null }}
+            />
+            {transferDialog.searchResults.length > 0 && (
+              <Paper variant="outlined" sx={{ maxHeight: 180, overflow: 'auto' }}>
+                {transferDialog.searchResults.map((r) => (
+                  <MenuItem
+                    key={r.id}
+                    selected={transferDialog.newPrincipalId === r.id}
+                    onClick={() =>
+                      setTransferDialog((prev) => ({ ...prev, newPrincipalId: r.id, newPrincipalLabel: `${r.fullName} (${r.cardNumber || r.id})` }))
+                    }
+                  >
+                    {r.fullName} — {r.cardNumber || r.nationalNumber || r.id}
+                  </MenuItem>
+                ))}
+              </Paper>
+            )}
+            {transferDialog.newPrincipalId && (
+              <Typography variant="body2" color="success.main">
+                رئيس الأسرة المختار: {transferDialog.newPrincipalLabel}
+              </Typography>
+            )}
+            <TextField
+              select
+              fullWidth
+              label="صلة القرابة الجديدة"
+              value={transferDialog.relationship}
+              onChange={(e) => setTransferDialog((prev) => ({ ...prev, relationship: e.target.value }))}
+            >
+              {Object.entries(RELATIONSHIP_AR).map(([value, label]) => (
+                <MenuItem key={value} value={value}>
+                  {label}
+                </MenuItem>
+              ))}
+            </TextField>
+            <TextField
+              type="date"
+              label="تاريخ السريان"
+              fullWidth
+              InputLabelProps={{ shrink: true }}
+              value={transferDialog.effectiveDate}
+              onChange={(e) => setTransferDialog((prev) => ({ ...prev, effectiveDate: e.target.value }))}
+            />
+            <TextField
+              label="سبب النقل"
+              required
+              fullWidth
+              multiline
+              minRows={2}
+              value={transferDialog.reason}
+              onChange={(e) => setTransferDialog((prev) => ({ ...prev, reason: e.target.value }))}
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setTransferDialog((prev) => ({ ...prev, open: false }))} disabled={transferLoading}>
+            إلغاء
+          </Button>
+          <Button
+            variant="contained"
+            disabled={transferLoading || !transferDialog.newPrincipalId || !transferDialog.reason.trim()}
+            onClick={submitTransfer}
+          >
+            {transferLoading ? 'جارِ النقل...' : 'تأكيد النقل'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* تغيير وثيقة الأسرة */}
+      <Dialog open={policyDialog.open} onClose={() => (policyLoading ? null : setPolicyDialog({ ...policyDialog, open: false }))} maxWidth="xs" fullWidth>
+        <DialogTitle>تغيير وثيقة الأسرة</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <DialogContentText>
+              سيتغيّر انتماء الوثيقة لكل أفراد الأسرة معاً ({1 + dependents.length} فرد) بتاريخ السريان المحدد -- كل الأسرة أو لا أحد.
+            </DialogContentText>
+            <TextField
+              select
+              fullWidth
+              label="الوثيقة الجديدة"
+              value={policyDialog.policyId}
+              onChange={(e) => setPolicyDialog((prev) => ({ ...prev, policyId: e.target.value }))}
+            >
+              {policyDialog.policyOptions.map((p) => (
+                <MenuItem key={p.id} value={p.id}>
+                  {p.policyName || p.name || `وثيقة #${p.id}`}
+                </MenuItem>
+              ))}
+            </TextField>
+            <TextField
+              type="date"
+              label="تاريخ السريان"
+              fullWidth
+              InputLabelProps={{ shrink: true }}
+              value={policyDialog.effectiveDate}
+              onChange={(e) => setPolicyDialog((prev) => ({ ...prev, effectiveDate: e.target.value }))}
+            />
+            <TextField
+              label="سبب التغيير"
+              required
+              fullWidth
+              multiline
+              minRows={2}
+              value={policyDialog.reason}
+              onChange={(e) => setPolicyDialog((prev) => ({ ...prev, reason: e.target.value }))}
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPolicyDialog({ ...policyDialog, open: false })} disabled={policyLoading}>
+            إلغاء
+          </Button>
+          <Button variant="contained" disabled={policyLoading || !policyDialog.policyId || !policyDialog.reason.trim()} onClick={submitPolicyChange}>
+            {policyLoading ? 'جارِ التغيير...' : 'تأكيد تغيير الوثيقة'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* إعادة ترتيب التابعين */}
+      <Dialog open={reorderDialog.open} onClose={() => (reorderLoading ? null : setReorderDialog({ open: false, ordered: [] }))} maxWidth="xs" fullWidth>
+        <DialogTitle>إعادة ترتيب التابعين</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 1 }}>يغيّر هذا ترتيب العرض فقط، ولا يغيّر رقم البطاقة أو الباركود.</DialogContentText>
+          <Stack spacing={1}>
+            {reorderDialog.ordered.map((d, index) => (
+              <Paper key={d.id} variant="outlined" sx={{ p: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Typography variant="body2">
+                  {index + 1}. {d.fullName} ({RELATIONSHIP_AR[d.relationship] || d.relationship})
+                </Typography>
+                <Stack direction="row">
+                  <IconButton size="small" disabled={index === 0} onClick={() => moveDependent(index, -1)}>
+                    ▲
+                  </IconButton>
+                  <IconButton size="small" disabled={index === reorderDialog.ordered.length - 1} onClick={() => moveDependent(index, 1)}>
+                    ▼
+                  </IconButton>
+                </Stack>
+              </Paper>
+            ))}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setReorderDialog({ open: false, ordered: [] })} disabled={reorderLoading}>
+            إلغاء
+          </Button>
+          <Button variant="contained" disabled={reorderLoading} onClick={submitReorder}>
+            {reorderLoading ? 'جارِ الحفظ...' : 'حفظ الترتيب'}
           </Button>
         </DialogActions>
       </Dialog>

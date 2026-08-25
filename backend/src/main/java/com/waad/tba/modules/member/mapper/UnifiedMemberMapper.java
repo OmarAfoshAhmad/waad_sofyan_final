@@ -247,6 +247,7 @@ public class UnifiedMemberMapper {
                 .statusChangedAt(entity.getStatusChangedAt())
                 .previousStatus(entity.getPreviousStatus())
                 .statusTransitionId(entity.getStatusTransitionId())
+                .version(entity.getVersion())
                 .eligibilityStatus(entity.getEligibilityStatus())
                 .photoUrl(entity.getPhotoUrl())
                 .profilePhotoPath(entity.getProfilePhotoPath())
