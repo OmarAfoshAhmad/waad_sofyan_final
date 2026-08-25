@@ -372,7 +372,11 @@ const Step2Roles = ({
   errors,
   setErrors
 }) => {
-  // Check if EMPLOYER_ADMIN role is selected
+  const hasEmployerScopedRole = selectedRoles.some((roleId) => {
+    const role = allRoles.find((r) => r?.id === roleId);
+    return role?.name === 'EMPLOYER_ADMIN' || role?.name === 'EMPLOYER_USER' || role?.name === 'DATA_ENTRY';
+  });
+
   const hasEmployerAdminRole = selectedRoles.some((roleId) => {
     const role = allRoles.find((r) => r?.id === roleId);
     return role?.name === 'EMPLOYER_ADMIN' || role?.name === 'EMPLOYER_USER';
@@ -501,10 +505,10 @@ const Step2Roles = ({
         </Box>
       )}
 
-      {hasEmployerAdminRole && (
+      {hasEmployerScopedRole && (
         <Box sx={{ mt: '1.5rem', pt: '1.0rem', borderTop: '1px dashed', borderColor: 'primary.main' }}>
           <Alert severity="info" sx={{ mb: '1.0rem' }}>
-            يجب اختيار صاحب عمل عند تعيين دور <strong>EMPLOYER_ADMIN</strong>.
+            يجب اختيار جهة العمل عند تعيين دور <strong>EMPLOYER_ADMIN</strong> أو <strong>DATA_ENTRY</strong>.
           </Alert>
           <Grid container spacing={2}>
             <Grid size={{ xs: 12, md: 8 }}>
@@ -842,9 +846,9 @@ const UserEdit = () => {
         throw new Error('اختيار مقدم الخدمة مطلوب لهذا الدور');
       }
 
-      if (selectedRole.name === 'EMPLOYER_ADMIN' && !form.employerId) {
-        setErrors((prev) => ({ ...prev, employerId: 'اختيار صاحب العمل مطلوب لهذا الدور' }));
-        throw new Error('اختيار صاحب العمل مطلوب لهذا الدور');
+      if (['EMPLOYER_ADMIN', 'DATA_ENTRY'].includes(selectedRole.name) && !form.employerId) {
+        setErrors((prev) => ({ ...prev, employerId: 'اختيار جهة العمل مطلوب لهذا الدور' }));
+        throw new Error('اختيار جهة العمل مطلوب لهذا الدور');
       }
 
       // Prepare update payload
@@ -855,7 +859,7 @@ const UserEdit = () => {
         phone: form.phone?.trim() || null,
         active: form.active,
         userType: selectedRole.name,
-        employerId: selectedRole.name === 'EMPLOYER_ADMIN' ? form.employerId : null,
+        employerId: ['EMPLOYER_ADMIN', 'DATA_ENTRY'].includes(selectedRole.name) ? form.employerId : null,
         providerId: selectedRole.name === 'PROVIDER_STAFF' ? form.providerId : null
       };
 

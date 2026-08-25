@@ -92,8 +92,8 @@ const validate = (form) => {
     errors.userType = 'نوع المستخدم مطلوب';
   }
 
-  if (form.userType === SystemRole.EMPLOYER_ADMIN && !form.employerId) {
-    errors.employerId = 'يجب اختيار جهة العمل لمدير جهة العمل';
+  if ([SystemRole.EMPLOYER_ADMIN, SystemRole.DATA_ENTRY].includes(form.userType) && !form.employerId) {
+    errors.employerId = 'يجب اختيار جهة العمل لهذا الدور';
   }
 
   if (form.userType === SystemRole.PROVIDER_STAFF && !form.providerId) {
@@ -179,7 +179,7 @@ const UserCreate = () => {
         email: form.email.trim(),
         phone: form.phone?.trim() || null,
         userType: form.userType,
-        employerId: form.userType === SystemRole.EMPLOYER_ADMIN ? form.employerId : null,
+        employerId: [SystemRole.EMPLOYER_ADMIN, SystemRole.DATA_ENTRY].includes(form.userType) ? form.employerId : null,
         providerId: form.userType === SystemRole.PROVIDER_STAFF ? form.providerId : null
       };
 
@@ -394,8 +394,8 @@ const UserCreate = () => {
               </TextField>
             </Grid>
 
-            {/* Employer Selection – Conditional for EMPLOYER_ADMIN */}
-            {form.userType === SystemRole.EMPLOYER_ADMIN && (
+            {/* Employer scope is mandatory for employer administrators and data-entry users. */}
+            {[SystemRole.EMPLOYER_ADMIN, SystemRole.DATA_ENTRY].includes(form.userType) && (
               <Grid size={{ xs: 12, sm: 6 }}>
                 <EmployerSelectField
                   value={form.employerId}

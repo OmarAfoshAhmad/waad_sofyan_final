@@ -16,6 +16,8 @@ import org.springframework.transaction.annotation.Transactional;
 import com.waad.tba.common.exception.ResourceNotFoundException;
 import com.waad.tba.modules.provider.entity.Provider;
 import com.waad.tba.modules.provider.repository.ProviderRepository;
+import com.waad.tba.modules.employer.entity.Employer;
+import com.waad.tba.modules.employer.repository.EmployerRepository;
 import com.waad.tba.modules.rbac.dto.UserCreateDto;
 import com.waad.tba.modules.rbac.dto.UserResponseDto;
 import com.waad.tba.modules.rbac.dto.UserUpdateDto;
@@ -50,6 +52,7 @@ public class UserService {
     private final UserSecurityService securityService;
     private final SessionManagementService sessionManagementService;
     private final ProviderRepository providerRepository;
+    private final EmployerRepository employerRepository;
 
     @Transactional(readOnly = true)
     public List<UserResponseDto> findAll() {
@@ -397,9 +400,14 @@ public class UserService {
     private void applyRoleBindings(User user, String userType, Long employerId, Long providerId) {
         user.setUserType(userType);
 
-        if ("EMPLOYER_ADMIN".equals(userType)) {
+        if ("EMPLOYER_ADMIN".equals(userType) || "DATA_ENTRY".equals(userType)) {
             if (employerId == null) {
-                throw new IllegalArgumentException("employerId is required for EMPLOYER_ADMIN");
+                throw new IllegalArgumentException("جهة العمل مطلوبة لهذا الدور");
+            }
+            Employer employer = employerRepository.findById(employerId)
+                    .orElseThrow(() -> new IllegalArgumentException("جهة العمل المحددة غير موجودة"));
+            if (!Boolean.TRUE.equals(employer.getActive())) {
+                throw new IllegalArgumentException("لا يمكن ربط المستخدم بجهة عمل غير نشطة");
             }
             user.setEmployerId(employerId);
             user.setProviderId(null);
@@ -416,7 +424,7 @@ public class UserService {
         }
 
         if (employerId != null || providerId != null) {
-            throw new IllegalArgumentException("employerId/providerId are only allowed for EMPLOYER_ADMIN or PROVIDER_STAFF");
+            throw new IllegalArgumentException("ربط جهة العمل مسموح فقط لمدير جهة العمل ومدخل البيانات، وربط مقدم الخدمة لموظف مقدم الخدمة");
         }
 
         user.setEmployerId(null);
