@@ -13,6 +13,10 @@ const accessControlService = {
     return unwrap(await axios.get(`${BASE_URL}/roles`));
   },
 
+  async updateRoleTemplate(roleCode, permissionCodes, reason) {
+    return unwrap(await axios.put(`${BASE_URL}/roles/${roleCode}/permissions`, { permissionCodes, reason }));
+  },
+
   async getEffectivePermissions(userId) {
     return unwrap(await axios.get(`${BASE_URL}/users/${userId}/effective-permissions`));
   },

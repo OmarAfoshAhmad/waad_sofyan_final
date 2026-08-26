@@ -1,7 +1,9 @@
 package com.waad.tba.modules.rbac.permission;
 
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -15,6 +17,7 @@ import com.waad.tba.modules.auth.service.SessionManagementService;
 import com.waad.tba.modules.rbac.entity.User;
 import com.waad.tba.modules.rbac.permission.dto.PermissionOverrideRequest;
 import com.waad.tba.modules.rbac.permission.dto.PermissionOverrideRequest.OverrideMode;
+import com.waad.tba.modules.rbac.permission.dto.RoleTemplateUpdateRequest;
 import com.waad.tba.modules.rbac.repository.UserRepository;
 
 import lombok.RequiredArgsConstructor;
@@ -44,6 +47,60 @@ public class PermissionAdministrationService {
                                  where role_code=? order by permission_code
                                 """, String.class, role.name())))
                 .toList();
+    }
+
+    @Transactional
+    public RoleTemplate replaceRolePermissions(String rawRoleCode, RoleTemplateUpdateRequest request) {
+        User actor = requireActor();
+        var actorPermissions = effectivePermissionService.resolve(actor);
+        if (!actorPermissions.contains(SystemPermission.ROLE_PERMISSION_MANAGE)) {
+            throw new AccessDeniedException("لا تملك صلاحية إدارة الأدوار والصلاحيات");
+        }
+
+        com.waad.tba.security.rbac.SystemRole role;
+        try {
+            role = com.waad.tba.security.rbac.SystemRole.valueOf(rawRoleCode.trim().toUpperCase());
+        } catch (RuntimeException ex) {
+            throw new IllegalArgumentException("الدور غير معروف: " + rawRoleCode);
+        }
+        if (role == com.waad.tba.security.rbac.SystemRole.SUPER_ADMIN) {
+            throw new IllegalArgumentException("قالب مدير النظام ثابت للحماية من إغلاق الإدارة بالكامل");
+        }
+
+        Set<SystemPermission> requested = new HashSet<>();
+        for (String code : request.permissionCodes()) {
+            SystemPermission permission = SystemPermission.parse(code);
+            if (!actorPermissions.contains(permission)) {
+                throw new AccessDeniedException("لا يمكن إضافة صلاحية لا يملكها المفوّض: " + permission.name());
+            }
+            requested.add(permission);
+        }
+
+        Set<String> previous = new HashSet<>(jdbcTemplate.queryForList(
+                "select permission_code from rbac_role_permissions where role_code=?",
+                String.class, role.name()));
+        Set<String> desired = requested.stream().map(Enum::name)
+                .collect(java.util.stream.Collectors.toSet());
+
+        for (String removed : previous.stream().filter(code -> !desired.contains(code)).sorted().toList()) {
+            jdbcTemplate.update("delete from rbac_role_permissions where role_code=? and permission_code=?",
+                    role.name(), removed);
+            auditRoleChange(actor, role.name(), removed, "GRANT", null, request.reason().trim());
+        }
+        for (String added : desired.stream().filter(code -> !previous.contains(code)).sorted().toList()) {
+            jdbcTemplate.update("""
+                    insert into rbac_role_permissions(role_code, permission_code, granted_by)
+                    values (?, ?, ?)
+                    """, role.name(), added, actor.getUsername());
+            auditRoleChange(actor, role.name(), added, null, "GRANT", request.reason().trim());
+        }
+
+        List<String> affectedUsers = jdbcTemplate.queryForList(
+                "select username from users where user_type=?", String.class, role.name());
+        jdbcTemplate.update("update users set authorization_version=authorization_version+1 where user_type=?",
+                role.name());
+        revokeSessionsAfterCommit(affectedUsers);
+        return new RoleTemplate(role.name(), role.getDisplayNameAr(), desired.stream().sorted().toList());
     }
 
     @Transactional(readOnly = true)
@@ -87,15 +144,28 @@ public class PermissionAdministrationService {
     }
 
     private void revokeSessionsAfterCommit(String username) {
+        revokeSessionsAfterCommit(List.of(username));
+    }
+
+    private void revokeSessionsAfterCommit(List<String> usernames) {
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
             throw new IllegalStateException("Permission changes require an active synchronized transaction");
         }
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
-                sessionManagementService.revokeAll(username);
+                usernames.forEach(sessionManagementService::revokeAll);
             }
         });
+    }
+
+    private void auditRoleChange(User actor, String roleCode, String permissionCode,
+            String previousEffect, String newEffect, String reason) {
+        jdbcTemplate.update("""
+                insert into rbac_permission_change_audit
+                    (target_type,target_role_code,permission_code,previous_effect,new_effect,reason,actor_user_id)
+                values ('ROLE',?,?,?,?,?,?)
+                """, roleCode, permissionCode, previousEffect, newEffect, reason, actor.getId());
     }
 
     private void applyOne(User actor, User target, SystemPermission permission,

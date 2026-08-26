@@ -20,6 +20,7 @@ import com.waad.tba.TbaWaadApplication;
 import com.waad.tba.modules.rbac.entity.User;
 import com.waad.tba.modules.rbac.permission.dto.PermissionOverrideRequest;
 import com.waad.tba.modules.rbac.permission.dto.PermissionOverrideRequest.OverrideMode;
+import com.waad.tba.modules.rbac.permission.dto.RoleTemplateUpdateRequest;
 import com.waad.tba.modules.rbac.repository.UserRepository;
 import com.waad.tba.support.PostgresIntegrationTestBase;
 
@@ -72,6 +73,50 @@ class PermissionAdministrationIntegrationTest extends PostgresIntegrationTestBas
                         "منح غير مشروع"))))
                 .isInstanceOf(AccessDeniedException.class);
         assertThat(effectivePermissionService.resolve(target)).doesNotContain(SystemPermission.CLAIM_APPROVE);
+    }
+
+    @Test
+    void roleTemplateReplacementIsAuditedAndRefreshesAffectedUsers() {
+        User actor = saveUser("SUPER_ADMIN");
+        User affected = saveUser("FINANCE_VIEWER");
+        authenticate(actor);
+        List<String> original = administrationService.roleTemplates().stream()
+                .filter(role -> role.roleCode().equals("FINANCE_VIEWER"))
+                .findFirst().orElseThrow().permissionCodes();
+        List<String> changed = new java.util.ArrayList<>(original);
+        changed.add("OPERATIONAL_REPORT_VIEW");
+
+        try {
+            var updated = administrationService.replaceRolePermissions("FINANCE_VIEWER",
+                    new RoleTemplateUpdateRequest(changed, "حاجة تشغيلية موثقة"));
+
+            assertThat(updated.permissionCodes()).contains("OPERATIONAL_REPORT_VIEW");
+            assertThat(effectivePermissionService.resolve(
+                    userRepository.findById(affected.getId()).orElseThrow()))
+                    .contains(SystemPermission.OPERATIONAL_REPORT_VIEW);
+            assertThat(userRepository.findById(affected.getId()).orElseThrow().getAuthorizationVersion())
+                    .isEqualTo(1L);
+            Integer audits = jdbcTemplate.queryForObject("""
+                    select count(*) from rbac_permission_change_audit
+                     where target_type='ROLE' and target_role_code='FINANCE_VIEWER'
+                       and permission_code='OPERATIONAL_REPORT_VIEW' and new_effect='GRANT'
+                    """, Integer.class);
+            assertThat(audits).isEqualTo(1);
+        } finally {
+            administrationService.replaceRolePermissions("FINANCE_VIEWER",
+                    new RoleTemplateUpdateRequest(original, "إعادة قالب الاختبار"));
+        }
+    }
+
+    @Test
+    void superAdminTemplateCannotBeChanged() {
+        User actor = saveUser("SUPER_ADMIN");
+        authenticate(actor);
+
+        assertThatThrownBy(() -> administrationService.replaceRolePermissions("SUPER_ADMIN",
+                new RoleTemplateUpdateRequest(List.of("USER_VIEW"), "تقليص غير مسموح")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("ثابت");
     }
 
     private User saveUser(String role) {

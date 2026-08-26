@@ -19,6 +19,7 @@ import com.waad.tba.modules.rbac.permission.PermissionAdministrationService.Role
 import com.waad.tba.modules.rbac.permission.ManagedUserAccessService;
 import com.waad.tba.modules.rbac.permission.dto.PermissionOverrideRequest;
 import com.waad.tba.modules.rbac.permission.dto.ManagedUserCreateRequest;
+import com.waad.tba.modules.rbac.permission.dto.RoleTemplateUpdateRequest;
 import com.waad.tba.modules.rbac.dto.UserResponseDto;
 
 import jakarta.validation.Valid;
@@ -48,6 +49,15 @@ public class PermissionAdministrationController {
     @GetMapping("/roles")
     public ResponseEntity<ApiResponse<List<RoleTemplate>>> roles() {
         return ResponseEntity.ok(ApiResponse.success(service.roleTemplates()));
+    }
+
+    @PutMapping("/roles/{roleCode}/permissions")
+    public ResponseEntity<ApiResponse<RoleTemplate>> updateRole(
+            @PathVariable String roleCode,
+            @Valid @RequestBody RoleTemplateUpdateRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "تم تحديث قالب الدور وسحب جلسات المستخدمين المتأثرين",
+                service.replaceRolePermissions(roleCode, request)));
     }
 
     @GetMapping("/users/{userId}/effective-permissions")

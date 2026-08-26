@@ -537,6 +537,13 @@ const UsersList = () => {
             إلغاء
           </Button>
           <Button
+            variant="outlined"
+            startIcon={<AdminPanelSettingsIcon />}
+            onClick={() => navigate('/admin/users/roles')}
+          >
+            الأدوار والصلاحيات
+          </Button>
+          <Button
             onClick={handleToggleConfirm}
             color={toggleDialog.user?.active !== false ? 'warning' : 'success'}
             variant="contained"
