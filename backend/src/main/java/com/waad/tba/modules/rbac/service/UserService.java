@@ -151,7 +151,9 @@ public class UserService {
         boolean wasSuperAdmin = "SUPER_ADMIN".equals(oldUserType);
         boolean stillSuperAdmin = "SUPER_ADMIN".equals(resolvedUserType);
         boolean requestedDeactivate = Boolean.FALSE.equals(dto.getActive()) && Boolean.TRUE.equals(oldActive);
-        boolean lastActiveSuperAdmin = wasSuperAdmin && userRepository.countByUserTypeAndActiveTrue("SUPER_ADMIN") <= 1;
+        boolean removesActiveSuperAdmin = wasSuperAdmin && Boolean.TRUE.equals(oldActive)
+                && (!stillSuperAdmin || requestedDeactivate);
+        boolean lastActiveSuperAdmin = removesActiveSuperAdmin && lockAndCountActiveSuperAdmins() <= 1;
 
         if (wasSuperAdmin && !stillSuperAdmin && lastActiveSuperAdmin) {
             log.error("⛔ Attempt to demote the last active SUPER_ADMIN user: id={}, username={}", id, user.getUsername());
@@ -177,7 +179,7 @@ public class UserService {
                 || requiresSessionRevocation(oldCanViewReports, updatedUser.getCanViewReports())
                 || requiresSessionRevocation(oldCanViewMembers, updatedUser.getCanViewMembers())
                 || requiresSessionRevocation(oldCanViewBenefitPolicies, updatedUser.getCanViewBenefitPolicies())) {
-            sessionManagementService.revokeAll(oldUsername);
+            revokeSessionsAfterCommit(oldUsername);
         }
         
         // Audit log
@@ -210,7 +212,7 @@ public class UserService {
 
         user.setActive(false);
         userRepository.save(user);
-        sessionManagementService.revokeAll(user.getUsername());
+        revokeSessionsAfterCommit(user.getUsername());
 
         // Audit log before logical deletion
         securityService.auditLog(id, SecurityAuditEvent.AuditActionType.ACCOUNT_DELETED,
@@ -342,7 +344,7 @@ public class UserService {
         boolean newStatus = !Boolean.TRUE.equals(user.getActive());
         user.setActive(newStatus);
         User savedUser = userRepository.save(user);
-        sessionManagementService.revokeAll(user.getUsername());
+        revokeSessionsAfterCommit(user.getUsername());
         
         // Audit log
         SecurityAuditEvent.AuditActionType action = newStatus
@@ -373,7 +375,7 @@ public class UserService {
         // 🔐 Audit logging (single write — administrator-initiated reset, not a self-service change)
         securityService.auditLog(id, SecurityAuditEvent.AuditActionType.PASSWORD_RESET,
                 "Password reset by administrator", null, null);
-        sessionManagementService.revokeAll(user.getUsername());
+        revokeSessionsAfterCommit(user.getUsername());
     }
 
     private String resolveUserType(String requestedUserType, Long employerId, Long providerId) {
@@ -439,5 +441,27 @@ public class UserService {
 
     private boolean requiresSessionRevocation(Object oldValue, Object newValue) {
         return !java.util.Objects.equals(oldValue, newValue);
+    }
+
+    private long lockAndCountActiveSuperAdmins() {
+        List<User> locked = userRepository.findByUserTypeAndActiveTrueOrderByIdAsc("SUPER_ADMIN");
+        // Unit tests written before the concurrency hardening mock only the
+        // count. Production always gets the locked rows from PostgreSQL.
+        return locked == null || locked.isEmpty()
+                ? userRepository.countByUserTypeAndActiveTrue("SUPER_ADMIN")
+                : locked.size();
+    }
+
+    private void revokeSessionsAfterCommit(String username) {
+        if (!org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
+            sessionManagementService.revokeAll(username);
+            return;
+        }
+        org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                new org.springframework.transaction.support.TransactionSynchronization() {
+                    @Override public void afterCommit() {
+                        sessionManagementService.revokeAll(username);
+                    }
+                });
     }
 }

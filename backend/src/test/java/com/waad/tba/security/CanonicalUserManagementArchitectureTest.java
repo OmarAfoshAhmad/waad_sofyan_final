@@ -28,5 +28,27 @@ class CanonicalUserManagementArchitectureTest {
 
         assertTrue(source.contains("@PutMapping(\"/{id:\\\\d+}/reset-password\")"));
         assertTrue(source.contains("userService.resetPassword(id, payload.newPassword())"));
+        assertTrue(source.contains("@permissionGuard.has('USER_VIEW')"));
+        assertTrue(source.contains("@permissionGuard.has('USER_MANAGE')"));
+        assertFalse(source.contains("hasRole('SUPER_ADMIN')"));
+    }
+
+    @Test
+    void permissionAdministrationMustNotFallBackToAStaticRole() throws Exception {
+        String source = Files.readString(Path.of(
+                "src/main/java/com/waad/tba/modules/rbac/controller/PermissionAdministrationController.java"));
+        assertTrue(source.contains("@permissionGuard.has('ROLE_PERMISSION_MANAGE')"));
+        assertFalse(source.contains("hasRole("));
+        assertTrue(source.contains("@permissionGuard.has('USER_MANAGE')"));
+    }
+
+    @Test
+    void frontendUserMutationsMustNotResubmitLegacyFeatureFlags() throws Exception {
+        String source = Files.readString(Path.of("../frontend/src/services/rbac/users.service.js"));
+        assertFalse(source.contains("canViewClaims: current.canViewClaims"));
+        assertFalse(source.contains("canViewVisits: current.canViewVisits"));
+        assertFalse(source.contains("canViewReports: current.canViewReports"));
+        assertFalse(source.contains("canViewMembers: current.canViewMembers"));
+        assertFalse(source.contains("canViewBenefitPolicies: current.canViewBenefitPolicies"));
     }
 }

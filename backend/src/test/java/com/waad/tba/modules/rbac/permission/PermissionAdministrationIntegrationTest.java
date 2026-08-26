@@ -5,6 +5,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -19,6 +22,7 @@ import org.springframework.test.context.ActiveProfiles;
 import com.waad.tba.TbaWaadApplication;
 import com.waad.tba.modules.rbac.entity.User;
 import com.waad.tba.modules.rbac.dto.UserUpdateDto;
+import com.waad.tba.modules.rbac.dto.UserCreateDto;
 import com.waad.tba.modules.rbac.permission.dto.ManagedUserUpdateRequest;
 import com.waad.tba.modules.rbac.permission.dto.PermissionOverrideRequest;
 import com.waad.tba.modules.rbac.permission.dto.PermissionOverrideRequest.OverrideMode;
@@ -34,6 +38,7 @@ class PermissionAdministrationIntegrationTest extends PostgresIntegrationTestBas
     @Autowired ManagedUserAccessService managedUserAccessService;
     @Autowired EffectivePermissionService effectivePermissionService;
     @Autowired JdbcTemplate jdbcTemplate;
+    @Autowired com.waad.tba.modules.rbac.service.UserService userService;
 
     @AfterEach
     void clearAuthentication() {
@@ -147,6 +152,71 @@ class PermissionAdministrationIntegrationTest extends PostgresIntegrationTestBas
         assertThat(reloaded.getFullName()).isEqualTo(originalName);
         assertThat(reloaded.getUserType()).isEqualTo("FINANCE_VIEWER");
         assertThat(reloaded.getAuthorizationVersion()).isZero();
+    }
+
+    @Test
+    void delegatedManagerCannotCreateRoleWhoseTemplateExceedsTheirPermissions() {
+        User actor = saveUser("DATA_ENTRY");
+        authenticate(actor);
+        jdbcTemplate.update("""
+                insert into rbac_user_permission_overrides
+                    (user_id,permission_code,effect,reason,changed_by)
+                values (?, 'USER_MANAGE', 'GRANT', 'delegated test', ?),
+                       (?, 'ROLE_PERMISSION_MANAGE', 'GRANT', 'delegated test', ?)
+                """, actor.getId(), actor.getId(), actor.getId(), actor.getId());
+
+        UserCreateDto request = UserCreateDto.builder()
+                .username("forbidden-admin-" + UUID.randomUUID().toString().substring(0, 8))
+                .fullName("Forbidden administrator")
+                .email("forbidden-" + UUID.randomUUID() + "@example.test")
+                .password("Strong@Pass123")
+                .userType("SUPER_ADMIN")
+                .build();
+
+        assertThatThrownBy(() -> managedUserAccessService.create(
+                new com.waad.tba.modules.rbac.permission.dto.ManagedUserCreateRequest(request, List.of())))
+                .isInstanceOf(AccessDeniedException.class)
+                .hasMessageContaining("صلاحيات لا يملكها");
+        assertThat(userRepository.existsByUsernameIgnoreCase(request.getUsername())).isFalse();
+    }
+
+    @Test
+    void concurrentDemotionsCannotRemoveEveryActiveSuperAdmin() throws Exception {
+        jdbcTemplate.update("update users set is_active=false where user_type='SUPER_ADMIN'");
+        User first = saveUser("SUPER_ADMIN");
+        User second = saveUser("SUPER_ADMIN");
+        CountDownLatch start = new CountDownLatch(1);
+        var executor = Executors.newFixedThreadPool(2);
+        try {
+            var firstResult = executor.submit(() -> demoteAfter(start, first));
+            var secondResult = executor.submit(() -> demoteAfter(start, second));
+            start.countDown();
+            boolean a = firstResult.get(20, TimeUnit.SECONDS);
+            boolean b = secondResult.get(20, TimeUnit.SECONDS);
+
+            assertThat(java.util.List.of(a, b)).containsExactlyInAnyOrder(true, false);
+            assertThat(userRepository.countByUserTypeAndActiveTrue("SUPER_ADMIN")).isEqualTo(1L);
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    private boolean demoteAfter(CountDownLatch start, User target) {
+        try {
+            start.await(10, TimeUnit.SECONDS);
+            userService.update(target.getId(), UserUpdateDto.builder()
+                    .username(target.getUsername())
+                    .fullName(target.getFullName())
+                    .email(target.getEmail())
+                    .active(true)
+                    .userType("FINANCE_VIEWER")
+                    .build(), "اختبار تزامن حماية آخر مدير");
+            return true;
+        } catch (IllegalArgumentException expected) {
+            return false;
+        } catch (Exception unexpected) {
+            throw new RuntimeException(unexpected);
+        }
     }
 
     private User saveUser(String role) {

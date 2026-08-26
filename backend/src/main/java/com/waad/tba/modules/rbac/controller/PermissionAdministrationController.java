@@ -29,12 +29,13 @@ import lombok.RequiredArgsConstructor;
 @RestController
 @RequestMapping("/api/v1/admin/access-control")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('SUPER_ADMIN') or @permissionGuard.has('ROLE_PERMISSION_MANAGE')")
+@PreAuthorize("@permissionGuard.has('ROLE_PERMISSION_MANAGE')")
 public class PermissionAdministrationController {
     private final PermissionAdministrationService service;
     private final ManagedUserAccessService managedUserAccessService;
 
     @org.springframework.web.bind.annotation.PostMapping("/users")
+    @PreAuthorize("@permissionGuard.has('USER_MANAGE')")
     public ResponseEntity<ApiResponse<UserResponseDto>> createManagedUser(
             @Valid @RequestBody ManagedUserCreateRequest request) {
         return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED)
@@ -43,6 +44,7 @@ public class PermissionAdministrationController {
     }
 
     @PutMapping("/users/{userId}")
+    @PreAuthorize("@permissionGuard.has('USER_MANAGE')")
     public ResponseEntity<ApiResponse<UserResponseDto>> updateManagedUser(
             @PathVariable Long userId,
             @Valid @RequestBody ManagedUserUpdateRequest request) {

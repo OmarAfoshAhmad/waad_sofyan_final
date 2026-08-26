@@ -41,6 +41,14 @@ public class EffectivePermissionService {
     }
 
     @Transactional(readOnly = true)
+    public Set<SystemPermission> resolveRole(SystemRole role) {
+        if (role == null) return Set.of();
+        EnumSet<SystemPermission> permissions = EnumSet.noneOf(SystemPermission.class);
+        rolePermissionCodes(role.name()).stream().map(SystemPermission::parse).forEach(permissions::add);
+        return Set.copyOf(permissions);
+    }
+
+    @Transactional(readOnly = true)
     public EffectivePermissionSnapshot snapshot(User user) {
         Set<SystemPermission> rolePermissions = EnumSet.noneOf(SystemPermission.class);
         SystemRole role = SystemRole.fromString(user.getUserType());

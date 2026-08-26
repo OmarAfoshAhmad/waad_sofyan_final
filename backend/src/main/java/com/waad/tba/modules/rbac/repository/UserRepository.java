@@ -7,10 +7,12 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import com.waad.tba.modules.rbac.entity.User;
+import jakarta.persistence.LockModeType;
 
 @Repository
 public interface UserRepository extends JpaRepository<User, Long> {
@@ -27,6 +29,14 @@ public interface UserRepository extends JpaRepository<User, Long> {
      * recovery path.
      */
     long countByUserTypeAndActiveTrue(String userType);
+
+    /**
+     * Serializes every operation that could remove an active SUPER_ADMIN.
+     * Counting without locking lets two concurrent demotions both observe 2
+     * and leave the system with zero administrators.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    List<User> findByUserTypeAndActiveTrueOrderByIdAsc(String userType);
     
     @Query("SELECT u FROM User u WHERE " +
            "LOWER(u.username) LIKE LOWER(CONCAT('%', :query, '%')) OR " +

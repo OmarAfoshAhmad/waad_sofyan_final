@@ -30,6 +30,7 @@ import com.waad.tba.modules.rbac.dto.UserCreateDto;
 import com.waad.tba.modules.rbac.dto.UserResponseDto;
 import com.waad.tba.modules.rbac.dto.UserUpdateDto;
 import com.waad.tba.modules.rbac.service.UserService;
+import com.waad.tba.modules.rbac.permission.ManagedUserAccessService;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -54,7 +55,7 @@ import lombok.RequiredArgsConstructor;
 @RequestMapping("/api/v1/admin/users")
 @RequiredArgsConstructor
 @Tag(name = "RBAC - Users", description = "APIs for managing users and their roles/permissions")
-@PreAuthorize("hasRole('SUPER_ADMIN')")
+@PreAuthorize("@permissionGuard.has('USER_VIEW')")
 public class UserController {
 
         private static final int DEFAULT_PAGE_SIZE = 10;
@@ -62,6 +63,7 @@ public class UserController {
         private static final int LEGACY_LIST_SIZE_LIMIT = 500;
 
         private final UserService userService;
+        private final ManagedUserAccessService managedUserAccessService;
         private final com.waad.tba.modules.rbac.service.ProviderUserExcelImportService providerUserExcelImportService;
 
         @GetMapping
@@ -94,6 +96,7 @@ public class UserController {
         }
 
         @PostMapping
+        @PreAuthorize("@permissionGuard.has('USER_MANAGE')")
         @Operation(summary = "Create user", description = "Creates a new user. Only SUPER_ADMIN can manage users.")
         @ApiResponses({
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "User created successfully"),
@@ -103,12 +106,14 @@ public class UserController {
         })
         public ResponseEntity<ApiResponse<UserResponseDto>> createUser(
                         @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "User creation payload") @Valid @RequestBody UserCreateDto dto) {
+                managedUserAccessService.assertMayCreate(dto.getUserType());
                 UserResponseDto createdUser = userService.create(dto);
                 return ResponseEntity.status(HttpStatus.CREATED)
                                 .body(ApiResponse.success("User created successfully", createdUser));
         }
 
         @PutMapping("/{id:\\d+}")
+        @PreAuthorize("@permissionGuard.has('USER_MANAGE')")
         @Operation(summary = "Update user", description = "Updates an existing user by ID. Role hierarchy enforced.")
         @ApiResponses({
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "User updated successfully"),
@@ -120,11 +125,13 @@ public class UserController {
         public ResponseEntity<ApiResponse<UserResponseDto>> updateUser(
                         @Parameter(name = "id", description = "User ID", required = true) @PathVariable("id") Long id,
                         @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "User update payload") @Valid @RequestBody UserUpdateDto dto) {
+                managedUserAccessService.assertMayUpdate(id, dto.getUserType());
                 UserResponseDto updatedUser = userService.update(id, dto);
                 return ResponseEntity.ok(ApiResponse.success("User updated successfully", updatedUser));
         }
 
         @DeleteMapping("/{id:\\d+}")
+        @PreAuthorize("@permissionGuard.has('USER_MANAGE')")
         @Operation(summary = "Delete user", description = "Deletes a user by ID. SUPER_ADMIN users can only be deleted by SUPER_ADMIN.")
         @ApiResponses({
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "User deleted successfully"),
@@ -179,6 +186,7 @@ public class UserController {
         }
 
         @PatchMapping("/{id:\\d+}/toggle-status")
+        @PreAuthorize("@permissionGuard.has('USER_MANAGE')")
         @Operation(summary = "Toggle user status", description = "Activates or deactivates a user. SUPER_ADMIN users cannot be deactivated.")
         @ApiResponses({
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "User status toggled successfully"),
@@ -195,6 +203,7 @@ public class UserController {
         }
 
         @PutMapping("/{id:\\d+}/reset-password")
+        @PreAuthorize("@permissionGuard.has('USER_MANAGE') and @permissionGuard.has('SESSION_REVOKE')")
         @Operation(summary = "Reset user password", description = "Resets a user password and revokes all active sessions.")
         public ResponseEntity<ApiResponse<Void>> resetPassword(
                         @PathVariable("id") Long id,
@@ -251,6 +260,7 @@ public class UserController {
         }
 
         @PostMapping(value = "/import/providers", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+        @PreAuthorize("@permissionGuard.has('USER_MANAGE')")
         @Operation(summary = "Import provider users from Excel", description = "Imports provider users from an Excel file.")
         @ApiResponses({
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Import completed successfully"),
