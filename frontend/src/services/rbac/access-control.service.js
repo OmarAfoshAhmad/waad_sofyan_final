@@ -27,6 +27,10 @@ const accessControlService = {
 
   async createManagedUser(user, permissionOverrides = []) {
     return unwrap(await axios.post(`${BASE_URL}/users`, { user, permissionOverrides }));
+  },
+
+  async updateManagedUser(userId, user, permissionOverrides = [], reason) {
+    return unwrap(await axios.put(`${BASE_URL}/users/${userId}`, { user, permissionOverrides, reason }));
   }
 };
 

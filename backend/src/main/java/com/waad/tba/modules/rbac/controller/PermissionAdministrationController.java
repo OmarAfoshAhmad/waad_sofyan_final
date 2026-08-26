@@ -19,6 +19,7 @@ import com.waad.tba.modules.rbac.permission.PermissionAdministrationService.Role
 import com.waad.tba.modules.rbac.permission.ManagedUserAccessService;
 import com.waad.tba.modules.rbac.permission.dto.PermissionOverrideRequest;
 import com.waad.tba.modules.rbac.permission.dto.ManagedUserCreateRequest;
+import com.waad.tba.modules.rbac.permission.dto.ManagedUserUpdateRequest;
 import com.waad.tba.modules.rbac.permission.dto.RoleTemplateUpdateRequest;
 import com.waad.tba.modules.rbac.dto.UserResponseDto;
 
@@ -39,6 +40,15 @@ public class PermissionAdministrationController {
         return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED)
                 .body(ApiResponse.success("تم إنشاء المستخدم وتطبيق صلاحياته ذرياً",
                         managedUserAccessService.create(request)));
+    }
+
+    @PutMapping("/users/{userId}")
+    public ResponseEntity<ApiResponse<UserResponseDto>> updateManagedUser(
+            @PathVariable Long userId,
+            @Valid @RequestBody ManagedUserUpdateRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "تم تحديث المستخدم والنطاق والصلاحيات ذرياً وسحب جلساته النشطة",
+                managedUserAccessService.update(userId, request)));
     }
 
     @GetMapping("/permissions")

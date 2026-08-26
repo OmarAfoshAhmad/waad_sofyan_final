@@ -113,6 +113,11 @@ public class UserService {
 
     @Transactional
     public UserResponseDto update(Long id, UserUpdateDto dto) {
+        return update(id, dto, null);
+    }
+
+    @Transactional
+    public UserResponseDto update(Long id, UserUpdateDto dto, String changeReason) {
         log.info("Updating user with id: {}", id);
         
         User user = userRepository.findById(id)
@@ -177,7 +182,8 @@ public class UserService {
         
         // Audit log
         securityService.auditLog(id, SecurityAuditEvent.AuditActionType.ACCOUNT_UPDATED,
-                "User updated" + (oldEmail.equals(dto.getEmail()) ? "" : ", email changed"),
+                "User updated" + (oldEmail.equals(dto.getEmail()) ? "" : ", email changed")
+                        + (changeReason == null || changeReason.isBlank() ? "" : ", reason: " + changeReason.trim()),
                 null, null);
         
         log.info("User updated successfully: {}", id);

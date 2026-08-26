@@ -18,6 +18,8 @@ import org.springframework.test.context.ActiveProfiles;
 
 import com.waad.tba.TbaWaadApplication;
 import com.waad.tba.modules.rbac.entity.User;
+import com.waad.tba.modules.rbac.dto.UserUpdateDto;
+import com.waad.tba.modules.rbac.permission.dto.ManagedUserUpdateRequest;
 import com.waad.tba.modules.rbac.permission.dto.PermissionOverrideRequest;
 import com.waad.tba.modules.rbac.permission.dto.PermissionOverrideRequest.OverrideMode;
 import com.waad.tba.modules.rbac.permission.dto.RoleTemplateUpdateRequest;
@@ -29,6 +31,7 @@ import com.waad.tba.support.PostgresIntegrationTestBase;
 class PermissionAdministrationIntegrationTest extends PostgresIntegrationTestBase {
     @Autowired UserRepository userRepository;
     @Autowired PermissionAdministrationService administrationService;
+    @Autowired ManagedUserAccessService managedUserAccessService;
     @Autowired EffectivePermissionService effectivePermissionService;
     @Autowired JdbcTemplate jdbcTemplate;
 
@@ -117,6 +120,33 @@ class PermissionAdministrationIntegrationTest extends PostgresIntegrationTestBas
                 new RoleTemplateUpdateRequest(List.of("USER_VIEW"), "تقليص غير مسموح")))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("ثابت");
+    }
+
+    @Test
+    void managedUpdateRollsBackIdentityRoleAndScopeWhenPermissionUpdateFails() {
+        User actor = saveUser("SUPER_ADMIN");
+        User target = saveUser("FINANCE_VIEWER");
+        authenticate(actor);
+        String originalName = target.getFullName();
+
+        UserUpdateDto update = UserUpdateDto.builder()
+                .username(target.getUsername())
+                .fullName("Name that must roll back")
+                .email(target.getEmail())
+                .active(true)
+                .userType("ACCOUNTANT")
+                .build();
+
+        assertThatThrownBy(() -> managedUserAccessService.update(target.getId(),
+                new ManagedUserUpdateRequest(update, List.of(
+                        new PermissionOverrideRequest("NOT_A_REAL_PERMISSION", OverrideMode.GRANT,
+                                "إجبار فشل الجزء الثاني")), "اختبار الذرية")))
+                .isInstanceOf(IllegalArgumentException.class);
+
+        User reloaded = userRepository.findById(target.getId()).orElseThrow();
+        assertThat(reloaded.getFullName()).isEqualTo(originalName);
+        assertThat(reloaded.getUserType()).isEqualTo("FINANCE_VIEWER");
+        assertThat(reloaded.getAuthorizationVersion()).isZero();
     }
 
     private User saveUser(String role) {
