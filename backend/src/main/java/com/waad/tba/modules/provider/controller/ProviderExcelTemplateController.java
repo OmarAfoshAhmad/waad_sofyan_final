@@ -21,13 +21,13 @@ import java.io.IOException;
 @RequestMapping("/api/v1/providers/import")
 @RequiredArgsConstructor
 @Tag(name = "Provider Excel Import", description = "System-generated Excel template download and import")
-@PreAuthorize("isAuthenticated()")
+@PreAuthorize("@permissionGuard.has('PROVIDER_MANAGE')")
 public class ProviderExcelTemplateController {
     
     private final ProviderExcelTemplateService templateService;
     
     @GetMapping("/template")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("@permissionGuard.has('PROVIDER_MANAGE')")
     @Operation(
         summary = "Download Providers Import Template",
         description = "Downloads a system-generated Excel template for importing medical providers"
@@ -46,7 +46,7 @@ public class ProviderExcelTemplateController {
     }
     
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("@permissionGuard.has('PROVIDER_MANAGE')")
     @Operation(
         summary = "Import Providers from Excel",
         description = "Imports medical providers from system-generated template. License numbers auto-generated."

@@ -608,7 +608,7 @@ export default function ProvidersList() {
           return (
             <Stack direction="row" spacing={0.5} justifyContent="center" onClick={(e) => e.stopPropagation()}>
               {provider.active === false || showDeleted ? (
-                <PermissionGuard resource="providers" action="delete">
+                <PermissionGuard requiredPermission="PROVIDER_MANAGE">
                   <>
                     <Tooltip title="استعادة">
                       <IconButton
@@ -622,18 +622,20 @@ export default function ProvidersList() {
                         <RefreshIcon fontSize="small" />
                       </IconButton>
                     </Tooltip>
-                    <Tooltip title="حذف نهائي">
-                      <IconButton
-                        size="small"
-                        color="error"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleHardDelete(provider.id, provider.name);
-                        }}
-                      >
-                        <DeleteForeverIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
+                    <PermissionGuard requiredPermissions={['PROVIDER_MANAGE', 'DANGER_ZONE_EXECUTE']}>
+                      <Tooltip title="حذف نهائي">
+                        <IconButton
+                          size="small"
+                          color="error"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleHardDelete(provider.id, provider.name);
+                          }}
+                        >
+                          <DeleteForeverIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </PermissionGuard>
                   </>
                 </PermissionGuard>
               ) : (
@@ -664,7 +666,7 @@ export default function ProvidersList() {
                     </IconButton>
                   </Tooltip>
 
-                  <PermissionGuard resource="providers" action="delete">
+                  <PermissionGuard requiredPermission="PROVIDER_MANAGE">
                     <Tooltip title="حذف">
                       <IconButton
                         size="small"
@@ -795,7 +797,7 @@ export default function ProvidersList() {
   return (
     <Box sx={{ height: 'calc(100vh - 120px)', display: 'flex', flexDirection: 'column', overflow: 'hidden', width: '100%' }}>
       {/* ====== MODERN PAGE HEADER ====== */}
-      <PermissionGuard resource="providers" action="view">
+      <PermissionGuard requiredPermission="PROVIDER_VIEW">
         <ModernPageHeader
           title="مقدمي الخدمات الصحية"
           subtitle="إدارة المستشفيات والعيادات والمختبرات والصيدليات"
@@ -803,24 +805,30 @@ export default function ProvidersList() {
           breadcrumbs={[{ label: 'الرئيسية', path: '/' }, { label: 'مقدمي الخدمات' }]}
           actions={
             <Stack direction="row" spacing={1} alignItems="center" flexWrap="nowrap" sx={{ overflowX: 'auto', maxWidth: '100%' }}>
-              <Button
-                variant="outlined"
-                color="secondary"
-                startIcon={<FileUploadIcon />}
-                onClick={() => setIsImportDialogOpen(true)}
-                sx={{ minWidth: '9.6875rem', whiteSpace: 'nowrap', flexShrink: 0 }}
-              >
-                استيراد من إكسل
-              </Button>
-              <SoftDeleteToggle showDeleted={showDeleted} onToggle={() => setShowDeleted((v) => !v)} />
-              <Button
-                variant="contained"
-                startIcon={<AddIcon />}
-                onClick={handleNavigateAdd}
-                sx={{ minWidth: '9.6875rem', whiteSpace: 'nowrap', flexShrink: 0 }}
-              >
-                إضافة مقدم خدمة
-              </Button>
+              <PermissionGuard requiredPermission="PROVIDER_MANAGE">
+                <Button
+                  variant="outlined"
+                  color="secondary"
+                  startIcon={<FileUploadIcon />}
+                  onClick={() => setIsImportDialogOpen(true)}
+                  sx={{ minWidth: '9.6875rem', whiteSpace: 'nowrap', flexShrink: 0 }}
+                >
+                  استيراد من إكسل
+                </Button>
+              </PermissionGuard>
+              <PermissionGuard requiredPermission="PROVIDER_MANAGE">
+                <SoftDeleteToggle showDeleted={showDeleted} onToggle={() => setShowDeleted((v) => !v)} />
+              </PermissionGuard>
+              <PermissionGuard requiredPermission="PROVIDER_MANAGE">
+                <Button
+                  variant="contained"
+                  startIcon={<AddIcon />}
+                  onClick={handleNavigateAdd}
+                  sx={{ minWidth: '9.6875rem', whiteSpace: 'nowrap', flexShrink: 0 }}
+                >
+                  إضافة مقدم خدمة
+                </Button>
+              </PermissionGuard>
             </Stack>
           }
         />
@@ -922,7 +930,7 @@ export default function ProvidersList() {
                 
                 {showDeleted ? (
                   <>
-                    <PermissionGuard resource="providers" action="delete">
+                    <PermissionGuard requiredPermission="PROVIDER_MANAGE">
                       <Button
                         size="small"
                         color="success"
@@ -937,24 +945,26 @@ export default function ProvidersList() {
                       >
                         استعادة المحدد
                       </Button>
-                      <Button
-                        size="small"
-                        color="error"
-                        variant="contained"
-                        startIcon={<DeleteForeverIcon />}
-                        onClick={() => confirmBulkAction({
-                          title: 'تأكيد الحذف النهائي',
-                          message: 'سيُحذف المحدد نهائياً ولا يمكن التراجع عن هذه العملية.',
-                          confirmText: 'حذف نهائي', confirmColor: 'error', action: providersService.bulkHardDelete,
-                          successMessage: 'تم الحذف النهائي للمرافق المحددة', errorMessage: 'تعذر الحذف النهائي'
-                        })}
-                      >
-                        حذف نهائي للمحدد
-                      </Button>
+                      <PermissionGuard requiredPermissions={['PROVIDER_MANAGE', 'DANGER_ZONE_EXECUTE']}>
+                        <Button
+                          size="small"
+                          color="error"
+                          variant="contained"
+                          startIcon={<DeleteForeverIcon />}
+                          onClick={() => confirmBulkAction({
+                            title: 'تأكيد الحذف النهائي',
+                            message: 'سيُحذف المحدد نهائياً ولا يمكن التراجع عن هذه العملية.',
+                            confirmText: 'حذف نهائي', confirmColor: 'error', action: providersService.bulkHardDelete,
+                            successMessage: 'تم الحذف النهائي للمرافق المحددة', errorMessage: 'تعذر الحذف النهائي'
+                          })}
+                        >
+                          حذف نهائي للمحدد
+                        </Button>
+                      </PermissionGuard>
                     </PermissionGuard>
                   </>
                 ) : (
-                  <PermissionGuard resource="providers" action="delete">
+                  <PermissionGuard requiredPermission="PROVIDER_MANAGE">
                     <Button
                       size="small"
                       color="primary"
