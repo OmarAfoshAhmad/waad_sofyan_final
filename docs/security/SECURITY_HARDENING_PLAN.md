@@ -699,3 +699,81 @@ secure: true   |   same-site: strict   |   http-only: true
 م13:   Tests=1067  Failures=0
 م17:   Tests=1075  Failures=0     BUILD SUCCESS
 ```
+
+---
+
+# بوابة الإنتاج
+
+كل مربع ومعه الأثر الذي يثبته — لا تُعلَّم بالثقة.
+
+## مؤتمَتة (يفرضها البناء)
+
+| # | البند | الأثر المُثبِت |
+|---|---|---|
+| 1 | مجهول لا يستطيع التسجيل | `PublicRegistrationClosedIntegrationTest.anonymousCannotRegister` |
+| 2 | رمز CSRF لا يكفي بلا صلاحية | `…anonymousWithCsrfStillCannotRegister` |
+| 3 | المسار الإداري المشروع سليم | `…administratorWithUserManageCanStillRegister` |
+| 4 | إقلاع التطبيق لم يُكسر | `…publicAuthEndpointsRemainReachable` |
+| 5 | لا دور داخلي افتراضي | `NoImplicitUserRoleTest` (4) |
+| 6 | بوابة المزوّد محروسة كلياً | `PreAuthPortalRequiresAuthorizationTest` (4) |
+| 7 | المصادقة وحدها لا تكفي للكتابة | `…authenticatedWithoutPreauthPermissionCannotWrite` |
+| 8 | نطاق غير محدد = رفض | `PreAuthAccessScopeResolverTest` (12) |
+| 9 | مزوّد لا يكتب باسم آخر | `PreAuthPortalProviderScopeTest` (4) |
+| 10 | لا فرع fail-open في فرض المزوّد | `ProviderEnforcementFailsClosedTest` (4) |
+| 11 | JWT لا يُقبل للويب | `WebAuthenticationIsSessionOnlyTest` (4) |
+| 12 | كوكي محصَّن بالافتراض | `SessionCookieHardeningTest` (3) |
+| 13 | لا بيانات حساسة في الروابط | `NoSensitiveDataInUrlsTest` (2) |
+| 14 | رؤوس الأمان تصل فعلاً | `SecurityHeadersTest` (5) |
+| 15 | كلفة التجزئة مقاسة ولا تُبطل القائم | `PasswordHashingStrengthTest` (3) |
+
+**المجموع: 54 اختبار انحدار أمني.**
+
+## مُتحقَّقة بالفحص (لا تعديل)
+
+| البند | الدليل |
+|---|---|
+| لا حقن SQL | كل `createNativeQuery` مُمَعلَم |
+| لا Mass Assignment | لا كيان في `@RequestBody` |
+| لا تسريب آثار الأخطاء | `include-stacktrace: never` + معرّف تتبّع |
+| لا أسرار في المستودع | مسح `application*.yml` |
+| Actuator محصور | `hasRole("SUPER_ADMIN")` |
+| قفل الحساب قائم | `max-failed-login-attempts: 5` / 30 دقيقة |
+
+## متبقية — تتطلب نظاماً مشغَّلاً أو قراراً تشغيلياً
+
+| البند | لماذا لم يُغلق |
+|---|---|
+| **النشر** | لا شيء من هذا يحمي الإنتاج قبل الدمج وإعادة النشر |
+| دورة متصفح بحسابات حقيقية | تتطلب تسجيل دخول فعلياً بكل دور |
+| `memberId` من جسم `/bulk` | يحتاج حلّ جهة عمل المستفيد بتاريخ الخدمة |
+| مرشّحات البحث (`nationalNumber`…) | العلاج تنقية سجلات الوصول أو تجزئة المعرّف — قرار تشغيلي |
+| ترحيل تجزئات كلمات المرور القائمة | يحتاج إعادة تجزئة عند الدخول الناجح |
+| تنظيف سباكة JWT الميتة | تنظيف لا ثغرة؛ فُصل عمداً عن commits أمنية |
+| رفع الملفات (م18) | لم يُفحص بعد |
+| مصفوفة التصعيد الكاملة (م29–30) | تحتاج بيانات متعددة المستأجرين |
+
+---
+
+# الخلاصة
+
+| ID | الخطورة | الحالة |
+|---|---|---|
+| S-01 | 🔴 حرجة | **FIXED** |
+| S-02 | 🔴 حرجة | **FIXED** |
+| S-03 | 🟠 عالية | **FIXED** (المزوّد) |
+| S-04 | 🟠 عالية | **FIXED** |
+| S-05 | 🟠 عالية | **FIXED** |
+| S-06 | 🟢 منخفضة¹ | **FIXED** |
+| S-07 | 🟢 منخفضة | **FIXED** |
+| S-08 | 🟡 متوسطة | **FIXED** |
+| S-09 | 🟡 متوسطة | **FIXED** |
+
+¹ خُفِّضت من MEDIUM بعد اكتشاف أن الإنتاج كان محصَّناً أصلاً.
+
+```
+الأساس:  Tests=1026  Failures=0  Errors=0
+النهاية: Tests=1080  Failures=0  Errors=0
+git diff --check: نظيف
+```
+
+**لا يُعتبر أي بند مغلقاً تشغيلياً قبل الدمج والنشر ودورة المتصفح.**
