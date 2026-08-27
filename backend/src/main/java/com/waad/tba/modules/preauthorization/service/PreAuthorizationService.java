@@ -1148,9 +1148,27 @@ public class PreAuthorizationService {
                         PreAuthStatus.NEEDS_CORRECTION)
                 : inboxStatuses;
 
-        Page<PreAuthorization> preAuths = preAuthorizationRepository.findByStatusIn(
-                resolvedStatuses,
-                pageable);
+        var currentUser = authorizationService.getCurrentUser();
+        if (currentUser == null) {
+            throw new org.springframework.security.access.AccessDeniedException("Authentication is required");
+        }
+
+        Page<PreAuthorization> preAuths;
+        if (currentUser.getProviderId() != null) {
+            preAuths = preAuthorizationRepository.findByStatusInAndProviderId(
+                    resolvedStatuses, currentUser.getProviderId(), pageable);
+        } else if (currentUser.getEmployerId() != null) {
+            preAuths = preAuthorizationRepository.findByStatusInAndEmployerId(
+                    resolvedStatuses, currentUser.getEmployerId(), pageable);
+        } else if (reviewerIsolationService.isSubjectToIsolation(currentUser)) {
+            List<Long> providerIds = reviewerIsolationService.getAllowedProviderIds(currentUser);
+            preAuths = providerIds.isEmpty()
+                    ? Page.empty(pageable)
+                    : preAuthorizationRepository.findByStatusInAndProviderIdIn(
+                            resolvedStatuses, providerIds, pageable);
+        } else {
+            preAuths = preAuthorizationRepository.findByStatusIn(resolvedStatuses, pageable);
+        }
 
         log.info("[SERVICE] Found {} pre-authorizations in inbox (Total Elements), Content Size: {}", preAuths.getTotalElements(), preAuths.getContent().size());
         

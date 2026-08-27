@@ -98,7 +98,7 @@ public class PreAuthReviewController {
 
     // ── بدء المراجعة ─────────────────────────────────────────────────────────
     @PostMapping("/{id}/start-review")
-    @PreAuthorize("@permissionGuard.has('PREAUTH_REVIEW')")
+    @PreAuthorize("@preAuthAccessGuard.canReview(#id)")
     @Operation(summary = "بدء مراجعة موافقة مسبقة", description = "يُحوّل الوضع من PENDING إلى UNDER_REVIEW")
     public ResponseEntity<ApiResponse<PreAuthorization>> startReview(
             @PathVariable Long id,
@@ -109,7 +109,7 @@ public class PreAuthReviewController {
 
     // ── قائمة سطور الموافقة ───────────────────────────────────────────────────
     @GetMapping("/{id}/lines")
-    @PreAuthorize("@permissionGuard.has('PREAUTH_REVIEW')")
+    @PreAuthorize("@preAuthAccessGuard.canReview(#id)")
     @Operation(summary = "جلب سطور خدمات الموافقة", description = "يُرجع جميع سطور الخدمات مع حالة القرار لكل سطر")
     public ResponseEntity<ApiResponse<List<PreAuthorizationLine>>> getLines(
             @PathVariable Long id) {
@@ -119,7 +119,7 @@ public class PreAuthReviewController {
 
     // ── قرار على سطر خدمة محدد ───────────────────────────────────────────────
     @PostMapping("/{id}/lines/{lineId}/decision")
-    @PreAuthorize("@permissionGuard.has('PREAUTH_REVIEW')")
+    @PreAuthorize("@preAuthAccessGuard.canReview(#id)")
     @Operation(
             summary = "قرار على سطر خدمة",
             description = "الموافقة / الموافقة الجزئية / الرفض على سطر خدمة بعينه. " +
@@ -136,7 +136,7 @@ public class PreAuthReviewController {
 
     // ── إنهاء المراجعة ────────────────────────────────────────────────────────
     @PostMapping("/{id}/finalize")
-    @PreAuthorize("@permissionGuard.has('PREAUTH_APPROVE')")
+    @PreAuthorize("@preAuthAccessGuard.canApprove(#id)")
     @Operation(
             summary = "إنهاء المراجعة النهائية",
             description = "يحسب الإجمالي المعتمد من جميع السطور ويُحدث وضع الموافقة. " +
@@ -151,7 +151,7 @@ public class PreAuthReviewController {
 
     // ── رفض كامل (shortcut) ──────────────────────────────────────────────────
     @PostMapping("/{id}/reject")
-    @PreAuthorize("@permissionGuard.has('PREAUTH_APPROVE')")
+    @PreAuthorize("@preAuthAccessGuard.canApprove(#id)")
     @Operation(summary = "رفض الموافقة المسبقة كلياً", description = "يرفض جميع السطور دفعةً واحدة")
     public ResponseEntity<ApiResponse<String>> rejectAll(
             @PathVariable Long id,
@@ -170,7 +170,7 @@ public class PreAuthReviewController {
 
     // ── طلب معلومات إضافية / إعادة للتعديل ───────────────────────────────────────────────────
     @PostMapping("/{id}/request-info")
-    @PreAuthorize("@permissionGuard.has('PREAUTH_REVIEW')")
+    @PreAuthorize("@preAuthAccessGuard.canReview(#id)")
     @Operation(summary = "إعادة للتعديل (طلب معلومات إضافية من المزود)")
     public ResponseEntity<ApiResponse<String>> requestInfo(
             @PathVariable Long id,

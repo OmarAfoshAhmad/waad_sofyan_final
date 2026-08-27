@@ -26,10 +26,10 @@ class PreAuthReviewPermissionWiringArchitectureTest {
 
         assertThat(source).contains(
                 "@GetMapping(\"/inbox\")\n    @PreAuthorize(\"@permissionGuard.has('PREAUTH_REVIEW')\")",
-                "@PostMapping(\"/{id}/start-review\")\n    @PreAuthorize(\"@permissionGuard.has('PREAUTH_REVIEW')\")",
-                "@GetMapping(\"/{id}/lines\")\n    @PreAuthorize(\"@permissionGuard.has('PREAUTH_REVIEW')\")",
-                "@PostMapping(\"/{id}/lines/{lineId}/decision\")\n    @PreAuthorize(\"@permissionGuard.has('PREAUTH_REVIEW')\")",
-                "@PostMapping(\"/{id}/request-info\")\n    @PreAuthorize(\"@permissionGuard.has('PREAUTH_REVIEW')\")");
+                "@PostMapping(\"/{id}/start-review\")\n    @PreAuthorize(\"@preAuthAccessGuard.canReview(#id)\")",
+                "@GetMapping(\"/{id}/lines\")\n    @PreAuthorize(\"@preAuthAccessGuard.canReview(#id)\")",
+                "@PostMapping(\"/{id}/lines/{lineId}/decision\")\n    @PreAuthorize(\"@preAuthAccessGuard.canReview(#id)\")",
+                "@PostMapping(\"/{id}/request-info\")\n    @PreAuthorize(\"@preAuthAccessGuard.canReview(#id)\")");
     }
 
     @Test
@@ -37,8 +37,8 @@ class PreAuthReviewPermissionWiringArchitectureTest {
         String source = source();
 
         assertThat(source).contains(
-                "@PostMapping(\"/{id}/finalize\")\n    @PreAuthorize(\"@permissionGuard.has('PREAUTH_APPROVE')\")",
-                "@PostMapping(\"/{id}/reject\")\n    @PreAuthorize(\"@permissionGuard.has('PREAUTH_APPROVE')\")");
+                "@PostMapping(\"/{id}/finalize\")\n    @PreAuthorize(\"@preAuthAccessGuard.canApprove(#id)\")",
+                "@PostMapping(\"/{id}/reject\")\n    @PreAuthorize(\"@preAuthAccessGuard.canApprove(#id)\")");
     }
 
     private String source() throws Exception {

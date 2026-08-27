@@ -154,6 +154,40 @@ public interface PreAuthorizationRepository extends JpaRepository<PreAuthorizati
                      "AND pa.status IN :statuses", countQuery = "SELECT COUNT(pa) FROM PreAuthorization pa WHERE pa.active = true AND pa.status IN :statuses")
        Page<PreAuthorization> findByStatusIn(@Param("statuses") List<PreAuthStatus> statuses, Pageable pageable);
 
+       @Query(value = "SELECT pa FROM PreAuthorization pa " +
+                     "LEFT JOIN FETCH pa.visit v " +
+                     "WHERE pa.active = true AND pa.status IN :statuses " +
+                     "AND pa.providerId = :providerId",
+              countQuery = "SELECT COUNT(pa) FROM PreAuthorization pa " +
+                     "WHERE pa.active = true AND pa.status IN :statuses " +
+                     "AND pa.providerId = :providerId")
+       Page<PreAuthorization> findByStatusInAndProviderId(
+                     @Param("statuses") List<PreAuthStatus> statuses,
+                     @Param("providerId") Long providerId,
+                     Pageable pageable);
+
+       @Query(value = "SELECT pa FROM PreAuthorization pa " +
+                     "LEFT JOIN FETCH pa.visit v " +
+                     "WHERE pa.active = true AND pa.status IN :statuses " +
+                     "AND pa.providerId IN :providerIds",
+              countQuery = "SELECT COUNT(pa) FROM PreAuthorization pa " +
+                     "WHERE pa.active = true AND pa.status IN :statuses " +
+                     "AND pa.providerId IN :providerIds")
+       Page<PreAuthorization> findByStatusInAndProviderIdIn(
+                     @Param("statuses") List<PreAuthStatus> statuses,
+                     @Param("providerIds") java.util.Collection<Long> providerIds,
+                     Pageable pageable);
+
+       @Query(value = "SELECT pa FROM PreAuthorization pa " +
+                     "LEFT JOIN FETCH pa.visit v JOIN Member m ON m.id = pa.memberId " +
+                     "WHERE pa.active = true AND pa.status IN :statuses AND m.employer.id = :employerId",
+              countQuery = "SELECT COUNT(pa) FROM PreAuthorization pa JOIN Member m ON m.id = pa.memberId " +
+                     "WHERE pa.active = true AND pa.status IN :statuses AND m.employer.id = :employerId")
+       Page<PreAuthorization> findByStatusInAndEmployerId(
+                     @Param("statuses") List<PreAuthStatus> statuses,
+                     @Param("employerId") Long employerId,
+                     Pageable pageable);
+
        /**
         * Count pre-authorizations by status list.
         */
