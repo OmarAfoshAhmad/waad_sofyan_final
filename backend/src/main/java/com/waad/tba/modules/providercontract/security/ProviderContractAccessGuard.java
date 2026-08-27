@@ -50,6 +50,31 @@ public class ProviderContractAccessGuard {
                 .orElse(false);
     }
 
+    public boolean canManageGlobal() {
+        if (!permissionGuard.has("CONTRACT_MANAGE")) return false;
+        var user = authorizationService.getCurrentUser();
+        return user != null && !authorizationService.isProvider(user);
+    }
+
+    public boolean canManageProvider(Long providerId) {
+        if (providerId == null || !permissionGuard.has("CONTRACT_MANAGE")) return false;
+        return canAccessProvider(providerId);
+    }
+
+    public boolean canManageContract(Long contractId) {
+        if (contractId == null || !permissionGuard.has("CONTRACT_MANAGE")) return false;
+        return contractRepository.findById(contractId)
+                .map(contract -> canAccessProvider(contract.getProvider().getId()))
+                .orElse(false);
+    }
+
+    public boolean canManagePricingItem(Long pricingItemId) {
+        if (pricingItemId == null || !permissionGuard.has("CONTRACT_MANAGE")) return false;
+        return pricingItemRepository.findById(pricingItemId)
+                .map(item -> canAccessProvider(item.getContract().getProvider().getId()))
+                .orElse(false);
+    }
+
     private boolean canAccessProvider(Long providerId) {
         var user = authorizationService.getCurrentUser();
         return user != null && authorizationService.canAccessProvider(user, providerId);

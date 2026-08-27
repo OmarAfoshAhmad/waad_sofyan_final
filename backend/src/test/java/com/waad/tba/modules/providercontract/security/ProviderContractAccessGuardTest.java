@@ -87,4 +87,21 @@ class ProviderContractAccessGuardTest {
         when(authorizationService.canAccessProvider(user, 51L)).thenReturn(true);
         assertThat(guard.canReadPricingItem(12L)).isTrue();
     }
+
+    @Test
+    void providerUserCannotTurnManageCapabilityIntoGlobalMutation() {
+        when(permissionGuard.has("CONTRACT_MANAGE")).thenReturn(true);
+        when(authorizationService.isProvider(user)).thenReturn(true);
+        assertThat(guard.canManageGlobal()).isFalse();
+    }
+
+    @Test
+    void contractManagementStillRequiresOwningProviderScope() {
+        when(permissionGuard.has("CONTRACT_MANAGE")).thenReturn(true);
+        Provider provider = Provider.builder().id(61L).build();
+        ProviderContract contract = ProviderContract.builder().provider(provider).build();
+        when(contractRepository.findById(15L)).thenReturn(Optional.of(contract));
+        when(authorizationService.canAccessProvider(user, 61L)).thenReturn(true);
+        assertThat(guard.canManageContract(15L)).isTrue();
+    }
 }

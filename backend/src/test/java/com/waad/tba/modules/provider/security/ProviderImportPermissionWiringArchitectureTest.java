@@ -46,6 +46,22 @@ class ProviderImportPermissionWiringArchitectureTest {
     }
 
     @Test
+    void contractApiUsesCapabilityAndResourceGuardsWithoutRoleFallback() throws Exception {
+        String source = Files.readString(SOURCE_ROOT.resolve(
+                "providercontract/controller/ProviderContractController.java"));
+
+        assertThat(source).doesNotContain("hasRole(", "hasAnyRole(");
+        assertThat(source).contains("@providerContractAccessGuard.canReadGlobal()");
+        assertThat(source).contains("@providerContractAccessGuard.canReadProvider(#providerId)");
+        assertThat(source).contains("@providerContractAccessGuard.canReadContract(#id)");
+        assertThat(source).contains("@providerContractAccessGuard.canReadPricingItem(#pricingId)");
+        assertThat(source).contains("@providerContractAccessGuard.canManageProvider(#dto.providerId)");
+        assertThat(source).contains("@providerContractAccessGuard.canManageContract(#id)");
+        assertThat(source).contains("@providerContractAccessGuard.canManagePricingItem(#pricingId)");
+        assertThat(source).contains("@permissionGuard.has('DANGER_ZONE_EXECUTE')");
+    }
+
+    @Test
     void priceListImportSeparatesReadFromImportAndKeepsLegacyDirectImportClosed() throws Exception {
         String source = Files.readString(SOURCE_ROOT.resolve(
                 "providercontract/controller/ProviderContractPricingExcelController.java"));
