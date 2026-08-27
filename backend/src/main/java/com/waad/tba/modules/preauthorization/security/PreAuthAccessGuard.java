@@ -26,6 +26,10 @@ public class PreAuthAccessGuard {
         return hasScopedAccess("PREAUTH_VIEW", preAuthId);
     }
 
+    public boolean canCreate(Long preAuthId) {
+        return hasScopedAccess("PREAUTH_CREATE", preAuthId);
+    }
+
     public boolean canApprove(Long preAuthId) {
         return hasScopedAccess("PREAUTH_APPROVE", preAuthId);
     }
