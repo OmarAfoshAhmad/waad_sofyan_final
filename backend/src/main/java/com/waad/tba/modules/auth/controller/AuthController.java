@@ -256,22 +256,6 @@ public class AuthController {
 
         // ========== EXISTING JWT-BASED ENDPOINTS (TEMPORARY - Phase B) ==========
 
-        @PostMapping("/login")
-        @Operation(summary = "User login", description = "Authenticates user credentials and returns a JWT token with user information.")
-        @ApiResponses({
-                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Login successful"),
-                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Bad Request", content = @io.swagger.v3.oas.annotations.media.Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = com.waad.tba.common.error.ApiError.class), examples = @io.swagger.v3.oas.annotations.media.ExampleObject(value = "{\n  \"status\": \"error\",\n  \"code\": \"VALIDATION_ERROR\",\n  \"message\": \"Username is required\",\n  \"timestamp\": \"2025-01-01T10:00:00Z\",\n  \"path\": \"/api/auth/login\"\n}"))),
-                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @io.swagger.v3.oas.annotations.media.Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = com.waad.tba.common.error.ApiError.class), examples = @io.swagger.v3.oas.annotations.media.ExampleObject(value = "{\n  \"status\": \"error\",\n  \"code\": \"INVALID_CREDENTIALS\",\n  \"message\": \"Invalid username or password\",\n  \"timestamp\": \"2025-01-01T10:00:00Z\",\n  \"path\": \"/api/auth/login\"\n}"))),
-                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden", content = @io.swagger.v3.oas.annotations.media.Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = com.waad.tba.common.error.ApiError.class))),
-                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Not Found", content = @io.swagger.v3.oas.annotations.media.Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = com.waad.tba.common.error.ApiError.class))),
-                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "Internal Server Error", content = @io.swagger.v3.oas.annotations.media.Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = com.waad.tba.common.error.ApiError.class), examples = @io.swagger.v3.oas.annotations.media.ExampleObject(value = "{\n  \"status\": \"error\",\n  \"code\": \"INTERNAL_ERROR\",\n  \"message\": \"Unexpected server error\",\n  \"timestamp\": \"2025-01-01T10:00:00Z\",\n  \"path\": \"/api/auth/login\"\n}")))
-        })
-        public ResponseEntity<ApiResponse<LoginResponse>> login(
-                        @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Login credentials") @Valid @RequestBody LoginRequest request) {
-                LoginResponse response = authService.login(request);
-                return ResponseEntity.ok(ApiResponse.success("Login successful", response));
-        }
-
         /**
          * Creating an account is an administrative act, not a public one: this
          * is a closed corporate TPA system with no self-service tier. Left
@@ -300,28 +284,6 @@ public class AuthController {
                 LoginResponse response = authService.register(request);
                 return ResponseEntity.status(HttpStatus.CREATED)
                                 .body(ApiResponse.success("Registration successful", response));
-        }
-
-        @GetMapping("/me")
-        @Operation(summary = "Get current user", description = "Returns the currently authenticated user's profile information.")
-        @ApiResponses({
-                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "User info retrieved successfully"),
-                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized request"),
-                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "Internal server error")
-        })
-        public ResponseEntity<ApiResponse<LoginResponse.UserInfo>> getCurrentUser(
-                        @Parameter(name = "Authorization", description = "Bearer JWT token", required = false) @RequestHeader(value = "Authorization", required = false) String authHeader) {
-                // Handle missing or invalid Authorization header
-                if (authHeader == null || !authHeader.startsWith("Bearer ") || authHeader.length() <= 7) {
-                        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                                        .body(ApiResponse.<LoginResponse.UserInfo>builder()
-                                                        .status("error")
-                                                        .message("Authorization header missing or invalid")
-                                                        .build());
-                }
-                String token = authHeader.substring(7); // Remove "Bearer " prefix
-                LoginResponse.UserInfo userInfo = authService.getCurrentUser(token);
-                return ResponseEntity.ok(ApiResponse.success(userInfo));
         }
 
         @PostMapping("/forgot-password")
@@ -501,36 +463,6 @@ public class AuthController {
                                 .messageAr("تم إرسال بريد التحقق بنجاح")
                                 .timestamp(LocalDateTime.now())
                                 .build());
-        }
-
-        /**
-         * Refresh JWT Token with updated permissions
-         * 
-         * POST /api/v1/auth/refresh-token
-         * 
-         * Allows authenticated user to get a new JWT token with updated
-         * roles/permissions
-         * without needing to logout and login again.
-         * 
-         * USE CASE:
-         * - After admin assigns new roles/permissions to user
-         * - User can call this endpoint to refresh their token immediately
-         * - No need to logout/login to see updated permissions
-         */
-        @PostMapping("/refresh-token")
-        @PreAuthorize("isAuthenticated()")
-        @Operation(summary = "Refresh JWT token with updated permissions", description = "Generates new JWT token with current user's updated roles and permissions")
-        public ResponseEntity<ApiResponse<LoginResponse>> refreshToken(
-                        Authentication authentication) {
-
-                log.info("🔄 Refreshing session permissions for user: {}", authentication.getName());
-
-                // Get fresh user data with updated roles/permissions from database
-                LoginResponse refreshedToken = authService.refreshUserToken(authentication.getName());
-
-                return ResponseEntity.ok(ApiResponse.success(
-                                "Token refreshed successfully with updated permissions",
-                                refreshedToken));
         }
 
         /**

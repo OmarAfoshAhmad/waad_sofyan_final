@@ -39,7 +39,7 @@
 | S-02 | CRITICAL | `PreAuthPortalController` بلا `@PreAuthorize` ولا `FeatureGuard` ويكتب فعلياً | **FIXED** |
 | S-03 | HIGH | `providerId`/`memberId` من جسم الطلب ⟶ IDOR/BOLA | **FIXED** (providerId) |
 | S-04 | HIGH | لا `PreAuthAccessScopeResolver` مقابل نظيره في المستفيدين | **FIXED** |
-| S-05 | HIGH | مساران متوازيان للمصادقة (Session + JWT) | OPEN |
+| S-05 | HIGH | مساران متوازيان للمصادقة (Session + JWT) | **FIXED** |
 | S-06 | MEDIUM | كوكي الجلسة بلا `Secure` ولا `SameSite` | OPEN |
 | S-07 | LOW | مراجعة عامل عمل BCrypt | OPEN |
 
@@ -444,3 +444,66 @@ scope.singleProviderId().ifPresent(...)   // المزوّد يكتب كنفسه 
 م4+5:  Tests=1054  Failures=0
 م6:    Tests=1058  Failures=0     BUILD SUCCESS
 ```
+
+---
+
+## المرحلة 9 — مسار مصادقة واحد للويب
+
+**الحالة:** مكتملة ✅
+
+### الإثبات قبل الحذف
+
+الوثيقة تشترط إثبات الاستخدام الحالي أولاً. الأدلة الست:
+
+| السؤال | الدليل |
+|---|---|
+| هل ترسل الواجهة `Authorization: Bearer`؟ | **لا** — صفر نتيجة |
+| هل تخزّن توكناً؟ | **لا** — `sessionStorage.clear()` عند الخروج فقط |
+| ماذا تستدعي فعلاً؟ | `/auth/session/login`, `/session/me`, `/session/logout` وإعادة تعيين كلمة المرور — **لا شيء غيرها** |
+| هل يوجد عميل جوال؟ | **لا** — `audience: tba-waad-mobile` طموح لا واقع |
+| اختبارات تعتمده؟ | واحد فقط، ويؤكد **عدم** إصداره: `$.data.token` `doesNotExist` |
+| هل يتشارك مسار الجلسة كوده؟ | **لا** — `sessionLogin` يستدعي `getUserInfo` لا `login` |
+
+### لماذا كان يجب أن يزول لا أن يُحسَّن
+
+مسارا مصادقة متوازيان يعنيان أن أمن التطبيق = **أضعف المسارين**، وأن كل حارس
+جديد يجب أن يصمد عليهما معاً.
+
+والأهم أنه يخرق النموذج الذي يقوم عليه باقي النظام:
+`PermissionAdministrationService` يستدعي `revokeAll()` بعد كل تغيير صلاحية —
+**والتوكن ليس صفاً يمكن حذفه**، فحامله يحتفظ بمكانته حتى انتهاء مدته وحدها.
+
+### ما حُذف
+
+| العنصر | السبب |
+|---|---|
+| `jwtAuthenticationFilter` من السلسلة | المسار الثاني للمصادقة |
+| `POST /api/v1/auth/login` | سطح ميت — كان سيمنح توكناً لا يصادق شيئاً |
+| `GET /api/v1/auth/me` | سطح ميت (يتطلب Bearer) |
+| `POST /api/v1/auth/refresh-token` | سطح ميت |
+| `/api/v1/auth/login` من القائمة العامة واستثناءات CSRF | إعدادات ميتة |
+
+### الاختبارات
+
+`WebAuthenticationIsSessionOnlyTest` — 4 اختبارات:
+
+| الاختبار | يثبت |
+|---|---|
+| `jwtIsNotAcceptedForWebAuthentication` | توكن ظاهرياً سليم يشتري **لا شيء** (401) |
+| `theJwtOnlyEndpointsAreGone` | النقاط الثلاث اختفت |
+| `sessionLoginStillWorksAndIssuesNoToken` | لم نكسر الدخول |
+| `theSecurityChainRegistersNoJwtFilter` | فلتر مصادقة ثانٍ لا يعود بالإغفال |
+
+### النتيجة
+
+```
+م6:   Tests=1058  Failures=0
+م9:   Tests=1062  Failures=0     BUILD SUCCESS
+```
+
+### ما تبقّى من سباكة JWT
+
+`JwtTokenProvider` و`JwtAuthenticationFilter` ما زالا موجودين كأصناف،
+و`AuthService.login()` ما زال يولّد توكناً (يصل إليه `register` وحده). التوكن
+**خامل تماماً** الآن — لا فلتر يقبله. تنظيفه النهائي مع متطلب `JWT_SECRET` في
+`StartupSecurityValidator` بند مستقل، لأنه تنظيف لا إغلاق ثغرة.
