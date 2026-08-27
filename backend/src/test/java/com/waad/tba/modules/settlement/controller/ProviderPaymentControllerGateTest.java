@@ -82,7 +82,7 @@ class ProviderPaymentControllerGateTest {
     @Test
     void createDraftProceedsWhenGateAllows() {
         when(authorizationService.getCurrentUser())
-                .thenReturn(User.builder().id(1L).username("accountant1").build());
+                .thenReturn(User.builder().id(1L).username("accountant1").userType("ACCOUNTANT").build());
         var request = new CreateProviderPaymentRequest();
         var draft = ProviderPayment.builder().id(1L).providerId(1L)
                 .amount(new BigDecimal("100.00")).status(ProviderPayment.Status.DRAFT).build();

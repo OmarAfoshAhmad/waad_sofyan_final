@@ -59,7 +59,7 @@ class MemberKinshipAdminServiceTest {
 
     @Test
     void writesTheResetAndDurableAuditInThatOrder() {
-        User actor = User.builder().id(9L).username("root").build();
+        User actor = User.builder().id(9L).username("root").userType("SUPER_ADMIN").build();
         when(authorization.getCurrentUser()).thenReturn(actor);
         when(jdbc.update(any(String.class))).thenReturn(17);
 

@@ -67,7 +67,7 @@ class PublicRegistrationClosedIntegrationTest extends PostgresIntegrationTestBas
     private String registrationJson(String username) {
         return """
                 {"username":"%s","password":"Intruder@123","fullName":"Intruder",
-                 "email":"%s@waad.test","phone":"0910000000"}
+                 "email":"%s@waad.test","phone":"0910000000","userType":"DATA_ENTRY"}
                 """.formatted(username, username);
     }
 

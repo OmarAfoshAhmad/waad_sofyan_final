@@ -25,6 +25,16 @@ public class RegisterRequest {
     @NotBlank(message = "Full name is required")
     private String fullName;
 
+    /**
+     * Required, and validated against SystemRole in the service. This field
+     * did not exist while the endpoint was anonymous: the created account
+     * simply inherited the "DATA_ENTRY" default on User.userType, which made
+     * it internal staff without anyone choosing that. The role is now part of
+     * the request an administrator has to make explicitly.
+     */
+    @NotBlank(message = "User type is required")
+    private String userType;
+
     @NotBlank(message = "Email is required")
     @Email(message = "Email must be valid")
     private String email;

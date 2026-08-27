@@ -35,7 +35,7 @@
 
 | ID | الخطورة | الوصف | الحالة |
 |----|---------|-------|--------|
-| S-01 | CRITICAL | تسجيل ذاتي عام + دور افتراضي `DATA_ENTRY` ⟶ سلسلة تصعيد من الإنترنت | **FIXED** |
+| S-01 | CRITICAL | تسجيل ذاتي عام + دور افتراضي `DATA_ENTRY` ⟶ سلسلة تصعيد من الإنترنت | **FIXED** (م1 + م2) |
 | S-02 | CRITICAL | `PreAuthPortalController` بلا `@PreAuthorize` ولا `FeatureGuard` ويكتب فعلياً | OPEN |
 | S-03 | HIGH | `providerId`/`memberId` من جسم الطلب ⟶ IDOR/BOLA | OPEN |
 | S-04 | HIGH | لا `PreAuthAccessScopeResolver` مقابل نظيره في المستفيدين | OPEN |
@@ -156,3 +156,77 @@ git diff --check: نظيف
 النسخة العاملة على المنفذ 8080 مأخوذة من `wt-member-closure` ولا تحمل هذا
 الإصلاح. **الثغرة ما زالت مفتوحة في النسخة المشغَّلة** حتى يُدمج هذا الفرع
 ويُعاد النشر.
+
+---
+
+## المرحلة 2 — إزالة الامتيازات الافتراضية
+
+**الحالة:** مكتملة ✅
+
+### المسح: أين كان الدور يُمنح بالصمت
+
+ثلاثة مصادر مستقلة، لا واحد:
+
+| # | الموضع | السلوك |
+|---|---|---|
+| 1 | `User.java:52` | `@Builder.Default userType = "DATA_ENTRY"` |
+| 2 | `V5__users.sql:12` | `NOT NULL DEFAULT 'DATA_ENTRY'` |
+| 3 | `UserService.resolveUserType` | `return "DATA_ENTRY"` كملاذ أخير |
+
+### مسارات الإنشاء — المسح الكامل
+
+| المسار | قبل | بعد |
+|---|---|---|
+| `RbacDataInitializer:103` | `SUPER_ADMIN` صريح ✓ | بلا تغيير |
+| `UserService:95-98` | `toEntity` ثم `applyRoleBindings` صريح ✓ | بلا تغيير |
+| `ClaimReviewService:364,695` | `ACCOUNTANT` صريح ✓ | بلا تغيير |
+| `ClaimApprovalRecoveryWorker:30` | `MEDICAL_REVIEWER` صريح ✓ | بلا تغيير |
+| `AuthService.register:222` | **لا يضبط شيئاً** ✗ | يتحقق ويُسند صراحةً |
+
+لا وجود لأي `INSERT INTO users` خارج الهجرات.
+
+### ما تغيّر
+
+| الملف | التغيير |
+|---|---|
+| `modules/rbac/entity/User.java` | حذف `@Builder.Default` — الحقل بلا قيمة ابتدائية |
+| `modules/rbac/service/UserService.java` | الملاذ الأخير صار `IllegalArgumentException` |
+| `modules/auth/dto/RegisterRequest.java` | حقل `userType` إلزامي (`@NotBlank`) |
+| `modules/auth/service/AuthService.java` | تحقق مقابل `SystemRole` ثم إسناد صريح |
+| `db/migration/V193__drop_implicit_user_role_default.sql` | `ALTER COLUMN user_type DROP DEFAULT` |
+
+### الهجرة — ما لم تفعله عمداً
+
+- **`NOT NULL` محفوظ** — حساب بلا دور يبقى مستحيلاً.
+- **لا صف واحد مسّته.** إعادة تعيين أدوار مستخدمين قائمين قرار تشغيلي يحتاج
+  دليلاً لكل حساب، لا `UPDATE` جماعياً داخل هجرة. هذا نص شرط الوثيقة:
+  «ممنوع تنفيذ Migration قد يمنح صلاحيات إضافية للمستخدمين الحاليين بالصمت».
+
+### نصف قطر الانفجار
+
+77 استدعاءً لـ`User.builder()` في الاختبارات، **3 ملفات فقط** كانت تعتمد على
+الافتراضي — وكلها كائنات وهمية في الذاكرة لا تُحفظ. أُسند لها دور صريح يطابق
+سياقها (`DATA_ENTRY`، `SUPER_ADMIN`، `ACCOUNTANT`).
+
+### الاختبارات
+
+`NoImplicitUserRoleTest` — 4 اختبارات مصدرية:
+
+| الاختبار | يثبت |
+|---|---|
+| `entityDeclaresNoDefaultRole` | لا `@Builder.Default` ولا تهيئة سطرية |
+| `newUserCannotInheritDataEntryRole` | لا ملاذ أخير في `resolveUserType` |
+| `databaseSuppliesNoDefaultRole` | الافتراضي محذوف و`NOT NULL` باقٍ |
+| `registrationRequestRequiresAnExplicitRole` | الدور جزء من الطلب |
+
+الفحص يتجاهل التعليقات قبل المطابقة: تعليق يشرح الافتراضي المحذوف يقتبسه
+بالضرورة، ومطابقة النثر بدل الكود تجعل الحارس يفشل على توثيقه هو.
+
+### النتيجة
+
+```
+م1:   Tests=1030  Failures=0  Errors=0
+م2:   Tests=1034  Failures=0  Errors=0     BUILD SUCCESS
+```
+
+V193 طُبِّقت على قاعدة PostgreSQL حقيقية داخل Testcontainers ضمن هذه الحزمة.

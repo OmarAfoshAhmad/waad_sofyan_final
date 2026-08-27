@@ -219,7 +219,23 @@ public class AuthService {
                         throw new IllegalArgumentException("Email already exists");
                 }
 
+                // Validated, never defaulted. An unrecognised string would mint a
+                // Spring Security authority that matches no @PreAuthorize
+                // expression, locking the account out of everything with no
+                // error at creation time.
+                String requestedType = request.getUserType() == null
+                                ? ""
+                                : request.getUserType().trim().toUpperCase(java.util.Locale.ROOT);
+                boolean knownRole = java.util.Arrays
+                                .stream(com.waad.tba.security.rbac.SystemRole.values())
+                                .anyMatch(role -> role.name().equals(requestedType));
+                if (!knownRole) {
+                        throw new IllegalArgumentException(
+                                        "نوع مستخدم غير صالح: " + request.getUserType());
+                }
+
                 User user = User.builder()
+                                .userType(requestedType)
                                 .username(request.getUsername())
                                 .password(passwordEncoder.encode(request.getPassword()))
                                 .fullName(request.getFullName())

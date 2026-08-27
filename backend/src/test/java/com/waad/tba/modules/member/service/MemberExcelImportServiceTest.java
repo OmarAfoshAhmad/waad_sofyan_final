@@ -152,7 +152,7 @@ class MemberExcelImportServiceTest {
         when(benefitPolicyRepository.findActiveEffectivePolicyForEmployer(10L, LocalDate.now()))
                 .thenReturn(Optional.of(activePolicy));
         when(benefitPolicyRepository.findByPolicyCode("POL-1")).thenReturn(Optional.of(activePolicy));
-        when(authorizationService.getCurrentUser()).thenReturn(User.builder().id(1L).username("tester").build());
+        when(authorizationService.getCurrentUser()).thenReturn(User.builder().id(1L).username("tester").userType("DATA_ENTRY").build());
         lenient().when(importAccessPolicy.require(
                 org.mockito.ArgumentMatchers.any(com.waad.tba.modules.member.security.MemberOperation.class),
                 org.mockito.ArgumentMatchers.anyCollection(), org.mockito.ArgumentMatchers.anyBoolean()))
