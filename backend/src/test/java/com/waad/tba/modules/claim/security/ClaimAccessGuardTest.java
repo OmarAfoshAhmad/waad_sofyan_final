@@ -129,4 +129,17 @@ class ClaimAccessGuardTest {
         assertThat(guard.canReadMemberFor("FINANCIAL_REPORT_VIEW", 55L)).isTrue();
         assertThat(guard.canReadMemberFor("SETTLEMENT_VIEW", 55L)).isFalse();
     }
+
+    @Test
+    void coverageCalculationRequiresMemberScopeAndExcludedClaimScope() {
+        when(permissionGuard.has("CLAIM_VIEW")).thenReturn(true);
+        when(authorizationService.canAccessMember(user, 55L)).thenReturn(true);
+        when(authorizationService.canAccessClaim(user, 88L)).thenReturn(false);
+
+        assertThat(guard.canCalculateCoverage(55L, null)).isTrue();
+        assertThat(guard.canCalculateCoverage(55L, 88L)).isFalse();
+
+        when(authorizationService.canAccessClaim(user, 88L)).thenReturn(true);
+        assertThat(guard.canCalculateCoverage(55L, 88L)).isTrue();
+    }
 }

@@ -44,6 +44,12 @@ public class ClaimAccessGuard {
         return user != null && authorizationService.canAccessMember(user, memberId);
     }
 
+    public boolean canCalculateCoverage(Long memberId, Long excludeClaimId) {
+        if (!canReadMemberFor("CLAIM_VIEW", memberId)) return false;
+        if (excludeClaimId == null) return true;
+        return hasScopedClaimAccess("CLAIM_VIEW", excludeClaimId);
+    }
+
     public boolean canAccessBatch(String permission, Long providerId, Long employerId) {
         if (permission == null || !permissionGuard.has(permission)) return false;
         var user = authorizationService.getCurrentUser();

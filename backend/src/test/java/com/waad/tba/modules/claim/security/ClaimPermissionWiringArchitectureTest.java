@@ -28,6 +28,8 @@ class ClaimPermissionWiringArchitectureTest {
             "src/main/java/com/waad/tba/modules/claim/controller/ReviewerScopeController.java");
     private static final Path LEGACY_RECONCILIATION = Path.of(
             "src/main/java/com/waad/tba/modules/claim/controller/ClaimLegacyReconciliationController.java");
+    private static final Path COVERAGE_ENGINE = Path.of(
+            "src/main/java/com/waad/tba/modules/claim/controller/CoverageEngineController.java");
 
     @Test
     void resourceMutationsUseClaimAccessGuardInsteadOfRoles() throws Exception {
@@ -107,6 +109,14 @@ class ClaimPermissionWiringArchitectureTest {
                 .doesNotContain("hasRole(", "hasAnyRole(", "isAuthenticated()");
         assertThat(reconciliation)
                 .contains("@permissionGuard.has('DANGER_ZONE_EXECUTE')")
+                .doesNotContain("hasRole(", "hasAnyRole(", "isAuthenticated()");
+    }
+
+    @Test
+    void coverageCalculationIsBoundToMemberAndExcludedClaimScope() throws Exception {
+        String source = Files.readString(COVERAGE_ENGINE);
+        assertThat(source)
+                .contains("@claimAccessGuard.canCalculateCoverage(#request.memberId, #request.excludeClaimId)")
                 .doesNotContain("hasRole(", "hasAnyRole(", "isAuthenticated()");
     }
 }
