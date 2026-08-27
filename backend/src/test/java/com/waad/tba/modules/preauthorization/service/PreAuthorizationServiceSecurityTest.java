@@ -11,7 +11,6 @@ import com.waad.tba.security.AuthorizationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.mockito.InjectMocks;
@@ -24,7 +23,6 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
@@ -184,6 +182,37 @@ class PreAuthorizationServiceSecurityTest {
 
         verify(preAuthorizationRepository, never()).findForOperationalReport(
                 null, 88L, null, null, null, pageable);
+    }
+
+    @Test
+    void statusListingDelegatesToScopedOperationalReport() {
+        var pageable = PageRequest.of(0, 20);
+        givenEmployerScope(77L);
+        when(preAuthorizationRepository.findForOperationalReport(
+                PreAuthStatus.SUBMITTED, 77L, null, null, null, pageable))
+                .thenReturn(new PageImpl<>(List.of(), pageable, 0));
+
+        service.getPreAuthorizationsByStatus(PreAuthStatus.SUBMITTED, pageable);
+
+        verify(preAuthorizationRepository).findForOperationalReport(
+                PreAuthStatus.SUBMITTED, 77L, null, null, null, pageable);
+        verify(preAuthorizationRepository, never()).findByStatusAndActiveTrue(
+                PreAuthStatus.SUBMITTED, pageable);
+    }
+
+    @Test
+    void searchUsesAuthorizedScopeInDatabaseQuery() {
+        var pageable = PageRequest.of(0, 20);
+        givenProviderScope(251L);
+        when(preAuthorizationRepository.searchScoped(
+                "PA-77", "PROVIDERS", java.util.Set.of(251L), pageable))
+                .thenReturn(new PageImpl<>(List.of(), pageable, 0));
+
+        service.search("  PA-77  ", pageable);
+
+        verify(preAuthorizationRepository).searchScoped(
+                "PA-77", "PROVIDERS", java.util.Set.of(251L), pageable);
+        verify(preAuthorizationRepository, never()).search("  PA-77  ", pageable);
     }
 
     private void givenProviderScope(Long providerId) {

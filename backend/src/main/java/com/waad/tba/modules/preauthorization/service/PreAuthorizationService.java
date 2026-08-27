@@ -1116,8 +1116,7 @@ public class PreAuthorizationService {
      */
     @Transactional(readOnly = true)
     public Page<PreAuthorizationResponseDto> getPreAuthorizationsByStatus(PreAuthStatus status, Pageable pageable) {
-        Page<PreAuthorization> preAuths = preAuthorizationRepository.findByStatusAndActiveTrue(status, pageable);
-        return preAuths.map(this::mapToResponseDtoLight);
+        return getOperationalReport(status, null, null, null, null, null, pageable);
     }
 
     /**
@@ -1492,9 +1491,14 @@ public class PreAuthorizationService {
     public Page<PreAuthorizationResponseDto> search(String query, Pageable pageable) {
         log.debug("Searching pre-authorizations with query: {}", query);
         if (query == null || query.isBlank()) {
-            return getAllPreAuthorizations(pageable);
+            return getOperationalReport(null, null, null, null, null, null, pageable);
         }
-        return preAuthorizationRepository.search(query, pageable)
+        AuthorizedPreAuthScope accessScope = preAuthAccessScopeResolver.requireViewScope();
+        java.util.Collection<Long> queryScopeIds = accessScope.isGlobal()
+                ? java.util.Set.of(-1L)
+                : accessScope.ids();
+        return preAuthorizationRepository.searchScoped(
+                        query.trim(), accessScope.kind().name(), queryScopeIds, pageable)
                 .map(pa -> mapToResponseDto(pa,
                         memberRepository.findById(pa.getMemberId()).orElse(null),
                         providerRepository.findById(pa.getProviderId()).orElse(null),

@@ -17,7 +17,11 @@ class PreAuthOperationalReportScopeArchitectureTest {
         String source = Files.readString(CONTROLLER).replace("\r\n", "\n");
 
         assertThat(source).contains(
-                "@GetMapping\n    @PreAuthorize(\"@permissionGuard.has('PREAUTH_VIEW')\")");
+                "@GetMapping\n    @PreAuthorize(\"@permissionGuard.has('PREAUTH_VIEW')\")",
+                "@GetMapping(\"/member/{memberId}\")\n    @PreAuthorize(\"@permissionGuard.has('PREAUTH_VIEW')\")",
+                "@GetMapping(\"/status/{status}\")\n    @PreAuthorize(\"@permissionGuard.has('PREAUTH_VIEW')\")",
+                "@GetMapping(\"/search\")\n    @PreAuthorize(\"@permissionGuard.has('PREAUTH_VIEW')\")",
+                "@GetMapping(\"/inbox/pending\")\n    @PreAuthorize(\"@permissionGuard.has('PREAUTH_REVIEW')\")");
     }
 
     @Test
@@ -36,5 +40,16 @@ class PreAuthOperationalReportScopeArchitectureTest {
                 .doesNotContain("authorizationService.isReviewer")
                 .doesNotContain("providerContextGuard.enforceProviderId")
                 .doesNotContain("reviewerIsolationService.getAllowedProviderIds");
+    }
+
+    @Test
+    void statusAndSearchCannotBypassTheAuthorizedScope() throws Exception {
+        String source = Files.readString(SERVICE);
+
+        assertThat(source)
+                .contains("return getOperationalReport(status, null, null, null, null, null, pageable)")
+                .contains("preAuthorizationRepository.searchScoped(")
+                .doesNotContain("preAuthorizationRepository.search(query, pageable)")
+                .doesNotContain("preAuthorizationRepository.findByStatusAndActiveTrue(status, pageable)");
     }
 }

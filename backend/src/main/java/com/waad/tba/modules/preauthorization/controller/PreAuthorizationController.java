@@ -424,7 +424,7 @@ public class PreAuthorizationController {
      * Ordered by createdAt ASC (FIFO - First In First Out) by default.
      */
     @GetMapping("/inbox/pending")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
+    @PreAuthorize("@permissionGuard.has('PREAUTH_REVIEW')")
     public ResponseEntity<ApiResponse<Page<PreAuthorizationResponseDto>>> getPendingInbox(
             @RequestParam(name = "page", defaultValue = "1") int page,
             @RequestParam(name = "size", defaultValue = "20") int size,
@@ -488,7 +488,7 @@ public class PreAuthorizationController {
      * GET /api/pre-authorizations/member/{memberId}
      */
     @GetMapping("/member/{memberId}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
+    @PreAuthorize("@permissionGuard.has('PREAUTH_VIEW')")
     public ResponseEntity<PaginationResponse<PreAuthorizationResponseDto>> getPreAuthorizationsByMember(
             @PathVariable("memberId") Long memberId,
             @RequestParam(name = "page", defaultValue = "0") int page,
@@ -540,7 +540,7 @@ public class PreAuthorizationController {
      * GET /api/pre-authorizations/status/{status}
      */
     @GetMapping("/status/{status}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
+    @PreAuthorize("@permissionGuard.has('PREAUTH_VIEW')")
     public ResponseEntity<PaginationResponse<PreAuthorizationResponseDto>> getPreAuthorizationsByStatus(
             @PathVariable("status") String status,
             @RequestParam(name = "page", defaultValue = "0") int page,
@@ -720,7 +720,7 @@ public class PreAuthorizationController {
      * GET /api/v1/pre-authorizations/search
      */
     @GetMapping("/search")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
+    @PreAuthorize("@permissionGuard.has('PREAUTH_VIEW')")
     public ResponseEntity<ApiResponse<Page<PreAuthorizationResponseDto>>> searchPreAuthorizations(
             @RequestParam(name = "q", required = false) String query,
             @RequestParam(name = "page", defaultValue = "0") int page,
