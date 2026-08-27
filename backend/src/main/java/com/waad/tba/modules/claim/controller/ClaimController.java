@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.waad.tba.common.dto.ApiResponse;
+import com.waad.tba.common.dto.ReasonRequest;
 import com.waad.tba.modules.claim.api.ClaimApiMapper;
 import com.waad.tba.modules.claim.api.request.ApproveClaimRequest;
 import com.waad.tba.modules.claim.api.request.PauseClaimReviewRequest;
@@ -234,7 +235,8 @@ public class ClaimController {
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'DATA_ENTRY', 'PROVIDER_STAFF')")
     public ResponseEntity<ApiResponse<Void>> deleteClaim(
             @PathVariable("id") Long id,
-            @RequestParam(name = "reason", required = false) String reason) {
+            @RequestBody(required = false) ReasonRequest reasonRequest) {
+                String reason = ReasonRequest.reasonOf(reasonRequest);
         claimService.deleteClaim(id, reason);
         return ResponseEntity.ok(ApiResponse.success("تم إلغاء المطالبة بنجاح", null));
     }
