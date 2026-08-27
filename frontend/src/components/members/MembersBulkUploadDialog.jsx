@@ -16,12 +16,10 @@ import {
   FormControlLabel,
   Checkbox
 } from '@mui/material';
-import {
-  CloudUpload as CloudUploadIcon,
-  Close as CloseIcon,
-  Download as DownloadIcon,
-  InsertDriveFile as FileIcon
-} from '@mui/icons-material';
+import CloudUploadIcon from '@mui/icons-material/CloudUpload';
+import CloseIcon from '@mui/icons-material/Close';
+import DownloadIcon from '@mui/icons-material/Download';
+import FileIcon from '@mui/icons-material/InsertDriveFile';
 import { useSnackbar } from 'notistack';
 import { downloadTemplate, previewImport, executeImport } from 'services/api/unified-members.service';
 import EmployerFilterSelector from 'components/tba/EmployerFilterSelector';

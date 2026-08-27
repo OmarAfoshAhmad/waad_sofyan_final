@@ -1,6 +1,7 @@
 import React from 'react';
 import { Box, Button, Typography, alpha, Tooltip } from '@mui/material';
-import { Block as RejectIcon, WarningAmber as WarnIcon } from '@mui/icons-material';
+import RejectIcon from '@mui/icons-material/Block';
+import WarnIcon from '@mui/icons-material/WarningAmber';
 
 export const ClaimTotalsFooter = ({
   isClaimRejected,
