@@ -129,7 +129,43 @@ public class SecurityConfig {
                         .anyRequest().authenticated())
 
                 // Allow framing for report previews
-                .headers(headers -> headers.frameOptions(frameOptions -> frameOptions.sameOrigin()))
+                .headers(headers -> headers
+                        // Report previews are embedded by the app itself.
+                        .frameOptions(frameOptions -> frameOptions.sameOrigin())
+
+                        // The complement to keeping secrets out of the query
+                        // string: the paths that remain still carry member ids,
+                        // and search filters still carry identifiers. Without
+                        // this, the browser attaches the full URL to requests
+                        // leaving for any other origin.
+                        .referrerPolicy(referrer -> referrer.policy(
+                                org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter
+                                        .ReferrerPolicy.NO_REFERRER))
+
+                        // Stops a browser from second-guessing a declared
+                        // content type -- the step that turns an uploaded file
+                        // served back as JSON into executable script.
+                        .contentTypeOptions(contentType -> {})
+
+                        // Only meaningful over TLS, which is where production
+                        // runs; harmless on plain HTTP in development.
+                        .httpStrictTransportSecurity(hsts -> hsts
+                                .includeSubDomains(true)
+                                .maxAgeInSeconds(31536000))
+
+                        // This service answers with JSON and serves no
+                        // third-party assets. 'self' still covers the
+                        // SUPER_ADMIN-only Swagger UI, which loads its bundle
+                        // from this same origin.
+                        .contentSecurityPolicy(csp -> csp.policyDirectives(
+                                "default-src 'self'; object-src 'none'; base-uri 'self'; "
+                                        + "frame-ancestors 'self'"))
+
+                        // Hardware and location APIs have no part in this
+                        // application; denying them costs nothing and removes
+                        // a class of prompt entirely.
+                        .permissionsPolicyHeader(permissions -> permissions.policy(
+                                "camera=(), microphone=(), geolocation=(), payment=()")))
 
                 // Session management configuration
                 .sessionManagement(session -> session
