@@ -37,8 +37,8 @@
 |----|---------|-------|--------|
 | S-01 | CRITICAL | تسجيل ذاتي عام + دور افتراضي `DATA_ENTRY` ⟶ سلسلة تصعيد من الإنترنت | **FIXED** (م1 + م2) |
 | S-02 | CRITICAL | `PreAuthPortalController` بلا `@PreAuthorize` ولا `FeatureGuard` ويكتب فعلياً | **FIXED** |
-| S-03 | HIGH | `providerId`/`memberId` من جسم الطلب ⟶ IDOR/BOLA | OPEN |
-| S-04 | HIGH | لا `PreAuthAccessScopeResolver` مقابل نظيره في المستفيدين | OPEN |
+| S-03 | HIGH | `providerId`/`memberId` من جسم الطلب ⟶ IDOR/BOLA | **FIXED** (providerId) |
+| S-04 | HIGH | لا `PreAuthAccessScopeResolver` مقابل نظيره في المستفيدين | **FIXED** |
 | S-05 | HIGH | مساران متوازيان للمصادقة (Session + JWT) | OPEN |
 | S-06 | MEDIUM | كوكي الجلسة بلا `Secure` ولا `SameSite` | OPEN |
 | S-07 | LOW | مراجعة عامل عمل BCrypt | OPEN |
@@ -305,3 +305,81 @@ Expecting throwable message: "Access Denied"  to contain: "المستفيد"
 `providerId` و`memberId` ما زالا يأتيان من جسم الطلب لا من هوية المستدعي، فحاملُ
 `PREAUTH_CREATE` يستطيع الكتابة باسم مزوّد آخر. هذه **S-03**، ولا تُصلَح دون
 محلّل النطاق في **S-04**.
+
+---
+
+## المرحلتان 4 و5 — محلّل النطاق وإزالة IDOR
+
+**الحالة:** مكتملتان ✅ — نُفِّذتا معاً لأن محلّلاً بلا مستهلك كود ميت.
+
+### النموذج
+
+`PreAuthAccessScope` — على غرار `MemberAccessScope` عمداً: هو المكوّن الذي أوقف
+سلسلة S-01 عن بلوغ بيانات المستفيدين، ونموذج نطاق ثانٍ بقواعد مختلفة يعني
+شيئاً ثانياً يُفكَّر فيه تحت الضغط.
+
+| Kind | المعنى |
+|---|---|
+| `GLOBAL` | مدير النظام والمراجعون |
+| `PROVIDERS` | موظف مقدم الخدمة — محدود بمرفقه |
+| `EMPLOYERS` | مدير جهة العمل — محدود بجهته |
+| `DENIED` | كل ما عدا ذلك، وكل نطاق غير محدد |
+
+الموافقة المسبقة تقع على **محورين** في آن: المزوّد الذي قدّمها، وجهة عمل
+المستفيد الذي طُلبت له. لذا `covers(providerId, employerId)`.
+
+### قرار سياسة موثَّق: المراجعون عالميون
+
+`isReviewer` ⟶ `GLOBAL`. مراجعة الطلبات عبر كل المزوّدين **هي العمل نفسه**، لا
+تصعيد صلاحية؛ ومراجع محدود بجهة واحدة لا يستطيع تشغيل الصندوق أصلاً. والمنح
+أضيق مما يبدو: نقاط المراجعة تشترط `PREAUTH_REVIEW`/`PREAUTH_APPROVE` فوقه،
+**والنطاق لا يمنح عملية أبداً**.
+
+هذا يختلف عن `MemberAccessScopeResolver` الذي يحصر المراجع بجهته — لأن ذاك يحكم
+بيانات المستفيدين لا صندوق المراجعة.
+
+### إزالة IDOR
+
+```java
+// قبل
+Long providerId = Long.valueOf(payload.get("providerId").toString());
+
+// بعد
+PreAuthAccessScope scope = scopeResolver.resolve();
+if (scope.isDenied()) throw new AccessDeniedException(scope.reason());
+Long providerId = scope.singleProviderId().orElse(null);   // المزوّد يكتب كنفسه
+// ومن له نطاق أوسع يجب أن يسمّي المزوّد صراحةً، ويُرفض أي مزوّد خارج نطاقه
+```
+
+**حساب المزوّد لا يستطيع تسمية أحد غيره — حتى لو سمّى نفسه بشكل صحيح.** قبول
+معرّف مطابق كان سيُبقي النقطة تثق بالجسم، وهي عين العلّة.
+
+### الاختبارات
+
+`PreAuthAccessScopeResolverTest` — 12 اختباراً (مصفوفة الأدوار كاملة).
+`PreAuthPortalProviderScopeTest` — 4 اختبارات تكامل بمزوّدَين حقيقيين:
+
+| الاختبار | يثبت |
+|---|---|
+| `providerCannotFileInAnotherProvidersName` | **لا صف** تحت المزوّد الأجنبي |
+| `theRequestIsFiledUnderTheAuthenticatedProviderNotTheClaimedOne` | الصف يقع تحت المستدعي |
+| `aProviderNeedNotSupplyItsOwnIdAtAll` | الجسم لم يعد يحمل ما تعرفه الجلسة |
+| `anAccountWithNoProviderScopeIsRefusedRatherThanDefaulted` | مزوّد بلا مرفق = رفض لا عالمية |
+
+### ملاحظة تشغيلية
+
+أعلام `PROVIDER_PORTAL_ENABLED` و`DIRECT_PREAUTH_SUBMISSION_ENABLED` مبذورة
+**معطّلة** في `V25` — افتراض إنتاجي سليم. اختبارات النطاق تفعّلها صراحةً، وإلا
+ردّ `FeatureGuard` بـ503 قبل بلوغ المنطق محل الاختبار.
+
+### النتيجة
+
+```
+م3:     Tests=1038  Failures=0
+م4+5:   Tests=1054  Failures=0     BUILD SUCCESS
+```
+
+### ما تبقّى
+
+`memberId` ما زال يأتي من الجسم. المحلّل جاهز لفحصه (`covers` يقبل محور جهة
+العمل)، لكن ربطه يحتاج حلّ جهة عمل المستفيد بتاريخ الخدمة — وهو عمل المرحلة 6.

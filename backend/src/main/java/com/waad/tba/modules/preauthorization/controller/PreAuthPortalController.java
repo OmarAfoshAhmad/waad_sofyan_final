@@ -21,6 +21,10 @@ import java.time.LocalDate;
 
 import com.waad.tba.common.exception.BusinessRuleException;
 import com.waad.tba.common.guard.FeatureGuard;
+import com.waad.tba.security.AuthorizationService;
+import com.waad.tba.modules.preauthorization.security.PreAuthAccessScope;
+import com.waad.tba.modules.preauthorization.security.PreAuthAccessScopeResolver;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -57,6 +61,8 @@ public class PreAuthPortalController {
 
     private final PreAuthorizationRepository preAuthorizationRepository;
     private final FeatureGuard featureGuard;
+    private final PreAuthAccessScopeResolver scopeResolver;
+    private final AuthorizationService authorizationService;
 
     @PostMapping
     @PreAuthorize("@permissionGuard.has('PREAUTH_CREATE')")
@@ -119,10 +125,39 @@ public class PreAuthPortalController {
         }
         Long memberId = Long.valueOf(memberData.get("id").toString());
 
-        if (payload.get("providerId") == null) {
-            throw new BusinessRuleException("لا يمكن إنشاء طلب موافقة مسبقة دون تحديد مقدم الخدمة.");
+        // S-03. providerId used to be read straight from the body, so anyone
+        // holding PREAUTH_CREATE could file a request in another provider's
+        // name -- the request decided whose it was. The authenticated identity
+        // decides now.
+        //
+        // A provider account writes as itself and may not name anyone else,
+        // even correctly: accepting a matching id would still leave the
+        // endpoint trusting the body. A caller with wider reach (an
+        // administrator acting for a provider) has no single provider to
+        // infer, so it must say which one, and the resolver refuses any
+        // provider outside its scope.
+        Long claimedProviderId = payload.get("providerId") == null
+                ? null
+                : Long.valueOf(payload.get("providerId").toString());
+
+        PreAuthAccessScope scope = scopeResolver.resolve();
+        if (scope.isDenied()) {
+            throw new AccessDeniedException(scope.reason());
         }
-        Long providerId = Long.valueOf(payload.get("providerId").toString());
+
+        Long providerId = scope.singleProviderId().orElse(null);
+        if (providerId == null) {
+            if (claimedProviderId == null) {
+                throw new BusinessRuleException(
+                        "لا يمكن إنشاء طلب موافقة مسبقة دون تحديد مقدم الخدمة.");
+            }
+            PreAuthAccessScope narrowed = scopeResolver.resolveFor(
+                    authorizationService.getCurrentUser(), claimedProviderId);
+            if (narrowed.isDenied()) {
+                throw new AccessDeniedException(narrowed.reason());
+            }
+            providerId = claimedProviderId;
+        }
 
         if (lines == null || lines.isEmpty()) {
             throw new BusinessRuleException("لا يمكن إنشاء طلب موافقة مسبقة دون بنود.");
