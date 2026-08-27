@@ -47,6 +47,11 @@ public class LocalFileStorageService implements FileStorageService {
     @Value("${file.storage.max-size.image:52428800}") // 50MB
     private long maxImageSize;
 
+    // Medical imaging is legitimately large, but "large" is not "unbounded":
+    // this type was allow-listed with no ceiling of any kind.
+    @Value("${file.storage.max-size.medical:209715200}") // 200MB
+    private long maxMedicalSize;
+
     private Path uploadPath;
 
     // Allowed MIME types
@@ -63,6 +68,31 @@ public class LocalFileStorageService implements FileStorageService {
     private static final List<String> ALLOWED_MEDICAL_TYPES = Arrays.asList(
             "application/dicom",
             "application/x-dicom");
+
+    /**
+     * Extensions refused whatever Content-Type the client declares.
+     *
+     * The declared type is the uploader's word for it, and nothing more: a
+     * page of script sent as image/png passes a MIME allowlist unchanged. The
+     * extension is what a web server, a proxy, or a colleague's desktop will
+     * later use to decide what this file *is*, so it has to agree.
+     */
+    private static final List<String> FORBIDDEN_EXTENSIONS = Arrays.asList(
+            "html", "htm", "xhtml", "shtml", "svg", "xml",
+            "js", "mjs", "jsp", "jspx", "php", "phtml", "asp", "aspx", "cgi", "pl", "py", "rb",
+            "exe", "dll", "so", "bat", "cmd", "com", "sh", "ps1", "msi", "jar", "class",
+            "htaccess");
+
+    /** Leading bytes each accepted type must actually begin with. */
+    private static final java.util.Map<String, byte[][]> MAGIC_BYTES = java.util.Map.of(
+            "application/pdf", new byte[][] { { 0x25, 0x50, 0x44, 0x46 } }, // %PDF
+            "image/jpeg", new byte[][] { { (byte) 0xFF, (byte) 0xD8, (byte) 0xFF } },
+            "image/jpg", new byte[][] { { (byte) 0xFF, (byte) 0xD8, (byte) 0xFF } },
+            "image/png", new byte[][] { { (byte) 0x89, 0x50, 0x4E, 0x47 } });
+
+    /** Bytes 128-131 of a DICOM file; anything shorter cannot be one. */
+    private static final byte[] DICOM_MAGIC = { 0x44, 0x49, 0x43, 0x4D };
+    private static final int DICOM_MAGIC_OFFSET = 128;
 
     @PostConstruct
     public void init() {
@@ -207,6 +237,98 @@ public class LocalFileStorageService implements FileStorageService {
         if (isDocumentType(contentType) && fileSize > maxDocumentSize) {
             throw new FileStorageException("Document file size exceeds limit: " + maxDocumentSize + " bytes");
         }
+
+        // Medical imaging was allow-listed without ever being size-checked:
+        // neither isImageType nor isDocumentType covers it, so a DICOM upload
+        // had no ceiling at all. Imaging is legitimately large, so it gets its
+        // own limit rather than being folded into the image one.
+        if (isMedicalType(contentType) && fileSize > maxMedicalSize) {
+            throw new FileStorageException("Medical file size exceeds limit: " + maxMedicalSize + " bytes");
+        }
+
+        rejectForbiddenExtension(file.getOriginalFilename());
+        verifyContentMatchesDeclaredType(file, contentType);
+    }
+
+    /**
+     * The extension has to be consistent with the content type the caller
+     * claims, because the two are read by different things at different times
+     * and only one of them is checked at upload.
+     */
+    private void rejectForbiddenExtension(String originalFilename) {
+        if (originalFilename == null) {
+            return;
+        }
+        int dot = originalFilename.lastIndexOf('.');
+        if (dot < 0 || dot == originalFilename.length() - 1) {
+            return;
+        }
+        String extension = originalFilename.substring(dot + 1).toLowerCase(java.util.Locale.ROOT);
+        if (FORBIDDEN_EXTENSIONS.contains(extension)) {
+            throw new FileStorageException("File extension not allowed: ." + extension);
+        }
+    }
+
+    /**
+     * Checks the bytes rather than the claim. Content-Type on a multipart part
+     * is supplied by whoever is uploading, so an allowlist built on it alone
+     * accepts anything as long as the label is right.
+     *
+     * Types with no stable signature (Word's OOXML container, DICOM variants
+     * that omit the preamble) are passed through: refusing what cannot be
+     * verified would reject legitimate clinical files, and the extension check
+     * plus the storage rules still apply to them.
+     */
+    private void verifyContentMatchesDeclaredType(MultipartFile file, String contentType) {
+        byte[][] signatures = MAGIC_BYTES.get(contentType);
+        if (signatures == null && !isMedicalType(contentType)) {
+            return;
+        }
+        try {
+            byte[] head = readHead(file, isMedicalType(contentType)
+                    ? DICOM_MAGIC_OFFSET + DICOM_MAGIC.length
+                    : 8);
+            if (isMedicalType(contentType)) {
+                // A DICOM file without the standard preamble is still valid;
+                // only contradict the claim when the preamble is present and
+                // says something else.
+                if (head.length >= DICOM_MAGIC_OFFSET + DICOM_MAGIC.length
+                        && !startsWithAt(head, DICOM_MAGIC, DICOM_MAGIC_OFFSET)) {
+                    throw new FileStorageException("File content does not match declared type: " + contentType);
+                }
+                return;
+            }
+            for (byte[] signature : signatures) {
+                if (startsWithAt(head, signature, 0)) {
+                    return;
+                }
+            }
+            throw new FileStorageException("File content does not match declared type: " + contentType);
+        } catch (IOException e) {
+            throw new FileStorageException("Could not read uploaded file for verification", e);
+        }
+    }
+
+    private byte[] readHead(MultipartFile file, int length) throws IOException {
+        try (java.io.InputStream in = file.getInputStream()) {
+            return in.readNBytes(length);
+        }
+    }
+
+    private static boolean startsWithAt(byte[] data, byte[] signature, int offset) {
+        if (data.length < offset + signature.length) {
+            return false;
+        }
+        for (int i = 0; i < signature.length; i++) {
+            if (data[offset + i] != signature[i]) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private boolean isMedicalType(String contentType) {
+        return ALLOWED_MEDICAL_TYPES.contains(contentType);
     }
 
     private boolean isAllowedType(String contentType) {

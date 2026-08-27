@@ -43,6 +43,7 @@
 | S-06 | MEDIUM→LOW | فجوة «آمن بالافتراض» في الملف الأساس (الإنتاج كان محصَّناً أصلاً) | **FIXED** |
 | S-07 | LOW | عامل عمل BCrypt الافتراضي (10) | **FIXED** |
 | S-09 | MEDIUM | رؤوس أمان ناقصة (لا `Referrer-Policy` ولا CSP) | **FIXED** |
+| S-10 | MEDIUM | الرفع يثق بـ`Content-Type` القادم من العميل، ولا سقف لحجم الملفات الطبية | **FIXED** |
 | S-08 | MEDIUM | مبررات حرة عن أشخاص مُعرَّفين في الروابط (تُسجَّل في سجلات الوصول والوكيل وتاريخ المتصفح) | **FIXED** |
 
 **Statuses:** `OPEN` → `MITIGATED` → `FIXED` → `VERIFIED`
@@ -725,8 +726,9 @@ secure: true   |   same-site: strict   |   http-only: true
 | 13 | لا بيانات حساسة في الروابط | `NoSensitiveDataInUrlsTest` (2) |
 | 14 | رؤوس الأمان تصل فعلاً | `SecurityHeadersTest` (5) |
 | 15 | كلفة التجزئة مقاسة ولا تُبطل القائم | `PasswordHashingStrengthTest` (3) |
+| 16 | الرفع يُفحص بالبايتات لا بالادعاء | `UploadContentValidationTest` (7) |
 
-**المجموع: 54 اختبار انحدار أمني.**
+**المجموع: 61 اختبار انحدار أمني.**
 
 ## مُتحقَّقة بالفحص (لا تعديل)
 
@@ -749,7 +751,7 @@ secure: true   |   same-site: strict   |   http-only: true
 | مرشّحات البحث (`nationalNumber`…) | العلاج تنقية سجلات الوصول أو تجزئة المعرّف — قرار تشغيلي |
 | ترحيل تجزئات كلمات المرور القائمة | يحتاج إعادة تجزئة عند الدخول الناجح |
 | تنظيف سباكة JWT الميتة | تنظيف لا ثغرة؛ فُصل عمداً عن commits أمنية |
-| رفع الملفات (م18) | لم يُفحص بعد |
+
 | مصفوفة التصعيد الكاملة (م29–30) | تحتاج بيانات متعددة المستأجرين |
 
 ---
@@ -777,3 +779,66 @@ git diff --check: نظيف
 ```
 
 **لا يُعتبر أي بند مغلقاً تشغيلياً قبل الدمج والنشر ودورة المتصفح.**
+
+---
+
+## المرحلة 18 — أمن رفع الملفات (S-10)
+
+**الحالة:** مكتملة ✅
+
+### ما كان سليماً
+
+اجتياز المسار (`path traversal`) محمي بثلاث طبقات: `cleanPath` ثم إزالة `..`
+و`/` ثم تحقق `startsWith(uploadPath)` على المجلد والهدف معاً. واسم الملف يُسبَق
+بـUUID. و`SVG` لم يكن في قائمة السماح أصلاً.
+
+### الفجوات الثلاث
+
+| # | الفجوة | الأثر |
+|---|---|---|
+| 1 | القبول يعتمد `file.getContentType()` | ترويسة يرسلها العميل — صفحة سكربت تُرفع كـ`image/png` وتمرّ كما هي |
+| 2 | لا فحص للامتداد | `invoice.png.html` يحتفظ بامتداده عبر التنقية |
+| 3 | `ALLOWED_MEDICAL_TYPES` بلا سقف حجم | لا `isImageType` ولا `isDocumentType` يغطيه ⟶ **رفع DICOM بلا حد إطلاقاً** |
+
+### ما تغيّر
+
+**فحص البايتات لا الادعاء** — تُقرأ بداية الملف وتُطابَق التوقيع:
+
+| النوع | التوقيع |
+|---|---|
+| PDF | `%PDF` |
+| JPEG | `FF D8 FF` |
+| PNG | `89 50 4E 47` |
+| DICOM | `DICM` عند الإزاحة 128 |
+
+الأنواع بلا توقيع مستقر (حاوية OOXML لوورد، صيغ DICOM بلا مقدّمة) تمرّ — رفض ما
+لا يمكن التحقق منه كان سيرفض ملفات سريرية مشروعة، ويبقى فحص الامتداد وقواعد
+التخزين ساريَين عليها.
+
+**قائمة امتدادات محظورة** بغضّ النظر عن النوع المُعلَن: `html`, `svg`, `js`,
+`php`, `jsp`, `exe`, `sh`, `jar`, `htaccess`… — لأن الامتداد هو ما سيستخدمه خادم
+ويب أو وكيل أو سطح مكتب زميل لاحقاً ليقرر **ما هذا الملف**، فيجب أن يتفق مع
+الادعاء.
+
+**سقف للملفات الطبية**: `file.storage.max-size.medical` (200MB افتراضاً).
+التصوير الطبي كبير مشروعاً — لكن «كبير» ليست «بلا حد».
+
+### الاختبارات
+
+`UploadContentValidationTest` — 7، تغطي الاتجاهين:
+
+| الاختبار | يثبت |
+|---|---|
+| `scriptDisguisedAsAnImageIsRejectedOnItsBytes` | الانتحال يُكشف |
+| `aDangerousExtensionIsRefusedEvenWithAConvincingContentType` | `invoice.png.html` يُرفض |
+| `anSvgIsRefusedBecauseItCarriesScript` | SVG مرفوض صراحةً |
+| `aGenuineImageIsStillAccepted` · `aGenuinePdfIsStillAccepted` | **لم نكسر الرفع المشروع** |
+| `medicalImagingNowHasASizeCeiling` | السقف الغائب صار قائماً |
+| `pathTraversalInTheFilenameCannotEscapeTheUploadDirectory` | الحماية القائمة ما زالت تعمل |
+
+### النتيجة
+
+```
+م17:   Tests=1075  Failures=0
+م18:   Tests=1082  Failures=0     BUILD SUCCESS
+```
