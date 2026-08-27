@@ -36,3 +36,11 @@ logging:
     org.springframework.web: DEBUG
     org.hibernate.SQL: DEBUG
     org.flywaydb: DEBUG
+
+  # Local development serves the app over plain HTTP, where a Secure cookie is
+  # never sent at all. This override exists so that production can default to
+  # secure rather than inherit whatever development needed.
+  servlet:
+    session:
+      cookie:
+        secure: false

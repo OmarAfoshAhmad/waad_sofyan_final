@@ -25,7 +25,7 @@ export const updatePayment = async (id, data) => {
 };
 
 export const deletePayment = async (id, reason) => {
-  const response = await axiosClient.delete(`${BASE_URL}/${id}`, { params: { reason } });
+  const response = await axiosClient.delete(`${BASE_URL}/${id}`, { data: { reason } });
   return response?.data;
 };
 

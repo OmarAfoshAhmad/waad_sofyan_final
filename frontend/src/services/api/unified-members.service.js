@@ -297,7 +297,7 @@ export const deleteMember = async (id) => {
  */
 export const terminateMembership = async (id, reason) => {
   try {
-    await api.post(`${UNIFIED_MEMBERS_BASE_URL}/${id}/terminate`, null, { params: { reason } });
+    await api.post(`${UNIFIED_MEMBERS_BASE_URL}/${id}/terminate`, { reason });
   } catch (error) {
     console.error('Error terminating membership:', error);
     throw error;
@@ -328,7 +328,7 @@ export const bulkDeleteMembers = async (ids, reason) => {
  */
 export const restoreMember = async (id, reason) => {
   try {
-    const response = await api.put(`${UNIFIED_MEMBERS_BASE_URL}/${id}/restore`, null, { params: { reason } });
+    const response = await api.put(`${UNIFIED_MEMBERS_BASE_URL}/${id}/restore`, { reason });
     return response.data;
   } catch (error) {
     console.error('Error restoring member:', error);
@@ -350,7 +350,7 @@ export const restoreMember = async (id, reason) => {
  */
 export const toggleMemberActive = async (id, active, reason) => {
   try {
-    const response = await api.patch(`${UNIFIED_MEMBERS_BASE_URL}/${id}/active`, null, { params: { active, reason } });
+    const response = await api.patch(`${UNIFIED_MEMBERS_BASE_URL}/${id}/active`, { reason }, { params: { active } });
     return response.data;
   } catch (error) {
     console.error('Error toggling member active status:', error);
@@ -369,7 +369,7 @@ export const toggleMemberActive = async (id, active, reason) => {
  */
 export const reinstateTerminatedMember = async (id, reason) => {
   try {
-    const response = await api.put(`${UNIFIED_MEMBERS_BASE_URL}/${id}/reinstate`, null, { params: { reason } });
+    const response = await api.put(`${UNIFIED_MEMBERS_BASE_URL}/${id}/reinstate`, { reason });
     return response.data;
   } catch (error) {
     console.error('Error reinstating terminated member:', error);
@@ -483,7 +483,7 @@ export const transferEmployerFamily = async (principalId, { newEmployerId, newPo
  */
 export const changeMemberStatus = async (id, status, reason) => {
   try {
-    const response = await api.patch(`${UNIFIED_MEMBERS_BASE_URL}/${id}/status`, null, { params: { status, reason } });
+    const response = await api.patch(`${UNIFIED_MEMBERS_BASE_URL}/${id}/status`, { reason }, { params: { status } });
     return response.data;
   } catch (error) {
     console.error('Error changing member status:', error);
@@ -503,7 +503,7 @@ export const changeMemberStatus = async (id, status, reason) => {
  */
 export const hardDeleteMember = async (id, reason) => {
   try {
-    await api.delete(`${UNIFIED_MEMBERS_BASE_URL}/${id}/hard`, { params: { reason } });
+    await api.delete(`${UNIFIED_MEMBERS_BASE_URL}/${id}/hard`, { data: { reason } });
   } catch (error) {
     console.error('Error physically deleting member:', error);
     throw error;

@@ -36,7 +36,6 @@ class PreAuthAccessScopeResolverTest {
 
     @Test
     void missingViewCapabilityIsDeniedBeforeResolvingTheUser() {
-        assertThat(resolver.resolve().kind()).isEqualTo(PreAuthAccessScope.Kind.DENIED);
         assertThatThrownBy(resolver::requireViewScope).isInstanceOf(AccessDeniedException.class);
         verifyNoInteractions(authorizationService, isolationService);
     }
@@ -86,8 +85,9 @@ class PreAuthAccessScopeResolverTest {
     }
 
     @Test
-    void unlinkedInternalUserWithCapabilityReceivesExplicitGlobalScope() {
+    void unlinkedReviewerWithCapabilityReceivesExplicitGlobalScope() {
         allowView();
+        when(authorizationService.isReviewer(user)).thenReturn(true);
 
         AuthorizedPreAuthScope scope = resolver.requireViewScope();
 

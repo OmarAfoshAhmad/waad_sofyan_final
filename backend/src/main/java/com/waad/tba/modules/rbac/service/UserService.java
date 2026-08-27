@@ -402,7 +402,13 @@ public class UserService {
         if (providerId != null) {
             return "PROVIDER_STAFF";
         }
-        return "DATA_ENTRY";
+        // No fallback. This used to return "DATA_ENTRY", so a request that
+        // named neither a role nor a scope produced an internal-staff account
+        // by omission. The two branches above still infer a role, but only
+        // from an explicit scope the caller supplied; with nothing at all to
+        // go on, the only safe answer is to refuse.
+        throw new IllegalArgumentException(
+                "يجب تحديد دور المستخدم صراحةً، أو ربطه بجهة عمل أو مقدم خدمة");
     }
 
     private void applyRoleBindings(User user, String userType, Long employerId, Long providerId) {

@@ -11,6 +11,7 @@ import com.waad.tba.modules.preauthorization.service.PreAuthorizationAttachmentS
 import com.waad.tba.common.file.FileResourceUtils;
 import com.waad.tba.common.guard.FeatureGuard;
 import com.waad.tba.common.dto.ApiResponse;
+import com.waad.tba.common.dto.ReasonRequest;
 import com.waad.tba.common.dto.PaginationResponse;
 import com.waad.tba.modules.rbac.entity.User;
 import com.waad.tba.security.AuthorizationService;
@@ -280,8 +281,9 @@ public class PreAuthorizationController {
     @PreAuthorize("@preAuthAccessGuard.canCancel(#id)")
     public ResponseEntity<ApiResponse<PreAuthorizationResponseDto>> cancelPreAuthorization(
             @PathVariable("id") Long id,
-            @RequestParam(name = "reason") String reason,
+            @RequestBody(required = false) ReasonRequest reasonRequest,
             Authentication authentication) {
+        String reason = ReasonRequest.reasonOf(reasonRequest);
         
         log.info("[API] Cancelling pre-authorization {}", id);
         

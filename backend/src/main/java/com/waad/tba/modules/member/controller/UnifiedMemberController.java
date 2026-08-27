@@ -1,6 +1,7 @@
 package com.waad.tba.modules.member.controller;
 
 import com.waad.tba.common.dto.ApiResponse;
+import com.waad.tba.common.dto.ReasonRequest;
 import com.waad.tba.common.dto.PaginationResponse;
 import com.waad.tba.common.exception.BusinessRuleException;
 import com.waad.tba.modules.member.dto.DependentMemberDto;
@@ -930,7 +931,8 @@ public class UnifiedMemberController {
         public ResponseEntity<ApiResponse<MemberViewDto>> setActive(
                         @PathVariable("id") Long id,
                         @RequestParam(name = "active") boolean active,
-                        @RequestParam(name = "reason", required = false) String reason) {
+                        @RequestBody(required = false) ReasonRequest reasonRequest) {
+                String reason = ReasonRequest.reasonOf(reasonRequest);
 
                 log.info("Setting active={} for member ID={}", active, id);
                 MemberViewDto updated = unifiedMemberService.toggleActive(id, active, reason);
@@ -949,7 +951,8 @@ public class UnifiedMemberController {
                         + "SUSPENDED member, this does not happen through the ordinary restore/active endpoints.")
         public ResponseEntity<ApiResponse<MemberViewDto>> reinstateTerminated(
                         @PathVariable("id") Long id,
-                        @RequestParam(name = "reason") String reason) {
+                        @RequestBody ReasonRequest reasonRequest) {
+                String reason = ReasonRequest.reasonOf(reasonRequest);
                 MemberViewDto updated = unifiedMemberService.reinstateTerminatedMember(id, reason);
                 return ResponseEntity.ok(ApiResponse.success("تمت إعادة العضوية المنتهية بنجاح", updated));
         }
@@ -993,7 +996,8 @@ public class UnifiedMemberController {
         public ResponseEntity<ApiResponse<MemberViewDto>> changeStatus(
                         @PathVariable("id") Long id,
                         @RequestParam(name = "status") Member.MemberStatus status,
-                        @RequestParam(name = "reason", required = false) String reason) {
+                        @RequestBody(required = false) ReasonRequest reasonRequest) {
+                String reason = ReasonRequest.reasonOf(reasonRequest);
 
                 log.info("Changing status to {} for member ID={}", status, id);
                 MemberViewDto updated = unifiedMemberService.changeStatus(id, status, reason);
@@ -1053,7 +1057,8 @@ public class UnifiedMemberController {
         })
         public ResponseEntity<ApiResponse<Void>> terminateMembership(
                         @PathVariable("id") Long id,
-                        @RequestParam(name = "reason") String reason) {
+                        @RequestBody ReasonRequest reasonRequest) {
+                String reason = ReasonRequest.reasonOf(reasonRequest);
 
                 log.info("Terminating membership: id={}", id);
 
@@ -1450,7 +1455,8 @@ public class UnifiedMemberController {
         @Operation(summary = "Reinstate Member", description = "Performs an audited status transition back to ACTIVE; a reason is mandatory")
         public ResponseEntity<ApiResponse<MemberViewDto>> restoreMember(
                         @PathVariable("id") Long id,
-                        @RequestParam(name = "reason") String reason) {
+                        @RequestBody ReasonRequest reasonRequest) {
+                String reason = ReasonRequest.reasonOf(reasonRequest);
                 log.info("♻️ Restore request: memberId={}", id);
 
                 MemberViewDto restored = unifiedMemberService.restoreMember(id, reason);
@@ -1471,7 +1477,8 @@ public class UnifiedMemberController {
                         + "and writes an independent (non-FK'd) audit record before deleting.")
         public ResponseEntity<ApiResponse<Void>> hardDeleteMember(
                         @PathVariable("id") Long id,
-                        @RequestParam(name = "reason") String reason) {
+                        @RequestBody ReasonRequest reasonRequest) {
+                String reason = ReasonRequest.reasonOf(reasonRequest);
                 log.warn("⚠️ HARD DELETE request: memberId={}", id);
 
                 unifiedMemberService.hardDeleteMember(id, reason);

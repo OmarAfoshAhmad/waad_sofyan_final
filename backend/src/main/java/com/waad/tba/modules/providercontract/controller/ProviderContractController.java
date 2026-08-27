@@ -21,6 +21,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.waad.tba.common.dto.ApiResponse;
+import com.waad.tba.common.dto.ReasonRequest;
 import com.waad.tba.modules.providercontract.dto.ProviderContractCreateDto;
 import com.waad.tba.modules.providercontract.dto.ProviderContractPricingItemCreateDto;
 import com.waad.tba.modules.providercontract.dto.ProviderContractPricingItemResponseDto;
@@ -439,7 +440,8 @@ public class ProviderContractController {
     @Operation(summary = "Suspend contract", description = "Suspend an active contract")
     public ResponseEntity<ApiResponse<ProviderContractResponseDto>> suspend(
             @Parameter(description = "Contract ID") @PathVariable("id") Long id,
-            @Parameter(description = "Suspension reason") @RequestParam(name = "reason", required = false) String reason) {
+            @Parameter(description = "Suspension reason") @RequestBody(required = false) ReasonRequest reasonRequest) {
+                String reason = ReasonRequest.reasonOf(reasonRequest);
 
         log.debug("REST request to suspend contract: {}", id);
         ProviderContractResponseDto result = contractService.suspend(id, reason);
@@ -455,7 +457,8 @@ public class ProviderContractController {
     @Operation(summary = "Terminate contract", description = "Terminate a contract permanently")
     public ResponseEntity<ApiResponse<ProviderContractResponseDto>> terminate(
             @Parameter(description = "Contract ID") @PathVariable("id") Long id,
-            @Parameter(description = "Termination reason") @RequestParam(name = "reason", required = false) String reason) {
+            @Parameter(description = "Termination reason") @RequestBody(required = false) ReasonRequest reasonRequest) {
+                String reason = ReasonRequest.reasonOf(reasonRequest);
 
         log.debug("REST request to terminate contract: {}", id);
         ProviderContractResponseDto result = contractService.terminate(id, reason);
