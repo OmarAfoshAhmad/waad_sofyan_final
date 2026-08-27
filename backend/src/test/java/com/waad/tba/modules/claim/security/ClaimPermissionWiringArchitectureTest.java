@@ -27,4 +27,10 @@ class ClaimPermissionWiringArchitectureTest {
         String source = Files.readString(CONTROLLER).replace("\r\n", "\n");
         assertThat(source).contains("@PutMapping(\"/{id:\\\\d+}\")\n    @PreAuthorize(\"denyAll()\")");
     }
+
+    @Test
+    void controllerContainsNoRoleBasedFallbacks() throws Exception {
+        String source = Files.readString(CONTROLLER);
+        assertThat(source).doesNotContain("hasRole(", "hasAnyRole(");
+    }
 }

@@ -199,7 +199,7 @@ public class ClaimController {
     }
 
     @GetMapping
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@claimAccessGuard.canList('CLAIM_VIEW')")
     @Operation(summary = "List claims", description = "List claims with pagination and optional filtering")
     public ResponseEntity<ApiResponse<ClaimListResponse>> listClaims(
             @RequestParam(name = "employerId", required = false) Long employerId,
@@ -254,7 +254,7 @@ public class ClaimController {
     }
 
     @GetMapping("/deleted")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY', 'MEDICAL_REVIEWER', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF')")
+    @PreAuthorize("@claimAccessGuard.canList('CLAIM_VIEW')")
     public ResponseEntity<ApiResponse<ClaimListResponse>> listDeletedClaims(
             @RequestParam(name = "employerId", required = false) Long employerId,
             @RequestParam(name = "providerId", required = false) Long providerId,
@@ -268,7 +268,7 @@ public class ClaimController {
     }
 
     @GetMapping("/count")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@claimAccessGuard.canList('CLAIM_VIEW')")
     public ResponseEntity<ApiResponse<Long>> countClaims(
             @RequestParam(name = "employerId", required = false) Long employerId) {
         long count = claimService.countClaims(employerId);
@@ -276,7 +276,7 @@ public class ClaimController {
     }
 
     @GetMapping("/search")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@claimAccessGuard.canList('CLAIM_VIEW')")
     public ResponseEntity<ApiResponse<List<ClaimViewDto>>> search(
             @RequestParam(name = "employerId", required = false) Long employerId,
             @RequestParam(name = "query") String query) {
@@ -285,7 +285,7 @@ public class ClaimController {
     }
 
     @GetMapping("/member/{memberId}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF', 'DATA_ENTRY', 'ACCOUNTANT')")
+    @PreAuthorize("@claimAccessGuard.canReadMember(#memberId)")
     @Operation(summary = "Get claims by member", description = "Retrieve all claims for a specific member")
     public ResponseEntity<ApiResponse<List<ClaimResponse>>> getClaimsByMember(@PathVariable("memberId") Long memberId) {
         List<ClaimViewDto> claims = claimService.getClaimsByMember(memberId);
@@ -296,7 +296,7 @@ public class ClaimController {
     }
 
     @GetMapping("/pre-authorization/{preAuthorizationId}")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@claimAccessGuard.canList('CLAIM_VIEW')")
     @Operation(summary = "Get claims by pre-authorization", description = "Retrieve all claims linked to a pre-authorization")
     public ResponseEntity<ApiResponse<List<ClaimResponse>>> getClaimsByPreAuthorization(
             @PathVariable("preAuthorizationId") Long preAuthorizationId) {
@@ -470,7 +470,7 @@ public class ClaimController {
      * Returns claims in SUBMITTED or UNDER_REVIEW status.
      */
     @GetMapping("/inbox/pending")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@claimAccessGuard.canList('CLAIM_REVIEW')")
     @Operation(summary = "Claims pending review", description = "Get claims awaiting review (SUBMITTED or UNDER_REVIEW status)")
     public ResponseEntity<ApiResponse<ClaimListResponse>> getPendingClaims(
             @RequestParam(name = "page", defaultValue = "1") int page,
@@ -491,7 +491,7 @@ public class ClaimController {
      * Get approved claims ready for settlement (Inbox for finance).
      */
     @GetMapping("/inbox/approved")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@claimAccessGuard.canList('SETTLEMENT_VIEW')")
     @Operation(summary = "Claims ready for settlement", description = "Get approved claims awaiting settlement (APPROVED status)")
     public ResponseEntity<ApiResponse<ClaimListResponse>> getApprovedClaims(
             @RequestParam(name = "page", defaultValue = "1") int page,
@@ -533,7 +533,7 @@ public class ClaimController {
      * Returns a single claim by its unique identifier.
      */
     @GetMapping("/number/{claimNumber}")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@claimAccessGuard.canReadClaimNumber(#claimNumber)")
     @Operation(summary = "Get claim by number", description = "Retrieve a claim by its unique claim number")
     public ResponseEntity<ApiResponse<ClaimResponse>> getClaimByNumber(@PathVariable("claimNumber") Long claimNumber) {
         ClaimViewDto claim = claimService.getClaimByNumber(claimNumber);
@@ -546,7 +546,7 @@ public class ClaimController {
      * Returns claims filtered by their status.
      */
     @GetMapping("/status/{status}")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@claimAccessGuard.canList('CLAIM_VIEW')")
     @Operation(summary = "Get claims by status", description = "Retrieve claims filtered by status with pagination")
     public ResponseEntity<ApiResponse<ClaimListResponse>> getClaimsByStatus(
             @PathVariable("status") ClaimStatus status,
@@ -568,7 +568,7 @@ public class ClaimController {
      * Calculates KPIs server-side for accuracy and performance.
      */
     @GetMapping("/financial-summary")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@claimAccessGuard.canList('CLAIM_VIEW')")
     @Operation(summary = "Get financial summary", description = "Get aggregated financial KPIs for reports with filtering support.")
     public ResponseEntity<ApiResponse<FinancialSummaryDto>> getFinancialSummary(
             @RequestParam(name = "employerId", required = false) Long employerId,

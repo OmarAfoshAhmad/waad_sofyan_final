@@ -1006,6 +1006,13 @@ public class ClaimService {
             claims = claims.stream().filter(c -> providerId.equals(c.getProviderId())).collect(Collectors.toList());
         }
 
+        if (reviewerIsolationService.isSubjectToIsolation(currentUser)) {
+            List<Long> allowedProviderIds = reviewerIsolationService.getAllowedProviderIds(currentUser);
+            claims = claims.stream()
+                    .filter(c -> allowedProviderIds.contains(c.getProviderId()))
+                    .collect(Collectors.toList());
+        }
+
         return claims.stream()
                 .map(claimMapper::toViewDto)
                 .collect(Collectors.toList());
@@ -1026,8 +1033,12 @@ public class ClaimService {
         List<Claim> claims = claimRepository.findByPreAuthorizationId(preAuthorizationId);
 
         // SECURITY: Prevent IDOR — only return claims the user can access
+        List<Long> reviewerProviderIds = reviewerIsolationService.isSubjectToIsolation(currentUser)
+                ? reviewerIsolationService.getAllowedProviderIds(currentUser)
+                : null;
         return claims.stream()
                 .filter(c -> c != null && c.getId() != null && authorizationService.canAccessClaim(currentUser, c.getId()))
+                .filter(c -> reviewerProviderIds == null || reviewerProviderIds.contains(c.getProviderId()))
                 .map(claimMapper::toViewDto)
                 .collect(Collectors.toList());
     }

@@ -28,6 +28,25 @@ public class ClaimAccessGuard {
         return hasScopedClaimAccess("CLAIM_VIEW", claimId);
     }
 
+    public boolean canList(String permission) {
+        return permission != null
+                && permissionGuard.has(permission)
+                && authorizationService.getCurrentUser() != null;
+    }
+
+    public boolean canReadMember(Long memberId) {
+        if (memberId == null || !permissionGuard.has("CLAIM_VIEW")) return false;
+        var user = authorizationService.getCurrentUser();
+        return user != null && authorizationService.canAccessMember(user, memberId);
+    }
+
+    public boolean canReadClaimNumber(Long claimNumber) {
+        if (claimNumber == null || !permissionGuard.has("CLAIM_VIEW")) return false;
+        return claimRepository.findByClaimNumber(claimNumber)
+                .map(claim -> hasScopedClaimAccess("CLAIM_VIEW", claim.getId()))
+                .orElse(false);
+    }
+
     public boolean canEdit(Long claimId) {
         if (claimId == null || !permissionGuard.has("CLAIM_CREATE")) return false;
         var user = authorizationService.getCurrentUser();
