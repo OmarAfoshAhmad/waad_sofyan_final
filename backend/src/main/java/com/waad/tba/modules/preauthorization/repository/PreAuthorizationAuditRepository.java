@@ -11,6 +11,7 @@ import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Collection;
 
 /**
  * Repository for PreAuthorization Audit Trail
@@ -68,6 +69,19 @@ public interface PreAuthorizationAuditRepository extends JpaRepository<PreAuthor
            "ORDER BY a.changeDate DESC")
     Page<PreAuthorizationAudit> findRecentAudits(
             @Param("sinceDate") LocalDateTime sinceDate,
+            Pageable pageable
+    );
+
+    @Query("SELECT a FROM PreAuthorizationAudit a WHERE a.changeDate >= :sinceDate " +
+           "AND EXISTS (SELECT pa.id FROM PreAuthorization pa WHERE pa.id = a.preAuthorizationId " +
+           "AND pa.active = true AND (:scopeKind = 'GLOBAL' " +
+           "OR (:scopeKind = 'PROVIDERS' AND pa.providerId IN :scopeIds) " +
+           "OR (:scopeKind = 'EMPLOYERS' AND EXISTS (SELECT m.id FROM Member m WHERE m.id = pa.memberId AND m.employer.id IN :scopeIds)))) " +
+           "ORDER BY a.changeDate DESC")
+    Page<PreAuthorizationAudit> findRecentAuditsScoped(
+            @Param("sinceDate") LocalDateTime sinceDate,
+            @Param("scopeKind") String scopeKind,
+            @Param("scopeIds") Collection<Long> scopeIds,
             Pageable pageable
     );
 
