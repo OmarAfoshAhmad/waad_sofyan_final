@@ -6,14 +6,22 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 
 import com.waad.tba.TbaWaadApplication;
+import com.waad.tba.modules.rbac.entity.User;
+import com.waad.tba.modules.rbac.repository.UserRepository;
 import com.waad.tba.support.PostgresIntegrationTestBase;
 
 /**
@@ -38,6 +46,38 @@ class PreAuthPortalIdentityFailsClosedTest extends PostgresIntegrationTestBase {
 
     @Autowired private PreAuthPortalController controller;
     @Autowired private JdbcTemplate jdbc;
+    @Autowired private UserRepository userRepository;
+    @Autowired private PasswordEncoder passwordEncoder;
+
+    /**
+     * These tests call the controller bean directly, so method security now
+     * intercepts them as it would any caller -- the endpoint gained a
+     * PREAUTH_CREATE guard (S-02) after this class was written. Authenticating
+     * as SUPER_ADMIN keeps the subject under test unchanged: it holds the whole
+     * permission catalogue, and FeatureGuard.isStaff() short-circuits for it,
+     * so these assertions stay about invented identity rather than becoming a
+     * second test of authorization or of feature-flag state.
+     */
+    @BeforeEach
+    void authenticateAsAdministrator() {
+        String username = "portal-identity-" + UUID.randomUUID().toString().substring(0, 8);
+        userRepository.save(User.builder()
+                .username(username)
+                .password(passwordEncoder.encode("Portal@Test123"))
+                .fullName("Portal Identity Admin")
+                .email(username + "@waad.test")
+                .userType("SUPER_ADMIN")
+                .active(true)
+                .emailVerified(true)
+                .build());
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(username, "x", List.of()));
+    }
+
+    @AfterEach
+    void clearSecurity() {
+        SecurityContextHolder.clearContext();
+    }
 
     /** A payload with every required field present; tests remove one at a time. */
     private Map<String, Object> completePayload() {

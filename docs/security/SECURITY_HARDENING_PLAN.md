@@ -36,7 +36,7 @@
 | ID | الخطورة | الوصف | الحالة |
 |----|---------|-------|--------|
 | S-01 | CRITICAL | تسجيل ذاتي عام + دور افتراضي `DATA_ENTRY` ⟶ سلسلة تصعيد من الإنترنت | **FIXED** (م1 + م2) |
-| S-02 | CRITICAL | `PreAuthPortalController` بلا `@PreAuthorize` ولا `FeatureGuard` ويكتب فعلياً | OPEN |
+| S-02 | CRITICAL | `PreAuthPortalController` بلا `@PreAuthorize` ولا `FeatureGuard` ويكتب فعلياً | **FIXED** |
 | S-03 | HIGH | `providerId`/`memberId` من جسم الطلب ⟶ IDOR/BOLA | OPEN |
 | S-04 | HIGH | لا `PreAuthAccessScopeResolver` مقابل نظيره في المستفيدين | OPEN |
 | S-05 | HIGH | مساران متوازيان للمصادقة (Session + JWT) | OPEN |
@@ -230,3 +230,78 @@ git diff --check: نظيف
 ```
 
 V193 طُبِّقت على قاعدة PostgreSQL حقيقية داخل Testcontainers ضمن هذه الحزمة.
+
+---
+
+## المرحلة 3 — تأمين PreAuthPortalController
+
+**الحالة:** مكتملة ✅
+
+### القرار: Deny first لا حذف
+
+لا مستهلك في الواجهة (`grep` = صفر)، لكن **الحذف كان سيكون خطأً**:
+`PreAuthPortalIdentityFailsClosedTest` يستدعي هذا الـcontroller مباشرة، وكُتب
+خصيصاً لمنعه من تلفيق هوية المستفيد والمزوّد والتصنيف. أي أن الفريق يعتبره
+سطحاً حياً ويصونه. طُبّق نص قاعدة الوثيقة: **Deny it first ثم أعد بناءه**.
+
+### ما تغيّر
+
+| النقطة | الحارس المضاف |
+|---|---|
+| `POST /` | `PREAUTH_CREATE` |
+| `GET /` | `PREAUTH_VIEW` |
+| `GET /{id}` | `PREAUTH_VIEW` |
+| `PUT /{id}/draft` | `PREAUTH_CREATE` |
+| `POST /bulk` | `PREAUTH_CREATE` + `requireProviderPortal()` + `requireDirectPreauthSubmission()` |
+| `POST /{id}/attachments` | `PREAUTH_CREATE` |
+
+بوابة الميزة على `/bulk` هي نفسها التي يطبّقها `PreAuthorizationController` على
+مسار الإنشاء المشروع. بدونها كان تعطيل البوابة يُخفي الشاشة بينما تستمر هذه
+النقطة في قبول الكتابة — بوابة «مطفأة» في كل مكان إلا حيث تهم.
+
+### ملاحظة على نموذج الصلاحيات
+
+`DATA_ENTRY` **لا يملك `PREAUTH_CREATE`** في قوالب `V191`، بينما الحارس القديم
+`hasAnyRole('SUPER_ADMIN','PROVIDER_STAFF','DATA_ENTRY')` على الـcontroller
+المشروع يمنحه ذلك. النموذج الجديد أضيق — وهو تشديد مقصود من مسار الترحيل
+المتوازي، لا سهو.
+
+### انحدار حقيقي ظهر وعولج بلا إضعاف
+
+الحزمة الكاملة أظهرت **5 إخفاقات** في `PreAuthPortalIdentityFailsClosedTest`:
+
+```
+Expecting throwable message: "Access Denied"  to contain: "المستفيد"
+```
+
+السبب: الاختبار يستدعي الـbean مباشرة، فصار أمن الميثود يعترضه قبل بلوغ
+تحقق الهوية. **نيّة الاختبار سليمة تماماً** — العلاج كان منحه سياق مصادقة، لا
+تخفيف الحارس (وهو ما تحظره الوثيقة صراحةً).
+
+اختير `SUPER_ADMIN` تحديداً: يملك الكتالوج كاملاً، و`FeatureGuard.isStaff()`
+يقصّر عليه، فتبقى تأكيداته عن **الهوية الملفَّقة** ولا تتحول إلى اختبار ثانٍ
+للتصريح أو لحالة أعلام الميزات.
+
+### الاختبارات
+
+`PreAuthPortalRequiresAuthorizationTest` — 4 اختبارات:
+
+| الاختبار | يثبت |
+|---|---|
+| `anonymousCannotWriteThroughThePortal` | رفض + **عدد الصفوف لم يتغير** |
+| `authenticatedWithoutPreauthPermissionCannotWrite` | المصادقة وحدها لا تكفي (`FINANCE_VIEWER`) |
+| `anonymousCannotReadThroughThePortal` | القراءة محروسة أيضاً |
+| `everyPortalEndpointDeclaresAPermission` | حارس لكل mapping — نقطة تُضاف لاحقاً لا ترث الانفتاح القديم |
+
+### النتيجة
+
+```
+م2:   Tests=1034  Failures=0
+م3:   Tests=1038  Failures=0     BUILD SUCCESS
+```
+
+### ما تبقّى على هذه النقطة
+
+`providerId` و`memberId` ما زالا يأتيان من جسم الطلب لا من هوية المستدعي، فحاملُ
+`PREAUTH_CREATE` يستطيع الكتابة باسم مزوّد آخر. هذه **S-03**، ولا تُصلَح دون
+محلّل النطاق في **S-04**.
