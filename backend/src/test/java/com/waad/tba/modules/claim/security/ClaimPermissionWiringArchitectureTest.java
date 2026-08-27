@@ -30,6 +30,8 @@ class ClaimPermissionWiringArchitectureTest {
             "src/main/java/com/waad/tba/modules/claim/controller/ClaimLegacyReconciliationController.java");
     private static final Path COVERAGE_ENGINE = Path.of(
             "src/main/java/com/waad/tba/modules/claim/controller/CoverageEngineController.java");
+    private static final Path COVERAGE_RULE_ADMIN = Path.of(
+            "src/main/java/com/waad/tba/modules/claim/ruleengine/controller/ClaimCoverageRuleAdminController.java");
 
     @Test
     void resourceMutationsUseClaimAccessGuardInsteadOfRoles() throws Exception {
@@ -117,6 +119,15 @@ class ClaimPermissionWiringArchitectureTest {
         String source = Files.readString(COVERAGE_ENGINE);
         assertThat(source)
                 .contains("@claimAccessGuard.canCalculateCoverage(#request.memberId, #request.excludeClaimId)")
+                .doesNotContain("hasRole(", "hasAnyRole(", "isAuthenticated()");
+    }
+
+    @Test
+    void coverageRuleAdministrationUsesBenefitPolicyCapabilities() throws Exception {
+        String source = Files.readString(COVERAGE_RULE_ADMIN);
+        assertThat(source)
+                .contains("@permissionGuard.has('BENEFIT_POLICY_VIEW')")
+                .contains("@permissionGuard.has('BENEFIT_POLICY_MANAGE')")
                 .doesNotContain("hasRole(", "hasAnyRole(", "isAuthenticated()");
     }
 }
