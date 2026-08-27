@@ -30,6 +30,9 @@ class PreAuthorizationRecordPermissionArchitectureTest {
                 "@GetMapping(\"/{id:\\\\d+}/attachments\")\n    @PreAuthorize(\"@preAuthAccessGuard.canView(#id)\")",
                 "@GetMapping(\"/{id:\\\\d+}/attachments/{attachmentId}\")\n    @PreAuthorize(\"@preAuthAccessGuard.canView(#id)\")",
                 "@DeleteMapping(\"/{id:\\\\d+}/attachments/{attachmentId}\")\n    @PreAuthorize(\"@preAuthAccessGuard.canCreate(#id)\")");
+        assertThat(source).contains(
+                "@GetMapping(\"/valid\")\n    @PreAuthorize(\"@permissionGuard.has('PREAUTH_VIEW')\")",
+                "@GetMapping(\"/check-validity\")\n    @PreAuthorize(\"@permissionGuard.has('PREAUTH_VIEW')\")");
     }
 
     @Test

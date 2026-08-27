@@ -230,6 +230,49 @@ class PreAuthorizationServiceSecurityTest {
         verify(preAuthorizationRepository, never()).search("  PA-77  ", pageable);
     }
 
+    @Test
+    void validLookupRejectsProviderOutsideAuthorizedScopeBeforeQuery() {
+        givenProviderScope(251L);
+
+        assertThrows(AccessDeniedException.class,
+                () -> service.findValidPreAuthorization(6L, 999L, "SRV-1"));
+
+        verify(preAuthorizationRepository, never()).findValidPreAuthorizations(
+                6L, 999L, "SRV-1", LocalDate.now());
+    }
+
+    @Test
+    void providerValidityCheckQueriesOnlyAuthorizedProviders() {
+        givenProviderScope(251L);
+        when(preAuthorizationRepository.findValidByMemberServiceAndProviderIds(
+                6L, "SRV-1", java.util.Set.of(251L), LocalDate.now()))
+                .thenReturn(List.of());
+
+        service.checkValidity(6L, "SRV-1");
+
+        verify(preAuthorizationRepository).findValidByMemberServiceAndProviderIds(
+                6L, "SRV-1", java.util.Set.of(251L), LocalDate.now());
+        verify(preAuthorizationRepository, never()).findValidByMemberAndService(
+                6L, "SRV-1", LocalDate.now());
+    }
+
+    @Test
+    void employerValidityCheckRejectsForeignMemberBeforeQuery() {
+        var employerAdmin = User.builder().id(12L).username("employer-admin")
+                .userType("EMPLOYER_ADMIN").employerId(77L).build();
+        when(authorizationService.getCurrentUser()).thenReturn(employerAdmin);
+        when(authorizationService.canAccessMember(employerAdmin, 6L)).thenReturn(false);
+        when(preAuthAccessScopeResolver.requireViewScope()).thenReturn(authorizedScope);
+        when(authorizedScope.kind()).thenReturn(
+                com.waad.tba.modules.preauthorization.security.PreAuthAccessScope.Kind.EMPLOYERS);
+
+        assertThrows(AccessDeniedException.class,
+                () -> service.checkValidity(6L, "SRV-1"));
+
+        verify(preAuthorizationRepository, never()).findValidByMemberAndService(
+                6L, "SRV-1", LocalDate.now());
+    }
+
     private void givenProviderScope(Long providerId) {
         when(preAuthAccessScopeResolver.requireViewScope()).thenReturn(authorizedScope);
         when(authorizedScope.kind()).thenReturn(

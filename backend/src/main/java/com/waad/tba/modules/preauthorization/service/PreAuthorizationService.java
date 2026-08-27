@@ -1190,6 +1190,8 @@ public class PreAuthorizationService {
      */
     @Transactional(readOnly = true)
     public PreAuthorizationResponseDto findValidPreAuthorization(Long memberId, Long providerId, String serviceCode) {
+        AuthorizedPreAuthScope accessScope = preAuthAccessScopeResolver.requireViewScope();
+        assertValidityLookupAllowed(accessScope, memberId, providerId);
         List<PreAuthorization> validPreAuths = preAuthorizationRepository.findValidPreAuthorizations(
                 memberId, providerId, serviceCode, LocalDate.now());
 
@@ -1270,9 +1272,16 @@ public class PreAuthorizationService {
     public PreAuthorizationResponseDto checkValidity(Long memberId, String serviceCode) {
         log.info("[PRE-AUTH] Checking validity for member {} and service {}", memberId, serviceCode);
 
-        // Find approved and valid pre-authorizations for this member and service
-        List<PreAuthorization> validPreAuths = preAuthorizationRepository
-                .findValidByMemberAndService(memberId, serviceCode, LocalDate.now());
+        AuthorizedPreAuthScope accessScope = preAuthAccessScopeResolver.requireViewScope();
+        LocalDate today = LocalDate.now();
+        List<PreAuthorization> validPreAuths;
+        if (accessScope.kind() == PreAuthAccessScope.Kind.PROVIDERS) {
+            validPreAuths = preAuthorizationRepository.findValidByMemberServiceAndProviderIds(
+                    memberId, serviceCode, accessScope.ids(), today);
+        } else {
+            assertEmployerCanAccessMember(accessScope, memberId);
+            validPreAuths = preAuthorizationRepository.findValidByMemberAndService(memberId, serviceCode, today);
+        }
 
         if (validPreAuths.isEmpty()) {
             log.info("[PRE-AUTH] No valid pre-authorization found for member {} and service {}", memberId, serviceCode);
@@ -1291,6 +1300,22 @@ public class PreAuthorizationService {
         Provider provider = providerRepository.findById(preAuth.getProviderId()).orElse(null);
 
         return mapToResponseDto(preAuth, member, provider, null);
+    }
+
+    private void assertValidityLookupAllowed(AuthorizedPreAuthScope accessScope, Long memberId, Long providerId) {
+        if (accessScope.kind() == PreAuthAccessScope.Kind.PROVIDERS
+                && !accessScope.ids().contains(providerId)) {
+            throw new AccessDeniedException("مقدم الخدمة المطلوب خارج نطاق صلاحيتك");
+        }
+        assertEmployerCanAccessMember(accessScope, memberId);
+    }
+
+    private void assertEmployerCanAccessMember(AuthorizedPreAuthScope accessScope, Long memberId) {
+        if (accessScope.kind() != PreAuthAccessScope.Kind.EMPLOYERS) return;
+        User currentUser = authorizationService.getCurrentUser();
+        if (currentUser == null || !authorizationService.canAccessMember(currentUser, memberId)) {
+            throw new AccessDeniedException("المستفيد المطلوب خارج نطاق جهة عملك");
+        }
     }
 
     // ==================== MAINTENANCE ====================

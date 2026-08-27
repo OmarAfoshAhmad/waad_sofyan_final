@@ -564,7 +564,7 @@ public class PreAuthorizationController {
      * GET /api/pre-authorizations/valid
      */
     @GetMapping("/valid")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
+    @PreAuthorize("@permissionGuard.has('PREAUTH_VIEW')")
     public ResponseEntity<ApiResponse<PreAuthorizationResponseDto>> findValidPreAuthorization(
             @RequestParam(name = "memberId") Long memberId,
             @RequestParam(name = "providerId") Long providerId,
@@ -623,7 +623,7 @@ public class PreAuthorizationController {
      * GET /api/pre-authorizations/check-validity
      */
     @GetMapping("/check-validity")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
+    @PreAuthorize("@permissionGuard.has('PREAUTH_VIEW')")
     public ResponseEntity<ApiResponse<PreAuthorizationResponseDto>> checkValidity(
             @RequestParam(name = "memberId") Long memberId,
             @RequestParam(name = "serviceCode") String serviceCode) {

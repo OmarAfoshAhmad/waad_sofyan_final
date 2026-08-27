@@ -407,6 +407,19 @@ public interface PreAuthorizationRepository extends JpaRepository<PreAuthorizati
                      @Param("serviceCode") String serviceCode,
                      @Param("currentDate") LocalDate currentDate);
 
+       @Query("SELECT pa FROM PreAuthorization pa WHERE pa.active = true " +
+                     "AND pa.memberId = :memberId " +
+                     "AND pa.providerId IN :providerIds " +
+                     "AND pa.serviceCode = :serviceCode " +
+                     "AND pa.status = 'APPROVED' " +
+                     "AND (pa.expiryDate IS NULL OR pa.expiryDate >= :currentDate) " +
+                     "ORDER BY pa.createdAt DESC")
+       List<PreAuthorization> findValidByMemberServiceAndProviderIds(
+                     @Param("memberId") Long memberId,
+                     @Param("serviceCode") String serviceCode,
+                     @Param("providerIds") java.util.Set<Long> providerIds,
+                     @Param("currentDate") LocalDate currentDate);
+
        /**
         * Aggregate stats for all active records in a single DB round-trip.
         * Returns: [totalCount, sumContractPrice, sumApprovedAmount(APPROVED only)]
