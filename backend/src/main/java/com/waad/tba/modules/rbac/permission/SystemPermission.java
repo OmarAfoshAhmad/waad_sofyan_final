@@ -24,6 +24,8 @@ public enum SystemPermission {
     PREAUTH_CREATE(PermissionCategory.PREAUTHORIZATIONS, "إنشاء موافقة مسبقة", false),
     PREAUTH_REVIEW(PermissionCategory.PREAUTHORIZATIONS, "مراجعة موافقة مسبقة", true),
     PREAUTH_APPROVE(PermissionCategory.PREAUTHORIZATIONS, "اعتماد موافقة مسبقة", true),
+    PREAUTH_CANCEL(PermissionCategory.PREAUTHORIZATIONS, "إلغاء موافقة مسبقة", true),
+    PREAUTH_DELETE(PermissionCategory.PREAUTHORIZATIONS, "حذف مسودة موافقة مسبقة", true),
     PROVIDER_VIEW(PermissionCategory.PROVIDERS, "عرض مقدمي الخدمة", false),
     PROVIDER_MANAGE(PermissionCategory.PROVIDERS, "إدارة مقدمي الخدمة", true),
     EMPLOYER_VIEW(PermissionCategory.EMPLOYERS, "عرض جهات العمل", false),

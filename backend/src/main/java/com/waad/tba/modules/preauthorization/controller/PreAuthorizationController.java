@@ -277,17 +277,16 @@ public class PreAuthorizationController {
      * POST /api/pre-authorizations/{id}/cancel
      */
     @PostMapping("/{id:\\d+}/cancel")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("@preAuthAccessGuard.canCancel(#id)")
     public ResponseEntity<ApiResponse<PreAuthorizationResponseDto>> cancelPreAuthorization(
             @PathVariable("id") Long id,
-            @RequestParam(name = "reason", required = false) String reason,
+            @RequestParam(name = "reason") String reason,
             Authentication authentication) {
         
         log.info("[API] Cancelling pre-authorization {}", id);
         
         String cancelledBy = authentication != null ? authentication.getName() : "system";
-        String cancelReason = reason != null ? reason : "Cancelled by user";
-        PreAuthorizationResponseDto response = preAuthorizationService.cancelPreAuthorization(id, cancelReason, cancelledBy);
+        PreAuthorizationResponseDto response = preAuthorizationService.cancelPreAuthorization(id, reason, cancelledBy);
         
         return ResponseEntity.ok(ApiResponse.success("Pre-authorization cancelled", response));
     }
@@ -327,7 +326,7 @@ public class PreAuthorizationController {
      * DELETE /api/pre-authorizations/{id}
      */
     @DeleteMapping("/{id:\\d+}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF')")
+    @PreAuthorize("@preAuthAccessGuard.canDelete(#id)")
     public ResponseEntity<ApiResponse<Void>> deletePreAuthorization(
             @PathVariable("id") Long id,
             Authentication authentication) {

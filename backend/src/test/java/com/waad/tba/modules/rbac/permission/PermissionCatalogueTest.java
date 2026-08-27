@@ -65,7 +65,9 @@ class PermissionCatalogueTest {
         String sql = Files.readString(Path.of("src/main/resources/db/migration/"
                 + "V191__normalized_role_and_user_permissions.sql"))
                 + Files.readString(Path.of("src/main/resources/db/migration/"
-                        + "V192__align_operational_role_permission_templates.sql"));
+                        + "V192__align_operational_role_permission_templates.sql"))
+                + Files.readString(Path.of("src/main/resources/db/migration/"
+                        + "V193__preauth_command_permissions.sql"));
         Arrays.stream(SystemPermission.values())
                 .forEach(permission -> assertTrue(sql.contains("'" + permission.name() + "'"),
                         () -> "Migration does not seed " + permission.name()));

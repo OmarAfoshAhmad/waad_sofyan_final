@@ -33,6 +33,9 @@ class PreAuthorizationRecordPermissionArchitectureTest {
         assertThat(source).contains(
                 "@GetMapping(\"/valid\")\n    @PreAuthorize(\"@permissionGuard.has('PREAUTH_VIEW')\")",
                 "@GetMapping(\"/check-validity\")\n    @PreAuthorize(\"@permissionGuard.has('PREAUTH_VIEW')\")");
+        assertThat(source).contains(
+                "@PostMapping(\"/{id:\\\\d+}/cancel\")\n    @PreAuthorize(\"@preAuthAccessGuard.canCancel(#id)\")",
+                "@DeleteMapping(\"/{id:\\\\d+}\")\n    @PreAuthorize(\"@preAuthAccessGuard.canDelete(#id)\")");
     }
 
     @Test

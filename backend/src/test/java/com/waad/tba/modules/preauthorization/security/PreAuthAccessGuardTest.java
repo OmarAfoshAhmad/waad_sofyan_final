@@ -108,6 +108,33 @@ class PreAuthAccessGuardTest {
         assertThat(guard.canApprove(7L)).isTrue();
     }
 
+    @Test
+    void cancelRequiresItsOwnCapabilityAndRecordScope() {
+        user.setEmployerId(71L);
+        PreAuthorization preAuth = preAuth(42L, 5L);
+        when(repository.findById(7L)).thenReturn(Optional.of(preAuth));
+        when(authorizationService.canAccessMember(user, 5L)).thenReturn(true);
+
+        assertThat(guard.canCancel(7L)).isFalse();
+
+        when(permissionGuard.has("PREAUTH_CANCEL")).thenReturn(true);
+        assertThat(guard.canCancel(7L)).isTrue();
+    }
+
+    @Test
+    void deleteCapabilityDoesNotBypassProviderOwnership() {
+        user.setProviderId(41L);
+        when(permissionGuard.has("PREAUTH_DELETE")).thenReturn(true);
+        PreAuthorization foreign = preAuth(42L, 5L);
+        when(repository.findById(7L)).thenReturn(Optional.of(foreign));
+
+        assertThat(guard.canDelete(7L)).isFalse();
+
+        PreAuthorization owned = preAuth(41L, 5L);
+        when(repository.findById(7L)).thenReturn(Optional.of(owned));
+        assertThat(guard.canDelete(7L)).isTrue();
+    }
+
     private PreAuthorization preAuth(Long providerId, Long memberId) {
         PreAuthorization preAuth = mock(PreAuthorization.class);
         when(preAuth.getProviderId()).thenReturn(providerId);

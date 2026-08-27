@@ -848,6 +848,13 @@ public class PreAuthorizationService {
     public PreAuthorizationResponseDto cancelPreAuthorization(Long id, String cancelReason, String cancelledBy) {
         log.info("[PRE-AUTH] Cancelling pre-authorization {}", id);
 
+        if (!preAuthAccessGuard.canCancel(id)) {
+            throw new AccessDeniedException("لا تملك صلاحية إلغاء هذه الموافقة المسبقة");
+        }
+        if (cancelReason == null || cancelReason.isBlank()) {
+            throw new IllegalArgumentException("سبب إلغاء الموافقة المسبقة مطلوب");
+        }
+
         // Through the ledger, not around it. Setting the status here would
         // leave the reservation rows RESERVED while the approval says it is
         // cancelled -- a hold nothing will ever release, quietly shrinking the
@@ -918,19 +925,15 @@ public class PreAuthorizationService {
     public void deletePreAuthorization(Long id, String deletedBy) {
         log.info("[PRE-AUTH] Deleting pre-authorization {}", id);
 
+        if (!preAuthAccessGuard.canDelete(id)) {
+            throw new AccessDeniedException("لا تملك صلاحية حذف هذه الموافقة المسبقة");
+        }
+
         PreAuthorization preAuth = preAuthorizationRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("PreAuthorization not found with ID: " + id));
 
-        // Check provider restrictions
-        Long providerId = providerContextGuard.getProviderFilter();
-        if (providerId != null) {
-            if (preAuth.getProviderId() == null || !preAuth.getProviderId().equals(providerId)) {
-                throw new SecurityException("Provider cannot access this pre-authorization");
-            }
-            if (preAuth.getStatus() != com.waad.tba.modules.preauthorization.entity.PreAuthorization.PreAuthStatus.DRAFT && 
-                preAuth.getStatus() != com.waad.tba.modules.preauthorization.entity.PreAuthorization.PreAuthStatus.PENDING) {
-                throw new IllegalStateException("لا يمكن حذف الموافقة المسبقة إلا إذا كانت مسودة أو قيد الانتظار");
-            }
+        if (preAuth.getStatus() != PreAuthStatus.DRAFT && preAuth.getStatus() != PreAuthStatus.PENDING) {
+            throw new IllegalStateException("لا يمكن حذف الموافقة المسبقة إلا إذا كانت مسودة أو قيد الانتظار");
         }
 
         preAuth.setActive(false);

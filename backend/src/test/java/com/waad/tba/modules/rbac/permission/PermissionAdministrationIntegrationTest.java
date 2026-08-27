@@ -78,6 +78,31 @@ class PermissionAdministrationIntegrationTest extends PostgresIntegrationTestBas
     }
 
     @Test
+    void preauthorizationCommandPermissionsArePersistedWithLeastPrivilegeDefaults() {
+        assertThat(jdbcTemplate.queryForList("""
+                select permission_code from rbac_role_permissions
+                 where role_code='MEDICAL_REVIEW_HEAD'
+                   and permission_code in ('PREAUTH_CANCEL','PREAUTH_DELETE')
+                """, String.class)).containsExactly("PREAUTH_CANCEL");
+        assertThat(jdbcTemplate.queryForList("""
+                select permission_code from rbac_role_permissions
+                 where role_code='INSURANCE_MANAGER'
+                   and permission_code in ('PREAUTH_CANCEL','PREAUTH_DELETE')
+                """, String.class)).containsExactly("PREAUTH_CANCEL");
+        assertThat(jdbcTemplate.queryForList("""
+                select permission_code from rbac_role_permissions
+                 where role_code='PROVIDER_STAFF'
+                   and permission_code in ('PREAUTH_CANCEL','PREAUTH_DELETE')
+                """, String.class)).containsExactly("PREAUTH_DELETE");
+        assertThat(jdbcTemplate.queryForList("""
+                select permission_code from rbac_role_permissions
+                 where role_code='SUPER_ADMIN'
+                   and permission_code in ('PREAUTH_CANCEL','PREAUTH_DELETE')
+                 order by permission_code
+                """, String.class)).containsExactly("PREAUTH_CANCEL", "PREAUTH_DELETE");
+    }
+
+    @Test
     void revokeWinsOverRoleAndWritesImmutableAudit() {
         User actor = saveUser("SUPER_ADMIN");
         User target = saveUser("DATA_ENTRY");

@@ -47,6 +47,14 @@ public class PreAuthAccessGuard {
         return hasScopedAccess("PREAUTH_APPROVE", preAuthId);
     }
 
+    public boolean canCancel(Long preAuthId) {
+        return hasScopedAccess("PREAUTH_CANCEL", preAuthId);
+    }
+
+    public boolean canDelete(Long preAuthId) {
+        return hasScopedAccess("PREAUTH_DELETE", preAuthId);
+    }
+
     private boolean hasScopedAccess(String permission, Long preAuthId) {
         if (preAuthId == null || !permissionGuard.has(permission)) return false;
         var user = authorizationService.getCurrentUser();

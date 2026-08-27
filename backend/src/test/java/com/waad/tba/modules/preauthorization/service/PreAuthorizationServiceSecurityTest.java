@@ -273,6 +273,48 @@ class PreAuthorizationServiceSecurityTest {
                 6L, "SRV-1", LocalDate.now());
     }
 
+    @Test
+    void cancelDeniedBeforeReservationRelease() {
+        when(preAuthAccessGuard.canCancel(300L)).thenReturn(false);
+
+        assertThrows(AccessDeniedException.class,
+                () -> service.cancelPreAuthorization(300L, "طلب المستفيد", "review-head"));
+
+        verify(preAuthorizationRepository, never()).findById(300L);
+    }
+
+    @Test
+    void cancelRequiresReasonBeforeReservationRelease() {
+        when(preAuthAccessGuard.canCancel(300L)).thenReturn(true);
+
+        assertThrows(IllegalArgumentException.class,
+                () -> service.cancelPreAuthorization(300L, "   ", "review-head"));
+
+        verify(preAuthorizationRepository, never()).findById(300L);
+    }
+
+    @Test
+    void deleteDeniedBeforeRecordLookup() {
+        when(preAuthAccessGuard.canDelete(300L)).thenReturn(false);
+
+        assertThrows(AccessDeniedException.class,
+                () -> service.deletePreAuthorization(300L, "provider-user"));
+
+        verify(preAuthorizationRepository, never()).findById(300L);
+    }
+
+    @Test
+    void authorizedDeleteStillRejectsApprovedRecord() {
+        preAuth.setStatus(PreAuthStatus.APPROVED);
+        when(preAuthAccessGuard.canDelete(300L)).thenReturn(true);
+        when(preAuthorizationRepository.findById(300L)).thenReturn(Optional.of(preAuth));
+
+        assertThrows(IllegalStateException.class,
+                () -> service.deletePreAuthorization(300L, "provider-user"));
+
+        verify(preAuthorizationRepository, never()).save(preAuth);
+    }
+
     private void givenProviderScope(Long providerId) {
         when(preAuthAccessScopeResolver.requireViewScope()).thenReturn(authorizedScope);
         when(authorizedScope.kind()).thenReturn(

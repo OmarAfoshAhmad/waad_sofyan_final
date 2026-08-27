@@ -39,13 +39,16 @@ public final class RolePermissionDefaults {
                     SystemPermission.MEMBER_LIMIT_VIEW, SystemPermission.EMPLOYER_VIEW,
                     SystemPermission.CLAIM_VIEW, SystemPermission.CLAIM_CREATE,
                     SystemPermission.PREAUTH_VIEW, SystemPermission.PREAUTH_CREATE,
+                    SystemPermission.PREAUTH_DELETE,
                     SystemPermission.CONTRACT_VIEW);
             case MEDICAL_REVIEWER -> EnumSet.copyOf(REVIEWER);
             case MEDICAL_REVIEW_HEAD -> with(REVIEWER,
-                    SystemPermission.CLAIM_APPROVE, SystemPermission.PREAUTH_APPROVE);
+                    SystemPermission.CLAIM_APPROVE, SystemPermission.PREAUTH_APPROVE,
+                    SystemPermission.PREAUTH_CANCEL);
             case INSURANCE_MANAGER -> with(REVIEWER,
                     SystemPermission.CLAIM_APPROVE, SystemPermission.CLAIM_REVERSE,
-                    SystemPermission.PREAUTH_APPROVE, SystemPermission.SETTLEMENT_VIEW,
+                    SystemPermission.PREAUTH_APPROVE, SystemPermission.PREAUTH_CANCEL,
+                    SystemPermission.SETTLEMENT_VIEW,
                     SystemPermission.FINANCIAL_REPORT_VIEW);
             case ACCOUNTANT -> EnumSet.of(SystemPermission.SETTLEMENT_VIEW,
                     SystemPermission.SETTLEMENT_MANAGE, SystemPermission.FINANCIAL_REPORT_VIEW,
