@@ -30,7 +30,7 @@ public class PreAuthorizationAuditController {
      * Get audit history for a specific PreAuthorization
      * GET /api/pre-authorizations/{id}/history
      * 
-     * OPEN ACCESS: Any authenticated user can view audit history
+     * Scoped access: the caller must be allowed to view this pre-authorization.
      */
     @GetMapping("/{id:\\d+}/history")
     @PreAuthorize("@preAuthAccessGuard.canView(#id)")
@@ -103,7 +103,7 @@ public class PreAuthorizationAuditController {
      * Get recent audit records (last N days)
      * GET /api/pre-authorizations/audits/recent
      * 
-     * OPEN ACCESS: Any authenticated user can view audit trail
+     * Scoped access: results are filtered to the caller's authorized provider/employer scope.
      */
     @GetMapping("/audits/recent")
     public ResponseEntity<ApiResponse<Page<PreAuthorizationAuditDto>>> getRecentAudits(
@@ -123,7 +123,7 @@ public class PreAuthorizationAuditController {
      * Search audit records
      * GET /api/pre-authorizations/audits/search
      * 
-     * OPEN ACCESS: Any authenticated user can search audit trail
+     * Scoped access: search is executed inside the caller's authorized provider/employer scope.
      */
     @GetMapping("/audits/search")
     public ResponseEntity<ApiResponse<Page<PreAuthorizationAuditDto>>> searchAudits(
