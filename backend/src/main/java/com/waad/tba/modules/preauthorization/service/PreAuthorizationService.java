@@ -1099,9 +1099,7 @@ public class PreAuthorizationService {
      */
     @Transactional(readOnly = true)
     public Page<PreAuthorizationResponseDto> getPreAuthorizationsByProvider(Long providerId, Pageable pageable) {
-        Page<PreAuthorization> preAuths = preAuthorizationRepository.findByProviderIdAndActiveTrue(providerId,
-                pageable);
-        return preAuths.map(this::mapToResponseDtoLight);
+        return getOperationalReport(null, providerId, null, null, null, null, pageable);
     }
 
     /**

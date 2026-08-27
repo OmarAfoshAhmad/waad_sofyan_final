@@ -203,6 +203,19 @@ class PreAuthorizationServiceSecurityTest {
     }
 
     @Test
+    void providerListingDelegatesToScopedOperationalReportAndRejectsForeignProvider() {
+        var pageable = PageRequest.of(0, 20);
+        givenProviderScope(251L);
+
+        assertThrows(AccessDeniedException.class,
+                () -> service.getPreAuthorizationsByProvider(999L, pageable));
+
+        verify(preAuthorizationRepository, never()).findByProviderIdAndActiveTrue(999L, pageable);
+        verify(preAuthorizationRepository, never()).findForOperationalReportByProvider(
+                null, 999L, null, null, null, null, pageable);
+    }
+
+    @Test
     void searchUsesAuthorizedScopeInDatabaseQuery() {
         var pageable = PageRequest.of(0, 20);
         givenProviderScope(251L);

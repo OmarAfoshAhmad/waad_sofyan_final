@@ -513,7 +513,7 @@ public class PreAuthorizationController {
      * GET /api/pre-authorizations/provider/{providerId}
      */
     @GetMapping("/provider/{providerId}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
+    @PreAuthorize("@permissionGuard.has('PREAUTH_VIEW')")
     public ResponseEntity<PaginationResponse<PreAuthorizationResponseDto>> getPreAuthorizationsByProvider(
             @PathVariable("providerId") Long providerId,
             @RequestParam(name = "page", defaultValue = "0") int page,
@@ -521,14 +521,12 @@ public class PreAuthorizationController {
             @RequestParam(name = "sortBy", defaultValue = "createdAt") String sortBy,
             @RequestParam(name = "sortDirection", defaultValue = "DESC") String sortDirection) {
         
-        User currentUser = authorizationService.getCurrentUser();
-        Long scopedProviderId = authorizationService.resolveProviderScope(currentUser, providerId);
-        log.info("[API] Fetching pre-authorizations for provider {}", scopedProviderId);
+        log.info("[API] Fetching pre-authorizations for provider {}", providerId);
 
         Sort.Direction direction = Sort.Direction.fromString(sortDirection);
         Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortBy));
 
-        Page<PreAuthorizationResponseDto> preAuthsPage = preAuthorizationService.getPreAuthorizationsByProvider(scopedProviderId, pageable);
+        Page<PreAuthorizationResponseDto> preAuthsPage = preAuthorizationService.getPreAuthorizationsByProvider(providerId, pageable);
         
         return ResponseEntity.ok(PaginationResponse.of(preAuthsPage));
     }
