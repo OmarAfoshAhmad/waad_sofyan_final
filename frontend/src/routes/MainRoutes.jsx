@@ -454,7 +454,7 @@ const MainRoutes = {
         {
           path: '',
           element: (
-            <PermissionGuard isRouteGuard>
+            <PermissionGuard requiredPermission="CONTRACT_VIEW" isRouteGuard>
               <ProviderContractsList />
             </PermissionGuard>
           )
@@ -462,7 +462,7 @@ const MainRoutes = {
         {
           path: 'create',
           element: (
-            <PermissionGuard isRouteGuard>
+            <PermissionGuard requiredPermission="CONTRACT_MANAGE" isRouteGuard>
               <ProviderContractCreate />
             </PermissionGuard>
           )
@@ -470,7 +470,7 @@ const MainRoutes = {
         {
           path: 'edit/:id',
           element: (
-            <PermissionGuard isRouteGuard>
+            <PermissionGuard requiredPermission="CONTRACT_MANAGE" isRouteGuard>
               <ProviderContractEdit />
             </PermissionGuard>
           )
@@ -478,7 +478,7 @@ const MainRoutes = {
         {
           path: ':id',
           element: (
-            <PermissionGuard isRouteGuard>
+            <PermissionGuard requiredPermission="CONTRACT_VIEW" isRouteGuard>
               <ProviderContractView />
             </PermissionGuard>
           )
@@ -627,7 +627,7 @@ const MainRoutes = {
     {
       path: 'medical-dictionary',
       element: (
-        <PermissionGuard isRouteGuard>
+        <PermissionGuard requiredPermission="PRICE_LIST_IMPORT" isRouteGuard>
           <MedicalDictionaryPage />
         </PermissionGuard>
       )
@@ -635,7 +635,7 @@ const MainRoutes = {
     {
       path: 'price-list-classifier',
       element: (
-        <PermissionGuard isRouteGuard>
+        <PermissionGuard requiredPermission="PRICE_LIST_IMPORT" isRouteGuard>
           <PriceListClassifierPage />
         </PermissionGuard>
       )
@@ -643,7 +643,7 @@ const MainRoutes = {
     {
       path: 'price-list-sessions',
       element: (
-        <PermissionGuard isRouteGuard>
+        <PermissionGuard requiredPermissions={['PRICE_LIST_IMPORT', 'PRICE_LIST_POST']} requireAll={false} isRouteGuard>
           <PriceListSessionsPage />
         </PermissionGuard>
       )

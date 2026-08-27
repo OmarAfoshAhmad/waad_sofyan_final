@@ -48,14 +48,22 @@ import { ROLE_RESOURCE_ACCESS } from 'config/roleAccessMap';
  * @param {boolean} batchClaimsEnabled - Whether legacy/monthly batch intake is enabled
  * @returns {Array} Filtered menu items visible to specified role
  */
-export const filterMenuItemsByRole = (items, role, providerPortalEnabled = false, batchClaimsEnabled = true) => {
+export const filterMenuItemsByRole = (items, role, providerPortalEnabled = false, batchClaimsEnabled = true, permissions = []) => {
   const allowedResources = ROLE_RESOURCE_ACCESS[role] || [];
+  const effectivePermissions = new Set(permissions || []);
 
   const isAllowed = (resource, item) => {
     if (item?.featureFlag === 'BATCH_CLAIMS_ENABLED' && !batchClaimsEnabled) return false;
     if (!resource) return true; // group headers without resource → always visible
     if (resource === 'provider_portal' && !providerPortalEnabled) return false;
     if (resource.startsWith('__hidden_')) return false; // Explicitly hidden items
+    if (item?.requiredPermission && !effectivePermissions.has(item.requiredPermission)) return false;
+    if (item?.requiredPermissions) {
+      const matches = item.requireAllPermissions === false
+        ? item.requiredPermissions.some((permission) => effectivePermissions.has(permission))
+        : item.requiredPermissions.every((permission) => effectivePermissions.has(permission));
+      if (!matches) return false;
+    }
     if (allowedResources.includes('*')) return true; // SUPER_ADMIN wildcard
     return allowedResources.includes(resource);
   };
@@ -64,7 +72,7 @@ export const filterMenuItemsByRole = (items, role, providerPortalEnabled = false
     .filter((item) => isAllowed(item.resource, item))
     .map((item) => ({
       ...item,
-      children: item.children ? filterMenuItemsByRole(item.children, role, providerPortalEnabled, batchClaimsEnabled) : undefined
+      children: item.children ? filterMenuItemsByRole(item.children, role, providerPortalEnabled, batchClaimsEnabled, permissions) : undefined
     }))
     .filter((item) => {
       // Remove groups/collapses with no visible children
@@ -361,6 +369,7 @@ const menuItem = [
             icon: HandshakeIcon,
             resource: 'provider_contracts',
             action: 'view',
+            requiredPermission: 'CONTRACT_VIEW',
             chip: {
               label: '✅',
               color: 'success',
@@ -627,6 +636,7 @@ const menuItem = [
         icon: MenuBookIcon,
         resource: 'medical_catalog',
         action: 'view',
+        requiredPermission: 'PRICE_LIST_IMPORT',
         chip: {
           label: '🧠',
           color: 'info',
@@ -642,6 +652,7 @@ const menuItem = [
         icon: ManageSearchIcon,
         resource: 'medical_catalog',
         action: 'view',
+        requiredPermission: 'PRICE_LIST_IMPORT',
         chip: {
           label: 'Excel',
           color: 'warning',
@@ -658,6 +669,8 @@ const menuItem = [
         icon: HistoryIcon,
         resource: 'medical_catalog',
         action: 'view',
+        requiredPermissions: ['PRICE_LIST_IMPORT', 'PRICE_LIST_POST'],
+        requireAllPermissions: false,
         chip: {
           label: 'تتبع',
           color: 'info',

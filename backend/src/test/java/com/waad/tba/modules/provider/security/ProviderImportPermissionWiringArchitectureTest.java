@@ -76,6 +76,18 @@ class ProviderImportPermissionWiringArchitectureTest {
         assertThat(legacyPrefix).contains("@PreAuthorize(\"denyAll()\")");
     }
 
+    @Test
+    void medicalDictionaryAndClassifiedListsUseCapabilitiesWithoutRoleFallback() throws Exception {
+        String source = Files.readString(SOURCE_ROOT.resolve(
+                "medicaldictionary/controller/MedicalDictionaryController.java"));
+
+        assertThat(source).doesNotContain("hasRole(", "hasAnyRole(");
+        assertThat(source).contains("@permissionGuard.has('PRICE_LIST_IMPORT')");
+        assertThat(source).contains("@permissionGuard.has('PRICE_LIST_POST')");
+        assertThat(source).contains("@permissionGuard.has('CLAIM_CREATE')");
+        assertThat(source).contains("@permissionGuard.has('PREAUTH_CREATE')");
+    }
+
     private long count(String source, String token) {
         return source.lines().filter(line -> line.contains(token)).count();
     }

@@ -20,7 +20,7 @@ export default function Navigation({ searchValue }) {
   const { flags } = useSystemConfig();
 
   const filteredMenuItems = useMemo(() => {
-    let providerScopedMenu = filterMenuItemsByRole(menuItem, role, flags.PROVIDER_PORTAL_ENABLED, flags.BATCH_CLAIMS_ENABLED);
+    let providerScopedMenu = filterMenuItemsByRole(menuItem, role, flags.PROVIDER_PORTAL_ENABLED, flags.BATCH_CLAIMS_ENABLED, user?.permissions);
 
     // Hide provider_portal menu group when PROVIDER_PORTAL_ENABLED flag is off
     // SUPER_ADMIN always sees everything (they can still access the API)
@@ -46,7 +46,7 @@ export default function Navigation({ searchValue }) {
     });
 
     return result;
-  }, [deferredSearch, role, flags.PROVIDER_PORTAL_ENABLED, flags.BATCH_CLAIMS_ENABLED]);
+  }, [deferredSearch, role, user?.permissions, flags.PROVIDER_PORTAL_ENABLED, flags.BATCH_CLAIMS_ENABLED]);
 
   const navGroups = filteredMenuItems.map((item) => {
     switch (item.type) {
