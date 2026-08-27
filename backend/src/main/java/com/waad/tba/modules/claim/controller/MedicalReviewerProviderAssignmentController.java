@@ -19,20 +19,20 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/admin/medical-reviewers")
-@PreAuthorize("isAuthenticated()")
+@PreAuthorize("@permissionGuard.has('USER_MANAGE')")
 public class MedicalReviewerProviderAssignmentController {
 
     private final MedicalReviewerProviderAssignmentService assignmentService;
 
     @GetMapping("/{id}/providers")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("@permissionGuard.has('USER_MANAGE')")
     public ResponseEntity<ApiResponse<MedicalReviewerProviderAssignmentsResponse>> getAssignments(@PathVariable("id") Long reviewerId) {
         MedicalReviewerProviderAssignmentsResponse response = assignmentService.getAssignments(reviewerId);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
     @PutMapping("/{id}/providers")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("@permissionGuard.has('USER_MANAGE')")
     public ResponseEntity<ApiResponse<MedicalReviewerProviderAssignmentsResponse>> updateAssignments(
             @PathVariable("id") Long reviewerId,
             @Valid @RequestBody MedicalReviewerProviderAssignmentsRequest request,

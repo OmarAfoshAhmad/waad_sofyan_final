@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v1/admin/claims/legacy-reconciliation")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('SUPER_ADMIN')")
+@PreAuthorize("@permissionGuard.has('DANGER_ZONE_EXECUTE')")
 public class ClaimLegacyReconciliationController {
 
     private final ClaimLegacyReconciliationService reconciliationService;
