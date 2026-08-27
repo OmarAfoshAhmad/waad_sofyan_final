@@ -5,6 +5,9 @@ import com.waad.tba.modules.preauthorization.entity.PreAuthorization;
 import com.waad.tba.modules.preauthorization.entity.PreAuthorization.PreAuthStatus;
 import com.waad.tba.modules.preauthorization.entity.PreAuthorization.Priority;
 import com.waad.tba.modules.preauthorization.repository.PreAuthorizationRepository;
+import com.waad.tba.modules.preauthorization.security.AuthorizedPreAuthScope;
+import com.waad.tba.modules.preauthorization.security.PreAuthAccessScope;
+import com.waad.tba.modules.preauthorization.security.PreAuthAccessScopeResolver;
 import com.waad.tba.modules.provider.entity.Provider;
 import com.waad.tba.modules.provider.repository.ProviderRepository;
 import com.waad.tba.modules.provider.service.ProviderContractService;
@@ -67,6 +70,7 @@ public class PreAuthorizationService {
     private final ArchitecturalGuardService architecturalGuard;
     private final com.waad.tba.modules.claim.service.ReviewerProviderIsolationService reviewerIsolationService;
     private final NotificationSseService notificationSseService;
+    private final PreAuthAccessScopeResolver preAuthAccessScopeResolver;
 
     // ==================== CREATE ====================
 
@@ -1017,34 +1021,48 @@ public class PreAuthorizationService {
             LocalDate dateFrom,
             LocalDate dateTo,
             Pageable pageable) {
-        User currentUser = authorizationService.getCurrentUser();
+        AuthorizedPreAuthScope accessScope = preAuthAccessScopeResolver.requireViewScope();
         String normalizedMemberSearch = normalizeReportSearch(memberSearch);
 
         Page<PreAuthorization> preAuths;
-        if (currentUser != null && authorizationService.isProvider(currentUser)) {
-            Long enforcedProviderId = providerContextGuard.enforceProviderId(requestedProviderId);
-            preAuths = preAuthorizationRepository.findForOperationalReportByProvider(
-                    status, enforcedProviderId, employerId, normalizedMemberSearch, dateFrom, dateTo, pageable);
-        } else if (currentUser != null && authorizationService.isReviewer(currentUser)
-                && !authorizationService.isSuperAdmin(currentUser)) {
+        if (accessScope.kind() == PreAuthAccessScope.Kind.PROVIDERS) {
+            if (requestedProviderId != null && !accessScope.ids().contains(requestedProviderId)) {
+                throw new AccessDeniedException("مقدم الخدمة المطلوب خارج نطاق صلاحيتك");
+            }
             if (requestedProviderId != null) {
-                reviewerIsolationService.validateReviewerAccess(currentUser, requestedProviderId);
                 preAuths = preAuthorizationRepository.findForOperationalReportByProvider(
                         status, requestedProviderId, employerId, normalizedMemberSearch, dateFrom, dateTo, pageable);
+            } else if (accessScope.ids().size() == 1) {
+                Long providerId = accessScope.ids().iterator().next();
+                preAuths = preAuthorizationRepository.findForOperationalReportByProvider(
+                        status, providerId, employerId, normalizedMemberSearch, dateFrom, dateTo, pageable);
             } else {
-                List<Long> allowedProviderIds = reviewerIsolationService.getAllowedProviderIds(currentUser);
-                if (allowedProviderIds.isEmpty()) {
-                    return Page.empty(pageable);
-                }
                 preAuths = preAuthorizationRepository.findForOperationalReportByProviders(
-                        status, allowedProviderIds, employerId, normalizedMemberSearch, dateFrom, dateTo, pageable);
+                        status, accessScope.ids(), employerId, normalizedMemberSearch, dateFrom, dateTo, pageable);
             }
-        } else if (requestedProviderId != null) {
+        } else if (accessScope.kind() == PreAuthAccessScope.Kind.EMPLOYERS) {
+            if (employerId != null && !accessScope.ids().contains(employerId)) {
+                throw new AccessDeniedException("جهة العمل المطلوبة خارج نطاق صلاحيتك");
+            }
+            if (accessScope.ids().size() != 1) {
+                throw new IllegalStateException("EMPLOYER_SCOPE_MUST_RESOLVE_TO_ONE_EMPLOYER");
+            }
+            Long enforcedEmployerId = accessScope.ids().iterator().next();
+            if (requestedProviderId != null) {
+                preAuths = preAuthorizationRepository.findForOperationalReportByProvider(
+                        status, requestedProviderId, enforcedEmployerId, normalizedMemberSearch, dateFrom, dateTo, pageable);
+            } else {
+                preAuths = preAuthorizationRepository.findForOperationalReport(
+                        status, enforcedEmployerId, normalizedMemberSearch, dateFrom, dateTo, pageable);
+            }
+        } else if (accessScope.kind() == PreAuthAccessScope.Kind.GLOBAL && requestedProviderId != null) {
             preAuths = preAuthorizationRepository.findForOperationalReportByProvider(
                     status, requestedProviderId, employerId, normalizedMemberSearch, dateFrom, dateTo, pageable);
-        } else {
+        } else if (accessScope.kind() == PreAuthAccessScope.Kind.GLOBAL) {
             preAuths = preAuthorizationRepository.findForOperationalReport(
                     status, employerId, normalizedMemberSearch, dateFrom, dateTo, pageable);
+        } else {
+            throw new AccessDeniedException("لا تملك نطاقاً لعرض الموافقات المسبقة");
         }
         return preAuths.map(this::mapToResponseDtoLight);
     }

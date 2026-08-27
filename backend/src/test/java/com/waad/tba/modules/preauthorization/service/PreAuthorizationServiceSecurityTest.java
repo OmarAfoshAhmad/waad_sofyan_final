@@ -3,6 +3,8 @@ package com.waad.tba.modules.preauthorization.service;
 import com.waad.tba.modules.preauthorization.entity.PreAuthorization;
 import com.waad.tba.modules.preauthorization.entity.PreAuthorization.PreAuthStatus;
 import com.waad.tba.modules.preauthorization.repository.PreAuthorizationRepository;
+import com.waad.tba.modules.preauthorization.security.AuthorizedPreAuthScope;
+import com.waad.tba.modules.preauthorization.security.PreAuthAccessScopeResolver;
 import com.waad.tba.modules.rbac.entity.User;
 import com.waad.tba.security.ProviderContextGuard;
 import com.waad.tba.security.AuthorizationService;
@@ -52,6 +54,12 @@ class PreAuthorizationServiceSecurityTest {
 
     @Mock
     private com.waad.tba.modules.claim.service.ReviewerProviderIsolationService reviewerIsolationService;
+
+    @Mock
+    private PreAuthAccessScopeResolver preAuthAccessScopeResolver;
+
+    @Mock
+    private AuthorizedPreAuthScope authorizedScope;
 
     @InjectMocks
     private PreAuthorizationService service;
@@ -113,64 +121,82 @@ class PreAuthorizationServiceSecurityTest {
 
     @Test
     void operationalReportForProviderAlwaysUsesSessionProviderScope() {
-        User providerStaff = User.builder().id(11L).username("provider-user")
-                .userType("PROVIDER_STAFF").providerId(251L).build();
         var pageable = PageRequest.of(0, 20);
         var dateFrom = LocalDate.of(2026, 1, 1);
         var dateTo = LocalDate.of(2026, 1, 31);
 
-        when(authorizationService.getCurrentUser()).thenReturn(providerStaff);
-        when(authorizationService.isProvider(providerStaff)).thenReturn(true);
-        when(providerContextGuard.enforceProviderId(999L)).thenReturn(251L);
-        when(preAuthorizationRepository.findForOperationalReportByProvider(
-                PreAuthStatus.SUBMITTED, 251L, 77L, "علي", dateFrom, dateTo, pageable))
-                .thenReturn(new PageImpl<>(List.of(), pageable, 0));
+        givenProviderScope(251L);
 
-        service.getOperationalReport(PreAuthStatus.SUBMITTED, 999L, 77L, " علي ", dateFrom, dateTo, pageable);
+        assertThrows(AccessDeniedException.class, () -> service.getOperationalReport(
+                PreAuthStatus.SUBMITTED, 999L, 77L, " علي ", dateFrom, dateTo, pageable));
 
-        verify(providerContextGuard).enforceProviderId(999L);
-        verify(preAuthorizationRepository).findForOperationalReportByProvider(
-                PreAuthStatus.SUBMITTED, 251L, 77L, "علي", dateFrom, dateTo, pageable);
         verify(preAuthorizationRepository, never()).findForOperationalReportByProvider(
                 PreAuthStatus.SUBMITTED, 999L, 77L, "علي", dateFrom, dateTo, pageable);
     }
 
     @Test
     void operationalReportForReviewerWithoutAssignmentsReturnsEmptyPage() {
-        User reviewer = User.builder().id(12L).username("reviewer")
-                .userType("MEDICAL_REVIEWER").build();
         var pageable = PageRequest.of(0, 20);
 
-        when(authorizationService.getCurrentUser()).thenReturn(reviewer);
-        when(authorizationService.isProvider(reviewer)).thenReturn(false);
-        when(authorizationService.isReviewer(reviewer)).thenReturn(true);
-        when(authorizationService.isSuperAdmin(reviewer)).thenReturn(false);
-        when(reviewerIsolationService.getAllowedProviderIds(reviewer)).thenReturn(List.of());
+        when(preAuthAccessScopeResolver.requireViewScope()).thenThrow(new AccessDeniedException("no scope"));
 
-        Page<?> result = service.getOperationalReport(null, null, null, null, null, null, pageable);
-
-        assertTrue(result.isEmpty());
+        assertThrows(AccessDeniedException.class,
+                () -> service.getOperationalReport(null, null, null, null, null, null, pageable));
         verify(preAuthorizationRepository, never()).findForOperationalReport(null, null, null, null, null, pageable);
     }
 
     @Test
     void operationalReportForReviewerValidatesRequestedProviderBeforeQuerying() {
-        User reviewer = User.builder().id(13L).username("assigned-reviewer")
-                .userType("MEDICAL_REVIEWER").build();
         var pageable = PageRequest.of(0, 20);
 
-        when(authorizationService.getCurrentUser()).thenReturn(reviewer);
-        when(authorizationService.isProvider(reviewer)).thenReturn(false);
-        when(authorizationService.isReviewer(reviewer)).thenReturn(true);
-        when(authorizationService.isSuperAdmin(reviewer)).thenReturn(false);
+        givenProviderScope(251L);
         when(preAuthorizationRepository.findForOperationalReportByProvider(
                 null, 251L, null, null, null, null, pageable))
                 .thenReturn(new PageImpl<>(List.of(), pageable, 0));
 
         service.getOperationalReport(null, 251L, null, null, null, null, pageable);
 
-        verify(reviewerIsolationService).validateReviewerAccess(reviewer, 251L);
         verify(preAuthorizationRepository).findForOperationalReportByProvider(
                 null, 251L, null, null, null, null, pageable);
+    }
+
+    @Test
+    void operationalReportForEmployerAlwaysEnforcesEmployerScope() {
+        var pageable = PageRequest.of(0, 20);
+        givenEmployerScope(77L);
+        when(preAuthorizationRepository.findForOperationalReport(
+                null, 77L, null, null, null, pageable))
+                .thenReturn(new PageImpl<>(List.of(), pageable, 0));
+
+        service.getOperationalReport(null, null, null, null, null, null, pageable);
+
+        verify(preAuthorizationRepository).findForOperationalReport(
+                null, 77L, null, null, null, pageable);
+    }
+
+    @Test
+    void operationalReportRejectsRequestedEmployerOutsideScope() {
+        var pageable = PageRequest.of(0, 20);
+        givenEmployerScope(77L);
+
+        assertThrows(AccessDeniedException.class,
+                () -> service.getOperationalReport(null, null, 88L, null, null, null, pageable));
+
+        verify(preAuthorizationRepository, never()).findForOperationalReport(
+                null, 88L, null, null, null, pageable);
+    }
+
+    private void givenProviderScope(Long providerId) {
+        when(preAuthAccessScopeResolver.requireViewScope()).thenReturn(authorizedScope);
+        when(authorizedScope.kind()).thenReturn(
+                com.waad.tba.modules.preauthorization.security.PreAuthAccessScope.Kind.PROVIDERS);
+        when(authorizedScope.ids()).thenReturn(java.util.Set.of(providerId));
+    }
+
+    private void givenEmployerScope(Long employerId) {
+        when(preAuthAccessScopeResolver.requireViewScope()).thenReturn(authorizedScope);
+        when(authorizedScope.kind()).thenReturn(
+                com.waad.tba.modules.preauthorization.security.PreAuthAccessScope.Kind.EMPLOYERS);
+        when(authorizedScope.ids()).thenReturn(java.util.Set.of(employerId));
     }
 }

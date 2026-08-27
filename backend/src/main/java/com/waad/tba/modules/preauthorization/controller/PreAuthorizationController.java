@@ -371,7 +371,7 @@ public class PreAuthorizationController {
      * ✅ API v1: Returns PreAuthorizationListResponse with decision fields READ-ONLY
      */
     @GetMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
+    @PreAuthorize("@permissionGuard.has('PREAUTH_VIEW')")
     public ResponseEntity<ApiResponse<PreAuthorizationListResponse>> getAllPreAuthorizations(
             @RequestParam(name = "page", defaultValue = "0") int page,
             @RequestParam(name = "size", defaultValue = "20") int size,
