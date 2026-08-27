@@ -104,7 +104,20 @@ server:
       timeout: ${SESSION_TIMEOUT:30m}
       cookie:
         name: JSESSIONID
+        # application-prod.yml already set secure/same-site/http-only; this
+        # base file did not, so every other profile -- and any deployment that
+        # forgets to activate prod -- fell back to a bare cookie. The hardened
+        # values belong in the default, with the relaxation stated explicitly
+        # in application-dev.yml, rather than the other way round.
         http-only: true
+        secure: ${SESSION_COOKIE_SECURE:true}
+        # Strict, matching application-prod.yml, which has been running this
+        # way -- so the deployment is already known to tolerate it rather than
+        # this being a guess. SameSite is evaluated per registrable domain and
+        # ignores the port, so the split dev ports (Vite on one, this API on
+        # another) remain same-site too.
+        same-site: ${SESSION_COOKIE_SAME_SITE:Strict}
+        path: /
 
 jwt:
   # Short-lived access token. Long sessions must use a separately revocable,

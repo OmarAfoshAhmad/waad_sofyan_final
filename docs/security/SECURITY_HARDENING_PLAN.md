@@ -40,7 +40,7 @@
 | S-03 | HIGH | `providerId`/`memberId` من جسم الطلب ⟶ IDOR/BOLA | **FIXED** (providerId) |
 | S-04 | HIGH | لا `PreAuthAccessScopeResolver` مقابل نظيره في المستفيدين | **FIXED** |
 | S-05 | HIGH | مساران متوازيان للمصادقة (Session + JWT) | **FIXED** |
-| S-06 | MEDIUM | كوكي الجلسة بلا `Secure` ولا `SameSite` | OPEN |
+| S-06 | MEDIUM→LOW | فجوة «آمن بالافتراض» في الملف الأساس (الإنتاج كان محصَّناً أصلاً) | **FIXED** |
 | S-07 | LOW | مراجعة عامل عمل BCrypt | OPEN |
 
 **Statuses:** `OPEN` → `MITIGATED` → `FIXED` → `VERIFIED`
@@ -507,3 +507,64 @@ scope.singleProviderId().ifPresent(...)   // المزوّد يكتب كنفسه 
 و`AuthService.login()` ما زال يولّد توكناً (يصل إليه `register` وحده). التوكن
 **خامل تماماً** الآن — لا فلتر يقبله. تنظيفه النهائي مع متطلب `JWT_SECRET` في
 `StartupSecurityValidator` بند مستقل، لأنه تنظيف لا إغلاق ثغرة.
+
+---
+
+## المرحلة 12 — تقوية كوكي الجلسة
+
+**الحالة:** مكتملة ✅
+
+### تصحيح للتقييم الأولي
+
+الفحص الأول قرأ `application.yml` وحده فأبلغ أن كوكي الجلسة بلا `Secure` ولا
+`SameSite`. **هذا كان ناقصاً**: `application-prod.yml` يضبط الثلاثة أصلاً:
+
+```yaml
+secure: true   |   same-site: strict   |   http-only: true
+```
+
+فالإنتاج **لم يكن مكشوفاً**. الخطورة تُخفَّض من MEDIUM إلى LOW، والفجوة
+الحقيقية مختلفة عمّا وُصف.
+
+### الفجوة الحقيقية
+
+القيم المحصَّنة كانت في ملف البروفايل لا في الأساس. أي بروفايل غير `prod` —
+و**أي نشر ينسى تفعيل `prod`** — كان يرث كوكي عارياً. الخلل في **موضع** القيمة
+لا في القيمة.
+
+### ما تغيّر
+
+| الملف | التغيير |
+|---|---|
+| `application.yml` | `secure: ${SESSION_COOKIE_SECURE:true}` · `same-site: ${SESSION_COOKIE_SAME_SITE:Strict}` · `path: /` |
+| `application-dev.yml` | `secure: false` صراحةً — وهي الاسترخاء الوحيد المسموح |
+| `application-prod.yml` | بلا تغيير — كان محصَّناً |
+
+**المبدأ:** الافتراض هو الآمن، والاسترخاء يُذكر بصوت مسموع حيث ينطبق فعلاً — لا
+العكس.
+
+### لماذا Strict لا Lax
+
+ترددت أولاً لأن طوبولوجيا النشر غير قابلة للتحديد من المستودع، و`Strict` قد
+يكسر تنقّلاً عابر المواقع. ثم حسم الدليل الأمر: **الإنتاج يعمل بـ`strict`
+فعلاً**، فهي مُثبَتة عملياً لا تخميناً. و`SameSite` يُقيَّم بالنطاق المسجَّل
+ويتجاهل المنفذ، فمنفذا التطوير المنفصلان يبقيان same-site.
+
+### الاختبارات
+
+`SessionCookieHardeningTest` — 3 اختبارات:
+
+| الاختبار | يثبت |
+|---|---|
+| `theDefaultProfileShipsAHardenedSessionCookie` | الأساس لا يعود لكوكي عارٍ |
+| `productionRemainsAtLeastAsStrictAsTheDefault` | الإنتاج لا يتراجع |
+| `developmentRelaxesOnlyTheSecureFlagAndSaysWhy` | التطوير يرخي `Secure` فقط — لا `SameSite` ولا `HttpOnly` |
+
+الثالث هو الأهم: يمنع أن تصير «احتياجات التطوير» ثغرة ترتدي ثياب مطوّر.
+
+### النتيجة
+
+```
+م9:    Tests=1062  Failures=0
+م12:   Tests=1065  Failures=0     BUILD SUCCESS
+```
