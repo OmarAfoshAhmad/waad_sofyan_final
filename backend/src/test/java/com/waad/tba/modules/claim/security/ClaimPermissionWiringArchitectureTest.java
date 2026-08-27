@@ -14,6 +14,10 @@ class ClaimPermissionWiringArchitectureTest {
             "src/main/java/com/waad/tba/modules/claim/controller/ClaimAttachmentController.java");
     private static final Path DRAFTS = Path.of(
             "src/main/java/com/waad/tba/modules/claim/controller/ClaimDraftController.java");
+    private static final Path REPORTS = Path.of(
+            "src/main/java/com/waad/tba/modules/claim/controller/ReportsController.java");
+    private static final Path BATCHES = Path.of(
+            "src/main/java/com/waad/tba/modules/claim/controller/ClaimBatchController.java");
 
     @Test
     void resourceMutationsUseClaimAccessGuardInsteadOfRoles() throws Exception {
@@ -49,5 +53,24 @@ class ClaimPermissionWiringArchitectureTest {
         assertThat(drafts)
                 .contains("@permissionGuard.has('CLAIM_CREATE')")
                 .doesNotContain("isAuthenticated()");
+    }
+
+    @Test
+    void reportsUseFinancialCapabilitiesAndMemberStatementsUseMemberScope() throws Exception {
+        String source = Files.readString(REPORTS);
+        assertThat(source)
+                .contains("@permissionGuard.has('FINANCIAL_REPORT_VIEW')")
+                .contains("@permissionGuard.has('SETTLEMENT_VIEW')")
+                .contains("@claimAccessGuard.canReadMemberFor('FINANCIAL_REPORT_VIEW', #memberId)")
+                .doesNotContain("hasRole(", "hasAnyRole(", "isAuthenticated()");
+    }
+
+    @Test
+    void batchesIntersectCapabilitiesWithRequestedProviderAndEmployerScope() throws Exception {
+        String source = Files.readString(BATCHES);
+        assertThat(source)
+                .contains("@claimAccessGuard.canAccessBatch('CLAIM_VIEW', #providerId, #employerId)")
+                .contains("@claimAccessGuard.canAccessBatch('CLAIM_CREATE', #providerId, #employerId)")
+                .doesNotContain("hasRole(", "hasAnyRole(", "isAuthenticated()");
     }
 }

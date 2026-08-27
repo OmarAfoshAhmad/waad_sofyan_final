@@ -35,9 +35,29 @@ public class ClaimAccessGuard {
     }
 
     public boolean canReadMember(Long memberId) {
-        if (memberId == null || !permissionGuard.has("CLAIM_VIEW")) return false;
+        return canReadMemberFor("CLAIM_VIEW", memberId);
+    }
+
+    public boolean canReadMemberFor(String permission, Long memberId) {
+        if (memberId == null || permission == null || !permissionGuard.has(permission)) return false;
         var user = authorizationService.getCurrentUser();
         return user != null && authorizationService.canAccessMember(user, memberId);
+    }
+
+    public boolean canAccessBatch(String permission, Long providerId, Long employerId) {
+        if (permission == null || !permissionGuard.has(permission)) return false;
+        var user = authorizationService.getCurrentUser();
+        if (user == null) return false;
+        if (authorizationService.isProvider(user)) {
+            return user.getProviderId() != null && (providerId == null || user.getProviderId().equals(providerId));
+        }
+        if (authorizationService.isEmployerAdmin(user)) {
+            return user.getEmployerId() != null && (employerId == null || user.getEmployerId().equals(employerId));
+        }
+        if (reviewerIsolationService.isSubjectToIsolation(user)) {
+            return providerId != null && reviewerIsolationService.getAllowedProviderIds(user).contains(providerId);
+        }
+        return true;
     }
 
     public boolean canReadClaimNumber(Long claimNumber) {

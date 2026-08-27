@@ -6,6 +6,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.util.Optional;
+import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -82,5 +83,50 @@ class ClaimAccessGuardTest {
         when(permissionGuard.has("DANGER_ZONE_EXECUTE")).thenReturn(true);
         when(authorizationService.canAccessClaim(user, 12L)).thenReturn(true);
         assertThat(guard.canHardDelete(12L)).isTrue();
+    }
+
+    @Test
+    void providerBatchScopeIsRestrictedToOwnProvider() {
+        user.setProviderId(41L);
+        when(permissionGuard.has("CLAIM_VIEW")).thenReturn(true);
+        when(authorizationService.isProvider(user)).thenReturn(true);
+
+        assertThat(guard.canAccessBatch("CLAIM_VIEW", 41L, null)).isTrue();
+        assertThat(guard.canAccessBatch("CLAIM_VIEW", 42L, null)).isFalse();
+    }
+
+    @Test
+    void employerBatchScopeIsRestrictedToOwnEmployer() {
+        user.setEmployerId(71L);
+        when(permissionGuard.has("CLAIM_CREATE")).thenReturn(true);
+        when(authorizationService.isProvider(user)).thenReturn(false);
+        when(authorizationService.isEmployerAdmin(user)).thenReturn(true);
+
+        assertThat(guard.canAccessBatch("CLAIM_CREATE", null, 71L)).isTrue();
+        assertThat(guard.canAccessBatch("CLAIM_CREATE", null, 72L)).isFalse();
+    }
+
+    @Test
+    void isolatedReviewerMustRequestAnAssignedProviderForBatchAccess() {
+        when(permissionGuard.has("CLAIM_VIEW")).thenReturn(true);
+        when(authorizationService.isProvider(user)).thenReturn(false);
+        when(authorizationService.isEmployerAdmin(user)).thenReturn(false);
+        when(isolationService.isSubjectToIsolation(user)).thenReturn(true);
+        when(isolationService.getAllowedProviderIds(user)).thenReturn(List.of(91L));
+
+        assertThat(guard.canAccessBatch("CLAIM_VIEW", null, null)).isFalse();
+        assertThat(guard.canAccessBatch("CLAIM_VIEW", 91L, null)).isTrue();
+        assertThat(guard.canAccessBatch("CLAIM_VIEW", 92L, null)).isFalse();
+    }
+
+    @Test
+    void memberFinancialReportRequiresBothCapabilityAndMemberScope() {
+        when(permissionGuard.has("FINANCIAL_REPORT_VIEW")).thenReturn(true);
+        when(authorizationService.canAccessMember(user, 55L)).thenReturn(false);
+
+        assertThat(guard.canReadMemberFor("FINANCIAL_REPORT_VIEW", 55L)).isFalse();
+        when(authorizationService.canAccessMember(user, 55L)).thenReturn(true);
+        assertThat(guard.canReadMemberFor("FINANCIAL_REPORT_VIEW", 55L)).isTrue();
+        assertThat(guard.canReadMemberFor("SETTLEMENT_VIEW", 55L)).isFalse();
     }
 }

@@ -27,7 +27,7 @@ import java.util.List;
 @RequestMapping("/api/v1/claim-batches")
 @RequiredArgsConstructor
 @Slf4j
-@PreAuthorize("isAuthenticated()")
+@PreAuthorize("@permissionGuard.has('CLAIM_VIEW')")
 public class ClaimBatchController {
 
     private final ClaimBatchService claimBatchService;
@@ -40,7 +40,7 @@ public class ClaimBatchController {
      * Does NOT create a new batch (safe GET).
      */
     @GetMapping("/current")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY', 'ACCOUNTANT', 'EMPLOYER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
+    @PreAuthorize("@claimAccessGuard.canAccessBatch('CLAIM_VIEW', #providerId, #employerId)")
     public ResponseEntity<ClaimBatchResponse> getCurrentBatch(
             @RequestParam Long providerId,
             @RequestParam Long employerId,
@@ -65,7 +65,7 @@ public class ClaimBatchController {
      * Validates: not future, not older than 3 months.
      */
     @PostMapping("/current")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY', 'ACCOUNTANT', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
+    @PreAuthorize("@claimAccessGuard.canAccessBatch('CLAIM_CREATE', #providerId, #employerId)")
     public ResponseEntity<ClaimBatchResponse> openOrGetBatch(
             @RequestParam Long providerId,
             @RequestParam Long employerId,
@@ -93,7 +93,7 @@ public class ClaimBatchController {
      * Search batches by employer and period.
      */
     @GetMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY', 'ACCOUNTANT', 'EMPLOYER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
+    @PreAuthorize("@claimAccessGuard.canAccessBatch('CLAIM_VIEW', #providerId, #employerId)")
     public ResponseEntity<List<ClaimBatchResponse>> getBatches(
             @RequestParam(required = false) Long providerId,
             @RequestParam(required = false) Long employerId,
