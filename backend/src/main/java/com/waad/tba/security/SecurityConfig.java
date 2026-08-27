@@ -74,7 +74,6 @@ public class SecurityConfig {
                         .ignoringRequestMatchers(
                                 "/api/v1/auth/session/login",
                                 "/api/v1/auth/login",
-                                "/api/v1/auth/register",
                                 "/api/v1/auth/forgot-password",
                                 "/api/v1/auth/reset-password",
                                 "/api/v1/auth/token/forgot-password",
@@ -87,8 +86,28 @@ public class SecurityConfig {
 
                 // Authorization rules
                 .authorizeHttpRequests(auth -> auth
-                        // Public endpoints - Authentication
-                        .requestMatchers("/api/v1/auth/**").permitAll()
+                        // Public endpoints - Authentication.
+                        // Enumerated deliberately: a wildcard over /auth/** also
+                        // exposed /register, which minted an active internal-staff
+                        // account for any anonymous caller. Anything under /auth
+                        // that is not listed here falls through to
+                        // .anyRequest().authenticated() or its own @PreAuthorize.
+                        .requestMatchers(
+                                "/api/v1/auth/login",
+                                "/api/v1/auth/session/login",
+                                "/api/v1/auth/session/logout",
+                                // Public by design: returns 200 with a null payload
+                                // for first-time visitors; AuthContext calls it on
+                                // every page load to ask "is there a session yet?".
+                                "/api/v1/auth/session/me",
+                                "/api/v1/auth/forgot-password",
+                                "/api/v1/auth/reset-password",
+                                "/api/v1/auth/token/forgot-password",
+                                "/api/v1/auth/token/reset-password",
+                                "/api/v1/auth/password-reset-config",
+                                "/api/v1/auth/verify-email",
+                                "/api/v1/auth/resend-verification")
+                        .permitAll()
                         // Reports are NOT public — contain sensitive claim data
                         .requestMatchers("/api/reports/**").authenticated()
                         // Docker/load-balancer health check — must stay public

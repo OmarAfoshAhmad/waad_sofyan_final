@@ -272,8 +272,23 @@ public class AuthController {
                 return ResponseEntity.ok(ApiResponse.success("Login successful", response));
         }
 
+        /**
+         * Creating an account is an administrative act, not a public one: this
+         * is a closed corporate TPA system with no self-service tier. Left
+         * anonymous, this endpoint minted an ACTIVE account that inherited the
+         * DATA_ENTRY default from User.userType -- a role classified as internal
+         * staff, which bypasses every FeatureGuard portal check.
+         *
+         * Guarded by permission rather than by role name to match the RBAC
+         * migration already under way (@permissionGuard.has), so this does not
+         * have to be rewritten when the remaining hasRole guards are converted.
+         *
+         * Prefer POST /api/v1/admin/access-control/users, which assigns role and
+         * scope explicitly instead of inheriting a default.
+         */
         @PostMapping("/register")
-        @Operation(summary = "User registration", description = "Registers a new user and returns JWT token with the created user information.")
+        @PreAuthorize("@permissionGuard.has('USER_MANAGE')")
+        @Operation(summary = "User registration (administrative)", description = "Registers a new user and returns JWT token with the created user information.")
         @ApiResponses({
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Registration successful"),
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request payload"),
