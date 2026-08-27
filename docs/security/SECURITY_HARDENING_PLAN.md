@@ -383,3 +383,64 @@ Long providerId = scope.singleProviderId().orElse(null);   // المزوّد ي�
 
 `memberId` ما زال يأتي من الجسم. المحلّل جاهز لفحصه (`covers` يقبل محور جهة
 العمل)، لكن ربطه يحتاج حلّ جهة عمل المستفيد بتاريخ الخدمة — وهو عمل المرحلة 6.
+
+---
+
+## المرحلة 6 — إغلاق المسار المشروع
+
+**الحالة:** مكتملة ✅
+
+### الاكتشاف: ثلاث فتحات fail-open في دالة واحدة
+
+`PreAuthorizationService.validateAndEnforceProviderId` — الحارس الذي يقرر تحت أي
+مزوّد تُقيَّد الموافقة — كان مفتوحاً من ثلاث جهات:
+
+| # | الفتحة | الأثر |
+|---|---|---|
+| 1 | `if (currentUser == null) { log.warn(...); return; }` | مبدأ بلا هوية ⟶ يتخطى التحقق ويكمل |
+| 2 | `canAccessInternalOperations` ⟶ «أي مزوّد مسموح» | يشمل `DATA_ENTRY` |
+| 3 | `// Other roles: no restriction on providerId` | كل دور آخر بلا قيد — **بالصمت** |
+
+الفتحة الثالثة أخطرها: قائمة `hasAnyRole` على الـcontroller كانت الشيء الوحيد
+الذي يضيّق هذا. وهذا **فخ لمسار ترحيل RBAC الجاري**: توسيع التعليق التوضيحي كان
+سيوسّع انتحال المزوّد معه بالصمت.
+
+### ما تغيّر
+
+الدالة أُعيدت كتابتها لتقرر بالنطاق لا بالدور:
+
+```java
+PreAuthAccessScope scope = preAuthAccessScopeResolver.resolveFor(currentUser);
+if (scope.isDenied()) throw new AccessDeniedException(scope.reason());
+
+scope.singleProviderId().ifPresent(...)   // المزوّد يكتب كنفسه دائماً
+// ومن لا مزوّد وحيد له: يجب أن يسمّيه، ويُعاد فحصه مقابل نطاقه
+```
+
+**لا فرع صامت.** أي حالة لا يغطيها النطاق ترفع استثناءً.
+
+### لماذا كان الإغلاق آمناً
+
+`createPreAuthorization` له **مستدعٍ واحد** (الـcontroller المحروس) ولا مهام
+مجدولة في الوحدة. فحص المستدعين سبق التعديل، لا بعده.
+
+### الاختبارات
+
+`ProviderEnforcementFailsClosedTest` — 4 اختبارات مصدرية تثبت غياب مخارج الهروب:
+
+| الاختبار | يثبت |
+|---|---|
+| `aDeniedScopeStopsTheRequestRatherThanBeingLogged` | الرفض يرفع استثناءً لا سطر سجل |
+| `internalRolesNoLongerNameAnyProviderFreely` | `canAccessInternalOperations` لم تعد بوابة |
+| `aWiderScopeMustNameAProviderAndBeNarrowedToIt` | التسمية إلزامية ثم تُفحص |
+| `aProviderIsStillForcedToFileAsItself` | المزوّد يُقيَّد بنفسه |
+
+فحص مصدري عمداً: اختبار زمن التشغيل يُظهر أن مساراً يرفض، ولا يُظهر أن فرعاً
+غير محروس لم يُضَف من جديد.
+
+### النتيجة
+
+```
+م4+5:  Tests=1054  Failures=0
+م6:    Tests=1058  Failures=0     BUILD SUCCESS
+```

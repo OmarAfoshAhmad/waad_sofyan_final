@@ -2,6 +2,8 @@ package com.waad.tba.modules.preauthorization.service;
 
 import com.waad.tba.modules.preauthorization.dto.*;
 import com.waad.tba.modules.preauthorization.entity.PreAuthorization;
+import com.waad.tba.modules.preauthorization.security.PreAuthAccessScope;
+import com.waad.tba.modules.preauthorization.security.PreAuthAccessScopeResolver;
 import com.waad.tba.modules.preauthorization.entity.PreAuthorization.PreAuthStatus;
 import com.waad.tba.modules.preauthorization.entity.PreAuthorization.Priority;
 import com.waad.tba.modules.preauthorization.repository.PreAuthorizationRepository;
@@ -63,6 +65,7 @@ public class PreAuthorizationService {
     private final PreAuthReservationLedgerService reservationLedgerService;
     private final AuthorizationService authorizationService;
     private final ProviderContextGuard providerContextGuard;
+    private final PreAuthAccessScopeResolver preAuthAccessScopeResolver;
     private final BenefitPolicyCoverageService benefitPolicyCoverageService;
     private final ArchitecturalGuardService architecturalGuard;
     private final com.waad.tba.modules.claim.service.ReviewerProviderIsolationService reviewerIsolationService;
@@ -1415,38 +1418,50 @@ public class PreAuthorizationService {
      * @param dto         The pre-authorization creation DTO
      * @param currentUser The currently authenticated user
      */
+    /**
+     * Decides which provider a pre-authorization is filed under.
+     *
+     * Rewritten because every branch of the previous version failed open: a
+     * null principal returned early with a log line, "internal operations"
+     * users (which includes DATA_ENTRY) could name any provider at all, and a
+     * trailing comment granted every other role the same freedom by saying
+     * nothing. The controller's role list was the only thing narrowing that,
+     * which makes it a trap for the RBAC migration now under way -- widening
+     * the annotation would silently widen this.
+     *
+     * Now the scope decides, and an unestablished scope denies.
+     */
     private void validateAndEnforceProviderId(PreAuthorizationCreateDto dto, User currentUser) {
-        if (currentUser == null) {
-            log.warn("⚠️ No authenticated user - skipping provider validation");
+        PreAuthAccessScope scope = preAuthAccessScopeResolver.resolveFor(currentUser);
+        if (scope.isDenied()) {
+            throw new AccessDeniedException(scope.reason());
+        }
+
+        // A provider files as itself, always -- even when it names itself
+        // correctly, because honouring the body at all leaves the endpoint
+        // trusting it.
+        java.util.Optional<Long> ownProvider = scope.singleProviderId();
+        if (ownProvider.isPresent()) {
+            providerContextGuard.validateProviderBinding(currentUser);
+            Long enforced = ownProvider.get();
+            if (dto.getProviderId() != null && !dto.getProviderId().equals(enforced)) {
+                log.warn("PROVIDER_ID_OVERRIDE: user {} requested providerId={} but is bound to {}",
+                        currentUser.getUsername(), dto.getProviderId(), enforced);
+            }
+            dto.setProviderId(enforced);
             return;
         }
 
-        // Check if user is a PROVIDER - use ProviderContextGuard for strict enforcement
-        if (authorizationService.isProvider(currentUser)) {
-            // ═══════════════════════════════════════════════════════════════════════════
-            // SECURITY HARDENING: Use ProviderContextGuard for validation
-            // This ensures provider binding is validated and providerId is enforced
-            // ═══════════════════════════════════════════════════════════════════════════
-            providerContextGuard.validateProviderBinding(currentUser);
-            Long userProviderId = currentUser.getProviderId();
-
-            // Log if request contained different providerId (potential attack/bug)
-            if (dto.getProviderId() != null && !dto.getProviderId().equals(userProviderId)) {
-                log.warn(
-                        "🚨 PROVIDER_ID_OVERRIDE: User {} requested providerId={} but enforced to {} (potential security issue)",
-                        currentUser.getUsername(), dto.getProviderId(), userProviderId);
-            }
-
-            // ALWAYS override with user's providerId - NO EXCEPTIONS
-            dto.setProviderId(userProviderId);
-
-            log.info("🔒 PROVIDER {} creating pre-auth with their providerId: {} (enforced by ProviderContextGuard)",
-                    currentUser.getUsername(), userProviderId);
-        } else if (authorizationService.canAccessInternalOperations(currentUser)) {
-            // Internal operations users can set any provider
-            log.info("🔓 Internal user {} creating pre-auth - any providerId allowed", currentUser.getUsername());
+        // Wider reach has no single provider to infer, so it must name one,
+        // and only one the scope actually covers.
+        if (dto.getProviderId() == null) {
+            throw new BusinessRuleException("يجب تحديد مقدم الخدمة لطلب الموافقة المسبقة");
         }
-        // Other roles: no restriction on providerId
+        PreAuthAccessScope narrowed =
+                preAuthAccessScopeResolver.resolveFor(currentUser, dto.getProviderId());
+        if (narrowed.isDenied()) {
+            throw new AccessDeniedException(narrowed.reason());
+        }
     }
 
     /**
