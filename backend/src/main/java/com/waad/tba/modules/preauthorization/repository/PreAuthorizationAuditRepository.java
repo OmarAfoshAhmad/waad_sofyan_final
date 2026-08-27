@@ -74,7 +74,7 @@ public interface PreAuthorizationAuditRepository extends JpaRepository<PreAuthor
 
     @Query("SELECT a FROM PreAuthorizationAudit a WHERE a.changeDate >= :sinceDate " +
            "AND EXISTS (SELECT pa.id FROM PreAuthorization pa WHERE pa.id = a.preAuthorizationId " +
-           "AND pa.active = true AND (:scopeKind = 'GLOBAL' " +
+           "AND (:scopeKind = 'GLOBAL' " +
            "OR (:scopeKind = 'PROVIDERS' AND pa.providerId IN :scopeIds) " +
            "OR (:scopeKind = 'EMPLOYERS' AND EXISTS (SELECT m.id FROM Member m WHERE m.id = pa.memberId AND m.employer.id IN :scopeIds)))) " +
            "ORDER BY a.changeDate DESC")
@@ -84,6 +84,39 @@ public interface PreAuthorizationAuditRepository extends JpaRepository<PreAuthor
             @Param("scopeIds") Collection<Long> scopeIds,
             Pageable pageable
     );
+
+    @Query("SELECT a FROM PreAuthorizationAudit a WHERE a.changedBy = :username " +
+           "AND EXISTS (SELECT pa.id FROM PreAuthorization pa WHERE pa.id = a.preAuthorizationId AND (:scopeKind = 'GLOBAL' " +
+           "OR (:scopeKind = 'PROVIDERS' AND pa.providerId IN :scopeIds) " +
+           "OR (:scopeKind = 'EMPLOYERS' AND EXISTS (SELECT m.id FROM Member m WHERE m.id = pa.memberId AND m.employer.id IN :scopeIds)))) " +
+           "ORDER BY a.changeDate DESC")
+    Page<PreAuthorizationAudit> findByChangedByScoped(@Param("username") String username,
+            @Param("scopeKind") String scopeKind, @Param("scopeIds") Collection<Long> scopeIds, Pageable pageable);
+
+    @Query("SELECT a FROM PreAuthorizationAudit a WHERE a.action = :action " +
+           "AND EXISTS (SELECT pa.id FROM PreAuthorization pa WHERE pa.id = a.preAuthorizationId AND (:scopeKind = 'GLOBAL' " +
+           "OR (:scopeKind = 'PROVIDERS' AND pa.providerId IN :scopeIds) " +
+           "OR (:scopeKind = 'EMPLOYERS' AND EXISTS (SELECT m.id FROM Member m WHERE m.id = pa.memberId AND m.employer.id IN :scopeIds)))) " +
+           "ORDER BY a.changeDate DESC")
+    Page<PreAuthorizationAudit> findByActionScoped(@Param("action") AuditAction action,
+            @Param("scopeKind") String scopeKind, @Param("scopeIds") Collection<Long> scopeIds, Pageable pageable);
+
+    @Query("SELECT a FROM PreAuthorizationAudit a WHERE (a.referenceNumber LIKE %:query% " +
+           "OR a.changedBy LIKE %:query% OR a.notes LIKE %:query%) " +
+           "AND EXISTS (SELECT pa.id FROM PreAuthorization pa WHERE pa.id = a.preAuthorizationId AND (:scopeKind = 'GLOBAL' " +
+           "OR (:scopeKind = 'PROVIDERS' AND pa.providerId IN :scopeIds) " +
+           "OR (:scopeKind = 'EMPLOYERS' AND EXISTS (SELECT m.id FROM Member m WHERE m.id = pa.memberId AND m.employer.id IN :scopeIds)))) " +
+           "ORDER BY a.changeDate DESC")
+    Page<PreAuthorizationAudit> searchScoped(@Param("query") String query,
+            @Param("scopeKind") String scopeKind, @Param("scopeIds") Collection<Long> scopeIds, Pageable pageable);
+
+    @Query("SELECT COUNT(a) FROM PreAuthorizationAudit a WHERE " +
+           "(:action IS NULL OR a.action = :action) AND EXISTS " +
+           "(SELECT pa.id FROM PreAuthorization pa WHERE pa.id = a.preAuthorizationId AND (:scopeKind = 'GLOBAL' " +
+           "OR (:scopeKind = 'PROVIDERS' AND pa.providerId IN :scopeIds) " +
+           "OR (:scopeKind = 'EMPLOYERS' AND EXISTS (SELECT m.id FROM Member m WHERE m.id = pa.memberId AND m.employer.id IN :scopeIds))))")
+    long countScoped(@Param("action") AuditAction action, @Param("scopeKind") String scopeKind,
+            @Param("scopeIds") Collection<Long> scopeIds);
 
     /**
      * Count audit records by action type

@@ -52,6 +52,10 @@ class PreAuthDashboardScopeIntegrationTest extends PostgresIntegrationTestBase {
         assertThat(auditRepository.findRecentAuditsScoped(LocalDateTime.now().minusDays(1),
                         "PROVIDERS", Set.of(providerA), PageRequest.of(0, 10)).getContent())
                 .extracting(a -> a.getPreAuthorizationId()).containsExactly(preauthA);
+        assertThat(auditRepository.searchScoped("scope-test", "EMPLOYERS", Set.of(employerB),
+                        PageRequest.of(0, 10)).getContent())
+                .extracting(a -> a.getPreAuthorizationId()).containsExactly(preauthB);
+        assertThat(auditRepository.countScoped(null, "PROVIDERS", Set.of(providerA))).isEqualTo(1);
 
         Object[] globalSummary = unwrap(repository.getActiveSummaryScoped("GLOBAL", Set.of(-1L)));
         assertThat(((Number) globalSummary[0]).longValue()).isGreaterThanOrEqualTo(2);
