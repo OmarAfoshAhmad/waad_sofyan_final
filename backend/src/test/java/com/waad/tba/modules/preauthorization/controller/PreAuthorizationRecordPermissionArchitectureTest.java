@@ -26,6 +26,7 @@ class PreAuthorizationRecordPermissionArchitectureTest {
         String source = Files.readString(CONTROLLER).replace("\r\n", "\n");
         assertThat(source).contains(
                 "@GetMapping(\"/{id:\\\\d+}\")\n    @PreAuthorize(\"@preAuthAccessGuard.canView(#id)\")",
+                "@GetMapping(\"/reference/{referenceNumber}\")\n    @PreAuthorize(\"@preAuthAccessGuard.canViewReference(#referenceNumber)\")",
                 "@GetMapping(\"/{id:\\\\d+}/attachments\")\n    @PreAuthorize(\"@preAuthAccessGuard.canView(#id)\")",
                 "@GetMapping(\"/{id:\\\\d+}/attachments/{attachmentId}\")\n    @PreAuthorize(\"@preAuthAccessGuard.canView(#id)\")",
                 "@DeleteMapping(\"/{id:\\\\d+}/attachments/{attachmentId}\")\n    @PreAuthorize(\"@preAuthAccessGuard.canCreate(#id)\")");

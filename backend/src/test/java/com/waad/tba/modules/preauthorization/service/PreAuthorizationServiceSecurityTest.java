@@ -5,6 +5,7 @@ import com.waad.tba.modules.preauthorization.entity.PreAuthorization.PreAuthStat
 import com.waad.tba.modules.preauthorization.repository.PreAuthorizationRepository;
 import com.waad.tba.modules.preauthorization.security.AuthorizedPreAuthScope;
 import com.waad.tba.modules.preauthorization.security.PreAuthAccessScopeResolver;
+import com.waad.tba.modules.preauthorization.security.PreAuthAccessGuard;
 import com.waad.tba.modules.rbac.entity.User;
 import com.waad.tba.security.ProviderContextGuard;
 import com.waad.tba.security.AuthorizationService;
@@ -59,6 +60,9 @@ class PreAuthorizationServiceSecurityTest {
     @Mock
     private AuthorizedPreAuthScope authorizedScope;
 
+    @Mock
+    private PreAuthAccessGuard preAuthAccessGuard;
+
     @InjectMocks
     private PreAuthorizationService service;
 
@@ -81,6 +85,7 @@ class PreAuthorizationServiceSecurityTest {
     @Test
     void getByIdDeniedWhenPreAuthBelongsToAnotherProvider() {
         when(preAuthorizationRepository.findById(300L)).thenReturn(Optional.of(preAuth));
+        when(preAuthAccessGuard.canView(300L)).thenReturn(false);
 
         assertThrows(AccessDeniedException.class, () -> service.getPreAuthorizationById(300L));
     }
@@ -89,6 +94,7 @@ class PreAuthorizationServiceSecurityTest {
     void getByReferenceDeniedWhenPreAuthBelongsToAnotherProvider() {
         when(preAuthorizationRepository.findByReferenceNumberAndActiveTrue("PA-2026-0001"))
                 .thenReturn(Optional.of(preAuth));
+        when(preAuthAccessGuard.canView(300L)).thenReturn(false);
 
         assertThrows(AccessDeniedException.class,
                 () -> service.getPreAuthorizationByReference("PA-2026-0001"));
@@ -96,12 +102,8 @@ class PreAuthorizationServiceSecurityTest {
 
     @Test
     void getByIdAllowedWhenPreAuthBelongsToCallersOwnProvider() {
-        User ownProviderStaff = User.builder().id(10L).username("owning-provider-user")
-                .userType("PROVIDER_STAFF").providerId(251L).build();
-        when(authorizationService.getCurrentUser()).thenReturn(ownProviderStaff);
-        when(authorizationService.isInternalStaff(ownProviderStaff)).thenReturn(false);
-        when(authorizationService.isProvider(ownProviderStaff)).thenReturn(true);
         when(preAuthorizationRepository.findById(300L)).thenReturn(Optional.of(preAuth));
+        when(preAuthAccessGuard.canView(300L)).thenReturn(true);
 
         // Should not throw — same provider owns the request.
         // (Downstream mapping may hit null-dependent fields; the access

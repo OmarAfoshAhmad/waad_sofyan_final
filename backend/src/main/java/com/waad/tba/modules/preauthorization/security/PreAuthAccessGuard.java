@@ -26,6 +26,19 @@ public class PreAuthAccessGuard {
         return hasScopedAccess("PREAUTH_VIEW", preAuthId);
     }
 
+    public boolean canViewReference(String referenceNumber) {
+        if (referenceNumber == null || referenceNumber.isBlank()
+                || !permissionGuard.has("PREAUTH_VIEW")) {
+            return false;
+        }
+        var user = authorizationService.getCurrentUser();
+        if (user == null) return false;
+
+        return preAuthorizationRepository.findByReferenceNumberAndActiveTrue(referenceNumber)
+                .map(preAuth -> hasRecordScope(user, preAuth))
+                .orElse(false);
+    }
+
     public boolean canCreate(Long preAuthId) {
         return hasScopedAccess("PREAUTH_CREATE", preAuthId);
     }
@@ -40,20 +53,23 @@ public class PreAuthAccessGuard {
         if (user == null) return false;
 
         return preAuthorizationRepository.findById(preAuthId)
-                .map(preAuth -> {
-                    Long providerId = preAuth.getProviderId();
-                    if (user.getProviderId() != null) {
-                        return user.getProviderId().equals(providerId);
-                    }
-                    if (user.getEmployerId() != null) {
-                        return authorizationService.canAccessMember(user, preAuth.getMemberId());
-                    }
-                    if (reviewerIsolationService.isSubjectToIsolation(user)) {
-                        return providerId != null
-                                && reviewerIsolationService.getAllowedProviderIds(user).contains(providerId);
-                    }
-                    return true;
-                })
+                .map(preAuth -> hasRecordScope(user, preAuth))
                 .orElse(false);
+    }
+
+    private boolean hasRecordScope(com.waad.tba.modules.rbac.entity.User user,
+            com.waad.tba.modules.preauthorization.entity.PreAuthorization preAuth) {
+        Long providerId = preAuth.getProviderId();
+        if (user.getProviderId() != null) {
+            return user.getProviderId().equals(providerId);
+        }
+        if (user.getEmployerId() != null) {
+            return authorizationService.canAccessMember(user, preAuth.getMemberId());
+        }
+        if (reviewerIsolationService.isSubjectToIsolation(user)) {
+            return providerId != null
+                    && reviewerIsolationService.getAllowedProviderIds(user).contains(providerId);
+        }
+        return true;
     }
 }

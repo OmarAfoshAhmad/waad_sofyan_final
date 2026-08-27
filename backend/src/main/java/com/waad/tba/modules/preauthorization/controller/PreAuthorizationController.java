@@ -470,7 +470,7 @@ public class PreAuthorizationController {
      * GET /api/pre-authorizations/reference/{referenceNumber}
      */
     @GetMapping("/reference/{referenceNumber}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
+    @PreAuthorize("@preAuthAccessGuard.canViewReference(#referenceNumber)")
     public ResponseEntity<ApiResponse<PreAuthorizationResponseDto>> getPreAuthorizationByReference(
             @PathVariable("referenceNumber") String referenceNumber) {
         

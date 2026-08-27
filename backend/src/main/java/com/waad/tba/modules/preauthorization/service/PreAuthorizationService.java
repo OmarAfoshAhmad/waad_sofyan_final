@@ -71,6 +71,7 @@ public class PreAuthorizationService {
     private final com.waad.tba.modules.claim.service.ReviewerProviderIsolationService reviewerIsolationService;
     private final NotificationSseService notificationSseService;
     private final PreAuthAccessScopeResolver preAuthAccessScopeResolver;
+    private final com.waad.tba.modules.preauthorization.security.PreAuthAccessGuard preAuthAccessGuard;
 
     // ==================== CREATE ====================
 
@@ -952,7 +953,7 @@ public class PreAuthorizationService {
         PreAuthorization preAuth = preAuthorizationRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("PreAuthorization not found with ID: " + id));
 
-        assertCanAccessPreAuthorization(preAuth);
+        assertCanViewPreAuthorization(preAuth);
 
         Member member = memberRepository.findById(preAuth.getMemberId()).orElse(null);
         Provider provider = providerRepository.findById(preAuth.getProviderId()).orElse(null);
@@ -969,7 +970,7 @@ public class PreAuthorizationService {
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "PreAuthorization not found with reference: " + referenceNumber));
 
-        assertCanAccessPreAuthorization(preAuth);
+        assertCanViewPreAuthorization(preAuth);
 
         Member member = memberRepository.findById(preAuth.getMemberId()).orElse(null);
         Provider provider = providerRepository.findById(preAuth.getProviderId()).orElse(null);
@@ -983,18 +984,10 @@ public class PreAuthorizationService {
      * employer admins only requests for members in their own employer.
      * Mirrors {@code PreAuthorizationAttachmentService.assertCanAccessPreAuthorization}.
      */
-    private void assertCanAccessPreAuthorization(PreAuthorization preAuth) {
-        User currentUser = authorizationService.getCurrentUser();
-
-        boolean allowed = authorizationService.isInternalStaff(currentUser)
-                || (authorizationService.isProvider(currentUser)
-                        && currentUser.getProviderId() != null
-                        && currentUser.getProviderId().equals(preAuth.getProviderId()))
-                || (authorizationService.isEmployerAdmin(currentUser)
-                        && authorizationService.canAccessMember(currentUser, preAuth.getMemberId()));
-
-        if (!allowed) {
-            log.warn("❌ Access denied: user {} attempted to access pre-authorization {}",
+    private void assertCanViewPreAuthorization(PreAuthorization preAuth) {
+        if (!preAuthAccessGuard.canView(preAuth.getId())) {
+            User currentUser = authorizationService.getCurrentUser();
+            log.warn("Access denied: user {} attempted to access pre-authorization {}",
                     currentUser != null ? currentUser.getUsername() : "unknown", preAuth.getId());
             throw new AccessDeniedException("Access to this pre-authorization is denied");
         }

@@ -68,6 +68,22 @@ class PreAuthAccessGuardTest {
     }
 
     @Test
+    void referenceLookupUsesViewCapabilityAndTheSameOwnershipBoundary() {
+        user.setProviderId(42L);
+        when(permissionGuard.has("PREAUTH_VIEW")).thenReturn(true);
+        PreAuthorization owned = preAuth(42L, 5L);
+        when(repository.findByReferenceNumberAndActiveTrue("PA-77"))
+                .thenReturn(Optional.of(owned));
+
+        assertThat(guard.canViewReference("PA-77")).isTrue();
+
+        PreAuthorization foreign = preAuth(41L, 5L);
+        when(repository.findByReferenceNumberAndActiveTrue("PA-77"))
+                .thenReturn(Optional.of(foreign));
+        assertThat(guard.canViewReference("PA-77")).isFalse();
+    }
+
+    @Test
     void employerScopeIsResolvedThroughTheMember() {
         user.setEmployerId(71L);
         when(permissionGuard.has("PREAUTH_REVIEW")).thenReturn(true);
