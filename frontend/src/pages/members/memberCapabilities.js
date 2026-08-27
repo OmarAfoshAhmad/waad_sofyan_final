@@ -1,19 +1,15 @@
-export const resolveMemberRole = (user) =>
-  String(user?.userType || user?.role || user?.roles?.[0]?.name || user?.roles?.[0] || '').trim().toUpperCase();
-
-/** Mirrors the backend member command/import/query policy at action level. */
+/** Mirrors the backend effective-permission checks at action level. */
 export const getMemberCapabilities = (user) => {
-  const role = resolveMemberRole(user);
-  const superAdmin = role === 'SUPER_ADMIN';
-  const employerAdmin = role === 'EMPLOYER_ADMIN';
-  const dataEntry = role === 'DATA_ENTRY';
+  const permissions = new Set(user?.permissions || []);
   return Object.freeze({
-    create: superAdmin || employerAdmin || dataEntry,
-    edit: superAdmin || employerAdmin || dataEntry,
-    lifecycle: superAdmin || employerAdmin,
-    hardDelete: superAdmin,
-    bulkTerminate: superAdmin || employerAdmin,
-    import: superAdmin || dataEntry,
-    export: superAdmin || employerAdmin
+    create: permissions.has('MEMBER_CREATE'),
+    edit: permissions.has('MEMBER_EDIT_IDENTITY'),
+    transfer: permissions.has('MEMBER_TRANSFER_EMPLOYER'),
+    lifecycle: permissions.has('MEMBER_CHANGE_STATUS'),
+    reinstateTerminated: permissions.has('MEMBER_REINSTATE_TERMINATED'),
+    hardDelete: permissions.has('MEMBER_HARD_DELETE'),
+    bulkTerminate: permissions.has('MEMBER_CHANGE_STATUS'),
+    import: permissions.has('MEMBER_IMPORT'),
+    export: permissions.has('MEMBER_EXPORT')
   });
 };

@@ -122,7 +122,6 @@ import java.util.Map;
                 "Supports: Principal creation with inline Dependents, Dependent management, " +
                 "Family eligibility checks via Barcode, CASCADE deletion, and unified CRUD operations.")
 @SuppressWarnings("deprecation")
-@PreAuthorize("isAuthenticated()")
 public class UnifiedMemberController {
 
         private static final int DEFAULT_PAGE_SIZE = 20;
@@ -138,7 +137,7 @@ public class UnifiedMemberController {
         private final MemberFamilyService memberFamilyService;
 
         @PostMapping("/{id}/family-transfer")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN')")
+        @PreAuthorize("@permissionGuard.has('MEMBER_TRANSFER_EMPLOYER')")
         @Operation(summary = "نقل تابع إلى رئيس أسرة آخر", description = "عملية ذرية مؤرخة ومدققة؛ تنقل جهة العمل والوثيقة عند الحاجة ولا تسمح بتداخل أسري أو نقل جزئي.")
         public ResponseEntity<ApiResponse<MemberViewDto>> transferDependent(
                         @PathVariable("id") Long id,
@@ -148,7 +147,7 @@ public class UnifiedMemberController {
         }
 
         @PostMapping("/{id}/relationship-correction")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN')")
+        @PreAuthorize("@permissionGuard.has('MEMBER_EDIT_IDENTITY')")
         @Operation(summary = "تصحيح صلة قرابة تابع", description = "تصحيح مدقق يتطلب سبباً ونسخة السجل لمنع تعارض التعديلات.")
         public ResponseEntity<ApiResponse<MemberViewDto>> correctRelationship(
                         @PathVariable("id") Long id,
@@ -158,7 +157,7 @@ public class UnifiedMemberController {
         }
 
         @PostMapping("/{id}/family-policy")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN')")
+        @PreAuthorize("@permissionGuard.has('MEMBER_EDIT_IDENTITY')")
         @Operation(summary = "تغيير وثيقة الأسرة بتاريخ سريان صريح", description = "كل أفراد الأسرة أو لا أحد؛ يتطلب نسخة كل سجل ولا يكتب تغييراً جزئياً.")
         public ResponseEntity<ApiResponse<List<MemberViewDto>>> changeFamilyPolicy(
                         @PathVariable("id") Long id,
@@ -168,7 +167,7 @@ public class UnifiedMemberController {
         }
 
         @PostMapping("/{id}/family-order")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN')")
+        @PreAuthorize("@permissionGuard.has('MEMBER_EDIT_IDENTITY')")
         @Operation(summary = "إعادة ترتيب التابعين", description = "يغيّر ترتيب العرض فقط ولا يغيّر رقم البطاقة أو الباركود.")
         public ResponseEntity<ApiResponse<List<MemberViewDto>>> reorderFamily(
                         @PathVariable("id") Long id,
@@ -178,7 +177,7 @@ public class UnifiedMemberController {
         }
 
         @GetMapping("/{id}/employer-transfer/preview")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN')")
+        @PreAuthorize("@permissionGuard.has('MEMBER_TRANSFER_EMPLOYER')")
         @Operation(summary = "معاينة نقل رئيس أسرة وأسرته إلى جهة عمل أخرى", description = "قراءة فقط: يعرض الجهة الحالية والجديدة وكل أفراد الأسرة المتأثرين بنسخهم الحالية، دون أي كتابة.")
         public ResponseEntity<ApiResponse<com.waad.tba.modules.member.dto.MemberEmployerTransferPreviewDto>> previewEmployerTransfer(
                         @PathVariable("id") Long id,
@@ -188,7 +187,7 @@ public class UnifiedMemberController {
         }
 
         @PostMapping("/{id}/employer-transfer")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN')")
+        @PreAuthorize("@permissionGuard.has('MEMBER_TRANSFER_EMPLOYER')")
         @Operation(summary = "نقل رئيس أسرة وأسرته إلى جهة عمل أخرى", description = "عملية ذرية مؤرخة: كل أفراد الأسرة ينتقلون معاً أو لا أحد. لا تُمس أي مطالبة أو تعيين سابق لتاريخ السريان.")
         public ResponseEntity<ApiResponse<List<MemberViewDto>>> transferEmployerFamily(
                         @PathVariable("id") Long id,
@@ -290,7 +289,7 @@ public class UnifiedMemberController {
          *                             within the same employer)
          */
         @PostMapping
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN', 'DATA_ENTRY')")
+        @PreAuthorize("@permissionGuard.has('MEMBER_CREATE')")
         @Operation(summary = "Create Principal Member with inline Dependents", description = "Creates a new Principal Member with auto-generated Barcode (WAHA-YYYY-NNNNNN) and Card Number (NNNNNN). "
                         +
                         "Supports inline creation of 0 to N Dependents. Each Dependent receives a Card Number with suffix (e.g., 000123-01). "
@@ -372,7 +371,7 @@ public class UnifiedMemberController {
          *                           violated
          */
         @PostMapping("/{principalId}/dependents")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN', 'DATA_ENTRY')")
+        @PreAuthorize("@permissionGuard.has('MEMBER_CREATE')")
         @Operation(summary = "Add Dependent to existing Principal", description = "Adds a new Dependent member to an existing Principal. "
                         +
                         "Auto-generates Card Number with suffix based on existing Dependents count (e.g., 000123-03). "
@@ -426,7 +425,7 @@ public class UnifiedMemberController {
          * @throws NotFoundException if Member not found
          */
         @GetMapping("/{id}")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN', 'DATA_ENTRY', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
+        @PreAuthorize("@permissionGuard.has('MEMBER_VIEW')")
         @Operation(summary = "Get Member by ID", description = "Retrieves a Member by ID. If the Member is a Principal, returns Principal data with list of Dependents. "
                         +
                         "If the Member is a Dependent, returns only the Dependent's data without nested children. " +
@@ -451,7 +450,7 @@ public class UnifiedMemberController {
         }
 
         @GetMapping("/count")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN', 'DATA_ENTRY')")
+        @PreAuthorize("@permissionGuard.has('MEMBER_VIEW')")
         @Operation(summary = "Count members", description = "Returns the count of members matching the criteria.")
         public ResponseEntity<Long> countMembers(
                         @RequestParam(name = "employerId", required = false) Long employerId,
@@ -486,7 +485,7 @@ public class UnifiedMemberController {
          * @return ResponseEntity with paginated Member list
          */
         @GetMapping
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN', 'DATA_ENTRY', 'MEDICAL_REVIEWER')")
+        @PreAuthorize("@permissionGuard.has('MEMBER_VIEW')")
         @Operation(summary = "Get all Members with pagination", description = "Retrieves paginated list of all Members (Principals and Dependents). "
                         +
                         "Supports filtering by Organization, Status, and Member Type. " +
@@ -557,7 +556,7 @@ public class UnifiedMemberController {
          * @return ResponseEntity with search results
          */
         @GetMapping("/search")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN', 'DATA_ENTRY', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
+        @PreAuthorize("@permissionGuard.has('MEMBER_VIEW')")
         @Operation(summary = "Advanced Member search", description = "Searches Members using multiple criteria. Supports partial matching for names, national number, Barcode, and Card Number. "
                         +
                         "Combines filters with AND logic. Returns paginated results. " +
@@ -677,7 +676,7 @@ public class UnifiedMemberController {
          * @throws BusinessException if Barcode belongs to Dependent (invalid)
          */
         @PostMapping("/eligibility/evaluations")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
+        @PreAuthorize("@permissionGuard.has('MEMBER_VIEW')")
         @Operation(summary = "Check Family Eligibility by Barcode", description = "Scans Principal's Barcode and returns entire family (Principal + Dependents) for member selection at point of service. "
                         +
                         "This is the PRIMARY eligibility check method in the unified architecture. " +
@@ -881,7 +880,7 @@ public class UnifiedMemberController {
          * @throws ValidationException if validation fails
          */
         @PutMapping("/{id}")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN', 'DATA_ENTRY')")
+        @PreAuthorize("@permissionGuard.has('MEMBER_EDIT_IDENTITY')")
         @Operation(summary = "Update Member data", description = "Updates an existing Member (Principal or Dependent). "
                         +
                         "Supports updating personal information, contact details, and custom attributes. " +
@@ -918,7 +917,7 @@ public class UnifiedMemberController {
          * @return Updated member view DTO
          */
         @PatchMapping("/{id}/active")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN')")
+        @PreAuthorize("@permissionGuard.has('MEMBER_CHANGE_STATUS')")
         @Operation(summary = "Activate or deactivate a member", description = "Toggles the active flag of a member without changing any other data. "
                         +
                         "Inactive members are still stored but excluded from eligibility checks.", parameters = {
@@ -944,9 +943,9 @@ public class UnifiedMemberController {
          * restore endpoints above: requires SUPER_ADMIN and a mandatory reason.
          */
         @PutMapping("/{id}/reinstate")
-        @PreAuthorize("hasRole('SUPER_ADMIN')")
+        @PreAuthorize("@permissionGuard.has('MEMBER_REINSTATE_TERMINATED')")
         @Operation(summary = "Reinstate a terminated member", description = "Restores a TERMINATED member to ACTIVE. "
-                        + "Exceptional action requiring SUPER_ADMIN and a mandatory reason -- unlike restoring a "
+                        + "Exceptional action requiring MEMBER_REINSTATE_TERMINATED and a mandatory reason -- unlike restoring a "
                         + "SUSPENDED member, this does not happen through the ordinary restore/active endpoints.")
         public ResponseEntity<ApiResponse<MemberViewDto>> reinstateTerminated(
                         @PathVariable("id") Long id,
@@ -961,7 +960,7 @@ public class UnifiedMemberController {
          * the principal never does this automatically.
          */
         @PutMapping("/family-restore/{transitionId}")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN')")
+        @PreAuthorize("@permissionGuard.has('MEMBER_CHANGE_STATUS')")
         @Operation(summary = "Restore a family cascade", description = "Restores exactly the dependents affected by "
                         + "one specific suspend/terminate cascade (identified by transitionId), skipping any "
                         + "dependent whose status changed independently since, or who no longer qualifies for "
@@ -983,7 +982,7 @@ public class UnifiedMemberController {
          * real "pause without terminating" workflow.
          */
         @PatchMapping("/{id}/status")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN')")
+        @PreAuthorize("@permissionGuard.has('MEMBER_CHANGE_STATUS')")
         @Operation(summary = "Change member membership status", description = "Transitions a member to ACTIVE, SUSPENDED, PENDING, or TERMINATED.", parameters = {
                         @Parameter(name = "id", description = "Member ID", required = true)
         })
@@ -1038,7 +1037,7 @@ public class UnifiedMemberController {
          * this stays only so existing callers of DELETE /{id} keep working.
          */
         @PostMapping("/{id}/terminate")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN')")
+        @PreAuthorize("@permissionGuard.has('MEMBER_CHANGE_STATUS')")
         @Operation(summary = "Terminate membership (CASCADE for Principals)", description = "Ends a Member's "
                         + "membership. BEHAVIOR VARIES BY TYPE: PRINCIPAL termination cascades to every currently-"
                         + "ACTIVE dependent (a dependent already suspended/terminated for their own reason keeps "
@@ -1075,7 +1074,7 @@ public class UnifiedMemberController {
          */
         @Deprecated
         @DeleteMapping("/{id}")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN')")
+        @PreAuthorize("@permissionGuard.has('MEMBER_CHANGE_STATUS')")
         @Operation(summary = "[Deprecated] Terminate membership -- use POST /{id}/terminate", description = "Deprecated alias for POST /{id}/terminate. Nothing is deleted; this ends membership (status=TERMINATED).")
         public ResponseEntity<ApiResponse<Void>> deleteMember(
                         @PathVariable("id") Long id) {
@@ -1084,7 +1083,7 @@ public class UnifiedMemberController {
         }
 
         @PostMapping("/bulk-delete")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN')")
+        @PreAuthorize("@permissionGuard.has('MEMBER_CHANGE_STATUS')")
         @Operation(summary = "Bulk Terminate Members", description = "Ends membership for a list of members by IDs. Nothing is deleted -- status becomes TERMINATED for each, recorded in the append-only status history with the given reason.")
         public ResponseEntity<ApiResponse<Void>> bulkDeleteMembers(
                         @RequestBody com.waad.tba.modules.member.dto.BulkTerminateRequestDto request) {
@@ -1106,7 +1105,7 @@ public class UnifiedMemberController {
          * @throws BusinessException if member is not a Principal
          */
         @GetMapping("/{principalId}/dependents")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
+        @PreAuthorize("@permissionGuard.has('MEMBER_VIEW')")
         @Operation(summary = "Get all Dependents of a Principal", description = "Retrieves all Dependents associated with a specific Principal member. "
                         +
                         "Returns empty list if Principal has no Dependents. " +
@@ -1138,7 +1137,7 @@ public class UnifiedMemberController {
          * @return ResponseEntity with count
          */
         @GetMapping("/{principalId}/dependents/count")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN')")
+        @PreAuthorize("@permissionGuard.has('MEMBER_VIEW')")
         @Operation(summary = "Count Dependents of a Principal", description = "Returns the total count of Dependents for a specific Principal member. "
                         +
                         "Useful for validation and UI display without fetching full Dependent details.", parameters = {
@@ -1177,7 +1176,7 @@ public class UnifiedMemberController {
          * @return Remaining limit data
          */
         @GetMapping("/{memberId}/remaining-limit")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
+        @PreAuthorize("@permissionGuard.has('MEMBER_LIMIT_VIEW')")
         @Operation(summary = "Get Member Remaining Limit", description = "Returns the remaining coverage limit for a member. Used in Provider Portal during claim creation.")
         public ResponseEntity<java.util.Map<String, Object>> getRemainingLimit(
                         @PathVariable("memberId") Long memberId) {
@@ -1253,7 +1252,7 @@ public class UnifiedMemberController {
          * @return Comprehensive financial summary
          */
         @GetMapping("/{memberId}/financial-summary")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY', 'EMPLOYER_ADMIN', 'MEDICAL_REVIEWER')")
+        @PreAuthorize("@permissionGuard.has('MEMBER_FINANCIAL_VIEW')")
         @Operation(summary = "Get Member Financial Summary", description = "Returns comprehensive financial overview including policy info, utilization metrics, "
                         +
                         "claim statistics, and alerts. **PHASE 1 Critical Endpoint** for financial visibility.", parameters = {
@@ -1316,7 +1315,7 @@ public class UnifiedMemberController {
          * @return Updated member with photo URL
          */
         @PostMapping(value = "/{id}/photo", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY', 'EMPLOYER_ADMIN')")
+        @PreAuthorize("@permissionGuard.has('MEMBER_EDIT_IDENTITY')")
         @Operation(summary = "Upload Member Photo", description = "Upload profile photo for a member. Accepts JPEG or PNG images.")
         public ResponseEntity<ApiResponse<MemberViewDto>> uploadPhoto(
                         @PathVariable("id") Long id,
@@ -1374,7 +1373,7 @@ public class UnifiedMemberController {
          * @return Photo binary content
          */
         @GetMapping(value = "/{id}/photo", produces = { MediaType.IMAGE_JPEG_VALUE, MediaType.IMAGE_PNG_VALUE })
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
+        @PreAuthorize("@permissionGuard.has('MEMBER_VIEW')")
         @Operation(summary = "Get Member Photo", description = "Retrieve member profile photo as image binary")
         public ResponseEntity<byte[]> getPhoto(@PathVariable("id") Long id) {
                 log.debug("📸 Photo request: memberId={}", id);
@@ -1411,7 +1410,7 @@ public class UnifiedMemberController {
          * @return Success response
          */
         @DeleteMapping("/{id}/photo")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY', 'EMPLOYER_ADMIN')")
+        @PreAuthorize("@permissionGuard.has('MEMBER_EDIT_IDENTITY')")
         @Operation(summary = "Delete Member Photo", description = "Remove profile photo from a member")
         public ResponseEntity<ApiResponse<Void>> deletePhoto(@PathVariable("id") Long id) {
                 log.info("🗑️ Photo delete request: memberId={}", id);
@@ -1447,7 +1446,7 @@ public class UnifiedMemberController {
          * @return Restored member
          */
         @PutMapping("/{id}/restore")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN')")
+        @PreAuthorize("@permissionGuard.has('MEMBER_CHANGE_STATUS')")
         @Operation(summary = "Reinstate Member", description = "Performs an audited status transition back to ACTIVE; a reason is mandatory")
         public ResponseEntity<ApiResponse<MemberViewDto>> restoreMember(
                         @PathVariable("id") Long id,
@@ -1466,7 +1465,7 @@ public class UnifiedMemberController {
          * @return Success response
          */
         @DeleteMapping("/{id}/hard")
-        @PreAuthorize("hasRole('SUPER_ADMIN')")
+        @PreAuthorize("@permissionGuard.has('MEMBER_HARD_DELETE')")
         @Operation(summary = "Hard Delete Member", description = "Permanently delete a member from the database (SUPER_ADMIN only). "
                         + "Requires a reason, blocked entirely if any financial/medical/audit footprint exists, "
                         + "and writes an independent (non-FK'd) audit record before deleting.")
@@ -1492,7 +1491,7 @@ public class UnifiedMemberController {
          * @return Excel file as byte array
          */
         @GetMapping("/export/excel")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN')")
+        @PreAuthorize("@permissionGuard.has('MEMBER_EXPORT')")
         @Operation(summary = "Export Members to Excel", description = "Export members list to Excel file with optional filters")
         public ResponseEntity<byte[]> exportMembersToExcel(
                         @RequestParam(name = "searchQuery", required = false) String searchQuery,
@@ -1536,7 +1535,7 @@ public class UnifiedMemberController {
         }
 
         @GetMapping("/export/reimportable-excel")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN')")
+        @PreAuthorize("@permissionGuard.has('MEMBER_EXPORT')")
         @Operation(summary = "Export re-importable member workbook",
                         description = "Exports the canonical member-import schema. Unlike /export/excel, this file is intended for preview and re-import.")
         public ResponseEntity<byte[]> exportReimportableMembers(
@@ -1564,7 +1563,7 @@ public class UnifiedMemberController {
          * @return List of matching members
          */
         @GetMapping("/unified-search")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN', 'DATA_ENTRY', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
+        @PreAuthorize("@permissionGuard.has('MEMBER_VIEW')")
         @Operation(summary = "Unified member search (Auto-detect type)", description = "Search members by card number, name (fuzzy), or barcode/QR.")
         public ResponseEntity<ApiResponse<List<MemberSearchDto>>> unifiedSearch(
                         @RequestParam(name = "query") String query,
@@ -1578,7 +1577,7 @@ public class UnifiedMemberController {
          * Get member details by ID - for detailed view after search
          */
         @GetMapping("/{id}/details")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN', 'DATA_ENTRY', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
+        @PreAuthorize("@permissionGuard.has('MEMBER_VIEW')")
         @Operation(summary = "Get member details by ID", description = "Retrieve complete member info after search selection")
         public ResponseEntity<ApiResponse<MemberSearchDto>> getMemberDetails(
                         @PathVariable("id") Long id) {

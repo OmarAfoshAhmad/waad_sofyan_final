@@ -42,6 +42,8 @@ import com.waad.tba.modules.member.security.MemberScopeFilter;
 import com.waad.tba.modules.systemadmin.service.AuditLogService;
 import com.waad.tba.security.AuthorizationService;
 import com.waad.tba.modules.rbac.entity.User;
+import com.waad.tba.modules.rbac.permission.EffectivePermissionService;
+import com.waad.tba.modules.rbac.permission.SystemPermission;
 
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
@@ -86,6 +88,7 @@ public class UnifiedMemberService {
     private final CardNumberGeneratorService cardNumberGenerator;
     private final UnifiedMemberMapper mapper;
     private final AuthorizationService authorizationService;
+    private final EffectivePermissionService effectivePermissionService;
     private final MemberFinancialSummaryService financialSummaryService;
     private final JdbcTemplate jdbcTemplate;
     private final AuditLogService auditLogService;
@@ -549,9 +552,11 @@ public class UnifiedMemberService {
         Member stored = requireStoredMember(id);
         commandAccessPolicy.require(MemberOperation.REINSTATE, employerIdOf(stored));
         User currentUser = authorizationService.getCurrentUser();
-        boolean isSuperAdmin = currentUser != null && "SUPER_ADMIN".equalsIgnoreCase(currentUser.getUserType());
+        boolean mayReinstateTerminated = currentUser != null
+                && effectivePermissionService.resolve(currentUser)
+                        .contains(SystemPermission.MEMBER_REINSTATE_TERMINATED);
         Member member = statusTransitionService.reinstateTerminated(id, reason,
-                currentUser != null ? currentUser.getId() : null, isSuperAdmin);
+                currentUser != null ? currentUser.getId() : null, mayReinstateTerminated);
         if (member.isPrincipal()) {
             List<Member> dependents = memberRepository.findByParentId(member.getId());
             return mapper.toViewDto(member, dependents);

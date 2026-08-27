@@ -34,9 +34,38 @@ class PermissionCatalogueTest {
     }
 
     @Test
+    void operationalTemplatesPreserveIntendedMemberAndEmployerWorkflows() {
+        var employerAdmin = RolePermissionDefaults.forRole(SystemRole.EMPLOYER_ADMIN);
+        assertTrue(employerAdmin.containsAll(java.util.Set.of(
+                SystemPermission.MEMBER_VIEW,
+                SystemPermission.MEMBER_CREATE,
+                SystemPermission.MEMBER_EDIT_IDENTITY,
+                SystemPermission.MEMBER_CHANGE_STATUS,
+                SystemPermission.MEMBER_TRANSFER_EMPLOYER,
+                SystemPermission.MEMBER_EXPORT,
+                SystemPermission.MEMBER_LIMIT_VIEW,
+                SystemPermission.EMPLOYER_VIEW)));
+        assertFalse(employerAdmin.contains(SystemPermission.MEMBER_HARD_DELETE));
+        assertFalse(employerAdmin.contains(SystemPermission.MEMBER_IMPORT));
+
+        assertTrue(RolePermissionDefaults.forRole(SystemRole.PROVIDER_STAFF)
+                .contains(SystemPermission.EMPLOYER_VIEW));
+        assertTrue(RolePermissionDefaults.forRole(SystemRole.PROVIDER_STAFF)
+                .contains(SystemPermission.MEMBER_LIMIT_VIEW));
+        assertTrue(RolePermissionDefaults.forRole(SystemRole.MEDICAL_REVIEWER)
+                .contains(SystemPermission.EMPLOYER_VIEW));
+        assertTrue(RolePermissionDefaults.forRole(SystemRole.ACCOUNTANT)
+                .contains(SystemPermission.EMPLOYER_VIEW));
+        assertTrue(RolePermissionDefaults.forRole(SystemRole.FINANCE_VIEWER)
+                .contains(SystemPermission.EMPLOYER_VIEW));
+    }
+
+    @Test
     void migrationSeedsEveryVersionControlledPermission() throws Exception {
         String sql = Files.readString(Path.of("src/main/resources/db/migration/"
-                + "V191__normalized_role_and_user_permissions.sql"));
+                + "V191__normalized_role_and_user_permissions.sql"))
+                + Files.readString(Path.of("src/main/resources/db/migration/"
+                        + "V192__align_operational_role_permission_templates.sql"));
         Arrays.stream(SystemPermission.values())
                 .forEach(permission -> assertTrue(sql.contains("'" + permission.name() + "'"),
                         () -> "Migration does not seed " + permission.name()));

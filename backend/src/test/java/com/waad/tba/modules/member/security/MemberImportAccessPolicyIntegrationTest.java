@@ -16,6 +16,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.context.ActiveProfiles;
 
 import com.waad.tba.TbaWaadApplication;
+import com.waad.tba.modules.rbac.entity.User;
 import com.waad.tba.support.PostgresIntegrationTestBase;
 
 /**
@@ -45,13 +46,20 @@ class MemberImportAccessPolicyIntegrationTest extends PostgresIntegrationTestBas
                 + "', 'Import " + label + " " + s + "') RETURNING id", Long.class);
     }
 
-    private void actingAs(String userType, Long employerId) {
+    private User actingAs(String userType, Long employerId) {
         String username = "ip-" + suffix();
-        userRepository.save(com.waad.tba.modules.rbac.entity.User.builder()
+        User saved = userRepository.save(User.builder()
                 .username(username).password("x").fullName("Import Test").email(username + "@waad.ly")
                 .userType(userType).employerId(employerId).active(true).build());
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(username, "x", List.of()));
+        return saved;
+    }
+
+    private void override(User user, String permission, String effect) {
+        jdbc.update("insert into rbac_user_permission_overrides"
+                + "(user_id,permission_code,effect,reason,changed_by) values(?,?,?,?,?)",
+                user.getId(), permission, effect, "integration permission decision", user.getId());
     }
 
     // -- the permitted paths --------------------------------------------
@@ -141,7 +149,7 @@ class MemberImportAccessPolicyIntegrationTest extends PostgresIntegrationTestBas
         // that is precisely the route around the rule.
         assertThatThrownBy(() -> policy.require(List.of(a), true))
                 .isInstanceOf(MemberAccessDeniedException.class)
-                .hasMessageContaining("مدير النظام");
+                .hasMessageContaining("العمليات الخطرة");
 
         // And the authorised handle says so even on the permitted path, so a
         // caller cannot read the flag from anywhere else.
@@ -159,7 +167,7 @@ class MemberImportAccessPolicyIntegrationTest extends PostgresIntegrationTestBas
     // -- everyone else --------------------------------------------------
 
     @Test
-    void otherRolesMayNotImportAtAll() {
+    void rolesWithoutTheEffectivePermissionMayNotImportAtAll() {
         long a = employer("A");
 
         for (String role : new String[] {"EMPLOYER_ADMIN", "PROVIDER_STAFF", "MEDICAL_REVIEWER"}) {
@@ -168,6 +176,35 @@ class MemberImportAccessPolicyIntegrationTest extends PostgresIntegrationTestBas
                     .as(role + " importing")
                     .isInstanceOf(MemberAccessDeniedException.class);
         }
+    }
+
+    @Test
+    void aRoleCanBeDelegatedImportWithoutChangingItsTemplate() {
+        long a = employer("A");
+        User employerAdmin = actingAs("EMPLOYER_ADMIN", a);
+        override(employerAdmin, "MEMBER_IMPORT", "GRANT");
+
+        assertThat(policy.require(List.of(a), false).covers(a)).isTrue();
+    }
+
+    @Test
+    void anExplicitRevocationOverridesTheDataEntryTemplate() {
+        long a = employer("A");
+        User dataEntry = actingAs("DATA_ENTRY", a);
+        override(dataEntry, "MEMBER_IMPORT", "REVOKE");
+
+        assertThatThrownBy(() -> policy.require(List.of(a), false))
+                .isInstanceOf(MemberAccessDeniedException.class)
+                .hasMessageContaining("MEMBER_IMPORT");
+    }
+
+    @Test
+    void clearingAbsentMembersFollowsTheSensitiveCapabilityNotTheRoleName() {
+        long a = employer("A");
+        User dataEntry = actingAs("DATA_ENTRY", a);
+        override(dataEntry, "DANGER_ZONE_EXECUTE", "GRANT");
+
+        assertThat(policy.require(List.of(a), true).mayClearAbsentMembers()).isTrue();
     }
 
     @Test

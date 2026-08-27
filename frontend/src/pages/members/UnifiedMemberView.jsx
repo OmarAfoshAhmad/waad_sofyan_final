@@ -89,7 +89,6 @@ import {
   getMember,
   terminateMembership,
   hardDeleteMember,
-  restoreMember,
   changeMemberStatus,
   reinstateTerminatedMember,
   restoreFamily,
@@ -201,7 +200,6 @@ const UnifiedMemberView = () => {
   const [deletingMember, setDeletingMember] = useState(null);
   const [hardDeleteDepDialogOpen, setHardDeleteDepDialogOpen] = useState(false);
   const [hardDeletingDep, setHardDeletingDep] = useState(null);
-  const [restoreTarget, setRestoreTarget] = useState(null);
   const [photoDialogOpen, setPhotoDialogOpen] = useState(false);
   const [statusMenuAnchor, setStatusMenuAnchor] = useState(null);
   const [statusMenuTargetId, setStatusMenuTargetId] = useState(null);
@@ -245,7 +243,8 @@ const UnifiedMemberView = () => {
    * server and bounces. TERMINATED -> ACTIVE is the one exception: it is not
    * changeStatus's ACTIVE case (restoreFromSuspended, which refuses a
    * TERMINATED member outright) but the separate reinstate operation, gated
-   * to SUPER_ADMIN. DUPLICATE_MERGED has no valid outgoing transition at all.
+   * to the explicit exceptional permission. DUPLICATE_MERGED has no valid
+   * outgoing transition at all.
    */
   const VALID_STATUS_TRANSITIONS = {
     ACTIVE: [
@@ -260,7 +259,7 @@ const UnifiedMemberView = () => {
       { value: 'ACTIVE', label: 'اعتماد وتفعيل' },
       { value: 'TERMINATED', label: 'إنهاء عضوية' }
     ],
-    TERMINATED: capabilities.hardDelete ? [{ value: 'ACTIVE', label: 'إعادة عضوية استثنائية', reinstate: true }] : [],
+    TERMINATED: capabilities.reinstateTerminated ? [{ value: 'ACTIVE', label: 'إعادة عضوية استثنائية', reinstate: true }] : [],
     DUPLICATE_MERGED: []
   };
 
@@ -514,6 +513,18 @@ const UnifiedMemberView = () => {
     });
   };
 
+  const openReinstateDialog = (targetId) => {
+    setStatusChangeDialog({
+      open: true,
+      targetId,
+      targetStatus: 'ACTIVE',
+      reason: '',
+      reinstate: true,
+      currentStatus: 'TERMINATED',
+      isPendingActivation: false
+    });
+  };
+
   const handleChangePage = (event, newPage) => {
     setPg(newPage);
   };
@@ -681,24 +692,6 @@ const UnifiedMemberView = () => {
   const handleModalSave = () => {
     fetchMemberData();
     setModalOpen(false);
-  };
-
-  const handleRestore = (id) => {
-    const target = id === member?.id ? member : dependents.find((item) => item.id === id);
-    setRestoreTarget(target || { id, fullName: 'المستفيد' });
-  };
-
-  const executeRestore = async (reason) => {
-    try {
-      await restoreMember(restoreTarget.id, reason);
-      openSnackbar({ open: true, message: 'تم استعادة التابع بنجاح', variant: 'alert', alert: { color: 'success' } });
-      fetchMemberData();
-    } catch (error) {
-      console.error('Error restoring member:', error);
-      openSnackbar({ open: true, message: 'خطأ في استعادة التابع', variant: 'alert', alert: { color: 'error' } });
-    } finally {
-      setRestoreTarget(null);
-    }
   };
 
   const handleHardDeleteDepConfirm = (dep) => {
@@ -1152,12 +1145,12 @@ const UnifiedMemberView = () => {
                     />
                   </Stack>
                   <Stack direction="row" spacing={1}>
-                    {capabilities.lifecycle && dependents.length > 0 && !showDeleted && (
+                    {capabilities.edit && dependents.length > 0 && !showDeleted && (
                       <Button size="small" variant="outlined" startIcon={<SwapHorizIcon />} onClick={openPolicyDialog}>
                         تغيير وثيقة الأسرة
                       </Button>
                     )}
-                    {capabilities.lifecycle && dependents.length > 1 && !showDeleted && (
+                    {capabilities.edit && dependents.length > 1 && !showDeleted && (
                       <Button size="small" variant="outlined" startIcon={<ReorderIcon />} onClick={openReorderDialog}>
                         إعادة ترتيب التابعين
                       </Button>
@@ -1263,8 +1256,8 @@ const UnifiedMemberView = () => {
                                     <Stack direction="row" spacing={1} justifyContent="center">
                                       {showDeleted ? (
                                         <>
-                                          {capabilities.lifecycle && <Tooltip title="استعادة">
-                                            <IconButton size="small" color="success" onClick={() => handleRestore(dep.id)}>
+                                          {capabilities.reinstateTerminated && <Tooltip title="إعادة عضوية استثنائية">
+                                            <IconButton size="small" color="success" onClick={() => openReinstateDialog(dep.id)}>
                                               <RestoreFromTrashIcon fontSize="small" />
                                             </IconButton>
                                           </Tooltip>}
@@ -1281,12 +1274,12 @@ const UnifiedMemberView = () => {
                                               <EditIcon fontSize="small" />
                                             </IconButton>
                                           </Tooltip>}
-                                          {capabilities.lifecycle && <Tooltip title="تصحيح صلة القرابة">
+                                          {capabilities.edit && <Tooltip title="تصحيح صلة القرابة">
                                             <IconButton size="small" color="info" onClick={() => openCorrectionDialog(dep)}>
                                               <FamilyRestroomIcon fontSize="small" />
                                             </IconButton>
                                           </Tooltip>}
-                                          {capabilities.lifecycle && <Tooltip title="نقل إلى رئيس أسرة آخر">
+                                          {capabilities.transfer && <Tooltip title="نقل إلى رئيس أسرة آخر">
                                             <IconButton size="small" color="info" onClick={() => openTransferDialog(dep)}>
                                               <CompareArrowsIcon fontSize="small" />
                                             </IconButton>
@@ -1822,8 +1815,6 @@ const UnifiedMemberView = () => {
       <MemberLifecycleDialog open={deleteDialogOpen} action="TERMINATE" member={deletingMember}
         affectedDependents={deletingMember?.type === MEMBER_TYPES.PRINCIPAL ? member?.dependentsCount || 0 : 0}
         onClose={() => setDeleteDialogOpen(false)} onConfirm={handleDeleteExecute} />
-      <MemberLifecycleDialog open={Boolean(restoreTarget)} action="RESTORE" member={restoreTarget}
-        onClose={() => setRestoreTarget(null)} onConfirm={executeRestore} />
     </>
   );
 };

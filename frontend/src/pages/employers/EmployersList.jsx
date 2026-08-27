@@ -49,6 +49,7 @@ import MainCard from 'components/MainCard';
 import { UnifiedMedicalTable } from 'components/common';
 import { ModernPageHeader, SoftDeleteToggle, DataExportWizard, ActionConfirmDialog } from 'components/tba';
 import PermissionGuard from 'components/PermissionGuard';
+import useAuth from 'hooks/useAuth';
 import EmployerImportDialog from './components/EmployerImportDialog';
 
 // Services
@@ -78,6 +79,8 @@ const EmployersList = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { enqueueSnackbar } = useSnackbar();
+  const { user } = useAuth();
+  const canManageEmployers = new Set(user?.permissions || []).has('EMPLOYER_MANAGE');
 
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
@@ -330,7 +333,7 @@ const EmployersList = () => {
             {row.active === false ? (
               /* السجل المؤرشف: الاستعادة فقط، فلا حذف نهائي للسجل التأميني */
               <>
-                <PermissionGuard resource="employers" action="delete">
+                <PermissionGuard requiredPermission="EMPLOYER_MANAGE">
                   <Tooltip title="استعادة">
                     <IconButton size="small" color="success" onClick={() => handleRestore(row.id, row.name || row.code)}>
                       <UndoIcon fontSize="small" />
@@ -341,21 +344,21 @@ const EmployersList = () => {
             ) : (
               /* ── الوضع النشط: تعديل + حذف ── */
               <>
-                <PermissionGuard resource="employers" action="read">
+                <PermissionGuard requiredPermission="BENEFIT_POLICY_VIEW">
                   <Tooltip title="وثائق جهة العمل">
                     <IconButton size="small" color="primary" onClick={() => handleViewPolicy(row.id)}>
                       <AssignmentIcon fontSize="small" />
                     </IconButton>
                   </Tooltip>
                 </PermissionGuard>
-                <PermissionGuard resource="employers" action="update">
+                <PermissionGuard requiredPermission="EMPLOYER_MANAGE">
                   <Tooltip title="تعديل">
                     <IconButton size="small" color="info" onClick={() => handleNavigateEdit(row.id)}>
                       <EditIcon fontSize="small" />
                     </IconButton>
                   </Tooltip>
                 </PermissionGuard>
-                <PermissionGuard resource="employers" action="delete">
+                <PermissionGuard requiredPermission="EMPLOYER_MANAGE">
                   <Tooltip title="حذف">
                     <IconButton size="small" color="error" onClick={() => handleArchive(row.id, row.name || row.code)}>
                       <DeleteIcon fontSize="small" />
@@ -386,7 +389,7 @@ const EmployersList = () => {
         px: { xs: 2, sm: 3 }
       }}
     >
-      <PermissionGuard resource="employers" action="view">
+      <PermissionGuard requiredPermission="EMPLOYER_VIEW" isRouteGuard>
         <ModernPageHeader
           title="جهات العمل"
           subtitle="إدارة جهات العمل ومعلوماتهم"
@@ -394,16 +397,18 @@ const EmployersList = () => {
           breadcrumbs={[{ label: 'الرئيسية', path: '/' }, { label: 'جهات العمل' }]}
           actions={
             <Stack direction="row" spacing={1.5}>
-              {selectedIds.length > 0 && !showArchived && (
-                <Button variant="contained" color="error" startIcon={<DeleteIcon />} onClick={handleBulkArchive}>
-                  حذف جماعي ({selectedIds.length})
-                </Button>
-              )}
-              {selectedIds.length > 0 && showArchived && (
-                <Button variant="contained" color="success" startIcon={<UndoIcon />} onClick={handleBulkRestore}>
-                  استعادة جماعية ({selectedIds.length})
-                </Button>
-              )}
+              <PermissionGuard requiredPermission="EMPLOYER_MANAGE">
+                {selectedIds.length > 0 && !showArchived && (
+                  <Button variant="contained" color="error" startIcon={<DeleteIcon />} onClick={handleBulkArchive}>
+                    حذف جماعي ({selectedIds.length})
+                  </Button>
+                )}
+                {selectedIds.length > 0 && showArchived && (
+                  <Button variant="contained" color="success" startIcon={<UndoIcon />} onClick={handleBulkRestore}>
+                    استعادة جماعية ({selectedIds.length})
+                  </Button>
+                )}
+              </PermissionGuard>
               <Button
                 variant="outlined"
                 onClick={() => setExportWizardOpen(true)}
@@ -421,7 +426,7 @@ const EmployersList = () => {
                 تصدير لإكسل
               </Button>
 
-              <PermissionGuard resource="employers" action="create">
+              <PermissionGuard requiredPermission="EMPLOYER_MANAGE">
                 <Button
                   variant="outlined"
                   onClick={() => setImportDialogOpen(true)}
@@ -434,7 +439,7 @@ const EmployersList = () => {
 
               <SoftDeleteToggle showDeleted={showArchived} onToggle={() => setShowArchived(!showArchived)} />
 
-              <PermissionGuard resource="employers" action="create">
+              <PermissionGuard requiredPermission="EMPLOYER_MANAGE">
                 <Button variant="contained" startIcon={<AddIcon />} onClick={handleNavigateAdd}>
                   إضافة جهة عمل
                 </Button>
@@ -555,7 +560,7 @@ const EmployersList = () => {
           renderCell={renderCell}
           emptyMessage="لا توجد جهات عمل مسجلة"
           getRowKey={(row) => row.id}
-          enableRowSelection
+          enableRowSelection={canManageEmployers}
           selectedRowIds={selectedIds}
           onRowSelectionChange={setSelectedIds}
           sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minHeight: 0, mb: 1 }}

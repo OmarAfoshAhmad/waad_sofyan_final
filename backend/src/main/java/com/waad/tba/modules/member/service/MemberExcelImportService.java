@@ -396,7 +396,10 @@ public class MemberExcelImportService {
             // never keep an absent membership ACTIVE. This runs after the
             // idempotency short-circuit and inside the import transaction.
             if (Boolean.TRUE.equals(clearOldMembers)) {
-                assertCurrentUserCanClearOldMembers();
+                if (!importScope.mayClearAbsentMembers()) {
+                    throw new AccessDeniedException(
+                            "إنهاء المستفيدين الغائبين عن الملف يتطلب صلاحية العمليات الخطرة");
+                }
                 Map<Long, Set<String>> presentCardsByEmployer = collectPresentCardsByEmployer(
                         sheet, resolvedHeaderRowNumber, physicalLastRow, fieldToColumnIndex, defaultEmployer);
                 for (Map.Entry<Long, Set<String>> entry : presentCardsByEmployer.entrySet()) {
@@ -695,13 +698,6 @@ public class MemberExcelImportService {
             terminated++;
         }
         log.info("🧹 Logically terminated {} members absent from the replacement import", terminated);
-    }
-
-    private void assertCurrentUserCanClearOldMembers() {
-        User currentUser = authorizationService.getCurrentUser();
-        if (currentUser == null || !"SUPER_ADMIN".equalsIgnoreCase(currentUser.getUserType())) {
-            throw new AccessDeniedException("Only SUPER_ADMIN can clear old members during import");
-        }
     }
 
     private Map<String, Member> loadExistingMembersForImport(

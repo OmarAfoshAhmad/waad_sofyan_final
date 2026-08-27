@@ -48,7 +48,7 @@ const LABELS = {
 const MembersBulkUploadDialog = ({ open, onClose, onSuccess }) => {
   const { enqueueSnackbar } = useSnackbar();
   const { user } = useAuth();
-  const isSuperAdmin = (user?.roles?.[0] || user?.role || '').replace(/^ROLE_/, '') === 'SUPER_ADMIN';
+  const canClearOldMembers = new Set(user?.permissions || []).has('DANGER_ZONE_EXECUTE');
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -275,7 +275,7 @@ const MembersBulkUploadDialog = ({ open, onClose, onSuccess }) => {
                   )}
                 </Stack>
               </Box>
-              {isSuperAdmin && (
+              {canClearOldMembers && (
                 <FormControlLabel
                   control={
                     <Checkbox

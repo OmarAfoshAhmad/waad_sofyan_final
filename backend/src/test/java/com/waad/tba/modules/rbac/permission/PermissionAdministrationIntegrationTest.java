@@ -46,6 +46,38 @@ class PermissionAdministrationIntegrationTest extends PostgresIntegrationTestBas
     }
 
     @Test
+    void operationalTemplateMigrationPreservesMemberAndEmployerWorkflows() {
+        List<String> employerAdmin = jdbcTemplate.queryForList("""
+                select permission_code from rbac_role_permissions
+                 where role_code='EMPLOYER_ADMIN'
+                """, String.class);
+        assertThat(employerAdmin).contains(
+                "MEMBER_VIEW", "MEMBER_CREATE", "MEMBER_EDIT_IDENTITY",
+                "MEMBER_CHANGE_STATUS", "MEMBER_TRANSFER_EMPLOYER",
+                "MEMBER_EXPORT", "MEMBER_LIMIT_VIEW", "EMPLOYER_VIEW");
+        assertThat(employerAdmin).doesNotContain("MEMBER_HARD_DELETE", "MEMBER_IMPORT");
+
+        Integer missingEmployerView = jdbcTemplate.queryForObject("""
+                select count(*) from (values
+                  ('DATA_ENTRY'), ('EMPLOYER_ADMIN'), ('PROVIDER_STAFF'),
+                  ('MEDICAL_REVIEWER'), ('MEDICAL_REVIEW_HEAD'), ('INSURANCE_MANAGER'),
+                  ('ACCOUNTANT'), ('FINANCE_VIEWER')
+                ) expected(role_code)
+                where not exists (
+                  select 1 from rbac_role_permissions actual
+                   where actual.role_code=expected.role_code
+                     and actual.permission_code='EMPLOYER_VIEW'
+                )
+                """, Integer.class);
+        assertThat(missingEmployerView).isZero();
+        assertThat(jdbcTemplate.queryForObject("""
+                select count(*) from rbac_role_permissions
+                 where role_code='SUPER_ADMIN'
+                   and permission_code in ('MEMBER_LIMIT_VIEW','MEMBER_REINSTATE_TERMINATED')
+                """, Integer.class)).isEqualTo(2);
+    }
+
+    @Test
     void revokeWinsOverRoleAndWritesImmutableAudit() {
         User actor = saveUser("SUPER_ADMIN");
         User target = saveUser("DATA_ENTRY");

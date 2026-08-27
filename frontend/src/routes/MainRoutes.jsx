@@ -207,7 +207,7 @@ const MainRoutes = {
         {
           path: '',
           element: (
-            <PermissionGuard isRouteGuard>
+            <PermissionGuard requiredPermission="MEMBER_VIEW" isRouteGuard>
               <UnifiedMembersList />
             </PermissionGuard>
           )
@@ -215,7 +215,7 @@ const MainRoutes = {
         {
           path: 'add',
           element: (
-            <PermissionGuard allowedRoles={['EMPLOYER_ADMIN', 'DATA_ENTRY']} isRouteGuard>
+            <PermissionGuard requiredPermission="MEMBER_CREATE" isRouteGuard>
               <UnifiedMemberCreate />
             </PermissionGuard>
           )
@@ -223,7 +223,7 @@ const MainRoutes = {
         {
           path: ':id',
           element: (
-            <PermissionGuard isRouteGuard>
+            <PermissionGuard requiredPermission="MEMBER_VIEW" isRouteGuard>
               <UnifiedMemberView />
             </PermissionGuard>
           )
@@ -231,7 +231,7 @@ const MainRoutes = {
         {
           path: ':id/edit',
           element: (
-            <PermissionGuard allowedRoles={['EMPLOYER_ADMIN', 'DATA_ENTRY']} isRouteGuard>
+            <PermissionGuard requiredPermission="MEMBER_EDIT_IDENTITY" isRouteGuard>
               <UnifiedMemberEdit />
             </PermissionGuard>
           )
@@ -239,7 +239,7 @@ const MainRoutes = {
         {
           path: ':id/add-dependent',
           element: (
-            <PermissionGuard allowedRoles={['EMPLOYER_ADMIN', 'DATA_ENTRY']} isRouteGuard>
+            <PermissionGuard requiredPermission="MEMBER_CREATE" isRouteGuard>
               <AddDependent />
             </PermissionGuard>
           )
@@ -247,7 +247,7 @@ const MainRoutes = {
         {
           path: 'eligibility',
           element: (
-            <PermissionGuard isRouteGuard>
+            <PermissionGuard requiredPermission="MEMBER_VIEW" isRouteGuard>
               <EligibilityCheck />
             </PermissionGuard>
           )
@@ -255,7 +255,7 @@ const MainRoutes = {
         {
           path: 'family-eligibility',
           element: (
-            <PermissionGuard isRouteGuard>
+            <PermissionGuard requiredPermission="MEMBER_VIEW" isRouteGuard>
               <FamilyEligibilityPage />
             </PermissionGuard>
           )

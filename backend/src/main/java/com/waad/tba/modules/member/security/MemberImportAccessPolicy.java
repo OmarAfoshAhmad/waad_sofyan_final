@@ -6,6 +6,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.waad.tba.modules.rbac.entity.User;
+import com.waad.tba.modules.rbac.permission.EffectivePermissionService;
+import com.waad.tba.modules.rbac.permission.SystemPermission;
 import com.waad.tba.security.AuthorizationService;
 
 import lombok.RequiredArgsConstructor;
@@ -30,6 +32,7 @@ public class MemberImportAccessPolicy {
 
     private final MemberAccessScopeResolver scopeResolver;
     private final AuthorizationService authorizationService;
+    private final EffectivePermissionService effectivePermissionService;
 
     /**
      * Authorises an import over the employers the file's rows belong to.
@@ -56,13 +59,12 @@ public class MemberImportAccessPolicy {
             throw new MemberAccessDeniedException(operation, scope.reason());
         }
 
-        boolean superAdmin = authorizationService.isSuperAdmin(user);
-        boolean dataEntry = authorizationService.isDataEntry(user);
-        if (!superAdmin && !dataEntry) {
-            // Matches the endpoint's own contract: importing is a data-entry
-            // function, not something every administrator does.
+        var effectivePermissions = effectivePermissionService.resolve(user);
+        boolean mayImport = effectivePermissions.contains(SystemPermission.MEMBER_IMPORT);
+        boolean mayClearAbsent = effectivePermissions.contains(SystemPermission.DANGER_ZONE_EXECUTE);
+        if (!mayImport) {
             throw new MemberAccessDeniedException(operation,
-                    "استيراد المستفيدين غير مسموح لهذا الدور");
+                    "استيراد المستفيدين غير مسموح دون صلاحية MEMBER_IMPORT");
         }
 
         if (rowEmployerIds == null || rowEmployerIds.isEmpty()) {
@@ -89,11 +91,11 @@ public class MemberImportAccessPolicy {
         // Ending the absentees is a mass status change. Data entry may create
         // and correct records; it may not end coverage, and doing it through
         // an import checkbox would be exactly the route around that rule.
-        if (clearAbsentMembers && !superAdmin) {
+        if (clearAbsentMembers && !mayClearAbsent) {
             throw new MemberAccessDeniedException(operation,
-                    "إنهاء المستفيدين الغائبين عن الملف يتطلب صلاحية مدير النظام");
+                    "إنهاء المستفيدين الغائبين عن الملف يتطلب صلاحية العمليات الخطرة");
         }
 
-        return new AuthorizedImportScope(scope, superAdmin);
+        return new AuthorizedImportScope(scope, mayClearAbsent);
     }
 }

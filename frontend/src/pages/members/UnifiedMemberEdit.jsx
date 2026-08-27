@@ -773,7 +773,7 @@ const UnifiedMemberEdit = () => {
                           helperText="نقل جهة العمل عملية مستقلة ومؤرخة ولا يتم من التعديل العام."
                           size="small"
                         />
-                        {capabilities.lifecycle && (
+                        {capabilities.transfer && (
                           <Button variant="outlined" size="small" startIcon={<SwapHorizIcon />} onClick={openEmployerTransferDialog} sx={{ mt: 0.5, whiteSpace: 'nowrap' }}>
                             نقل إلى جهة أخرى
                           </Button>

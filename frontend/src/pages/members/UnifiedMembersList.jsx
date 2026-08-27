@@ -80,7 +80,7 @@ import {
   exportReimportableMembers,
   terminateMembership,
   bulkDeleteMembers,
-  restoreMember,
+  reinstateTerminatedMember,
   hardDeleteMember,
   toggleMemberActive,
   MEMBER_TYPES,
@@ -369,10 +369,6 @@ const UnifiedMembersList = () => {
     setLifecycleDialog({ open: true, action: 'TERMINATE', member });
   };
 
-  const handleRestoreClick = (member) => {
-    setLifecycleDialog({ open: true, action: 'RESTORE', member });
-  };
-
   const handleHardDeleteClick = (member) => {
     setLifecycleDialog({ open: true, action: 'HARD_DELETE', member });
   };
@@ -389,7 +385,7 @@ const UnifiedMembersList = () => {
     try {
       if (action === 'TERMINATE') await terminateMembership(member.id, reason);
       else if (action === 'HARD_DELETE') await hardDeleteMember(member.id, reason);
-      else if (action === 'RESTORE') await restoreMember(member.id, reason);
+      else if (action === 'REINSTATE') await reinstateTerminatedMember(member.id, reason);
       else await toggleMemberActive(member.id, false, reason);
       enqueueSnackbar('تم تنفيذ العملية بنجاح', { variant: 'success' });
       setLifecycleDialog((prev) => ({ ...prev, open: false }));
@@ -578,8 +574,9 @@ const UnifiedMembersList = () => {
           // Actions for deleted members
           return (
             <Stack direction="row" spacing={0.5}>
-              {capabilities.lifecycle && <Tooltip title="استعادة">
-                <IconButton size="small" color="success" onClick={() => handleRestoreClick(member)}>
+              {capabilities.reinstateTerminated && <Tooltip title="إعادة عضوية استثنائية">
+                <IconButton size="small" color="success" onClick={() =>
+                  setLifecycleDialog({ open: true, action: 'REINSTATE', member })}>
                   <UndoIcon fontSize="small" />
                 </IconButton>
               </Tooltip>}

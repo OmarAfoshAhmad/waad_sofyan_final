@@ -208,9 +208,10 @@ public class MemberStatusTransitionService {
      * same as reversing whatever happened while the member was terminated.
      */
     @Transactional
-    public Member reinstateTerminated(Long memberId, String reason, Long actingUserId, boolean callerIsSuperAdmin) {
-        if (!callerIsSuperAdmin) {
-            throw new AccessDeniedException("إعادة عضوية منتهية تتطلب صلاحية مدير النظام");
+    public Member reinstateTerminated(Long memberId, String reason, Long actingUserId,
+            boolean callerHasExceptionalPermission) {
+        if (!callerHasExceptionalPermission) {
+            throw new AccessDeniedException("إعادة عضوية منتهية تتطلب صلاحية الاستعادة الاستثنائية");
         }
         if (reason == null || reason.trim().isEmpty()) {
             throw new BusinessRuleException("سبب إعادة العضوية المنتهية إلزامي");

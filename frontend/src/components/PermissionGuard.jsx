@@ -20,10 +20,9 @@ const isSuperAdminUser = (user) => getUserRole(user) === 'SUPER_ADMIN';
 const isProviderUser = (role) => role === 'PROVIDER_STAFF';
 
 /**
- * RoleGuard — Phase 5 Static Role-Based Authorization
- *
- * Replaces PermissionGuard. All checks are role-based only.
- * SUPER_ADMIN bypasses all role checks.
+ * Permission-aware guard. Capability checks consume the effective permission
+ * snapshot returned by the server, so explicit per-user revocations remain
+ * authoritative. allowedRoles is retained only for routes not migrated yet.
  *
  * Usage:
  *
@@ -43,7 +42,7 @@ const isProviderUser = (role) => role === 'PROVIDER_STAFF';
  *    </RoleGuard>
  *
  */
-const RoleGuard = ({ allowedRoles, isRouteGuard = false, children, fallback = null }) => {
+const RoleGuard = ({ allowedRoles, requiredPermission, requiredPermissions, requireAll = true, isRouteGuard = false, children, fallback = null }) => {
   const { user, authStatus } = useAuth();
 
   if (authStatus === 'INITIALIZING') return null;
@@ -54,7 +53,23 @@ const RoleGuard = ({ allowedRoles, isRouteGuard = false, children, fallback = nu
 
   const userRole = getUserRole(user);
 
-  // SUPER_ADMIN bypasses all role checks
+  const requestedPermissions = [
+    ...(requiredPermission ? [requiredPermission] : []),
+    ...(requiredPermissions || [])
+  ];
+  if (requestedPermissions.length > 0) {
+    const effective = new Set(user.permissions || []);
+    const allowed = requireAll
+      ? requestedPermissions.every((permission) => effective.has(permission))
+      : requestedPermissions.some((permission) => effective.has(permission));
+    if (allowed) return children;
+    if (isRouteGuard) return <Navigate to={getDefaultRouteForRole(userRole)} replace />;
+    return fallback;
+  }
+
+  // Legacy role guard only. Capability checks above never bypass the effective
+  // permission snapshot, including explicit per-user revocations.
+  // SUPER_ADMIN bypasses legacy role checks.
   if (isSuperAdminUser(user)) {
     return children;
   }

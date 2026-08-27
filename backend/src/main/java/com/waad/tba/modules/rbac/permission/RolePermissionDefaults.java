@@ -11,6 +11,8 @@ public final class RolePermissionDefaults {
 
     private static final Set<SystemPermission> REVIEWER = EnumSet.of(
             SystemPermission.MEMBER_VIEW, SystemPermission.MEMBER_FINANCIAL_VIEW,
+            SystemPermission.MEMBER_LIMIT_VIEW,
+            SystemPermission.EMPLOYER_VIEW,
             SystemPermission.CLAIM_VIEW, SystemPermission.CLAIM_REVIEW,
             SystemPermission.PREAUTH_VIEW, SystemPermission.PREAUTH_REVIEW,
             SystemPermission.PROVIDER_VIEW, SystemPermission.CONTRACT_VIEW,
@@ -22,13 +24,19 @@ public final class RolePermissionDefaults {
             case SUPER_ADMIN -> EnumSet.allOf(SystemPermission.class);
             case DATA_ENTRY -> EnumSet.of(SystemPermission.MEMBER_VIEW,
                     SystemPermission.MEMBER_CREATE, SystemPermission.MEMBER_EDIT_IDENTITY,
-                    SystemPermission.MEMBER_IMPORT, SystemPermission.EMPLOYER_VIEW,
+                    SystemPermission.MEMBER_IMPORT, SystemPermission.MEMBER_LIMIT_VIEW,
+                    SystemPermission.EMPLOYER_VIEW,
                     SystemPermission.BENEFIT_POLICY_VIEW);
             case EMPLOYER_ADMIN -> EnumSet.of(SystemPermission.MEMBER_VIEW,
+                    SystemPermission.MEMBER_CREATE, SystemPermission.MEMBER_EDIT_IDENTITY,
+                    SystemPermission.MEMBER_CHANGE_STATUS, SystemPermission.MEMBER_TRANSFER_EMPLOYER,
+                    SystemPermission.MEMBER_EXPORT, SystemPermission.MEMBER_LIMIT_VIEW,
+                    SystemPermission.EMPLOYER_VIEW,
                     SystemPermission.CLAIM_VIEW, SystemPermission.PREAUTH_VIEW,
                     SystemPermission.OPERATIONAL_REPORT_VIEW,
                     SystemPermission.BENEFIT_POLICY_VIEW);
             case PROVIDER_STAFF -> EnumSet.of(SystemPermission.MEMBER_VIEW,
+                    SystemPermission.MEMBER_LIMIT_VIEW, SystemPermission.EMPLOYER_VIEW,
                     SystemPermission.CLAIM_VIEW, SystemPermission.CLAIM_CREATE,
                     SystemPermission.PREAUTH_VIEW, SystemPermission.PREAUTH_CREATE,
                     SystemPermission.CONTRACT_VIEW);
@@ -41,10 +49,11 @@ public final class RolePermissionDefaults {
                     SystemPermission.FINANCIAL_REPORT_VIEW);
             case ACCOUNTANT -> EnumSet.of(SystemPermission.SETTLEMENT_VIEW,
                     SystemPermission.SETTLEMENT_MANAGE, SystemPermission.FINANCIAL_REPORT_VIEW,
-                    SystemPermission.CLAIM_VIEW, SystemPermission.CONTRACT_VIEW);
+                    SystemPermission.CLAIM_VIEW, SystemPermission.CONTRACT_VIEW,
+                    SystemPermission.EMPLOYER_VIEW);
             case FINANCE_VIEWER -> EnumSet.of(SystemPermission.SETTLEMENT_VIEW,
                     SystemPermission.FINANCIAL_REPORT_VIEW, SystemPermission.CLAIM_VIEW,
-                    SystemPermission.CONTRACT_VIEW);
+                    SystemPermission.CONTRACT_VIEW, SystemPermission.EMPLOYER_VIEW);
         };
     }
 
