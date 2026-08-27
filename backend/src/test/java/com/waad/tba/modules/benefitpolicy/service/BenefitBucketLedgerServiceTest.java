@@ -33,17 +33,26 @@ class BenefitBucketLedgerServiceTest {
     @Mock BenefitRuleBucketRepository ruleBucketRepository;
     @Mock BenefitLimitBucketRepository bucketRepository;
     @Mock BenefitBucketConsumptionRepository consumptionRepository;
+    @Mock LimitBalanceReader limitBalanceReader;
 
     private BenefitBucketLedgerService service;
     private BenefitPolicy policy;
     private BenefitLimitBucket bucket;
+    private com.waad.tba.modules.member.service.MemberPolicyResolver memberPolicyResolver;
     private Claim claim;
     private ClaimLine line;
 
     @BeforeEach
     void setUp() {
+        memberPolicyResolver = org.mockito.Mockito.mock(
+                com.waad.tba.modules.member.service.MemberPolicyResolver.class);
+        // The real gate, over the same mocked repository: the extraction must
+        // not change what is written, only where the write is issued from.
         service = new BenefitBucketLedgerService(
-                claimRepository, benefitPolicyRepository, ruleBucketRepository, bucketRepository, consumptionRepository);
+                claimRepository, memberPolicyResolver, benefitPolicyRepository, ruleBucketRepository,
+                bucketRepository, consumptionRepository,
+                new BenefitConsumptionEntryWriter(consumptionRepository),
+                new TimesLimitEvaluator(), limitBalanceReader);
 
         policy = BenefitPolicy.builder()
                 .id(1L)
@@ -83,12 +92,16 @@ class BenefitBucketLedgerServiceTest {
                 .build();
         BenefitRuleBucket link = BenefitRuleBucket.builder().bucket(bucket).build();
 
+        lenient().when(memberPolicyResolver.resolveFor(any(Member.class), any(LocalDate.class)))
+                .thenReturn(Optional.of(policy));
         lenient().when(claimRepository.findById(20L)).thenReturn(Optional.of(claim));
         lenient().when(ruleBucketRepository.findByRuleIdOrderByConsumptionOrder(50L))
                 .thenReturn(List.of(link));
         lenient().when(bucketRepository.findByIdForUpdate(70L)).thenReturn(Optional.of(bucket));
         lenient().when(consumptionRepository.existsByIdempotencyKey(anyString())).thenReturn(false);
         lenient().when(consumptionRepository.existsUnledgeredApprovedBucketClaim(anyLong(), anyLong(), any()))
+                .thenReturn(false);
+        lenient().when(consumptionRepository.existsUnledgeredApprovedGeneralClaim(anyLong(), anyLong(), any()))
                 .thenReturn(false);
         lenient().when(consumptionRepository.sumCommittedAmount(any(), any(), any(), any(), any()))
                 .thenReturn(new BigDecimal("1300.00"));
@@ -116,11 +129,16 @@ class BenefitBucketLedgerServiceTest {
     @Test
     @DisplayName("وثيقة جهة العمل تُستخدم في الدفتر عندما لا توجد وثيقة مباشرة للمستفيد")
     void employerPolicyFallbackIsCommitted() {
-        Employer employer = Employer.builder().id(5L).build();
+        // The ledger no longer resolves the policy itself -- it asks
+        // MemberPolicyResolver for the policy in force on the claim's SERVICE
+        // DATE, and any employer-level fallback now lives there (and is tested
+        // in MemberPolicyResolverIntegrationTest against a real database). What
+        // this test still pins is that the ledger commits a consumption row for
+        // whatever the resolver returns, including for a member whose own
+        // pointer is null.
         claim.getMember().setBenefitPolicy(null);
-        claim.getMember().setEmployer(employer);
-        when(benefitPolicyRepository.findActiveEffectivePolicyForEmployer(
-                eq(5L), eq(LocalDate.of(2026, 7, 20))))
+        claim.getMember().setEmployer(Employer.builder().id(5L).build());
+        when(memberPolicyResolver.resolveFor(any(Member.class), eq(LocalDate.of(2026, 7, 20))))
                 .thenReturn(Optional.of(policy));
 
         service.commitClaim(20L);
@@ -176,8 +194,38 @@ class BenefitBucketLedgerServiceTest {
     }
 
     @Test
+    @DisplayName("مطالبة معتمدة سابقة بلا قيد سقف عام توقف الاعتماد اللاحق")
+    void unledgeredPreviousApprovedGeneralClaimFailsClosed() {
+        when(consumptionRepository.existsUnledgeredApprovedGeneralClaim(eq(10L), eq(20L), any())).thenReturn(true);
+
+        RuntimeException error = assertThrows(RuntimeException.class, () -> service.commitClaim(20L));
+
+        assertTrue(error.getMessage().contains("لم تُرحّل استهلاكها إلى السقف العام"));
+        verify(bucketRepository, never()).findByIdForUpdate(anyLong());
+        verify(consumptionRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("السقف العام يُقرأ من الدفتر لا من claim_lines، ويوقف الاعتماد عند تجاوزه")
+    void generalCeilingReadFromLedgerBlocksOverdraw() {
+        policy.setAnnualLimit(new BigDecimal("1000.00"));
+        when(benefitPolicyRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(policy));
+        when(limitBalanceReader.readGeneralCeiling(eq(10L), eq(1L), eq(new BigDecimal("1000.00")), any(), any(), eq(20L)))
+                .thenReturn(new LimitBalanceReader.GeneralCeilingBalance(
+                        new BigDecimal("1000.00"), new BigDecimal("900.00"), BigDecimal.ZERO,
+                        new BigDecimal("100.00"), new BigDecimal("100.00")));
+
+        // this claim's own line consumes 200, which added to the 900 already
+        // committed (per the ledger) exceeds the 1000 ceiling.
+        RuntimeException error = assertThrows(RuntimeException.class, () -> service.commitClaim(20L));
+
+        assertTrue(error.getMessage().contains("تجاوز السقف العام"));
+        verify(consumptionRepository, never()).save(any());
+    }
+
+    @Test
     @DisplayName("إلغاء المطالبة يعكس الاستهلاك ويحفظ أثراً تدقيقياً")
-    void reversalMarksOriginalAndCreatesAuditEntry() {
+    void reversalLeavesTheOriginalIntactAndPostsACompensatingMovement() {
         BenefitBucketConsumption original = BenefitBucketConsumption.builder()
                 .id(90L)
                 .claim(claim)
@@ -199,13 +247,23 @@ class BenefitBucketLedgerServiceTest {
 
         service.reverseClaim(20L);
 
-        assertEquals(BenefitBucketConsumption.Status.REVERSED, original.getStatus());
+        // The original is NEVER touched: the ledger is append-only, and the
+        // balance effect comes from the compensating row via
+        // net = original - SUM(reversals). Flipping it (the old behaviour)
+        // erased the fact that the amount had been committed at all, and made
+        // partial reversal impossible to express.
+        assertEquals(BenefitBucketConsumption.Status.COMMITTED, original.getStatus());
+        assertNull(original.getReversedAt());
+
         ArgumentCaptor<BenefitBucketConsumption> captor =
                 ArgumentCaptor.forClass(BenefitBucketConsumption.class);
-        verify(consumptionRepository, times(2)).save(captor.capture());
-        BenefitBucketConsumption reversal = captor.getAllValues().get(1);
+        verify(consumptionRepository, times(1)).save(captor.capture());
+        BenefitBucketConsumption reversal = captor.getValue();
         assertEquals(original, reversal.getReversalOf());
         assertEquals("ORIGINAL:REVERSAL", reversal.getIdempotencyKey());
+        assertEquals(BenefitBucketConsumption.Status.REVERSED, reversal.getStatus());
+        assertEquals(BenefitBucketConsumption.ReversalReason.CLAIM_REVERSAL, reversal.getReversalReason());
+        assertEquals(original.getApprovedAmount(), reversal.getApprovedAmount());
     }
 
     @Test

@@ -10,7 +10,6 @@ import {
   Button,
   Stack,
   TextField,
-  MenuItem,
   InputAdornment,
   Alert,
   Typography,
@@ -41,7 +40,7 @@ import ModernPageHeader from 'components/tba/ModernPageHeader';
 
 // Services
 import { getBenefitPolicyById, updateBenefitPolicy, getBenefitPoliciesByEmployer, checkPolicyEditability } from 'services/api/benefit-policies.service';
-import { getEmployerSelectors } from 'services/api/employers.service';
+import EmployerSelectField from 'components/tba/EmployerSelectField';
 
 /**
  * Validation Schema - Yup
@@ -108,9 +107,7 @@ const BenefitPolicyEdit = () => {
   const { id } = useParams();
 
   const [policy, setPolicy] = useState(null);
-  const [employers, setEmployers] = useState([]);
   const [loadingPolicy, setLoadingPolicy] = useState(true);
-  const [loadingEmployers, setLoadingEmployers] = useState(true);
   const [generalError, setGeneralError] = useState(null);
   const [overlapWarning, setOverlapWarning] = useState(null);
   const [isDynamicallyEditable, setIsDynamicallyEditable] = useState(true);
@@ -147,30 +144,6 @@ const BenefitPolicyEdit = () => {
       mounted = false;
     };
   }, [id]);
-
-  // Fetch Employers Data
-  useEffect(() => {
-    let mounted = true;
-
-    const fetchSelectors = async () => {
-      try {
-        const data = await getEmployerSelectors();
-        if (mounted) {
-          setEmployers(Array.isArray(data) ? data : []);
-        }
-      } catch (err) {
-        console.error('Failed to fetch employers:', err);
-      } finally {
-        if (mounted) setLoadingEmployers(false);
-      }
-    };
-
-    fetchSelectors();
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
 
   // Check for overlapping policies
   const checkOverlap = async (employerOrgId, startDate, endDate, currentPolicyId) => {
@@ -362,35 +335,15 @@ const BenefitPolicyEdit = () => {
                     </Grid>
 
                     <Grid size={{ xs: 12, md: 8 }}>
-                      <TextField
-                        fullWidth
-                        select
+                      <EmployerSelectField
                         size="small"
                         label="الشريك (صاحب العمل)"
-                        name="employerOrgId"
                         value={values.employerOrgId}
-                        onChange={handleChange}
-                        onBlur={handleBlur}
+                        onChange={() => {}}
                         error={touched.employerOrgId && Boolean(errors.employerOrgId)}
                         helperText="جهة العمل ثابتة بعد إنشاء الوثيقة"
                         disabled
-                      >
-                        {loadingEmployers ? (
-                          <MenuItem value="" disabled>
-                            <CircularProgress size={16} sx={{ mr: 1 }} /> جارٍ التحميل...
-                          </MenuItem>
-                        ) : employers.length > 0 ? (
-                          employers.map((emp) => (
-                            <MenuItem key={emp.id} value={emp.id} sx={{ fontSize: '0.8125rem' }}>
-                              {emp.label || emp.name}
-                            </MenuItem>
-                          ))
-                        ) : (
-                          <MenuItem value="" disabled>
-                            لا يوجد شركاء متاحين
-                          </MenuItem>
-                        )}
-                      </TextField>
+                      />
                     </Grid>
 
 

@@ -5,6 +5,7 @@ import java.util.Optional;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
@@ -28,10 +29,6 @@ public interface MemberRepository extends JpaRepository<Member, Long>, JpaSpecif
 
        @Query("SELECT DISTINCT m.employer.id FROM Member m")
        List<Long> findDistinctEmployerIds();
-
-       Optional<Member> findByCivilId(String civilId);
-
-       Optional<Member> findByNationalNumber(String nationalNumber);
 
        Optional<Member> findByCardNumber(String cardNumber);
 
@@ -67,8 +64,6 @@ public interface MemberRepository extends JpaRepository<Member, Long>, JpaSpecif
        @Query("SELECT m FROM Member m WHERE m.status = :status AND m.active = true")
        List<com.waad.tba.modules.member.dto.MemberLightProjection> findAllActiveMembersLight(@Param("status") Member.MemberStatus status);
 
-       boolean existsByCivilId(String civilId);
-
        boolean existsByCardNumber(String cardNumber);
 
        boolean existsByFullNameIgnoreCaseAndEmployerIdAndActiveTrue(String fullName, Long employerOrgId);
@@ -77,8 +72,6 @@ public interface MemberRepository extends JpaRepository<Member, Long>, JpaSpecif
                      String fullName,
                      Long parentId,
                      Member.Relationship relationship);
-
-       boolean existsByCivilIdAndIdNot(String civilId, Long id);
 
        boolean existsByCardNumberAndIdNot(String cardNumber, Long id);
 
@@ -100,6 +93,27 @@ public interface MemberRepository extends JpaRepository<Member, Long>, JpaSpecif
        @Query("SELECT m FROM Member m WHERE m.active = true")
        Page<Member> findAll(Pageable pageable);
 
+       /**
+        * Overrides the default Specification+Sort overload to eagerly fetch
+        * employer (and benefitPolicy, same cost) via entity graph. Used only by
+        * {@code MemberExcelExportService} today -- without this, exporting N rows
+        * triggered N extra lazy-load queries just to read employer.getName().
+        */
+       @Override
+       @org.springframework.data.jpa.repository.EntityGraph(attributePaths = { "employer", "benefitPolicy" })
+       List<Member> findAll(org.springframework.data.jpa.domain.Specification<Member> spec, Sort sort);
+
+       /**
+        * Canonical paged member listing/search query.
+        *
+        * <p>The DTO mapper reads employer, policy and (for dependents) parent. Keeping
+        * those to-one associations lazy here makes the query count grow with the page
+        * size even though dependents are batch-loaded separately by the service.</p>
+        */
+       @Override
+       @org.springframework.data.jpa.repository.EntityGraph(attributePaths = { "employer", "benefitPolicy", "parent" })
+       Page<Member> findAll(org.springframework.data.jpa.domain.Specification<Member> spec, Pageable pageable);
+
        @Query(value = "SELECT m FROM Member m LEFT JOIN FETCH m.employer LEFT JOIN FETCH m.benefitPolicy WHERE " +
                      "m.active = true AND (" +
                      "LOWER(m.fullName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
@@ -110,7 +124,7 @@ public interface MemberRepository extends JpaRepository<Member, Long>, JpaSpecif
 
        @Query("SELECT m FROM Member m LEFT JOIN FETCH m.employer LEFT JOIN FETCH m.benefitPolicy WHERE " +
                      "LOWER(m.fullName) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
-                     "LOWER(m.civilId) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
+                     "LOWER(m.nationalNumber) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
                      "LOWER(m.cardNumber) LIKE LOWER(CONCAT('%', :query, '%'))")
        List<Member> search(@Param("query") String query);
 
@@ -228,7 +242,7 @@ public interface MemberRepository extends JpaRepository<Member, Long>, JpaSpecif
         */
        @Query("SELECT m FROM Member m LEFT JOIN FETCH m.employer LEFT JOIN FETCH m.benefitPolicy WHERE m.employer.id = :employerOrgId AND (" +
                      "LOWER(m.fullName) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
-                     "LOWER(m.civilId) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
+                     "LOWER(m.nationalNumber) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
                      "LOWER(m.cardNumber) LIKE LOWER(CONCAT('%', :query, '%')))")
        List<Member> searchByEmployerId(@Param("query") String query, @Param("employerOrgId") Long employerOrgId);
 
@@ -319,11 +333,6 @@ public interface MemberRepository extends JpaRepository<Member, Long>, JpaSpecif
        default List<Member> findByNameContainingIgnoreCaseAndEmployerId(String name, Long employerOrgId) {
               return findByNameContainingAndEmployerId(name, employerOrgId);
        }
-
-       /**
-        * Find member by civil ID and employer organization ID
-        */
-       Optional<Member> findByCivilIdAndEmployerId(String civilId, Long employerOrgId);
 
        /**
         * Find member by card number and employer organization ID

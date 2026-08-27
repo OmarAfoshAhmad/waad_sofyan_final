@@ -11,8 +11,8 @@ import com.waad.tba.modules.medicaldictionary.service.V50MedicalClassificationEn
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalCategoryRepository;
 import com.waad.tba.modules.medicaltaxonomy.service.MedicalCategoryService;
 import com.waad.tba.modules.medicaltaxonomy.dto.MedicalCategoryCreateDto;
-import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRuleRepository;
+import com.waad.tba.modules.member.service.MemberContextResolver;
 import com.waad.tba.modules.providercontract.entity.ProviderContractPricingItem;
 import com.waad.tba.modules.providercontract.repository.*;
 import com.waad.tba.security.AuthorizationService;
@@ -32,8 +32,8 @@ public class ClaimPendingServiceService {
     private final ClaimMapper claimMapper;
     private final MedicalCategoryRepository categoryRepository;
     private final MedicalCategoryService categoryService;
-    private final BenefitPolicyRepository policyRepository;
     private final BenefitPolicyRuleRepository ruleRepository;
+    private final MemberContextResolver memberContextResolver;
     private final ProviderContractRepository contractRepository;
     private final ProviderContractPricingItemRepository pricingRepository;
     private final V50MedicalClassificationEngine classifier;
@@ -205,12 +205,7 @@ public class ClaimPendingServiceService {
 
     private void assertPositiveCoverageRule(Claim claim, Long categoryId) {
         var member = claim.getMember();
-        var policy = member == null ? null : member.getBenefitPolicy();
-        if (policy == null && member != null && member.getEmployer() != null) {
-            policy = policyRepository.findActiveEffectivePolicyForEmployer(member.getEmployer().getId(), claim.getServiceDate())
-                    .orElse(null);
-        }
-        if (policy == null) throw new BusinessRuleException("لا توجد وثيقة سارية للمستفيد في تاريخ الخدمة");
+        var policy = memberContextResolver.resolveForOrFail(member, claim.getServiceDate()).policy();
         var context = claim.getEncounterType() != null ? claim.getEncounterType()
                 : com.waad.tba.modules.providercontract.enums.EncounterType.OUTPATIENT;
         var rule = ruleRepository.findBestRuleForContext(policy.getId(), categoryId, null, context,

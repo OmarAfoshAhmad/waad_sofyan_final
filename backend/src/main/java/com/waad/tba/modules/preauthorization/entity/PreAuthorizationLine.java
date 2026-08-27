@@ -28,6 +28,44 @@ public class PreAuthorizationLine {
     @Column(name = "provider_service_id")
     private Long providerServiceId;
 
+    /**
+     * The line's own medical identity (V176). providerServiceId identifies
+     * the provider's price-list entry, not a classification -- and the
+     * benefit rule that decides which buckets apply is resolved from the
+     * CATEGORY. Resolving it from the pre-authorization head instead would
+     * price every line of a mixed-category request against a single
+     * category, landing holds on the wrong buckets for all but one of them.
+     */
+    @Column(name = "medical_service_id")
+    private Long medicalServiceId;
+
+    @Column(name = "medical_category_id")
+    private Long medicalCategoryId;
+
+    /**
+     * The reviewer's decision (V177). A refusal is a judgement, not
+     * arithmetic: the engine must never manufacture one to make its own
+     * totals balance, so it arrives here as an input.
+     */
+    public enum ReviewDecision { APPROVE, PARTIALLY_APPROVE, REJECT }
+
+    @Column(name = "requested_quantity", nullable = false)
+    @Builder.Default private Integer requestedQuantity = 1;
+
+    /** Null until reviewed; equal to requestedQuantity when fully approved. */
+    @Column(name = "approved_quantity")
+    private Integer approvedQuantity;
+
+    @Column(name = "explicit_rejected_amount", precision = 15, scale = 2)
+    @Builder.Default private BigDecimal explicitRejectedAmount = BigDecimal.ZERO;
+
+    @Column(name = "rejection_reason", length = 1000)
+    private String rejectionReason;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "review_decision", length = 20)
+    private ReviewDecision reviewDecision;
+
     @Column(name = "provider_service_code", length = 50)
     private String providerServiceCode;
 

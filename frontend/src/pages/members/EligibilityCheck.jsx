@@ -30,24 +30,24 @@ import {
   TableHead,
   TableRow,
   Alert,
+  AlertTitle,
   IconButton,
   Divider
 } from '@mui/material';
-import {
-  QrCodeScanner as QrCodeScannerIcon,
-  Search as SearchIcon,
-  CheckCircle as CheckCircleIcon,
-  Cancel as CancelIcon,
-  Visibility as VisibilityIcon,
-  PersonAdd as PersonAddIcon,
-  QrCode as QrCodeIcon,
-  CreditCard as CreditCardIcon,
-  Badge as BadgeIcon,
-  Savings as SavingsIcon,
-  AccountBalanceWallet as AccountBalanceWalletIcon,
-  TrendingUp as TrendingUpIcon,
-  Payments as PaymentsIcon
-} from '@mui/icons-material';
+import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner';
+import SearchIcon from '@mui/icons-material/Search';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import CancelIcon from '@mui/icons-material/Cancel';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import PersonAddIcon from '@mui/icons-material/PersonAdd';
+import QrCodeIcon from '@mui/icons-material/QrCode';
+import CreditCardIcon from '@mui/icons-material/CreditCard';
+import BadgeIcon from '@mui/icons-material/Badge';
+import SavingsIcon from '@mui/icons-material/Savings';
+import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
+import TrendingUpIcon from '@mui/icons-material/TrendingUp';
+import PaymentsIcon from '@mui/icons-material/Payments';
+import RefreshIcon from '@mui/icons-material/Refresh';
 
 import MainCard from 'components/MainCard';
 import ModernPageHeader from 'components/tba/ModernPageHeader';
@@ -125,6 +125,19 @@ const EligibilityCheck = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  /**
+   * Formats a financial-limit value for display. When financial data could
+   * not be read (financialDataAvailable === false), a missing/zero value is
+   * indistinguishable from "no limit left" -- so this must render as
+   * "unavailable" text, never as 0, to avoid implying a false balance.
+   */
+  const formatLimit = (value, financialDataAvailable) => {
+    if (financialDataAvailable === false) {
+      return 'غير متاح';
+    }
+    return `${value?.toLocaleString() || '0'} د.ل`;
   };
 
   /**
@@ -222,6 +235,25 @@ const EligibilityCheck = () => {
         {/* Results */}
         {familyData && (
           <>
+            {/* Financial data failure banner -- eligibility/identity data below
+                succeeded independently and is still shown; only the balance
+                figures are unreliable. */}
+            {familyData.financialDataAvailable === false && (
+              <Grid size={12}>
+                <Alert
+                  severity="warning"
+                  action={
+                    <Button color="inherit" size="small" startIcon={<RefreshIcon />} onClick={handleCheckEligibility} disabled={loading}>
+                      إعادة المحاولة
+                    </Button>
+                  }
+                >
+                  <AlertTitle>تعذر تحميل بيانات السقف المالي</AlertTitle>
+                  {familyData.financialDataError || 'تعذر تحميل بيانات السقف المالي؛ لا تعتمد على الأرقام الظاهرة.'}
+                </Alert>
+              </Grid>
+            )}
+
             {/* Principal Member Card */}
             <Grid size={12}>
               <Card elevation={3}>
@@ -303,7 +335,7 @@ const EligibilityCheck = () => {
                             <Typography variant="caption" color="text.secondary" display="block">
                               الحد السنوي
                             </Typography>
-                            <Typography variant="h6">{familyData.principal?.annualLimit?.toLocaleString() || '0'} د.ل</Typography>
+                            <Typography variant="h6">{formatLimit(familyData.principal?.annualLimit, familyData.financialDataAvailable)}</Typography>
                           </Box>
                         </Stack>
                       </Paper>
@@ -321,7 +353,7 @@ const EligibilityCheck = () => {
                             <Typography variant="caption" color="text.secondary" display="block">
                               المستهلك
                             </Typography>
-                            <Typography variant="h6">{familyData.principal?.usedAmount?.toLocaleString() || '0'} د.ل</Typography>
+                            <Typography variant="h6">{formatLimit(familyData.principal?.usedAmount, familyData.financialDataAvailable)}</Typography>
                           </Box>
                         </Stack>
                       </Paper>
@@ -340,7 +372,7 @@ const EligibilityCheck = () => {
                               المتبقي
                             </Typography>
                             <Typography variant="h6" color="info.dark" fontWeight="bold">
-                              {familyData.principal?.remainingLimit?.toLocaleString() || '0'} د.ل
+                              {formatLimit(familyData.principal?.remainingLimit, familyData.financialDataAvailable)}
                             </Typography>
                           </Box>
                         </Stack>
@@ -450,10 +482,10 @@ const EligibilityCheck = () => {
                             </TableCell>
                             <TableCell dir="ltr">{formatDate(dep.birthDate)}</TableCell>
                             <TableCell>{dep.gender === GENDERS.MALE ? 'ذكر' : 'أنثى'}</TableCell>
-                            <TableCell>{dep.annualLimit?.toLocaleString() || '0'} د.ل</TableCell>
+                            <TableCell>{formatLimit(dep.annualLimit, familyData.financialDataAvailable)}</TableCell>
                             <TableCell>
                               <Typography variant="body2" color="info.main" fontWeight="bold">
-                                {dep.remainingLimit?.toLocaleString() || '0'} د.ل
+                                {formatLimit(dep.remainingLimit, familyData.financialDataAvailable)}
                               </Typography>
                             </TableCell>
                             <TableCell>

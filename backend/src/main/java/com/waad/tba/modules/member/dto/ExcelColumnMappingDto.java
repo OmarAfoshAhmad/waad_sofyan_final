@@ -24,7 +24,7 @@ public class ExcelColumnMappingDto {
      * 
      * Example:
      * {
-     *   0: "civilId",
+     *   0: "nationalNumber",
      *   1: "fullName",
      *   2: "email",
      *   3: "phone",

@@ -1,10 +1,12 @@
 package com.waad.tba.modules.member.mapper;
 
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Component;
 
+import com.waad.tba.modules.eligibility.domain.EligibilityResult;
 import com.waad.tba.modules.member.dto.DependentMemberDto;
 import com.waad.tba.modules.member.dto.DependentViewDto;
 import com.waad.tba.modules.member.dto.FamilyEligibilityResponseDto;
@@ -35,6 +37,13 @@ public class UnifiedMemberMapper {
 
     private final AuthorizationService authorizationService;
 
+    /** Request-scoped facts needed while mapping a page; resolve once, not per row. */
+    public record ReadContext(boolean maskSensitiveFields) {}
+
+    public ReadContext currentReadContext() {
+        return new ReadContext(shouldMaskSensitiveFields());
+    }
+
     /**
      * SECTION_02 HIGH finding #9: national ID and home address are masked for
      * external provider-portal users — every read endpoint previously
@@ -46,8 +55,8 @@ public class UnifiedMemberMapper {
         return authorizationService.isProvider(currentUser);
     }
 
-    private String maskNationalNumber(String nationalNumber) {
-        if (!shouldMaskSensitiveFields()) {
+    private String maskNationalNumber(String nationalNumber, boolean maskSensitiveFields) {
+        if (!maskSensitiveFields) {
             return nationalNumber;
         }
         if (nationalNumber == null || nationalNumber.length() < 4) {
@@ -56,8 +65,8 @@ public class UnifiedMemberMapper {
         return "****" + nationalNumber.substring(nationalNumber.length() - 4);
     }
 
-    private String maskAddress(String address) {
-        return shouldMaskSensitiveFields() ? null : address;
+    private String maskAddress(String address, boolean maskSensitiveFields) {
+        return maskSensitiveFields ? null : address;
     }
 
     /**
@@ -80,12 +89,10 @@ public class UnifiedMemberMapper {
                 .employeeNumber(dto.getEmployeeNumber())
                 .joinDate(dto.getJoinDate())
                 .occupation(dto.getOccupation())
-                .status(dto.getStatus() != null ? dto.getStatus() : Member.MemberStatus.ACTIVE)
                 .startDate(dto.getStartDate())
                 .endDate(dto.getEndDate())
                 .cardStatus(dto.getCardStatus() != null ? dto.getCardStatus() : Member.CardStatus.ACTIVE)
                 .notes(dto.getNotes())
-                .active(dto.getActive() != null ? dto.getActive() : true)
                 .build();
     }
 
@@ -106,8 +113,6 @@ public class UnifiedMemberMapper {
                 .email(dto.getEmail())
                 .occupation(dto.getOccupation())
                 .notes(dto.getNotes())
-                .active(dto.getActive() != null ? dto.getActive() : true)
-                .status(Member.MemberStatus.ACTIVE) // Default
                 .cardStatus(Member.CardStatus.ACTIVE) // Default
                 .build();
     }
@@ -174,26 +179,28 @@ public class UnifiedMemberMapper {
         if (dto.getNotes() != null) {
             entity.setNotes(dto.getNotes());
         }
-        if (dto.getActive() != null) {
-            entity.setActive(dto.getActive());
-        }
-
-        // Relationship can be updated for dependents only
-        if (dto.getRelationship() != null && entity.isDependent()) {
-            entity.setRelationship(dto.getRelationship());
-        }
+        // status/active/benefitPolicy/employer/relationship/cardNumber are not
+        // copied here at all. They are no longer merely "ignored" either --
+        // UnifiedMemberService.rejectSensitiveFieldChanges refuses the request
+        // outright when one of them would CHANGE, so a caller can never be told
+        // their save succeeded while the change was quietly dropped.
     }
 
     /**
      * Convert Member entity to MemberViewDto (for PRINCIPAL with dependents).
      */
     public MemberViewDto toViewDto(Member entity, List<Member> dependents) {
-        MemberViewDto dto = toViewDto(entity);
+        return toViewDto(entity, dependents, currentReadContext());
+    }
+
+    public MemberViewDto toViewDto(Member entity, List<Member> dependents, ReadContext context) {
+        boolean maskSensitiveFields = context.maskSensitiveFields();
+        MemberViewDto dto = toViewDto(entity, maskSensitiveFields);
 
         // Add dependent information
         if (dependents != null && !dependents.isEmpty()) {
             List<DependentViewDto> dependentDtos = dependents.stream()
-                    .map(this::toDependentViewDto)
+                    .map(dependent -> toDependentViewDto(dependent, maskSensitiveFields))
                     .collect(Collectors.toList());
             dto.setDependents(dependentDtos);
             dto.setDependentsCount(dependentDtos.size());
@@ -208,11 +215,15 @@ public class UnifiedMemberMapper {
      * Convert Member entity to MemberViewDto (single member).
      */
     public MemberViewDto toViewDto(Member entity) {
+        return toViewDto(entity, shouldMaskSensitiveFields());
+    }
+
+    private MemberViewDto toViewDto(Member entity, boolean maskSensitiveFields) {
         MemberViewDto dto = MemberViewDto.builder()
                 .id(entity.getId())
                 .type(entity.getType().name()) // PRINCIPAL or DEPENDENT
                 .fullName(entity.getFullName())
-                .nationalNumber(maskNationalNumber(entity.getNationalNumber()))
+                .nationalNumber(maskNationalNumber(entity.getNationalNumber(), maskSensitiveFields))
                 .cardNumber(entity.getCardNumber())
                 .barcode(entity.getBarcode()) // NULL for dependents
                 .birthDate(entity.getBirthDate())
@@ -220,7 +231,7 @@ public class UnifiedMemberMapper {
                 .maritalStatus(entity.getMaritalStatus())
                 .phone(entity.getPhone())
                 .email(entity.getEmail())
-                .address(maskAddress(entity.getAddress()))
+                .address(maskAddress(entity.getAddress(), maskSensitiveFields))
                 .nationality(entity.getNationality())
                 .policyNumber(entity.getPolicyNumber())
                 .employeeNumber(entity.getEmployeeNumber())
@@ -231,6 +242,12 @@ public class UnifiedMemberMapper {
                 .endDate(entity.getEndDate())
                 .cardStatus(entity.getCardStatus())
                 .blockedReason(entity.getBlockedReason())
+                .statusReason(entity.getStatusReason())
+                .statusSource(entity.getStatusSource())
+                .statusChangedAt(entity.getStatusChangedAt())
+                .previousStatus(entity.getPreviousStatus())
+                .statusTransitionId(entity.getStatusTransitionId())
+                .version(entity.getVersion())
                 .eligibilityStatus(entity.getEligibilityStatus())
                 .photoUrl(entity.getPhotoUrl())
                 .profilePhotoPath(entity.getProfilePhotoPath())
@@ -262,6 +279,7 @@ public class UnifiedMemberMapper {
                 dto.setParentFullName(entity.getParent().getFullName());
             } 
             dto.setRelationship(entity.getRelationship());
+            dto.setFamilyOrder(entity.getFamilyOrder());
         }
 
         return dto;
@@ -271,15 +289,20 @@ public class UnifiedMemberMapper {
      * Convert Member entity to DependentViewDto (for dependent display).
      */
     public DependentViewDto toDependentViewDto(Member entity) {
+        return toDependentViewDto(entity, shouldMaskSensitiveFields());
+    }
+
+    private DependentViewDto toDependentViewDto(Member entity, boolean maskSensitiveFields) {
         if (!entity.isDependent()) {
             throw new IllegalArgumentException("Cannot convert principal to DependentViewDto");
         }
 
         return DependentViewDto.builder()
                 .id(entity.getId())
+                .version(entity.getVersion())
                 .relationship(entity.getRelationship())
                 .fullName(entity.getFullName())
-                .nationalNumber(maskNationalNumber(entity.getNationalNumber()))
+                .nationalNumber(maskNationalNumber(entity.getNationalNumber(), maskSensitiveFields))
                 .cardNumber(entity.getCardNumber())
                 .birthDate(entity.getBirthDate())
                 .gender(entity.getGender())
@@ -303,8 +326,22 @@ public class UnifiedMemberMapper {
 
     /**
      * Convert Principal + Dependents to FamilyEligibilityResponseDto.
+     *
+     * @param eligibilityByMemberId Real-time eligibility engine results
+     *                              (see EligibilityEngineService), one per
+     *                              family member, keyed by member id. This
+     *                              is now the single source of truth for the
+     *                              "eligible" decision -- previously this
+     *                              method computed its own shallow
+     *                              active+cachedFlag+hasEmployer check that
+     *                              never consulted the real coverage rules
+     *                              engine, so a member the engine would
+     *                              reject (e.g. exhausted limit, inactive
+     *                              policy) could still be reported eligible
+     *                              here.
      */
-    public FamilyEligibilityResponseDto toFamilyEligibilityResponse(Member principal, List<Member> dependents) {
+    public FamilyEligibilityResponseDto toFamilyEligibilityResponse(
+            Member principal, List<Member> dependents, Map<Long, EligibilityResult> eligibilityByMemberId) {
         // Convert principal
         MemberViewDto principalDto = toViewDto(principal);
 
@@ -313,22 +350,34 @@ public class UnifiedMemberMapper {
                 .map(this::toDependentViewDto)
                 .collect(Collectors.toList());
 
-        // Count eligible members - safely handle null values
-        int eligibleCount = 0;
-        boolean principalActive = Boolean.TRUE.equals(principal.getActive());
-        boolean principalEligible = Boolean.TRUE.equals(principal.getEligibilityStatus());
         boolean principalHasEmployer = principal.getEmployer() != null;
 
-        // Principal is eligible if active, eligible status is true, and has employer
-        if (principalActive && principalEligible && principalHasEmployer) {
-            eligibleCount++;
+        int eligibleCount = 0;
+        Map<Long, String> ineligibilityReasonsAr = new java.util.HashMap<>();
+        java.util.Set<Long> systemErrorMemberIds = new java.util.HashSet<>();
+        List<Member> allMembers = new java.util.ArrayList<>(dependents.size() + 1);
+        allMembers.add(principal);
+        allMembers.addAll(dependents);
+        for (Member member : allMembers) {
+            EligibilityResult result = eligibilityByMemberId.get(member.getId());
+            if (result != null && result.isEligible()) {
+                eligibleCount++;
+                continue;
+            }
+            // Not eligible (or no result at all -- fails closed): record why, and
+            // whether it's a genuine rule denial vs. the engine call itself
+            // failing, so the frontend can tell "this member isn't covered" apart
+            // from "we couldn't verify this member, try again" rather than
+            // presenting both identically as a plain denial.
+            if (result != null && result.getReasons() != null && !result.getReasons().isEmpty()) {
+                var firstReason = result.getReasons().get(0);
+                ineligibilityReasonsAr.put(member.getId(), firstReason.getMessageAr());
+                if ("SYSTEM_ERROR".equals(firstReason.getCode())) {
+                    systemErrorMemberIds.add(member.getId());
+                }
+            }
         }
 
-        eligibleCount += (int) dependents.stream()
-                .filter(d -> Boolean.TRUE.equals(d.getActive()) && Boolean.TRUE.equals(d.getEligibilityStatus()))
-                .count();
-
-        // Determine eligibility - also check if principal has employer
         boolean eligible = eligibleCount > 0 && principalHasEmployer;
         String message;
         if (!principalHasEmployer) {
@@ -353,6 +402,8 @@ public class UnifiedMemberMapper {
                         principal.getBenefitPolicy() != null ? principal.getBenefitPolicy().getStatus().name() : null)
                 .employerOrgId(principal.getEmployer() != null ? principal.getEmployer().getId() : null)
                 .employerOrgName(principal.getEmployer() != null ? principal.getEmployer().getName() : null)
+                .ineligibilityReasonsAr(ineligibilityReasonsAr)
+                .systemErrorMemberIds(systemErrorMemberIds)
                 .build();
     }
 }

@@ -87,6 +87,7 @@ import {
 // Project Components
 import MainCard from 'components/MainCard';
 import ModernPageHeader from 'components/tba/ModernPageHeader';
+import PermissionGuard from 'components/PermissionGuard';
 
 // API Service
 import {
@@ -1023,28 +1024,32 @@ const ProviderContractView = () => {
 
             <Stack direction="row" spacing={1}>
               {/* Add System Service Button */}
-              <Button
-                variant="contained"
-                color="secondary"
-                onClick={handleOpenAddPricing}
-                startIcon={<AddIcon />}
-                size="medium"
-                disabled={contract.status === CONTRACT_STATUS.TERMINATED || contract.status === CONTRACT_STATUS.EXPIRED}
-              >
-                إضافة خدمة
-              </Button>
+              <PermissionGuard requiredPermission="CONTRACT_MANAGE">
+                <Button
+                  variant="contained"
+                  color="secondary"
+                  onClick={handleOpenAddPricing}
+                  startIcon={<AddIcon />}
+                  size="medium"
+                  disabled={contract.status === CONTRACT_STATUS.TERMINATED || contract.status === CONTRACT_STATUS.EXPIRED}
+                >
+                  إضافة خدمة
+                </Button>
+              </PermissionGuard>
 
               {/* Import Price List Button */}
-              <Button
-                variant="outlined"
-                color="primary"
-                onClick={handleImportPriceList}
-                startIcon={<CloudUploadIcon />}
-                size="medium"
-                disabled={contract.status === CONTRACT_STATUS.TERMINATED || contract.status === CONTRACT_STATUS.EXPIRED}
-              >
-                استيراد الأسعار
-              </Button>
+              <PermissionGuard requiredPermission="PRICE_LIST_IMPORT">
+                <Button
+                  variant="outlined"
+                  color="primary"
+                  onClick={handleImportPriceList}
+                  startIcon={<CloudUploadIcon />}
+                  size="medium"
+                  disabled={contract.status === CONTRACT_STATUS.TERMINATED || contract.status === CONTRACT_STATUS.EXPIRED}
+                >
+                  استيراد الأسعار
+                </Button>
+              </PermissionGuard>
 
               {/* Export Price List Button */}
               {pricingItems.length > 0 && (

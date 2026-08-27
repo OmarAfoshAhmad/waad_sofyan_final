@@ -47,7 +47,7 @@ public class ProviderController {
      * @return Paginated list of provider selector options
      */
     @GetMapping("/selector")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF', 'DATA_ENTRY', 'ACCOUNTANT', 'FINANCE_VIEWER')")
+    @PreAuthorize("@permissionGuard.has('PROVIDER_VIEW')")
     public ResponseEntity<ApiResponse<PaginationResponse<ProviderSelectorDto>>> getSelectorOptions(
             @RequestParam(name = "page", defaultValue = "1") int page,
             @RequestParam(name = "size", defaultValue = "1000") int size) {
@@ -106,7 +106,7 @@ public class ProviderController {
     }
 
     @PostMapping
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("@permissionGuard.has('PROVIDER_MANAGE')")
     public ResponseEntity<ApiResponse<ProviderViewDto>> createProvider(@Valid @RequestBody ProviderCreateDto dto) {
         ProviderViewDto provider = providerService.createProvider(dto);
         return ResponseEntity.status(HttpStatus.CREATED)
@@ -114,7 +114,7 @@ public class ProviderController {
     }
 
     @PutMapping("/{id:\\d+}")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("@permissionGuard.has('PROVIDER_MANAGE')")
     public ResponseEntity<ApiResponse<ProviderViewDto>> updateProvider(
             @PathVariable("id") Long id,
             @Valid @RequestBody ProviderUpdateDto dto) {
@@ -123,7 +123,7 @@ public class ProviderController {
     }
 
     @GetMapping("/{id:\\d+}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'ACCOUNTANT', 'DATA_ENTRY', 'PROVIDER_STAFF', 'EMPLOYER_ADMIN')")
+    @PreAuthorize("@permissionGuard.has('PROVIDER_VIEW')")
     public ResponseEntity<ApiResponse<ProviderViewDto>> getProvider(@PathVariable("id") Long id) {
         var currentUser = authorizationService.getCurrentUser();
         if (authorizationService.isProvider(currentUser) && !authorizationService.canAccessProvider(currentUser, id)) {
@@ -135,7 +135,7 @@ public class ProviderController {
     }
 
     @GetMapping
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("@permissionGuard.has('PROVIDER_VIEW')")
     public ResponseEntity<ApiResponse<PaginationResponse<ProviderViewDto>>> listProviders(
             @RequestParam(name = "page", defaultValue = "1") int page,
             @RequestParam(name = "size", defaultValue = "10") int size,
@@ -165,21 +165,21 @@ public class ProviderController {
      * Use soft delete (active=false) instead to preserve data integrity.
      */
     @DeleteMapping("/{id:\\d+}")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("@permissionGuard.has('PROVIDER_MANAGE')")
     public ResponseEntity<ApiResponse<Void>> deactivateProvider(@PathVariable("id") Long id) {
         providerService.deactivateProvider(id);
         return ResponseEntity.ok(ApiResponse.success("Provider deactivated successfully", null));
     }
 
     @PutMapping("/{id:\\d+}/restore")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("@permissionGuard.has('PROVIDER_MANAGE')")
     public ResponseEntity<ApiResponse<ProviderViewDto>> restoreProvider(@PathVariable("id") Long id) {
         ProviderViewDto provider = providerService.restoreProvider(id);
         return ResponseEntity.ok(ApiResponse.success("Provider restored successfully", provider));
     }
 
     @DeleteMapping("/{id:\\d+}/hard")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("@permissionGuard.has('PROVIDER_MANAGE') and @permissionGuard.has('DANGER_ZONE_EXECUTE')")
     public ResponseEntity<ApiResponse<Void>> hardDeleteProvider(@PathVariable("id") Long id) {
         providerService.hardDeleteProvider(id);
         return ResponseEntity.ok(ApiResponse.success("Provider permanently deleted", null));
@@ -190,56 +190,56 @@ public class ProviderController {
     // ═══════════════════════════════════════════════════════════════════════════
 
     @PostMapping("/bulk-deactivate")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("@permissionGuard.has('PROVIDER_MANAGE')")
     public ResponseEntity<ApiResponse<Void>> bulkDeactivateProviders(@RequestBody List<Long> ids) {
         providerService.bulkDeactivateProviders(ids);
         return ResponseEntity.ok(ApiResponse.success("Providers and empty contracts deactivated successfully", null));
     }
 
     @PostMapping("/bulk-hard-delete")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("@permissionGuard.has('PROVIDER_MANAGE') and @permissionGuard.has('DANGER_ZONE_EXECUTE')")
     public ResponseEntity<ApiResponse<Void>> bulkHardDeleteProviders(@RequestBody List<Long> ids) {
         providerService.bulkHardDeleteProviders(ids);
         return ResponseEntity.ok(ApiResponse.success("Providers and empty contracts permanently deleted", null));
     }
 
     @PostMapping("/bulk-restore")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("@permissionGuard.has('PROVIDER_MANAGE')")
     public ResponseEntity<ApiResponse<Void>> bulkRestoreProviders(@RequestBody List<Long> ids) {
         providerService.bulkRestoreProviders(ids);
         return ResponseEntity.ok(ApiResponse.success("Providers restored successfully", null));
     }
 
     @PostMapping("/bulk-allow-all-employers")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("@permissionGuard.has('PROVIDER_MANAGE')")
     public ResponseEntity<ApiResponse<Void>> bulkAllowAllEmployers(@RequestBody List<Long> ids) {
         providerService.bulkAllowAllEmployers(ids);
         return ResponseEntity.ok(ApiResponse.success("Employers allowed successfully for selected providers", null));
     }
 
     @PostMapping("/bulk-remove-employers")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("@permissionGuard.has('PROVIDER_MANAGE')")
     public ResponseEntity<ApiResponse<Void>> bulkRemoveEmployers(@RequestBody List<Long> ids) {
         providerService.bulkRemoveEmployers(ids);
         return ResponseEntity.ok(ApiResponse.success("Employers removed successfully for selected providers", null));
     }
 
     @GetMapping("/active")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("@permissionGuard.has('PROVIDER_VIEW')")
     public ResponseEntity<ApiResponse<List<ProviderViewDto>>> getAllActiveProviders() {
         List<ProviderViewDto> providers = providerService.getAllActiveProviders();
         return ResponseEntity.ok(ApiResponse.success("Active providers retrieved successfully", providers));
     }
 
     @GetMapping("/count")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("@permissionGuard.has('PROVIDER_VIEW')")
     public ResponseEntity<ApiResponse<Long>> countProviders() {
         long count = providerService.countProviders();
         return ResponseEntity.ok(ApiResponse.success("Provider count retrieved successfully", count));
     }
 
     @GetMapping("/search")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("@permissionGuard.has('PROVIDER_VIEW')")
     public ResponseEntity<ApiResponse<List<ProviderViewDto>>> search(@RequestParam(name = "query") String query) {
         List<ProviderViewDto> results = providerService.search(query);
         return ResponseEntity.ok(ApiResponse.success(results));
@@ -253,7 +253,7 @@ public class ProviderController {
      * Assign a medical service to a provider
      */
     @PostMapping("/{id}/services")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("@permissionGuard.has('PROVIDER_MANAGE')")
     public ResponseEntity<ApiResponse<ProviderServiceResponseDto>> assignService(
             @PathVariable("id") Long id,
             @Valid @RequestBody ProviderServiceAssignDto dto) {
@@ -270,7 +270,7 @@ public class ProviderController {
      * Remove a service from a provider
      */
     @DeleteMapping("/{id}/services/{serviceCode}")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("@permissionGuard.has('PROVIDER_MANAGE')")
     public ResponseEntity<ApiResponse<Void>> removeService(
             @PathVariable("id") Long id,
             @PathVariable("serviceCode") String serviceCode) {
@@ -286,7 +286,7 @@ public class ProviderController {
      * Get all services offered by a provider
      */
     @GetMapping("/{id}/services")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'DATA_ENTRY', 'ACCOUNTANT')")
+    @PreAuthorize("@permissionGuard.has('PROVIDER_VIEW')")
     public ResponseEntity<ApiResponse<List<ProviderServiceResponseDto>>> getProviderServices(
             @PathVariable("id") Long id) {
 
@@ -301,7 +301,7 @@ public class ProviderController {
      * Get service codes for a provider (lightweight)
      */
     @GetMapping("/{id}/service-codes")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'DATA_ENTRY', 'ACCOUNTANT')")
+    @PreAuthorize("@permissionGuard.has('PROVIDER_VIEW')")
     public ResponseEntity<ApiResponse<List<String>>> getProviderServiceCodes(@PathVariable("id") Long id) {
         log.info("[PROVIDER-SERVICES] GET /api/providers/{}/service-codes", id);
 
@@ -314,7 +314,7 @@ public class ProviderController {
      * Check if provider offers a specific service
      */
     @GetMapping("/{id}/services/{serviceCode}/check")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'DATA_ENTRY', 'ACCOUNTANT')")
+    @PreAuthorize("@permissionGuard.has('PROVIDER_VIEW')")
     public ResponseEntity<ApiResponse<Boolean>> checkProviderService(
             @PathVariable("id") Long id,
             @PathVariable("serviceCode") String serviceCode) {
@@ -339,7 +339,7 @@ public class ProviderController {
      * Get effective price for a service on a specific date
      */
     @GetMapping("/{id}/services/{serviceCode}/price")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'DATA_ENTRY', 'ACCOUNTANT')")
+    @PreAuthorize("@permissionGuard.has('PROVIDER_VIEW')")
     public ResponseEntity<ApiResponse<EffectivePriceResponseDto>> getEffectivePrice(
             @PathVariable("id") Long id,
             @PathVariable("serviceCode") String serviceCode,
@@ -364,7 +364,7 @@ public class ProviderController {
      * GET /api/providers/{id}/contract/services/requiring-preauth?memberId=X
      */
     @GetMapping("/{id}/contract/services/requiring-preauth")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER')")
+    @PreAuthorize("@permissionGuard.has('PROVIDER_VIEW')")
     public ResponseEntity<ApiResponse<java.util.List<ProviderServiceDto>>> getServicesRequiringPreAuth(
             @PathVariable("id") Long id,
             @RequestParam(name = "memberId") Long memberId) {
@@ -386,7 +386,7 @@ public class ProviderController {
      * GET /api/providers/{id}/allowed-employers-ids
      */
     @GetMapping("/{id}/allowed-employers-ids")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("@permissionGuard.has('PROVIDER_VIEW')")
     public ResponseEntity<ApiResponse<List<Long>>> getAllowedEmployerIds(@PathVariable("id") Long id) {
         log.info("[PROVIDER] GET /api/providers/{}/allowed-employers-ids", id);
         List<Long> employerIds = providerService.getAllowedEmployerIds(id);
@@ -399,7 +399,7 @@ public class ProviderController {
      * GET /api/providers/{id}/documents
      */
     @GetMapping("/{id}/documents")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("@permissionGuard.has('PROVIDER_VIEW')")
     public ResponseEntity<ApiResponse<List<ProviderAdminDocumentResponseDto>>> getProviderDocuments(
             @PathVariable("id") Long id) {
         log.info("[PROVIDER] GET /api/providers/{}/documents", id);
@@ -413,7 +413,7 @@ public class ProviderController {
      * POST /api/providers/{id}/documents
      */
     @PostMapping("/{id}/documents")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("@permissionGuard.has('PROVIDER_MANAGE')")
     public ResponseEntity<ApiResponse<ProviderAdminDocumentResponseDto>> addProviderDocument(
             @PathVariable("id") Long id,
             @RequestPart("data") @Valid ProviderAdminDocumentCreateDto dto,
@@ -433,7 +433,7 @@ public class ProviderController {
      * GET /api/providers/{providerId}/documents/{docId}/download
      */
     @GetMapping("/{providerId}/documents/{docId}/download")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("@permissionGuard.has('PROVIDER_VIEW')")
     public ResponseEntity<byte[]> downloadProviderDocument(
             @PathVariable("providerId") Long providerId,
             @PathVariable("docId") Long docId) {
@@ -457,7 +457,7 @@ public class ProviderController {
      * DELETE /api/providers/{providerId}/documents/{docId}
      */
     @DeleteMapping("/{providerId}/documents/{docId}")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("@permissionGuard.has('PROVIDER_MANAGE')")
     public ResponseEntity<ApiResponse<Void>> deleteProviderDocument(
             @PathVariable("providerId") Long providerId,
             @PathVariable("docId") Long docId) {
@@ -476,7 +476,7 @@ public class ProviderController {
      * Get allowed employers for a provider
      */
     @GetMapping("/{id}/allowed-employers")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF')")
+    @PreAuthorize("@permissionGuard.has('PROVIDER_VIEW')")
     public ResponseEntity<ApiResponse<List<AllowedEmployerDto>>> getAllowedEmployers(@PathVariable("id") Long id) {
         // Security check: if provider user, ensure accessing own provider
         var currentUser = authorizationService.getCurrentUser();
@@ -496,7 +496,7 @@ public class ProviderController {
      * Update allowed employers for a provider
      */
     @PutMapping("/{id}/allowed-employers")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("@permissionGuard.has('PROVIDER_MANAGE')")
     public ResponseEntity<ApiResponse<Void>> updateAllowedEmployers(
             @PathVariable("id") Long id,
             @RequestBody List<Long> employerIds) {
@@ -512,7 +512,7 @@ public class ProviderController {
      * GET /api/v1/providers/by-employer/{employerId}
      */
     @GetMapping("/by-employer/{employerId}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'DATA_ENTRY', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF', 'EMPLOYER_ADMIN')")
+    @PreAuthorize("@permissionGuard.has('PROVIDER_VIEW')")
     public ResponseEntity<ApiResponse<List<ProviderViewDto>>> getProvidersByEmployer(
             @PathVariable("employerId") Long employerId) {
         Long scopedEmployerId = authorizationService.resolveEmployerScope(authorizationService.getCurrentUser(), employerId);

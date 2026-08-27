@@ -43,6 +43,7 @@ import MainCard from 'components/MainCard';
 import { ModernPageHeader, ActionConfirmDialog, SoftDeleteToggle } from 'components/tba';
 import { UnifiedMedicalTable } from 'components/common';
 import TableErrorBoundary from 'components/TableErrorBoundary';
+import PermissionGuard from 'components/PermissionGuard';
 import useTableState from 'hooks/useTableState';
 import {
   getProviderContracts,
@@ -490,20 +491,25 @@ const ProviderContractsList = () => {
               </Tooltip>
 
               {showDeleted ? (
-                <>
+                <PermissionGuard requiredPermission="CONTRACT_MANAGE">
+                  <>
                   <Tooltip title="استعادة">
                     <IconButton size="small" color="success" onClick={() => handleRestore(contract.id, contract.contractCode)}>
                       <UndoIcon fontSize="small" />
                     </IconButton>
                   </Tooltip>
-                  <Tooltip title="حذف نهائي">
-                    <IconButton size="small" color="error" onClick={() => handleHardDelete(contract.id, contract.contractCode)}>
-                      <DeleteForeverIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                </>
+                    <PermissionGuard requiredPermissions={['CONTRACT_MANAGE', 'DANGER_ZONE_EXECUTE']}>
+                      <Tooltip title="حذف نهائي">
+                        <IconButton size="small" color="error" onClick={() => handleHardDelete(contract.id, contract.contractCode)}>
+                          <DeleteForeverIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </PermissionGuard>
+                  </>
+                </PermissionGuard>
               ) : (
-                <>
+                <PermissionGuard requiredPermission="CONTRACT_MANAGE">
+                  <>
                   <Tooltip title="تعديل">
                     <IconButton
                       size="small"
@@ -524,7 +530,8 @@ const ProviderContractsList = () => {
                       <DeleteIcon fontSize="small" />
                     </IconButton>
                   </Tooltip>
-                </>
+                  </>
+                </PermissionGuard>
               )}
             </Stack>
           );
@@ -557,55 +564,61 @@ const ProviderContractsList = () => {
                 '& > *': { flexShrink: 0 }
               }}
             >
-              {selectedIds.length > 0 && (
+              <PermissionGuard requiredPermission="CONTRACT_MANAGE">
+                <>
+                  {selectedIds.length > 0 && (
+                    <Button
+                      variant="contained"
+                      color="primary"
+                      startIcon={<EditIcon />}
+                      onClick={() => setBulkEditOpen(true)}
+                      sx={HEADER_ACTION_BUTTON_SX}
+                    >
+                      تعديل جماعي ({selectedIds.length})
+                    </Button>
+                  )}
+                  {selectedIds.length > 0 && (
+                    <Button
+                      variant="contained"
+                      color="error"
+                      startIcon={<DeleteIcon />}
+                      onClick={handleBulkDelete}
+                      sx={HEADER_ACTION_BUTTON_SX}
+                    >
+                      حذف جماعي ({selectedIds.length})
+                    </Button>
+                  )}
+                  <Button
+                    variant="outlined"
+                    color="secondary"
+                    startIcon={<FileUploadIcon />}
+                    onClick={() => setContractImportOpen(true)}
+                    sx={HEADER_ACTION_BUTTON_SX}
+                  >
+                    استيراد عقود جديدة
+                  </Button>
+                  <SoftDeleteToggle showDeleted={showDeleted} onToggle={() => setShowDeleted((v) => !v)} />
+                  <Button
+                    variant="contained"
+                    startIcon={<DescriptionIcon />}
+                    onClick={handleNavigateAdd}
+                    sx={HEADER_ACTION_BUTTON_SX}
+                  >
+                    إنشاء عقد جديد
+                  </Button>
+                </>
+              </PermissionGuard>
+              <PermissionGuard requiredPermission="PRICE_LIST_IMPORT">
                 <Button
                   variant="contained"
-                  color="primary"
-                  startIcon={<EditIcon />}
-                  onClick={() => setBulkEditOpen(true)}
+                  color="secondary"
+                  startIcon={<FileUploadIcon />}
+                  onClick={() => setBulkImportOpen(true)}
                   sx={HEADER_ACTION_BUTTON_SX}
                 >
-                  تعديل جماعي ({selectedIds.length})
+                  استيراد قوائم أسعار
                 </Button>
-              )}
-              {selectedIds.length > 0 && (
-                <Button
-                  variant="contained"
-                  color="error"
-                  startIcon={<DeleteIcon />}
-                  onClick={handleBulkDelete}
-                  sx={HEADER_ACTION_BUTTON_SX}
-                >
-                  حذف جماعي ({selectedIds.length})
-                </Button>
-              )}
-              <Button
-                variant="outlined"
-                color="secondary"
-                startIcon={<FileUploadIcon />}
-                onClick={() => setContractImportOpen(true)}
-                sx={HEADER_ACTION_BUTTON_SX}
-              >
-                استيراد عقود جديدة
-              </Button>
-              <Button
-                variant="contained"
-                color="secondary"
-                startIcon={<FileUploadIcon />}
-                onClick={() => setBulkImportOpen(true)}
-                sx={HEADER_ACTION_BUTTON_SX}
-              >
-                استيراد قوائم أسعار
-              </Button>
-              <SoftDeleteToggle showDeleted={showDeleted} onToggle={() => setShowDeleted((v) => !v)} />
-              <Button
-                variant="contained"
-                startIcon={<DescriptionIcon />}
-                onClick={handleNavigateAdd}
-                sx={HEADER_ACTION_BUTTON_SX}
-              >
-                إنشاء عقد جديد
-              </Button>
+              </PermissionGuard>
             </Stack>
           }
           sx={{ mb: 0.5 }}

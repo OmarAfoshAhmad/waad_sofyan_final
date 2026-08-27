@@ -6,6 +6,8 @@ import com.waad.tba.modules.preauthorization.entity.PreAuthorization;
 import com.waad.tba.modules.preauthorization.entity.PreAuthorization.PreAuthStatus;
 import com.waad.tba.modules.preauthorization.repository.PreAuthorizationRepository;
 import com.waad.tba.modules.preauthorization.repository.PreAuthorizationAuditRepository;
+import com.waad.tba.modules.preauthorization.security.AuthorizedPreAuthScope;
+import com.waad.tba.modules.preauthorization.security.PreAuthAccessScopeResolver;
 import com.waad.tba.modules.provider.entity.Provider;
 import com.waad.tba.modules.provider.repository.ProviderRepository;
 import lombok.RequiredArgsConstructor;
@@ -35,6 +37,7 @@ public class PreAuthDashboardService {
         private final PreAuthorizationRepository preAuthRepository;
         private final PreAuthorizationAuditRepository auditRepository;
         private final ProviderRepository providerRepository;
+        private final PreAuthAccessScopeResolver accessScopeResolver;
 
         /**
          * Get complete dashboard data
@@ -66,7 +69,8 @@ public class PreAuthDashboardService {
                 log.info("[DASHBOARD] Calculating overall statistics");
 
                 // Single aggregate query — no full-table load
-                Object[] summary = preAuthRepository.getActiveSummary();
+                AuthorizedPreAuthScope scope = accessScopeResolver.requireViewScope();
+                Object[] summary = preAuthRepository.getActiveSummaryScoped(scopeKind(scope), scopeIds(scope));
                 long totalCount    = 0;
                 BigDecimal totalRequested = BigDecimal.ZERO;
                 BigDecimal totalApproved  = BigDecimal.ZERO;
@@ -81,7 +85,7 @@ public class PreAuthDashboardService {
                 }
 
                 // Per-status counts from existing GROUP BY query
-                List<Object[]> statusRows = preAuthRepository.countByStatus();
+                List<Object[]> statusRows = preAuthRepository.countByStatusScoped(scopeKind(scope), scopeIds(scope));
                 long pendingCount = 0, approvedCount = 0, rejectedCount = 0;
                 for (Object item : statusRows) {
                         if (item == null) continue;
@@ -136,7 +140,8 @@ public class PreAuthDashboardService {
         public StatusDistribution getStatusDistribution() {
                 log.info("[DASHBOARD] Calculating status distribution");
 
-                List<Object[]> results = preAuthRepository.sumAmountsByStatus();
+                AuthorizedPreAuthScope scope = accessScopeResolver.requireViewScope();
+                List<Object[]> results = preAuthRepository.sumAmountsByStatusScoped(scopeKind(scope), scopeIds(scope));
                 Map<PreAuthStatus, StatusData> statusMap = new HashMap<>();
 
                 for (Object item : results) {
@@ -186,7 +191,9 @@ public class PreAuthDashboardService {
         public List<PreAuthSummaryDto> getHighPriorityQueue(int limit) {
                 log.info("[DASHBOARD] Fetching high priority queue (limit: {})", limit);
 
-                List<PreAuthorization> highPriority = preAuthRepository.findHighPriorityPending();
+                AuthorizedPreAuthScope scope = accessScopeResolver.requireViewScope();
+                List<PreAuthorization> highPriority = preAuthRepository.findHighPriorityPendingScoped(
+                                scopeKind(scope), scopeIds(scope));
 
                 return highPriority.stream()
                                 .limit(limit)
@@ -204,7 +211,9 @@ public class PreAuthDashboardService {
                 LocalDate today = LocalDate.now();
                 LocalDate expiryDate = today.plusDays(withinDays);
 
-                List<PreAuthorization> expiring = preAuthRepository.findPreAuthsExpiringWithinDays(today, expiryDate);
+                AuthorizedPreAuthScope scope = accessScopeResolver.requireViewScope();
+                List<PreAuthorization> expiring = preAuthRepository.findPreAuthsExpiringWithinDaysScoped(
+                                today, expiryDate, scopeKind(scope), scopeIds(scope));
 
                 return expiring.stream()
                                 .limit(limit)
@@ -223,7 +232,9 @@ public class PreAuthDashboardService {
                 LocalDate startDate = today.minusDays(days);
 
                 // Targeted query — only records in the requested date window
-                List<PreAuthorization> allInRange = preAuthRepository.findActiveFromDate(startDate);
+                AuthorizedPreAuthScope scope = accessScopeResolver.requireViewScope();
+                List<PreAuthorization> allInRange = preAuthRepository.findActiveFromDateScoped(
+                                startDate, scopeKind(scope), scopeIds(scope));
 
                 Map<LocalDate, TrendData> trendMap = new HashMap<>();
 
@@ -278,7 +289,9 @@ public class PreAuthDashboardService {
                 log.info("[DASHBOARD] Fetching top {} providers by volume", limit);
 
                 // Single GROUP BY query — avoids full-table scan + N×findById
-                List<Object[]> statsRows = preAuthRepository.getActiveProviderStats();
+                AuthorizedPreAuthScope scope = accessScopeResolver.requireViewScope();
+                List<Object[]> statsRows = preAuthRepository.getActiveProviderStatsScoped(
+                                scopeKind(scope), scopeIds(scope));
 
                 // Batch-fetch all referenced provider names in one query
                 List<Long> providerIds = statsRows.stream()
@@ -326,7 +339,9 @@ public class PreAuthDashboardService {
         public List<RecentActivity> getRecentActivity(int limit) {
                 log.info("[DASHBOARD] Fetching recent {} activities", limit);
 
-                return auditRepository.findRecentAudits(LocalDate.now().minusDays(7).atStartOfDay(),
+                AuthorizedPreAuthScope scope = accessScopeResolver.requireViewScope();
+                return auditRepository.findRecentAuditsScoped(LocalDate.now().minusDays(7).atStartOfDay(),
+                                scopeKind(scope), scopeIds(scope),
                                 PageRequest.of(0, limit))
                                 .getContent()
                                 .stream()
@@ -342,6 +357,16 @@ public class PreAuthDashboardService {
         }
 
         // ==================== HELPER METHODS ====================
+
+        private String scopeKind(AuthorizedPreAuthScope scope) {
+                return scope.kind().name();
+        }
+
+        private Collection<Long> scopeIds(AuthorizedPreAuthScope scope) {
+                // Hibernate still binds collection parameters in branches made false by GLOBAL.
+                // A non-empty impossible sentinel avoids invalid SQL without widening access.
+                return scope.ids().isEmpty() ? Set.of(-1L) : scope.ids();
+        }
 
         /**
          * Convert PreAuthorization to summary DTO

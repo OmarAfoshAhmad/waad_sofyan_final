@@ -56,6 +56,10 @@ class BenefitPolicyCoverageServiceTest {
     private AuthorizationService authorizationService;
     @Mock
     private CoverageDecisionService coverageDecisionService;
+    @Mock
+    private com.waad.tba.modules.member.service.MemberPolicyResolver memberPolicyResolver;
+    @Mock
+    private LimitBalanceReader limitBalanceReader;
 
     @InjectMocks
     private BenefitPolicyCoverageService coverageService;
@@ -88,11 +92,18 @@ class BenefitPolicyCoverageServiceTest {
                 .code("SRV001")
                 .name("Consultation")
                 .build();
+
+        // Every coverage decision now resolves the policy on its explicit
+        // date; the pointer on this fixture is display-only.
+        lenient().when(memberPolicyResolver.resolveFor(any(Member.class), any(LocalDate.class)))
+                .thenReturn(Optional.of(testPolicy));
     }
 
     @Test
     @DisplayName("Should validate active policy successfully")
     void validateMemberHasActivePolicy_Success() {
+        org.mockito.Mockito.when(memberPolicyResolver.resolveFor(testMember, LocalDate.now()))
+                .thenReturn(java.util.Optional.of(testPolicy));
         assertDoesNotThrow(() -> coverageService.validateMemberHasActivePolicy(testMember, LocalDate.now()));
     }
 
@@ -100,7 +111,9 @@ class BenefitPolicyCoverageServiceTest {
     @DisplayName("Should throw exception when member has no policy and auto-resolve fails")
     void validateMemberHasActivePolicy_NoPolicy() {
         testMember.setBenefitPolicy(null);
-        
+        org.mockito.Mockito.when(memberPolicyResolver.resolveFor(testMember, LocalDate.now()))
+                .thenReturn(java.util.Optional.empty());
+
         assertThrows(BusinessRuleException.class, () -> 
             coverageService.validateMemberHasActivePolicy(testMember, LocalDate.now()));
     }
@@ -186,6 +199,13 @@ class BenefitPolicyCoverageServiceTest {
     @Test
     @DisplayName("Free-text service without canonical ID must never receive policy default coverage")
     void validateClaimCoverage_FreeTextServiceFailsClosed() {
+        org.mockito.Mockito.when(memberPolicyResolver.resolveFor(org.mockito.ArgumentMatchers.eq(testMember),
+                org.mockito.ArgumentMatchers.any()))
+                .thenReturn(java.util.Optional.of(testPolicy));
+        // validateClaimCoverage now takes the policy from resolveForOrFail too.
+        org.mockito.Mockito.when(memberPolicyResolver.resolveForOrFail(org.mockito.ArgumentMatchers.eq(testMember),
+                org.mockito.ArgumentMatchers.any()))
+                .thenReturn(testPolicy);
         var input = BenefitPolicyCoverageService.ServiceCoverageInput.builder()
                 .serviceName("خدمة مكتوبة يدويا")
                 .amount(new BigDecimal("100.00"))
@@ -202,13 +222,41 @@ class BenefitPolicyCoverageServiceTest {
     @Test
     @DisplayName("Should throw exception if annual limit exceeded")
     void validateAmountLimits_Exceeded() {
-        // Arrange
-        when(claimRepository.sumApprovedAmountByMemberAndYear(anyLong(), anyInt(), anyList(), isNull()))
-                .thenReturn(new BigDecimal("9500.00")); // Spent 9500 of 10000
+        // Arrange -- finance-08: the annual ceiling is read from the ledger, on
+        // the ACTUAL (committed-only) axis for the claim path.
+        when(limitBalanceReader.readGeneralCeiling(eq(1L), eq(1L), eq(new BigDecimal("10000.00")), any(), any(), isNull()))
+                .thenReturn(new LimitBalanceReader.GeneralCeilingBalance(
+                        new BigDecimal("10000.00"), new BigDecimal("9500.00"), BigDecimal.ZERO,
+                        new BigDecimal("500.00"), new BigDecimal("500.00"))); // Consumed 9500 of 10000
 
         // Act & Assert
-        assertThrows(BusinessRuleException.class, () -> 
+        assertThrows(BusinessRuleException.class, () ->
             coverageService.validateAmountLimits(testMember, testPolicy, new BigDecimal("600.00"), LocalDate.now()));
+    }
+
+    @Test
+    @DisplayName("Reservable gate must reject a second approval that a live reservation already exhausted")
+    void validateReservableAmountLimits_RejectsWhenReservationExhaustsCeiling() {
+        // Nothing spent yet, but a prior pre-authorization already holds 9600 of 10000.
+        when(limitBalanceReader.readGeneralCeiling(eq(1L), eq(1L), eq(new BigDecimal("10000.00")), any(), any(), isNull()))
+                .thenReturn(new LimitBalanceReader.GeneralCeilingBalance(
+                        new BigDecimal("10000.00"), BigDecimal.ZERO, new BigDecimal("9600.00"),
+                        new BigDecimal("10000.00"), new BigDecimal("400.00")));
+
+        assertThrows(BusinessRuleException.class, () -> coverageService.validateReservableAmountLimits(
+                testMember, testPolicy, new BigDecimal("600.00"), LocalDate.now()));
+    }
+
+    @Test
+    @DisplayName("Claim-path gate ignores reservations: a live hold must not shrink actual remaining")
+    void validateAmountLimits_IgnoresReservations() {
+        when(limitBalanceReader.readGeneralCeiling(eq(1L), eq(1L), eq(new BigDecimal("10000.00")), any(), any(), isNull()))
+                .thenReturn(new LimitBalanceReader.GeneralCeilingBalance(
+                        new BigDecimal("10000.00"), BigDecimal.ZERO, new BigDecimal("9600.00"),
+                        new BigDecimal("10000.00"), new BigDecimal("400.00")));
+
+        assertDoesNotThrow(() -> coverageService.validateAmountLimits(
+                testMember, testPolicy, new BigDecimal("600.00"), LocalDate.now()));
     }
 
     @Test
@@ -224,15 +272,17 @@ class BenefitPolicyCoverageServiceTest {
     }
 
     @Test
-    @DisplayName("validateAmountLimits(excludeClaimId) must pass claimId to the annual-limit exclusion query")
+    @DisplayName("validateAmountLimits(excludeClaimId) must pass claimId to the annual-limit ledger read")
     void validateAmountLimits_PassesExcludeClaimIdToAnnualQuery() {
-        when(claimRepository.sumApprovedAmountByMemberAndYear(eq(1L), anyInt(), anyList(), eq(42L)))
-                .thenReturn(new BigDecimal("60.00"));
+        when(limitBalanceReader.readGeneralCeiling(eq(1L), eq(1L), eq(new BigDecimal("10000.00")), any(), any(), eq(42L)))
+                .thenReturn(new LimitBalanceReader.GeneralCeilingBalance(
+                        new BigDecimal("10000.00"), new BigDecimal("60.00"), BigDecimal.ZERO,
+                        new BigDecimal("9940.00"), new BigDecimal("9940.00")));
 
         assertDoesNotThrow(() -> coverageService.validateAmountLimits(
                 testMember, testPolicy, new BigDecimal("100.00"), LocalDate.now(), 42L));
 
-        verify(claimRepository).sumApprovedAmountByMemberAndYear(eq(1L), anyInt(), anyList(), eq(42L));
+        verify(limitBalanceReader).readGeneralCeiling(eq(1L), eq(1L), eq(new BigDecimal("10000.00")), any(), any(), eq(42L));
     }
 
     @Test
@@ -269,11 +319,74 @@ class BenefitPolicyCoverageServiceTest {
     @Test
     @DisplayName("Deprecated 4-arg overload must still work and imply no exclusion (null)")
     void validateAmountLimits_LegacyOverload_PassesNullExclude() {
-        when(claimRepository.sumApprovedAmountByMemberAndYear(eq(1L), anyInt(), anyList(), isNull()))
-                .thenReturn(new BigDecimal("100.00"));
+        when(limitBalanceReader.readGeneralCeiling(eq(1L), eq(1L), eq(new BigDecimal("10000.00")), any(), any(), isNull()))
+                .thenReturn(new LimitBalanceReader.GeneralCeilingBalance(
+                        new BigDecimal("10000.00"), new BigDecimal("100.00"), BigDecimal.ZERO,
+                        new BigDecimal("9900.00"), new BigDecimal("9900.00")));
 
         assertDoesNotThrow(() -> coverageService.validateAmountLimits(
                 testMember, testPolicy, new BigDecimal("50.00"), LocalDate.now()));
+    }
+
+    @Test
+    @DisplayName("getRemainingCoverage reads the ledger filtered to THIS policy, not the unfiltered claim_lines total -- "
+            + "a member who switched policies mid-year must not have a former policy's spending count against this one")
+    void getRemainingCoverage_ReadsPolicyFilteredLedger_NotUnfilteredClaimLinesTotal() {
+        when(limitBalanceReader.readGeneralCeiling(eq(1L), eq(1L), eq(new BigDecimal("10000.00")), any(), any(), isNull()))
+                .thenReturn(new LimitBalanceReader.GeneralCeilingBalance(
+                        new BigDecimal("10000.00"), new BigDecimal("3000.00"), BigDecimal.ZERO,
+                        new BigDecimal("7000.00"), new BigDecimal("7000.00")));
+
+        BigDecimal remaining = coverageService.getRemainingCoverage(testPolicy, 1L, LocalDate.now());
+
+        assertEquals(0, new BigDecimal("7000.00").compareTo(remaining));
+        verify(claimRepository, never())
+                .sumLimitConsumptionByMemberAndPeriodExcludingClaim(anyLong(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("getLimitConsumedForYear queries the calendar-year window on the limit-consumption axis")
+    void getLimitConsumedForYear_QueriesCalendarYearWindow() {
+        when(claimRepository.sumLimitConsumptionByMemberAndPeriodExcludingClaim(
+                eq(1L), eq(LocalDate.of(2026, 1, 1)), eq(LocalDate.of(2026, 12, 31)), isNull()))
+                .thenReturn(new BigDecimal("345.00"));
+
+        BigDecimal consumed = coverageService.getLimitConsumedForYear(1L, 2026, null);
+
+        assertEquals(0, new BigDecimal("345.00").compareTo(consumed));
+    }
+
+    @Test
+    @DisplayName("Bulk getLimitConsumedForYear returns zero for every member the query didn't return a row for")
+    void getLimitConsumedForYear_Bulk_DefaultsMissingMembersToZero() {
+        when(claimRepository.sumLimitConsumptionByMembersAndPeriodExcludingClaim(
+                eq(java.util.Set.of(1L, 2L, 3L)), any(), any(), isNull()))
+                .thenReturn(java.util.List.of(
+                        row(1L, new BigDecimal("100.00")),
+                        row(3L, new BigDecimal("0.00"))));
+
+        var result = coverageService.getLimitConsumedForYear(java.util.Set.of(1L, 2L, 3L), 2026, null);
+
+        assertEquals(3, result.size());
+        assertEquals(0, new BigDecimal("100.00").compareTo(result.get(1L)));
+        assertEquals(0, BigDecimal.ZERO.compareTo(result.get(2L))); // never returned a row -- still present, zero
+        assertEquals(0, BigDecimal.ZERO.compareTo(result.get(3L)));
+    }
+
+    @Test
+    @DisplayName("Bulk getLimitConsumedForYear never queries the database for an empty member set")
+    void getLimitConsumedForYear_Bulk_EmptyInputSkipsQuery() {
+        var result = coverageService.getLimitConsumedForYear(java.util.List.<Long>of(), 2026, null);
+
+        assertTrue(result.isEmpty());
+        verifyNoInteractions(claimRepository);
+    }
+
+    private com.waad.tba.modules.claim.projection.MemberLimitConsumptionProjection row(Long memberId, BigDecimal amount) {
+        return new com.waad.tba.modules.claim.projection.MemberLimitConsumptionProjection() {
+            @Override public Long getMemberId() { return memberId; }
+            @Override public BigDecimal getConsumedAmount() { return amount; }
+        };
     }
 
     private CoverageDecision coveredDecision(BenefitPolicyRule rule, Long categoryId) {

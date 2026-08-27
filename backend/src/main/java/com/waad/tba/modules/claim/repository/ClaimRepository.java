@@ -36,17 +36,6 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
         long countByPolicyId(@Param("policyId") Long policyId);
 
 
-        @Query("SELECT COALESCE(SUM(c.approvedAmount), 0) FROM Claim c " +
-                        "WHERE c.active = true AND c.member.id = :memberId " +
-                        "AND c.status IN (com.waad.tba.modules.claim.entity.ClaimStatus.APPROVED, com.waad.tba.modules.claim.entity.ClaimStatus.SETTLED, com.waad.tba.modules.claim.entity.ClaimStatus.BATCHED) " +
-                        "AND c.serviceDate BETWEEN :yearStart AND :yearEnd " +
-                        "AND (:excludeClaimId IS NULL OR c.id <> :excludeClaimId)")
-        java.math.BigDecimal sumApprovedAmountsByMemberAndYearExcludingClaim(
-                        @Param("memberId") Long memberId,
-                        @Param("yearStart") LocalDate yearStart,
-                        @Param("yearEnd") LocalDate yearEnd,
-                        @Param("excludeClaimId") Long excludeClaimId);
-
         /** WAAD-FIN-1.0: the policy ceiling consumes settlement value, not insurer payment. */
         @Query("SELECT COALESCE(SUM(cl.limitConsumption), 0) FROM ClaimLine cl " +
                         "WHERE cl.currentLine = true AND cl.claim.active = true AND cl.claim.member.id = :memberId " +
@@ -58,6 +47,94 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
                         @Param("periodStart") LocalDate periodStart,
                         @Param("periodEnd") LocalDate periodEnd,
                         @Param("excludeClaimId") Long excludeClaimId);
+
+        /**
+         * Bulk counterpart of {@link #sumLimitConsumptionByMemberAndPeriodExcludingClaim}
+         * -- same axis, same filters, one row per member instead of one query per
+         * member. Exists so a family (principal + N dependents) can be read in a
+         * single round trip instead of N+1; keep both queries' WHERE clauses in sync
+         * if the limit-consumption axis or its eligible statuses ever change.
+         */
+        @Query("SELECT cl.claim.member.id as memberId, COALESCE(SUM(cl.limitConsumption), 0) as consumedAmount " +
+                        "FROM ClaimLine cl " +
+                        "WHERE cl.currentLine = true AND cl.claim.active = true AND cl.claim.member.id IN :memberIds " +
+                        "AND cl.claim.status IN (com.waad.tba.modules.claim.entity.ClaimStatus.APPROVED, com.waad.tba.modules.claim.entity.ClaimStatus.SETTLED, com.waad.tba.modules.claim.entity.ClaimStatus.BATCHED) "
+                        +
+                        "AND cl.claim.serviceDate BETWEEN :periodStart AND :periodEnd " +
+                        "AND (:excludeClaimId IS NULL OR cl.claim.id <> :excludeClaimId) " +
+                        "GROUP BY cl.claim.member.id")
+        List<com.waad.tba.modules.claim.projection.MemberLimitConsumptionProjection> sumLimitConsumptionByMembersAndPeriodExcludingClaim(
+                        @Param("memberIds") java.util.Collection<Long> memberIds,
+                        @Param("periodStart") LocalDate periodStart,
+                        @Param("periodEnd") LocalDate periodEnd,
+                        @Param("excludeClaimId") Long excludeClaimId);
+
+        /**
+         * How many times a member has claimed a specific service in a given
+         * year -- replaces {@code MemberFinancialSummaryService
+         * .getServiceCoverageLimits}'s former pattern of loading every claim
+         * for the member and counting matches in a Java loop.
+         *
+         * {@code cl.currentLine = true} matters here specifically: without it,
+         * a claim that went through the correction cycle (V152 -- reopen for
+         * correction, new calculationVersion, re-approve) would have its
+         * superseded line(s) still attached to {@code claim.getLines()}
+         * alongside the current one, double-counting a single real visit as
+         * two uses. The prior Java-loop implementation iterated
+         * {@code claim.getLines()} directly with no such filter and had
+         * exactly this latent double-count bug; every other
+         * per-claim-line aggregate query in this repository already filters
+         * on {@code currentLine = true} for the same reason (see
+         * sumLimitConsumptionByMemberAndPeriodExcludingClaim above) -- this
+         * query brings the times-limit count in line with that established
+         * convention instead of leaving it as the one exception.
+         *
+         * Excludes REJECTED claims, matching the prior implementation
+         * exactly; every other status (including DRAFT/SUBMITTED/
+         * UNDER_REVIEW) still counts against the limit, which is unchanged
+         * behavior carried over as-is, not a new decision made here.
+         */
+        @Query("SELECT COUNT(cl) FROM ClaimLine cl " +
+                        "WHERE cl.currentLine = true AND cl.claim.active = true AND cl.claim.member.id = :memberId " +
+                        "AND cl.claim.status <> com.waad.tba.modules.claim.entity.ClaimStatus.REJECTED " +
+                        "AND cl.serviceCode = :serviceCode " +
+                        "AND YEAR(cl.claim.serviceDate) = :year")
+        long countServiceUsageForMemberAndYear(
+                        @Param("memberId") Long memberId,
+                        @Param("serviceCode") String serviceCode,
+                        @Param("year") int year);
+
+        /**
+         * One row per member: every claim-history metric
+         * {@code MemberFinancialSummaryService} needs, aggregated in the database
+         * instead of loaded as entities and reduced in Java. Statuses/fields mirror
+         * {@code MemberFinancialSummaryService}'s former per-claim Java reduction
+         * exactly -- this query is that reduction, moved into SQL so it scales with
+         * claim history size instead of with claims-loaded-into-heap.
+         */
+        @Query("SELECT c.member.id as memberId, " +
+                        "COUNT(c) as claimsCount, " +
+                        "SUM(CASE WHEN c.status IN (com.waad.tba.modules.claim.entity.ClaimStatus.SUBMITTED, com.waad.tba.modules.claim.entity.ClaimStatus.UNDER_REVIEW) THEN 1 ELSE 0 END) as pendingClaimsCount, "
+                        +
+                        "SUM(CASE WHEN c.status IN (com.waad.tba.modules.claim.entity.ClaimStatus.APPROVED, com.waad.tba.modules.claim.entity.ClaimStatus.SETTLED) THEN 1 ELSE 0 END) as approvedClaimsCount, "
+                        +
+                        "SUM(CASE WHEN c.status = com.waad.tba.modules.claim.entity.ClaimStatus.REJECTED THEN 1 ELSE 0 END) as rejectedClaimsCount, "
+                        +
+                        "COALESCE(SUM(c.requestedAmount), 0) as totalClaimed, " +
+                        "COALESCE(SUM(CASE WHEN c.status IN (com.waad.tba.modules.claim.entity.ClaimStatus.APPROVED, com.waad.tba.modules.claim.entity.ClaimStatus.SETTLED) THEN c.approvedAmount ELSE 0 END), 0) as totalApproved, "
+                        +
+                        "COALESCE(SUM(CASE WHEN c.status = com.waad.tba.modules.claim.entity.ClaimStatus.SETTLED THEN c.approvedAmount ELSE 0 END), 0) as totalPaid, "
+                        +
+                        "COALESCE(SUM(CASE WHEN c.status IN (com.waad.tba.modules.claim.entity.ClaimStatus.APPROVED, com.waad.tba.modules.claim.entity.ClaimStatus.SETTLED) THEN c.patientCoPay ELSE 0 END), 0) as totalPatientCoPay, "
+                        +
+                        "COALESCE(SUM(CASE WHEN c.status IN (com.waad.tba.modules.claim.entity.ClaimStatus.APPROVED, com.waad.tba.modules.claim.entity.ClaimStatus.SETTLED) THEN c.deductibleApplied ELSE 0 END), 0) as totalDeductibleApplied, "
+                        +
+                        "MAX(c.createdAt) as lastClaimAt " +
+                        "FROM Claim c " +
+                        "WHERE c.active = true AND c.member.id IN :memberIds " +
+                        "GROUP BY c.member.id")
+        List<com.waad.tba.modules.claim.projection.MemberFinancialAggregateProjection> findFinancialAggregatesByMemberIds(
+                        @Param("memberIds") java.util.Collection<Long> memberIds);
 
         /**
          * Legacy-data repair candidates, case A: an APPROVED claim with no qualifying
@@ -884,23 +961,6 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
                         "AND (:excludeClaimId IS NULL OR c.id <> :excludeClaimId)")
         java.math.BigDecimal sumApprovedAmountByFamilyAndYear(
                         @Param("principalId") Long principalId,
-                        @Param("year") int year,
-                        @Param("statuses") List<com.waad.tba.modules.claim.entity.ClaimStatus> statuses,
-                        @Param("excludeClaimId") Long excludeClaimId);
-
-        /**
-         * Calculate total approved amount for a member in a given year.
-         * Used for per-member annual limit validation.
-         * See sumApprovedAmountByFamilyAndYear javadoc for excludeClaimId/active rationale.
-         */
-        @Query("SELECT COALESCE(SUM(c.approvedAmount), 0) FROM Claim c " +
-                        "WHERE c.member.id = :memberId " +
-                        "AND YEAR(c.serviceDate) = :year " +
-                        "AND c.active = true " +
-                        "AND c.status IN :statuses " +
-                        "AND (:excludeClaimId IS NULL OR c.id <> :excludeClaimId)")
-        java.math.BigDecimal sumApprovedAmountByMemberAndYear(
-                        @Param("memberId") Long memberId,
                         @Param("year") int year,
                         @Param("statuses") List<com.waad.tba.modules.claim.entity.ClaimStatus> statuses,
                         @Param("excludeClaimId") Long excludeClaimId);

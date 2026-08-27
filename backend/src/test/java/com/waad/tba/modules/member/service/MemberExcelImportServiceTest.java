@@ -7,9 +7,11 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.lenient;
 
 import java.io.ByteArrayOutputStream;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -73,6 +75,26 @@ class MemberExcelImportServiceTest {
     private ClaimRepository claimRepository;
     @Mock
     private PreAuthorizationRepository preAuthorizationRepository;
+    @Mock
+    private MemberImportAuditRecorder auditRecorder;
+    @Mock
+    private com.waad.tba.modules.member.repository.MemberPolicyAssignmentRepository policyAssignmentRepository;
+    @Mock
+    private com.waad.tba.modules.member.repository.MemberEmployerAssignmentRepository employerAssignmentRepository;
+    @Mock
+    private MemberEmployerResolver memberEmployerResolver;
+    @Mock
+    private com.waad.tba.modules.member.repository.MemberStatusHistoryRepository statusHistoryRepository;
+    @Mock
+    private com.waad.tba.modules.member.repository.MemberHardDeleteAuditRepository hardDeleteAuditRepository;
+    @Mock
+    private org.springframework.jdbc.core.JdbcTemplate statusTransitionJdbcTemplate;
+    @Mock
+    private com.waad.tba.modules.member.security.MemberImportAccessPolicy importAccessPolicy;
+    @Mock
+    private com.waad.tba.modules.member.security.AuthorizedImportScope authorizedImportScope;
+    @Mock
+    private MemberImportPreviewTicketService previewTicketService;
 
     @InjectMocks
     private MemberExcelImportService service;
@@ -83,9 +105,18 @@ class MemberExcelImportServiceTest {
     void setUp() {
         MemberImportParser parser = new MemberImportParser();
         MemberImportMapper mapper = new MemberImportMapper(parser);
+        MemberPolicyResolver policyResolverForStatus = new MemberPolicyResolver(
+                policyAssignmentRepository, benefitPolicyRepository, memberRepository,
+                org.mockito.Mockito.mock(MemberEmployerResolver.class));
+        MemberStatusTransitionService statusTransitionService = new MemberStatusTransitionService(
+                memberRepository, statusHistoryRepository, hardDeleteAuditRepository, benefitPolicyRepository,
+                statusTransitionJdbcTemplate, policyResolverForStatus);
+        MemberPolicyResolver memberPolicyResolver = new MemberPolicyResolver(
+                policyAssignmentRepository, benefitPolicyRepository, memberRepository,
+                org.mockito.Mockito.mock(MemberEmployerResolver.class));
         MemberImportRowProcessor rowProcessor = new MemberImportRowProcessor(
                 parser, employerRepository, benefitPolicyRepository, barcodeGeneratorService,
-                cardNumberGeneratorService);
+                cardNumberGeneratorService, statusTransitionService);
 
         service = new MemberExcelImportService(
                 memberRepository,
@@ -100,9 +131,14 @@ class MemberExcelImportServiceTest {
                 mapper,
                 rowProcessor,
                 barcodeGeneratorService,
-                visitRepository,
-                claimRepository,
-                preAuthorizationRepository);
+                auditRecorder,
+                statusTransitionService,
+                memberEmployerResolver,
+                employerAssignmentRepository,
+                memberPolicyResolver,
+                policyAssignmentRepository,
+                importAccessPolicy,
+                previewTicketService);
 
         employer = Employer.builder().id(10L).code("EMP1").name("Employer One").active(true).build();
 
@@ -115,7 +151,13 @@ class MemberExcelImportServiceTest {
         when(benefitPolicyRepository.findAll()).thenReturn(List.of(activePolicy));
         when(benefitPolicyRepository.findActiveEffectivePolicyForEmployer(10L, LocalDate.now()))
                 .thenReturn(Optional.of(activePolicy));
+        when(benefitPolicyRepository.findByPolicyCode("POL-1")).thenReturn(Optional.of(activePolicy));
         when(authorizationService.getCurrentUser()).thenReturn(User.builder().id(1L).username("tester").build());
+        lenient().when(importAccessPolicy.require(
+                org.mockito.ArgumentMatchers.any(com.waad.tba.modules.member.security.MemberOperation.class),
+                org.mockito.ArgumentMatchers.anyCollection(), org.mockito.ArgumentMatchers.anyBoolean()))
+                .thenReturn(authorizedImportScope);
+        lenient().when(authorizedImportScope.covers(org.mockito.ArgumentMatchers.anyLong())).thenReturn(true);
 
         when(employerRepository.findByNameIgnoreCase(eq("EMP1"))).thenReturn(Optional.empty());
         when(employerRepository.findByCode(eq("EMP1"))).thenReturn(Optional.of(employer));
@@ -123,6 +165,8 @@ class MemberExcelImportServiceTest {
         when(employerRepository.findByCode(eq("BAD"))).thenReturn(Optional.empty());
 
         when(importLogRepository.findByImportBatchId(anyString())).thenReturn(Optional.empty());
+        when(importLogRepository.findByImportScopeHashAndStatus(anyString(), eq(MemberImportLog.ImportStatus.COMPLETED)))
+                .thenReturn(Optional.empty());
         when(importLogRepository.save(any(MemberImportLog.class))).thenAnswer(invocation -> {
             MemberImportLog log = invocation.getArgument(0);
             if (log.getId() == null) {
@@ -130,9 +174,27 @@ class MemberExcelImportServiceTest {
             }
             return log;
         });
+        when(importLogRepository.saveAndFlush(any(MemberImportLog.class))).thenAnswer(invocation -> {
+            MemberImportLog log = invocation.getArgument(0);
+            if (log.getId() == null) {
+                log.setId(100L);
+            }
+            return log;
+        });
+        when(importLogRepository.findById(anyLong())).thenAnswer(invocation ->
+                Optional.of(MemberImportLog.builder().id(invocation.getArgument(0)).importBatchId("test-batch")
+                        .startedAt(LocalDateTime.now()).build()));
+        when(auditRecorder.markStarted(anyString(), any(), anyLong(), anyString(), anyString(), any(), any(), any()))
+                .thenReturn(100L);
 
         doNothing().when(importErrorRepository).deleteByImportLogId(anyLong());
-        when(memberRepository.findByCivilId(anyString())).thenReturn(Optional.empty());
+        when(policyAssignmentRepository.findMemberIdsWithAnyAssignment(any())).thenReturn(List.of());
+        when(policyAssignmentRepository.findByMemberIdAndAssignmentEndDateIsNull(anyLong()))
+                .thenReturn(Optional.empty());
+        when(policyAssignmentRepository.save(any(com.waad.tba.modules.member.entity.MemberPolicyAssignment.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(policyAssignmentRepository.saveAndFlush(any(com.waad.tba.modules.member.entity.MemberPolicyAssignment.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
         when(barcodeGeneratorService.generateForPrincipal()).thenReturn("WAD-2026-00000001", "WAD-2026-00000002");
         when(cardNumberGeneratorService.generateUniqueForPrincipal(any(Member.class))).thenReturn("CARD-0001",
                 "CARD-0002");
@@ -143,6 +205,10 @@ class MemberExcelImportServiceTest {
             }
             return member;
         });
+        when(memberRepository.findByIdWithLock(anyLong())).thenAnswer(invocation ->
+                Optional.of(Member.builder().id(invocation.getArgument(0)).employer(employer)
+                        .benefitPolicy(activePolicy).fullName("Imported Member").cardNumber("CARD-0001")
+                        .active(true).build()));
     }
 
     @Test

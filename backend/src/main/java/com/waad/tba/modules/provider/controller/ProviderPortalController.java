@@ -94,6 +94,7 @@ public class ProviderPortalController {
     
     private final AuthorizationService authorizationService;
     private final ProviderContextGuard providerContextGuard;
+    private final com.waad.tba.modules.member.service.MemberPolicyResolver memberPolicyResolver;
     
     // Provider-Partner Isolation (Phase 5.5)
     private final com.waad.tba.modules.provider.service.ProviderService providerService;
@@ -180,7 +181,7 @@ public class ProviderPortalController {
      * 
      * Example: GET /api/provider/eligibility/WAD-2026-00001234
      */
-    @GetMapping("/eligibility/{barcode}")
+    @PostMapping("/eligibility/evaluations/{barcode}")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF')")
     @Operation(
         summary = "Quick eligibility check by barcode (GET)",
@@ -1142,7 +1143,7 @@ public class ProviderPortalController {
             com.waad.tba.modules.member.entity.Member member = memberRepository.findById(memberId)
                 .orElse(null);
             
-            if (member == null || member.getBenefitPolicy() == null) {
+            if (member == null) {
                 log.warn("[PROVIDER-PORTAL] Member {} not found or has no benefit policy", memberId);
                 return ResponseEntity.ok(ApiResponse.success(
                     "Member has no benefit policy",
@@ -1150,7 +1151,15 @@ public class ProviderPortalController {
                 ));
             }
             
-            Long policyId = member.getBenefitPolicy().getId();
+            Long policyId = memberPolicyResolver.resolveFor(member, LocalDate.now())
+                .map(com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy::getId)
+                .orElse(null);
+            if (policyId == null) {
+                return ResponseEntity.ok(ApiResponse.success(
+                    "Member has no effective benefit policy today",
+                    java.util.Collections.emptyList()
+                ));
+            }
             
             // 3. Get all pricing items from contract
             java.util.List<com.waad.tba.modules.providercontract.dto.ProviderContractPricingItemResponseDto> allPricingItems = 

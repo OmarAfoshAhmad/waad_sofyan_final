@@ -1,11 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Formik, Form } from 'formik';
 import * as Yup from 'yup';
 import dayjs from 'dayjs';
 
 // MUI Components
-import { Grid, Button, CircularProgress, TextField, MenuItem, InputAdornment, Alert, Typography, Divider, Box, Stack } from '@mui/material';
+import { Grid, Button, TextField, MenuItem, InputAdornment, Alert, Typography, Divider, Box, Stack } from '@mui/material';
 import { LoadingButton } from '@mui/lab';
 import DatePicker from 'components/common/SystemDatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -15,7 +15,6 @@ import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import SaveIcon from '@mui/icons-material/Save';
 import CancelIcon from '@mui/icons-material/Cancel';
 import PolicyIcon from '@mui/icons-material/Policy';
-import BusinessIcon from '@mui/icons-material/Business';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import DescriptionIcon from '@mui/icons-material/Description';
@@ -26,7 +25,7 @@ import ModernPageHeader from 'components/tba/ModernPageHeader';
 
 // Services
 import { createBenefitPolicy } from 'services/api/benefit-policies.service';
-import { getEmployerSelectors } from 'services/api/employers.service';
+import EmployerSelectField from 'components/tba/EmployerSelectField';
 
 /**
  * Validation Schema - Yup
@@ -68,8 +67,6 @@ const validationSchema = Yup.object().shape({
  */
 const BenefitPolicyCreate = () => {
   const navigate = useNavigate();
-  const [employers, setEmployers] = useState([]);
-  const [loadingEmployers, setLoadingEmployers] = useState(true);
   const [generalError, setGeneralError] = useState(null);
 
   // Initial Form Values
@@ -85,24 +82,6 @@ const BenefitPolicyCreate = () => {
     notes: '',
     status: 'DRAFT'
   };
-
-  // Fetch Employers Data Function
-  const fetchEmployers = async () => {
-    setLoadingEmployers(true);
-    try {
-      const data = await getEmployerSelectors();
-      setEmployers(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.error('Failed to fetch employers:', err);
-    } finally {
-      setLoadingEmployers(false);
-    }
-  };
-
-  // Fetch Employers on Mount
-  useEffect(() => {
-    fetchEmployers();
-  }, []);
 
   // Handle Form Submission
   const handleSubmit = async (values, { setSubmitting }) => {
@@ -216,43 +195,20 @@ const BenefitPolicyCreate = () => {
                     </Grid>
 
                     <Grid size={{ xs: 12, md: 8 }}>
-                      <TextField
-                        fullWidth
-                        select
+                      <EmployerSelectField
                         size="small"
                         label="الشريك (صاحب العمل)"
-                        name="employerOrgId"
                         value={values.employerOrgId}
-                        onChange={(e) => {
-                          const selectedId = e.target.value;
+                        onChange={(selectedId, emp) => {
                           setFieldValue('employerOrgId', selectedId);
                           // Auto-populate name from employer
-                          if (!values.name) {
-                            const emp = employers.find((em) => em.id === selectedId);
-                            if (emp) setFieldValue('name', `وثيقة ${emp.label || emp.name}`);
+                          if (!values.name && emp) {
+                            setFieldValue('name', `وثيقة ${emp.label || emp.name}`);
                           }
                         }}
-                        onBlur={handleBlur}
                         error={touched.employerOrgId && Boolean(errors.employerOrgId)}
                         helperText={(touched.employerOrgId && errors.employerOrgId) || 'اختر المؤسسة صاحبة الوثيقة'}
-                        disabled={loadingEmployers}
-                      >
-                        {loadingEmployers ? (
-                          <MenuItem value="" disabled>
-                            <CircularProgress size={16} sx={{ mr: 1 }} /> جارٍ التحميل...
-                          </MenuItem>
-                        ) : employers.length > 0 ? (
-                          employers.map((emp) => (
-                            <MenuItem key={emp.id} value={emp.id} sx={{ fontSize: '0.8125rem' }}>
-                              {emp.label || emp.name}
-                            </MenuItem>
-                          ))
-                        ) : (
-                          <MenuItem value="" disabled>
-                            لا يوجد شركاء متاحين
-                          </MenuItem>
-                        )}
-                      </TextField>
+                      />
                     </Grid>
 
                     <Grid size={{ xs: 12, md: 4 }}>

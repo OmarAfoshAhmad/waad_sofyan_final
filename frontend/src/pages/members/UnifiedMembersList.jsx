@@ -25,6 +25,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Autocomplete,
+  Alert,
   Box,
   Button,
   Chip,
@@ -60,7 +61,6 @@ import {
   Business as BusinessIcon,
   Star as VIPIcon,
   Bolt as FlashIcon,
-  CheckCircle as CheckCircleIcon,
   Search as SearchIcon,
   Close as CloseIcon,
   UploadFile as UploadFileIcon,
@@ -77,19 +77,23 @@ import DataExportWizard from 'components/tba/DataExportWizard';
 import {
   searchMembers,
   exportMembers,
-  deleteMember,
+  exportReimportableMembers,
+  terminateMembership,
   bulkDeleteMembers,
-  restoreMember,
+  reinstateTerminatedMember,
   hardDeleteMember,
+  toggleMemberActive,
   MEMBER_TYPES,
   MEMBER_STATUSES
 } from 'services/api/unified-members.service';
 import axiosClient from 'utils/axios';
 import { RELATIONSHIP_CONFIG } from 'components/insurance/MemberTypeIndicator';
 import { formatDate } from 'utils/formatters';
+import MemberLifecycleDialog from './MemberLifecycleDialog';
+import useAuth from 'hooks/useAuth';
+import { getMemberCapabilities } from './memberCapabilities';
 
 const MIN_MEMBER_SEARCH_LENGTH = 3;
-const MAX_SELECT_ALL_MEMBERS = 5000;
 
 /**
  * Unified Members List Component
@@ -97,6 +101,10 @@ const MAX_SELECT_ALL_MEMBERS = 5000;
 const UnifiedMembersList = () => {
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
+  const { user } = useAuth();
+  // Mirrors MemberCommandAccessPolicy/MemberImportAccessPolicy. These flags
+  // improve the UI only; backend resource-scope checks remain authoritative.
+  const capabilities = getMemberCapabilities(user);
 
   // ════════════════════════════════════════════════════════════════════════
   // STATE
@@ -104,6 +112,7 @@ const UnifiedMembersList = () => {
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [totalCount, setTotalCount] = useState(0);
+  const [loadError, setLoadError] = useState('');
 
   // Pagination
   const [page, setPage] = useState(0);
@@ -127,6 +136,11 @@ const UnifiedMembersList = () => {
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [exportWizardOpen, setExportWizardOpen] = useState(false);
 
+  // Bulk termination requires a stated reason -- rare, high-impact, no shortcut.
+  const [bulkTerminateDialog, setBulkTerminateDialog] = useState(false);
+  const [bulkTerminateReason, setBulkTerminateReason] = useState('');
+  const [bulkTerminateLoading, setBulkTerminateLoading] = useState(false);
+
   // Confirmation Dialog
   const [confirmDialog, setConfirmDialog] = useState({
     open: false,
@@ -137,6 +151,8 @@ const UnifiedMembersList = () => {
     cancelText: 'إلغاء',
     onConfirm: null
   });
+  const [lifecycleDialog, setLifecycleDialog] = useState({ open: false, action: 'SUSPEND', member: null });
+  const [lifecycleLoading, setLifecycleLoading] = useState(false);
 
   // Selection
   const [selectedMembers, setSelectedMembers] = useState([]);
@@ -172,12 +188,22 @@ const UnifiedMembersList = () => {
       const response = await searchMembers(params);
       const pageData = response?.data || response;
 
+      setLoadError('');
       setMembers(pageData?.content || []);
       setTotalCount(pageData?.totalElements || 0);
       setSelectedMembers([]); // Clear selection on page change or fetch
     } catch (error) {
       console.error('Error fetching members:', error);
-      enqueueSnackbar('خطأ في جلب المستفيدين', { variant: 'error' });
+      const message = error?.response?.data?.messageAr
+        || error?.response?.data?.message
+        || error?.response?.data?.error
+        || error?.message
+        || 'تعذر جلب المستفيدين';
+      setMembers([]);
+      setTotalCount(0);
+      setSelectedMembers([]);
+      setLoadError(message);
+      enqueueSnackbar(message, { variant: 'error' });
     } finally {
       setLoading(false);
     }
@@ -245,6 +271,29 @@ const UnifiedMembersList = () => {
     return await exportMembers(params);
   };
 
+  const handleReimportableExport = async () => {
+    try {
+      const blob = await exportReimportableMembers({
+        searchTerm,
+        organizationId: filters.organizationId || undefined,
+        status: filters.status || undefined,
+        type: filters.type || undefined,
+        deleted: showDeleted
+      });
+      const url = window.URL.createObjectURL(new Blob([blob]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `members-reimportable-${new Date().toISOString().split('T')[0]}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      enqueueSnackbar('تم إنشاء ملف صالح للمعاينة وإعادة الاستيراد', { variant: 'success' });
+    } catch (error) {
+      enqueueSnackbar(error?.response?.data?.message || 'فشل إنشاء ملف إعادة الاستيراد', { variant: 'error' });
+    }
+  };
+
   // Delete/Restore Handlers
   const closeDialog = () => {
     setConfirmDialog((prev) => ({ ...prev, open: false }));
@@ -253,7 +302,7 @@ const UnifiedMembersList = () => {
   const handleConfirmAction = async (actionFn, defaultSuccessMessage, defaultErrorMessage) => {
     try {
       const result = await actionFn();
-      const message = typeof result === 'string' ? result : (result?.message || defaultSuccessMessage);
+      const message = typeof result === 'string' ? result : result?.message || defaultSuccessMessage;
       enqueueSnackbar(message, { variant: 'success' });
     } catch (error) {
       console.error('Action failed:', error);
@@ -266,45 +315,11 @@ const UnifiedMembersList = () => {
   };
 
   // Selection Handlers
-  const handleSelectAllClick = async (event) => {
+  const handleSelectAllClick = (event) => {
     if (event.target.checked) {
-      if (totalCount > members.length) {
-        if (totalCount > MAX_SELECT_ALL_MEMBERS) {
-          enqueueSnackbar(
-            `عدد النتائج كبير (${totalCount}). يرجى تضييق البحث أو الفلاتر قبل تحديد الكل.`,
-            { variant: 'warning' }
-          );
-          event.target.checked = false;
-          return;
-        }
-        enqueueSnackbar('جاري تحديد جميع السجلات المطابقة...', { variant: 'info' });
-        try {
-          const effectiveSearchTerm = getEffectiveSearchTerm();
-          const hasSearch = !!effectiveSearchTerm;
-          const params = {
-            page: 0,
-            size: totalCount > 0 ? totalCount : 100000,
-            sort: sortBy,
-            direction: sortDirection.toUpperCase(),
-            deleted: showDeleted,
-            ...(filters.organizationId && { employerId: filters.organizationId }),
-            ...(filters.type && { type: filters.type }),
-            ...(filters.status && { status: filters.status }),
-            ...(hasSearch && { fullName: effectiveSearchTerm })
-          };
-          const response = await searchMembers(params);
-          const pageData = response?.data || response;
-          const allIds = (pageData?.content || []).map((n) => n.id);
-          setSelectedMembers(allIds);
-          enqueueSnackbar(`تم تحديد ${allIds.length} مستفيد بنجاح`, { variant: 'success' });
-        } catch (error) {
-          console.error('Error fetching all members for selection:', error);
-          enqueueSnackbar('حدث خطأ أثناء تحديد جميع السجلات', { variant: 'error' });
-        }
-      } else {
-        const newSelected = members.map((n) => n.id);
-        setSelectedMembers(newSelected);
-      }
+      const pageIds = members.map((member) => member.id);
+      setSelectedMembers(pageIds);
+      enqueueSnackbar(`تم تحديد الصفحة الحالية (${pageIds.length} مستفيد)`, { variant: 'info' });
       return;
     }
     setSelectedMembers([]);
@@ -327,80 +342,59 @@ const UnifiedMembersList = () => {
   };
 
   const handleBulkDelete = () => {
-    setConfirmDialog({
-      open: true,
-      title: 'حذف المستفيدين المحددين',
-      content: `هل أنت متأكد من حذف ${selectedMembers.length} مستفيد؟ سيتم حذف التابعين أيضاً إذا كان هناك موظف محدد.`,
-      severity: 'error',
-      confirmText: 'حذف',
-      cancelText: 'إلغاء',
-      onConfirm: () =>
-        handleConfirmAction(
-          async () => {
-            const res = await bulkDeleteMembers(selectedMembers);
-            setSelectedMembers([]); // clear selection
-            if (res?.message && res.message.includes('فشل حذف')) {
-                throw new Error(res.message);
-            }
-            return res?.message || 'تم إرسال طلب الحذف بنجاح';
-          },
-          'تم إرسال طلب الحذف بنجاح',
-          'فشل طلب الحذف المتعدد'
-        )
-    });
+    setBulkTerminateReason('');
+    setBulkTerminateDialog(true);
+  };
+
+  const confirmBulkTerminate = async () => {
+    if (!bulkTerminateReason.trim()) {
+      enqueueSnackbar('سبب إنهاء العضوية إلزامي', { variant: 'warning' });
+      return;
+    }
+    setBulkTerminateLoading(true);
+    try {
+      const res = await bulkDeleteMembers(selectedMembers, bulkTerminateReason.trim());
+      setSelectedMembers([]);
+      enqueueSnackbar(res?.message || 'تم إنهاء العضوية بنجاح', { variant: 'success' });
+      setBulkTerminateDialog(false);
+      await fetchMembers();
+    } catch (error) {
+      enqueueSnackbar(error?.response?.data?.message || 'فشل إنهاء عضوية المحدد', { variant: 'error' });
+    } finally {
+      setBulkTerminateLoading(false);
+    }
   };
 
   const handleDeleteClick = (member) => {
-    setConfirmDialog({
-      open: true,
-      title: 'هل أنت متأكد؟',
-      content:
-        member.type === 'PRINCIPAL'
-          ? `سيتم حذف المستفيد ${member.fullName}. سيتم حذف جميع التابعين المرتبطين به أيضاً!`
-          : `سيتم حذف المستفيد ${member.fullName}.`,
-      severity: 'error',
-      confirmText: 'نعم، احذفه',
-      onConfirm: () => handleConfirmAction(() => deleteMember(member.id), 'تم حذف المستفيد بنجاح', 'خطأ في حذف المستفيد')
-    });
-  };
-
-  const handleRestoreClick = (member) => {
-    setConfirmDialog({
-      open: true,
-      title: 'استعادة المستفيد؟',
-      content: `سيتم استعادة المستفيد ${member.fullName} وإعادته للقائمة النشطة.`,
-      severity: 'success',
-      confirmText: 'نعم، استعده',
-      onConfirm: () => handleConfirmAction(() => restoreMember(member.id), 'تم استعادة المستفيد بنجاح', 'خطأ في استعادة المستفيد')
-    });
+    setLifecycleDialog({ open: true, action: 'TERMINATE', member });
   };
 
   const handleHardDeleteClick = (member) => {
-    setConfirmDialog({
-      open: true,
-      title: 'حذف نهائي؟',
-      content: `سيتم حذف المستفيد ${member.fullName} نهائياً من قاعدة البيانات. هذا الإجراء لا يمكن التراجع عنه!`,
-      severity: 'error',
-      confirmText: 'نعم، احذف نهائياً',
-      onConfirm: () => handleConfirmAction(() => hardDeleteMember(member.id), 'تم الحذف النهائي بنجاح', 'خطأ في الحذف النهائي')
-    });
+    setLifecycleDialog({ open: true, action: 'HARD_DELETE', member });
   };
 
   const handleToggleActiveClick = (member) => {
     const newActive = member.active === false ? true : false;
-    setConfirmDialog({
-      open: true,
-      title: newActive ? 'تفعيل المستفيد؟' : 'إيقاف المستفيد؟',
-      content: `سيتم ${newActive ? 'تفعيل' : 'إيقاف'} المستفيد ${member.fullName}.`,
-      severity: newActive ? 'success' : 'warning',
-      confirmText: newActive ? 'نعم، فعّله' : 'نعم، أوقفه',
-      onConfirm: () =>
-        handleConfirmAction(
-          () => toggleMemberActive(member.id, newActive),
-          newActive ? 'تم تفعيل المستفيد بنجاح' : 'تم إيقاف المستفيد بنجاح',
-          'خطأ في تغيير حالة المستفيد'
-        )
-    });
+    setLifecycleDialog({ open: true, action: newActive ? 'RESTORE' : 'SUSPEND', member });
+  };
+
+  const executeLifecycleAction = async (reason) => {
+    const { action, member } = lifecycleDialog;
+    if (!member) return;
+    setLifecycleLoading(true);
+    try {
+      if (action === 'TERMINATE') await terminateMembership(member.id, reason);
+      else if (action === 'HARD_DELETE') await hardDeleteMember(member.id, reason);
+      else if (action === 'REINSTATE') await reinstateTerminatedMember(member.id, reason);
+      else await toggleMemberActive(member.id, false, reason);
+      enqueueSnackbar('تم تنفيذ العملية بنجاح', { variant: 'success' });
+      setLifecycleDialog((prev) => ({ ...prev, open: false }));
+      await fetchMembers();
+    } catch (error) {
+      enqueueSnackbar(error?.response?.data?.message || 'تعذر تنفيذ العملية', { variant: 'error' });
+    } finally {
+      setLifecycleLoading(false);
+    }
   };
 
   // ════════════════════════════════════════════════════════════════════════
@@ -487,7 +481,11 @@ const UnifiedMembersList = () => {
         );
 
       case 'birthDate':
-        return <Typography variant="body2" dir="ltr">{formatDate(member.birthDate)}</Typography>;
+        return (
+          <Typography variant="body2" dir="ltr">
+            {formatDate(member.birthDate)}
+          </Typography>
+        );
 
       case 'relationship': {
         if (member.type === MEMBER_TYPES.PRINCIPAL) {
@@ -576,16 +574,17 @@ const UnifiedMembersList = () => {
           // Actions for deleted members
           return (
             <Stack direction="row" spacing={0.5}>
-              <Tooltip title="استعادة">
-                <IconButton size="small" color="success" onClick={() => handleRestoreClick(member)}>
+              {capabilities.reinstateTerminated && <Tooltip title="إعادة عضوية استثنائية">
+                <IconButton size="small" color="success" onClick={() =>
+                  setLifecycleDialog({ open: true, action: 'REINSTATE', member })}>
                   <UndoIcon fontSize="small" />
                 </IconButton>
-              </Tooltip>
-              <Tooltip title="حذف نهائي">
+              </Tooltip>}
+              {capabilities.hardDelete && <Tooltip title="حذف نهائي">
                 <IconButton size="small" color="error" onClick={() => handleHardDeleteClick(member)}>
                   <DeleteIcon fontSize="small" />
                 </IconButton>
-              </Tooltip>
+              </Tooltip>}
             </Stack>
           );
         }
@@ -593,28 +592,21 @@ const UnifiedMembersList = () => {
         // Actions for active members
         return (
           <Stack direction="row" spacing={0.5}>
-            {member.status === MEMBER_STATUSES.PENDING && (
-              <Tooltip title="اعتماد العضوية">
-                <IconButton size="small" color="success">
-                  <CheckCircleIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-            )}
             <Tooltip title="عرض التفاصيل">
               <IconButton size="small" color="info" onClick={() => navigate(`/members/${member.id}`)}>
                 <VisibilityIcon fontSize="small" />
               </IconButton>
             </Tooltip>
-            <Tooltip title="تعديل">
+            {capabilities.edit && <Tooltip title="تعديل">
               <IconButton size="small" color="primary" onClick={() => navigate(`/members/${member.id}/edit`)}>
                 <EditIcon fontSize="small" />
               </IconButton>
-            </Tooltip>
-            <Tooltip title="حذف">
+            </Tooltip>}
+            {capabilities.lifecycle && <Tooltip title="إنهاء العضوية">
               <IconButton size="small" color="error" onClick={() => handleDeleteClick(member)}>
                 <DeleteIcon fontSize="small" />
               </IconButton>
-            </Tooltip>
+            </Tooltip>}
           </Stack>
         );
 
@@ -637,7 +629,7 @@ const UnifiedMembersList = () => {
         actions={
           <Stack direction="row" spacing={1} flexWrap="wrap">
             {/* Bulk Action Buttons */}
-            {selectedMembers.length > 0 && (
+            {capabilities.bulkTerminate && selectedMembers.length > 0 && (
               <Button
                 variant="contained"
                 color="error"
@@ -647,12 +639,12 @@ const UnifiedMembersList = () => {
                   minWidth: '9.6875rem'
                 }}
               >
-                حذف المحدد ({selectedMembers.length})
+                إنهاء عضوية المحدد ({selectedMembers.length})
               </Button>
             )}
 
             {/* Excel Buttons Group — template download is available inside the import dialog. */}
-            <Button
+            {capabilities.import && <Button
               variant="outlined"
               onClick={handleImportClick}
               startIcon={<UploadFileIcon />}
@@ -667,8 +659,8 @@ const UnifiedMembersList = () => {
               }}
             >
               استيراد من إكسل
-            </Button>
-            <Button
+            </Button>}
+            {capabilities.export && <Button
               variant="outlined"
               onClick={() => setExportWizardOpen(true)}
               startIcon={<FileDownloadIcon />}
@@ -683,18 +675,29 @@ const UnifiedMembersList = () => {
               }}
             >
               تصدير لإكسل
-            </Button>
+            </Button>}
+            {capabilities.export && <Button variant="outlined" onClick={handleReimportableExport} startIcon={<FileDownloadIcon />} sx={{ minWidth: '12rem' }}>
+              تصدير قابل لإعادة الاستيراد
+            </Button>}
 
             {/* Deleted Members Toggle */}
             <SoftDeleteToggle showDeleted={showDeleted} onToggle={() => setShowDeleted(!showDeleted)} />
 
-            <Button variant="contained" startIcon={<AddIcon />} onClick={() => navigate('/members/add')}>
+            {capabilities.create && <Button variant="contained" startIcon={<AddIcon />} onClick={() => navigate('/members/add')}>
               إضافة مستفيد
-            </Button>
+            </Button>}
           </Stack>
         }
         sx={{ mb: 0.5 }}
       />
+
+      {loadError && (
+        <Alert severity="error" sx={{ mb: 1, flexShrink: 0 }} action={
+          <Button color="inherit" size="small" onClick={fetchMembers}>إعادة المحاولة</Button>
+        }>
+          {loadError}
+        </Alert>
+      )}
 
       <MainCard sx={{ mb: 1, flexShrink: 0 }}>
         {/* FILTERS AND SEARCH ROW */}
@@ -807,7 +810,8 @@ const UnifiedMembersList = () => {
               <MenuItem value={MEMBER_STATUSES.ACTIVE}>نشط</MenuItem>
               <MenuItem value={MEMBER_STATUSES.SUSPENDED}>موقوف</MenuItem>
               <MenuItem value={MEMBER_STATUSES.PENDING}>قيد المراجعة</MenuItem>
-              <MenuItem value={MEMBER_STATUSES.TERMINATED}>منتهي</MenuItem>
+              <MenuItem value={MEMBER_STATUSES.TERMINATED}>منتهية العضوية</MenuItem>
+              <MenuItem value={MEMBER_STATUSES.DUPLICATE_MERGED}>مدموج</MenuItem>
             </TextField>
 
             {/* Reset Button */}
@@ -840,7 +844,7 @@ const UnifiedMembersList = () => {
         getRowKey={(member) => member.id}
         emptyMessage={showDeleted ? 'لا توجد مستفيدين محذوفين' : 'لا توجد مستفيدين'}
         loadingMessage="جارِ التحميل..."
-        selectable={!showDeleted}
+        selectable={!showDeleted && capabilities.bulkTerminate}
         selectedRows={selectedMembers}
         onSelectAllClick={handleSelectAllClick}
         onSelectRow={handleSelectRow}
@@ -877,6 +881,49 @@ const UnifiedMembersList = () => {
         cancelText={confirmDialog.cancelText}
         onConfirm={confirmDialog.onConfirm}
         onClose={closeDialog}
+      />
+
+      {/* Bulk Terminate Dialog -- reason is mandatory, this is rare and high-impact */}
+      <Dialog open={bulkTerminateDialog} onClose={() => (bulkTerminateLoading ? null : setBulkTerminateDialog(false))} maxWidth="sm" fullWidth>
+        <DialogTitle>إنهاء عضوية {selectedMembers.length} مستفيد</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            سيتم إنهاء عضوية {selectedMembers.length} مستفيد محدد. سيُلغى التابعون النشطون أيضاً إذا كان هناك موظف
+            رئيسي ضمن التحديد. لا يُحذف شيء فعلياً -- تصبح الحالة "منتهية العضوية" ويبقى السجل والتاريخ المالي كما هو.
+          </DialogContentText>
+          <TextField
+            label="سبب إنهاء العضوية"
+            required
+            fullWidth
+            multiline
+            minRows={2}
+            value={bulkTerminateReason}
+            onChange={(e) => setBulkTerminateReason(e.target.value)}
+            disabled={bulkTerminateLoading}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setBulkTerminateDialog(false)} disabled={bulkTerminateLoading}>
+            إلغاء
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            disabled={bulkTerminateLoading || !bulkTerminateReason.trim()}
+            onClick={confirmBulkTerminate}
+          >
+            {bulkTerminateLoading ? 'جارِ الإنهاء...' : 'تأكيد إنهاء العضوية'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+      <MemberLifecycleDialog
+        open={lifecycleDialog.open}
+        action={lifecycleDialog.action}
+        member={lifecycleDialog.member}
+        affectedDependents={lifecycleDialog.member?.dependentsCount || 0}
+        loading={lifecycleLoading}
+        onClose={() => setLifecycleDialog((prev) => ({ ...prev, open: false }))}
+        onConfirm={executeLifecycleAction}
       />
     </Box>
   );

@@ -35,6 +35,9 @@ public class UserServiceTest {
     @Mock
     private SessionManagementService sessionManagementService;
 
+    @Mock
+    private com.waad.tba.modules.employer.repository.EmployerRepository employerRepository;
+
     @InjectMocks
     private UserService userService;
 
@@ -137,13 +140,71 @@ public class UserServiceTest {
         when(userRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(userMapper.toResponseDto(any())).thenReturn(com.waad.tba.modules.rbac.dto.UserResponseDto.builder().build());
 
+        com.waad.tba.modules.employer.entity.Employer employer =
+                com.waad.tba.modules.employer.entity.Employer.builder().id(77L).name("جهة اختبار").active(true).build();
+        when(employerRepository.findById(77L)).thenReturn(Optional.of(employer));
         com.waad.tba.modules.rbac.dto.UserUpdateDto dto = com.waad.tba.modules.rbac.dto.UserUpdateDto.builder()
-                .username("superadmin").email("admin@example.com").userType("DATA_ENTRY").build();
+                .username("superadmin").email("admin@example.com").userType("DATA_ENTRY").employerId(77L).build();
 
         userService.update(5L, dto);
 
         verify(userRepository).save(any());
         verify(sessionManagementService).revokeAll("superadmin");
+    }
+
+    @Test
+    void createDataEntryRequiresAndPersistsAnActiveEmployerScope() {
+        com.waad.tba.modules.rbac.dto.UserCreateDto missingEmployer =
+                com.waad.tba.modules.rbac.dto.UserCreateDto.builder()
+                        .username("data-entry").email("data@example.com").password("Strong@123")
+                        .fullName("مدخل بيانات").userType("DATA_ENTRY").build();
+        when(userRepository.existsByUsernameIgnoreCase("data-entry")).thenReturn(false);
+        when(userRepository.existsByEmailIgnoreCase("data@example.com")).thenReturn(false);
+        when(userMapper.toEntity(missingEmployer)).thenReturn(User.builder().build());
+        when(passwordEncoder.encode("Strong@123")).thenReturn("encoded");
+
+        assertThrows(IllegalArgumentException.class, () -> userService.create(missingEmployer));
+        verify(userRepository, never()).save(any());
+
+        reset(userRepository, userMapper, passwordEncoder);
+        com.waad.tba.modules.rbac.dto.UserCreateDto scoped =
+                com.waad.tba.modules.rbac.dto.UserCreateDto.builder()
+                        .username("data-entry").email("data@example.com").password("Strong@123")
+                        .fullName("مدخل بيانات").userType("DATA_ENTRY").employerId(81L).build();
+        User entity = User.builder().build();
+        com.waad.tba.modules.employer.entity.Employer employer =
+                com.waad.tba.modules.employer.entity.Employer.builder().id(81L).name("جهة نشطة").active(true).build();
+        when(userRepository.existsByUsernameIgnoreCase("data-entry")).thenReturn(false);
+        when(userRepository.existsByEmailIgnoreCase("data@example.com")).thenReturn(false);
+        when(userMapper.toEntity(scoped)).thenReturn(entity);
+        when(passwordEncoder.encode("Strong@123")).thenReturn("encoded");
+        when(employerRepository.findById(81L)).thenReturn(Optional.of(employer));
+        when(userRepository.save(entity)).thenReturn(entity);
+        when(userMapper.toResponseDto(entity)).thenReturn(com.waad.tba.modules.rbac.dto.UserResponseDto.builder().build());
+
+        userService.create(scoped);
+
+        assertEquals("DATA_ENTRY", entity.getUserType());
+        assertEquals(81L, entity.getEmployerId());
+        assertNull(entity.getProviderId());
+    }
+
+    @Test
+    void dataEntryRejectsInactiveEmployer() {
+        User target = User.builder().build();
+        com.waad.tba.modules.rbac.dto.UserCreateDto dto =
+                com.waad.tba.modules.rbac.dto.UserCreateDto.builder()
+                        .username("inactive-scope").email("inactive@example.com").password("Strong@123")
+                        .fullName("مدخل بيانات").userType("DATA_ENTRY").employerId(91L).build();
+        when(userRepository.existsByUsernameIgnoreCase(dto.getUsername())).thenReturn(false);
+        when(userRepository.existsByEmailIgnoreCase(dto.getEmail())).thenReturn(false);
+        when(userMapper.toEntity(dto)).thenReturn(target);
+        when(passwordEncoder.encode(dto.getPassword())).thenReturn("encoded");
+        when(employerRepository.findById(91L)).thenReturn(Optional.of(
+                com.waad.tba.modules.employer.entity.Employer.builder().id(91L).name("جهة موقوفة").active(false).build()));
+
+        assertThrows(IllegalArgumentException.class, () -> userService.create(dto));
+        verify(userRepository, never()).save(any());
     }
 
     @Test
@@ -204,7 +265,10 @@ public class UserServiceTest {
                 .active(true)
                 .canViewMembers(true)
                 .build();
+        com.waad.tba.modules.employer.entity.Employer employer =
+                com.waad.tba.modules.employer.entity.Employer.builder().id(100L).name("جهة اختبار").active(true).build();
         when(userRepository.findById(11L)).thenReturn(Optional.of(employerUser));
+        when(employerRepository.findById(100L)).thenReturn(Optional.of(employer));
         when(userRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(userMapper.toResponseDto(any())).thenReturn(com.waad.tba.modules.rbac.dto.UserResponseDto.builder().build());
         doAnswer(inv -> {

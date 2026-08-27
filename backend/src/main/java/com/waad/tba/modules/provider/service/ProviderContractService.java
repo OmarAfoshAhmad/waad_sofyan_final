@@ -40,6 +40,7 @@ public class ProviderContractService {
         private final ProviderContractPricingItemRepository pricingItemRepository;
         private final MemberRepository memberRepository;
         private final BenefitPolicyRuleService benefitPolicyRuleService;
+        private final com.waad.tba.modules.member.service.MemberPolicyResolver memberPolicyResolver;
 
         // ==================== PRICE LOOKUP ====================
 
@@ -182,12 +183,17 @@ public class ProviderContractService {
 
                 // Get member's benefit policy
                 com.waad.tba.modules.member.entity.Member member = memberRepository.findById(memberId).orElse(null);
-                if (member == null || member.getBenefitPolicy() == null) {
+                if (member == null) {
                         log.warn("[PROVIDER-CONTRACT] Member {} not found or has no benefit policy", memberId);
                         return java.util.Collections.emptyList();
                 }
 
-                Long policyId = member.getBenefitPolicy().getId();
+                Long policyId = memberPolicyResolver.resolveFor(member, LocalDate.now())
+                                .map(com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy::getId)
+                                .orElse(null);
+                if (policyId == null) {
+                        return java.util.Collections.emptyList();
+                }
 
                 // Filter services that require pre-approval (category-based check since V229)
                 return pricingItems.stream()

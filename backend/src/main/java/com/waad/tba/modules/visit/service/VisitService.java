@@ -19,6 +19,7 @@ import com.waad.tba.modules.claim.entity.Claim;
 import com.waad.tba.modules.claim.repository.ClaimRepository;
 import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.modules.member.repository.MemberRepository;
+import com.waad.tba.modules.member.service.MemberIdentityResolver;
 import com.waad.tba.modules.preauthorization.entity.PreAuthorization;
 import com.waad.tba.modules.preauthorization.repository.PreAuthorizationRepository;
 import com.waad.tba.modules.provider.entity.Provider;
@@ -77,6 +78,7 @@ public class VisitService {
 
     private final VisitRepository repository;
     private final MemberRepository memberRepository;
+    private final MemberIdentityResolver memberIdentityResolver;
     private final VisitMapper mapper;
     private final AuthorizationService authorizationService;
     private final AuditLogService auditLogService;
@@ -184,14 +186,26 @@ public class VisitService {
         User currentUser = authorizationService.getCurrentUser();
         validateAndEnforceProviderId(dto, currentUser);
 
-        Member member = memberRepository.findById(dto.getMemberId())
-                .orElseThrow(() -> new ResourceNotFoundException("Member", "id", dto.getMemberId()));
+        // Duplicate resolution applies only at the boundary of a NEW operation.
+        // Historical visits are never reassigned: their member remains the identity
+        // that owned the encounter when it happened.
+        Member member = memberIdentityResolver.resolveCanonicalOrFail(dto.getMemberId());
+        Long canonicalMemberId = member.getId();
 
-        LocalDate visitDate = dto.getVisitDate() != null ? dto.getVisitDate() : LocalDate.now();
-
-        if (member.getBenefitPolicy() != null) {
-            benefitPolicyCoverageService.validateCanCreateClaim(member, visitDate);
+        // The visit date is the DECISION date for everything downstream --
+        // policy resolution, coverage, limits. Defaulting it to today silently
+        // made "when this was entered" stand in for "when it happened", which
+        // is the same class of defect as resolving a policy by today's pointer.
+        if (dto.getVisitDate() == null) {
+            throw new BusinessRuleException(
+                    "تاريخ الزيارة مطلوب: لا يمكن تحديد التغطية والسقوف بدون تاريخ الخدمة الفعلي");
         }
+        LocalDate visitDate = dto.getVisitDate();
+
+        // Always resolve eligibility on the visit date. Guarding this call with
+        // the current convenience pointer made a missing/stale pointer bypass
+        // validation even when dated assignments existed (and vice versa).
+        benefitPolicyCoverageService.validateCanCreateClaim(member, visitDate);
 
         // --- SMART LOCK LOGIC ---
         // Prevent creating a new visit if there is already an open visit for the same member at the same provider
@@ -201,7 +215,8 @@ public class VisitService {
             VisitStatus.PENDING_PREAUTH, 
             VisitStatus.PREAUTH_APPROVED
         );
-        boolean hasOpenVisit = repository.existsByMemberIdAndProviderIdAndStatusIn(dto.getMemberId(), dto.getProviderId(), openStatuses);
+        boolean hasOpenVisit = repository.existsByMemberIdAndProviderIdAndStatusIn(
+                canonicalMemberId, dto.getProviderId(), openStatuses);
         
         if (hasOpenVisit) {
             throw new BusinessRuleException("يوجد زيارة مفتوحة مسبقاً لهذا المستفيد في نفس المنشأة. الرجاء إغلاقها أولاً لتتمكن من إنشاء زيارة جديدة.");

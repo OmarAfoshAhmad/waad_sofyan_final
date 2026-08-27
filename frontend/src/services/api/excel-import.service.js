@@ -29,25 +29,6 @@ export const downloadMemberTemplate = async () => {
   return response.data;
 };
 
-/**
- * Import members from Excel
- * POST /members/import
- * @param {File} file - Excel file
- * @returns {Promise<ExcelImportResult>}
- *
- * NOTE: No /api prefix - axios baseURL already includes /api
- */
-export const importMembers = async (file) => {
-  const formData = new FormData();
-  formData.append('file', file);
-
-  const response = await axios.post('/members/import', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-    timeout: 300000 // 5 minutes for large Excel files
-  });
-  return unwrap(response);
-};
-
 // ═══════════════════════════════════════════════════════════════════════════
 // PROVIDERS MODULE
 // ═══════════════════════════════════════════════════════════════════════════
@@ -264,8 +245,6 @@ export const isImportSuccessful = (result) => {
 export default {
   // Members
   downloadMemberTemplate,
-  importMembers,
-
   // Providers
   downloadProviderTemplate,
   importProviders,

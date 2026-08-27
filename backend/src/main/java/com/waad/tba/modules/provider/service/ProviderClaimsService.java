@@ -50,6 +50,7 @@ import java.util.List;
 public class ProviderClaimsService {
 
     private final ClaimService claimService;
+    private final com.waad.tba.modules.member.service.MemberPolicyResolver memberPolicyResolver;
     private final ClaimRepository claimRepository;
     private final MemberRepository memberRepository;
     private final BenefitPolicyRuleRepository benefitPolicyRuleRepository;
@@ -78,10 +79,10 @@ public class ProviderClaimsService {
                 providerUsername, request.getMemberId(), request.getClaimedAmount(), request.getClaimType());
 
         // Step 1: Validate member
-        Member member = validateMember(request.getMemberId());
+        Member member = validateMember(request.getMemberId(), request.getServiceDate());
 
         // Step 2: Check annual limit
-        AnnualLimitCheck annualLimitCheck = checkAnnualLimit(member, request.getClaimedAmount());
+        AnnualLimitCheck annualLimitCheck = checkAnnualLimit(member, request.getClaimedAmount(), request.getServiceDate());
 
         // Step 3: Check service-level limits
         // Note: serviceCode is derived from serviceCategoryId for now (deprecated flow)
@@ -110,7 +111,7 @@ public class ProviderClaimsService {
     /**
      * Validate member exists and is eligible.
      */
-    private Member validateMember(Long memberId) {
+    private Member validateMember(Long memberId, java.time.LocalDate serviceDate) {
         Member member = memberRepository.findById(memberId)
                 .orElseThrow(() -> new ResourceNotFoundException("Member not found with ID: " + memberId));
 
@@ -118,14 +119,19 @@ public class ProviderClaimsService {
             throw new BusinessRuleException("Member is not active - cannot submit claim");
         }
 
-        if (member.getBenefitPolicy() == null) {
-            throw new BusinessRuleException("Member has no benefit policy assigned");
+        // This guard DECIDES whether the claim may be submitted, so it is a
+        // dated decision, not a null-check: "has a policy today" is the wrong
+        // question for a claim dated last year. Resolved at the service date
+        // and failed closed.
+        if (serviceDate == null) {
+            throw new BusinessRuleException("تاريخ الخدمة مطلوب للتحقق من تغطية المستفيد");
         }
+        var policyOnServiceDate = memberPolicyResolver.resolveForOrFail(member, serviceDate);
 
         // Note: employer validation removed (deprecated field)
 
-        log.info("✅ Member validated: id={}, name={}, policy={}",
-                member.getId(), member.getFullName(), member.getBenefitPolicy().getId());
+        log.info("✅ Member validated: id={}, name={}, policy={} (on {})",
+                member.getId(), member.getFullName(), policyOnServiceDate.getId(), serviceDate);
 
         return member;
     }
@@ -136,19 +142,16 @@ public class ProviderClaimsService {
      * FIXED (Audit Fix): Now uses BenefitPolicyCoverageService for real annual
      * limit tracking.
      */
-    private AnnualLimitCheck checkAnnualLimit(Member member, BigDecimal claimedAmount) {
-        if (member.getBenefitPolicy() == null) {
-            throw new BusinessRuleException("Member has no benefit policy assigned");
-        }
-
-        BigDecimal annualLimit = member.getBenefitPolicy().getAnnualLimit();
+    private AnnualLimitCheck checkAnnualLimit(Member member, BigDecimal claimedAmount, LocalDate serviceDate) {
+        var policy = memberPolicyResolver.resolveForOrFail(member, serviceDate);
+        BigDecimal annualLimit = policy.getAnnualLimit();
         if (annualLimit == null || annualLimit.compareTo(BigDecimal.ZERO) <= 0) {
             // Unlimited policy
             return new AnnualLimitCheck(BigDecimal.ZERO, BigDecimal.ZERO, claimedAmount, BigDecimal.ZERO,
                     BigDecimal.ZERO, 0, 0, false, new ArrayList<>());
         }
 
-        BigDecimal remainingLimit = benefitPolicyCoverageService.getRemainingCoverage(member, LocalDate.now());
+        BigDecimal remainingLimit = benefitPolicyCoverageService.getRemainingCoverage(member, serviceDate);
         if (remainingLimit == null) {
             remainingLimit = annualLimit;
         }

@@ -2,7 +2,9 @@ package com.waad.tba.modules.member.controller;
 
 import java.io.IOException;
 import java.util.Map;
-import java.util.UUID;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -20,7 +22,6 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.waad.tba.common.dto.ApiResponse;
-import com.waad.tba.common.excel.dto.ExcelImportResult;
 import com.waad.tba.modules.member.dto.ExcelColumnDetectionDto;
 import com.waad.tba.modules.member.dto.MemberImportPreviewDto;
 import com.waad.tba.modules.member.dto.MemberImportResultDto;
@@ -30,6 +31,7 @@ import com.waad.tba.modules.member.repository.MemberImportLogRepository;
 import com.waad.tba.modules.member.service.ExcelColumnMappingService;
 import com.waad.tba.modules.member.service.MemberExcelImportService;
 import com.waad.tba.modules.member.service.MemberExcelTemplateService;
+import com.waad.tba.modules.member.service.MemberImportPreviewTicketService;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -50,7 +52,7 @@ import lombok.extern.slf4j.Slf4j;
 @RequestMapping("/api/v1/unified-members/import")
 @RequiredArgsConstructor
 @Tag(name = "Member Excel Import", description = "System-generated Excel template download and import")
-@PreAuthorize("isAuthenticated()")
+@PreAuthorize("@permissionGuard.has('MEMBER_IMPORT')")
 public class MemberExcelTemplateController {
     
     private final MemberExcelTemplateService templateService;
@@ -58,6 +60,8 @@ public class MemberExcelTemplateController {
     private final ExcelColumnMappingService columnMappingService;
     private final MemberImportLogRepository importLogRepository;
     private final MemberImportErrorRepository importErrorRepository;
+    private final MemberImportPreviewTicketService previewTicketService;
+    private final ObjectMapper objectMapper;
     
     /**
      * Download Excel template for members import
@@ -65,7 +69,7 @@ public class MemberExcelTemplateController {
      * GET /api/members/import/template
      */
     @GetMapping("/template")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY')")
+    @PreAuthorize("@permissionGuard.has('MEMBER_IMPORT')")
     @Operation(
         summary = "Download Members Import Template",
         description = "Downloads a system-generated Excel template for importing members. " +
@@ -88,50 +92,13 @@ public class MemberExcelTemplateController {
             .body(excelData);
     }
     
-    /**
-     * Import members from Excel file
-     * 
-     * POST /api/members/import
-     */
-    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY')")
-    @Operation(
-        summary = "Import Members from Excel",
-        description = "Imports members from a system-generated Excel template. " +
-                     "Only creates new members (no updates in Phase 1). " +
-                     "Card numbers are auto-generated. Employer lookup is mandatory."
-    )
-    public ResponseEntity<ApiResponse<ExcelImportResult>> importMembers(
-            @RequestParam("file") MultipartFile file,
-            @RequestParam(value = "employerId", required = false) Long employerId,
-            @RequestParam(value = "clearOldMembers", required = false, defaultValue = "false") Boolean clearOldMembers
-    ) {
-        log.info("[MemberImport] Import requested: {}, employerId: {}, clearOldMembers: {}", file.getOriginalFilename(), employerId, clearOldMembers);
-        
-        if (Boolean.TRUE.equals(clearOldMembers)) {
-            importService.clearOldMembersForFile(file, employerId, null);
-        }
-        
-        ExcelImportResult result = templateService.importFromExcel(file, employerId);
-        
-        log.info("[MemberImport] Import completed - Created: {}, Rejected: {}, Failed: {}",
-            result.getSummary().getCreated(),
-            result.getSummary().getRejected(),
-            result.getSummary().getFailed());
-        
-        if (result.isSuccess()) {
-            return ResponseEntity.ok(ApiResponse.success(result.getMessageEn(), result));
-        } else {
-            // FIX: Return 200 OK even for validation errors so frontend can display the error report
-            return ResponseEntity.ok()
-                .body(ApiResponse.<ExcelImportResult>builder()
-                    .status("error")
-                    .message(result.getMessageEn())
-                    .data(result)
-                    .timestamp(java.time.LocalDateTime.now())
-                    .build());
-        }
-    }
+    // Import members from Excel: the non-atomic direct POST /import route
+    // (MemberExcelTemplateService.importFromExcel) has been removed --
+    // it was never called by the frontend (which always uses /preview then
+    // /execute, below), had no other caller anywhere in the codebase, and
+    // could not be brought up to the same atomicity/audit/idempotency
+    // standard as the live pipeline without maintaining two parallel import
+    // engines. Use POST .../preview then POST .../execute instead.
 
     // ==================== COLUMN DETECTION ====================
 
@@ -141,7 +108,7 @@ public class MemberExcelTemplateController {
      * POST /api/v1/unified-members/import/detect-columns
      */
     @PostMapping(value = "/detect-columns", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY')")
+    @PreAuthorize("@permissionGuard.has('MEMBER_IMPORT')")
     @Operation(
         summary = "Detect Excel columns and suggest mappings",
         description = "Analyzes Excel file structure and intelligently suggests column-to-field mappings"
@@ -185,7 +152,7 @@ public class MemberExcelTemplateController {
      * POST /api/v1/unified-members/import/preview
      */
     @PostMapping(value = "/preview", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY')")
+    @PreAuthorize("@permissionGuard.has('MEMBER_IMPORT')")
     @Operation(
         summary = "Preview Excel import",
         description = "Upload Excel file and preview data before import"
@@ -194,12 +161,15 @@ public class MemberExcelTemplateController {
             @Parameter(description = "Excel file (.xlsx)")
             @RequestParam("file") MultipartFile file,
             @Parameter(description = "Custom column mappings (optional)")
-            @RequestParam(value = "customMappings", required = false) Map<String, String> customMappings,
+            @RequestParam(value = "customMappingsJson", required = false) String customMappingsJson,
             @Parameter(description = "Selected Employer ID (optional fallback for empty/invalid employer values)")
             @RequestParam(value = "employerId", required = false) Long employerId,
+            @RequestParam(value = "benefitPolicyId", required = false) Long benefitPolicyId,
+            @RequestParam(value = "clearOldMembers", required = false, defaultValue = "false") Boolean clearOldMembers,
             @Parameter(description = "Header row number (optional, 0-indexed)")
             @RequestParam(value = "headerRowNumber", required = false) Integer headerRowNumber) {
         
+        Map<String, String> customMappings = parseCustomMappings(customMappingsJson);
         log.info("📊 Preview import request: {} (mappings: {}, headerRow: {})", 
                 file.getOriginalFilename(), 
                 customMappings != null ? "yes" : "auto",
@@ -218,6 +188,9 @@ public class MemberExcelTemplateController {
         
         try {
             MemberImportPreviewDto preview = importService.parseAndPreview(file, customMappings, headerRowNumber, employerId);
+            preview.setBatchId(previewTicketService.issue(file, employerId, benefitPolicyId,
+                    preview.getResolvedHeaderRowNumber(),
+                    clearOldMembers, customMappings, preview.getResolvedEmployerIds()));
             String message = preview.getValidRows() > 0
                     ? "تم تحليل الملف بنجاح"
                     : "تم تحليل الملف: لا توجد صفوف صالحة حاليًا، يمكن اختيار جهة عمل موحدة ثم التنفيذ";
@@ -237,7 +210,7 @@ public class MemberExcelTemplateController {
      * POST /api/v1/unified-members/import/execute
      */
     @PostMapping(value = "/execute", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY')")
+    @PreAuthorize("@permissionGuard.has('MEMBER_IMPORT')")
     @Operation(
         summary = "Execute Excel import",
         description = "Import members from Excel file with selected employer and benefit policy"
@@ -253,11 +226,13 @@ public class MemberExcelTemplateController {
             @RequestParam(value = "batchId", required = false) String batchId,
             @Parameter(description = "Header row number (0-indexed)")
             @RequestParam(value = "headerRowNumber", required = false) Integer headerRowNumber,
+            @RequestParam(value = "customMappingsJson", required = false) String customMappingsJson,
             @Parameter(description = "Import policy: CREATE_ONLY, UPDATE_ONLY, CREATE_OR_UPDATE")
             @RequestParam(value = "importPolicy", required = false) String importPolicy,
-            @Parameter(description = "Clear old members (only if they have no financial movements)")
+            @Parameter(description = "Replace the scoped member list: absent memberships are terminated logically; history is preserved")
             @RequestParam(value = "clearOldMembers", required = false, defaultValue = "false") Boolean clearOldMembers) {
         
+        Map<String, String> customMappings = parseCustomMappings(customMappingsJson);
         log.info("📥 Execute import: file={}, employer={}, policy={}, batch={}, clearOldMembers={}", 
                 file.getOriginalFilename(), employerId, benefitPolicyId, batchId, clearOldMembers);
         
@@ -267,12 +242,12 @@ public class MemberExcelTemplateController {
         }
         
         if (batchId == null || batchId.isBlank()) {
-            batchId = UUID.randomUUID().toString();
+            return ResponseEntity.badRequest().body(ApiResponse.error("يجب إجراء معاينة صالحة قبل التنفيذ"));
         }
         
         try {
-            MemberImportResultDto result = importService.executeImport(
-                file, batchId, employerId, benefitPolicyId, headerRowNumber, clearOldMembers);
+            MemberImportResultDto result = importService.executeConfirmedImport(
+                file, batchId, employerId, benefitPolicyId, headerRowNumber, clearOldMembers, customMappings);
             
             String status = result.getStatus();
             if ("COMPLETED".equals(status)) {
@@ -300,7 +275,7 @@ public class MemberExcelTemplateController {
      * GET /api/v1/unified-members/import/status/{batchId}
      */
     @GetMapping("/status/{batchId}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY')")
+    @PreAuthorize("@permissionGuard.has('MEMBER_IMPORT')")
     @Operation(summary = "Get import status by batch ID")
     public ResponseEntity<ApiResponse<MemberImportLog>> getImportStatus(
             @PathVariable("batchId") String batchId) {
@@ -316,7 +291,7 @@ public class MemberExcelTemplateController {
      * GET /api/v1/unified-members/import/errors/{batchId}
      */
     @GetMapping("/errors/{batchId}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY')")
+    @PreAuthorize("@permissionGuard.has('MEMBER_IMPORT')")
     @Operation(summary = "Get errors for import batch")
     public ResponseEntity<ApiResponse<?>> getImportErrors(
             @PathVariable("batchId") String batchId) {
@@ -331,7 +306,7 @@ public class MemberExcelTemplateController {
      * GET /api/v1/unified-members/import/logs
      */
     @GetMapping("/logs")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY')")
+    @PreAuthorize("@permissionGuard.has('MEMBER_IMPORT')")
     @Operation(summary = "Get import logs")
     public ResponseEntity<ApiResponse<Page<MemberImportLog>>> getImportLogs(
             @RequestParam(name = "page", defaultValue = "1") int page,
@@ -341,6 +316,16 @@ public class MemberExcelTemplateController {
                 PageRequest.of(Math.max(0, page - 1), size, Sort.by(Sort.Direction.DESC, "createdAt")));
         
         return ResponseEntity.ok(ApiResponse.success("Import logs retrieved", logs));
+    }
+
+    private Map<String, String> parseCustomMappings(String json) {
+        if (json == null || json.isBlank()) return Map.of();
+        try {
+            return objectMapper.readValue(json, new TypeReference<Map<String, String>>() {});
+        } catch (IOException ex) {
+            throw new com.waad.tba.common.exception.BusinessRuleException(
+                    "تنسيق مطابقة أعمدة الاستيراد غير صالح");
+        }
     }
 }
 

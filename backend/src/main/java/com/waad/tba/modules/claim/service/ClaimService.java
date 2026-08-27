@@ -46,9 +46,7 @@ import com.waad.tba.modules.provider.entity.Provider;
 import com.waad.tba.modules.provider.repository.ProviderRepository;
 import com.waad.tba.modules.provider.service.ProviderNetworkService;
 import com.waad.tba.modules.preauthorization.entity.PreAuthorization;
-import com.waad.tba.modules.preauthorization.entity.PreAuthorization.PreAuthStatus;
 import com.waad.tba.modules.preauthorization.repository.PreAuthorizationRepository;
-import com.waad.tba.modules.preauthorization.service.PreAuthorizationService;
 import com.waad.tba.modules.visit.entity.Visit;
 import com.waad.tba.modules.visit.repository.VisitRepository;
 import com.waad.tba.modules.rbac.entity.User;
@@ -118,6 +116,7 @@ public class ClaimService {
     private final ProviderContextGuard providerContextGuard;
     private final MedicalAuditLogService medicalAuditLogService;
     private final MemberRepository memberRepository;
+    private final com.waad.tba.modules.member.service.MemberContextResolver memberContextResolver;
     private final ProviderRepository providerRepository;
     private final VisitRepository visitRepository;
     private final PreAuthorizationRepository preAuthorizationRepository;
@@ -145,7 +144,6 @@ public class ClaimService {
     private final AtomicFinancialService atomicFinancialService;
 
     // Phase 5 (2026-02-02): Pre-Authorization Lifecycle Management
-    private final PreAuthorizationService preAuthorizationService;
 
     // PHASE NEXT (2026-02-12): Medical Reviewer Isolation
     private final ReviewerProviderIsolationService reviewerIsolationService;
@@ -300,6 +298,14 @@ public class ClaimService {
         Provider provider = providerRepository.findById(visit.getProviderId())
                 .orElseThrow(() -> new ResourceNotFoundException("Provider", "id", visit.getProviderId()));
 
+        if (dto.getServiceDate() == null) {
+            throw new BusinessRuleException(
+                    "تاريخ الخدمة إلزامي لإنشاء المطالبة، ولا يجوز استبداله بتاريخ اليوم");
+        }
+        var datedMemberContext = memberContextResolver.resolveForOrFail(
+                visit.getMember(), dto.getServiceDate());
+        var serviceEmployer = datedMemberContext.employer();
+
         // ══════════════════════════════════════════════════════════════════════════
         // MEDICAL REVIEWER ISOLATION: Validation (Creation)
         // ══════════════════════════════════════════════════════════════════════════
@@ -316,20 +322,20 @@ public class ClaimService {
 
         // SECURITY: Verify provider is authorized for this member's employer
         // (Prevent cross-tenant claim creation)
-        if (visit.getMember() != null && visit.getMember().getEmployer() != null) {
+        if (visit.getMember() != null) {
             // Bypass check if provider allows all employers (global network)
             boolean isGlobalProvider = Boolean.TRUE.equals(provider.getAllowAllEmployers());
 
             boolean isAuthorized = isGlobalProvider || providerAllowedEmployerRepository.hasActiveAccessToEmployer(
-                    provider.getId(), visit.getMember().getEmployer().getId());
+                    provider.getId(), serviceEmployer.getId());
 
             if (!isAuthorized) {
                 log.error(
                         "🛑 SECURITY ALERT: Provider {} attempted to create claim for UNAUTHORIZED employer {} (Member: {})",
-                        provider.getId(), visit.getMember().getEmployer().getId(), visit.getMember().getId());
+                        provider.getId(), serviceEmployer.getId(), visit.getMember().getId());
                 throw new org.springframework.web.server.ResponseStatusException(
                         org.springframework.http.HttpStatus.FORBIDDEN,
-                        "المزود غير مخول لتقديم خدمات لموظفي هذه الجهة (" + visit.getMember().getEmployer().getName()
+                        "المزود غير مخول لتقديم خدمات لموظفي هذه الجهة (" + serviceEmployer.getName()
                                 + ").");
             }
         }
@@ -349,7 +355,7 @@ public class ClaimService {
 
             if (claimBatch != null) {
                 if (!claimBatch.getProviderId().equals(provider.getId()) ||
-                        !claimBatch.getEmployerId().equals(visit.getMember().getEmployer().getId())) {
+                        !claimBatch.getEmployerId().equals(serviceEmployer.getId())) {
                     throw new BusinessRuleException("الدفعة المختارة لا تتطابق مع المزود أو جهة العمل للمطالبة.");
                 }
             }
@@ -357,13 +363,13 @@ public class ClaimService {
             // AUTO-RESOLVE CURRENT BATCH (Phase 11 Law)
             // If no batch ID is provided, we MUST find or create the current open batch
             // for this Provider + Employer + Period.
-            LocalDate date = dto.getServiceDate() != null ? dto.getServiceDate() : LocalDate.now();
+            LocalDate date = dto.getServiceDate();
             log.info("🔄 Auto-resolving batch for provider {}, employer {}, period {}/{}", 
-                    provider.getId(), visit.getMember().getEmployer().getId(), date.getMonthValue(), date.getYear());
+                    provider.getId(), serviceEmployer.getId(), date.getMonthValue(), date.getYear());
             
             claimBatch = claimBatchService.getOrCreateBatch(
                     provider.getId(),
-                    visit.getMember().getEmployer().getId(),
+                    serviceEmployer.getId(),
                     date.getYear(),
                     date.getMonthValue());
         }
@@ -430,37 +436,6 @@ public class ClaimService {
                     savedClaim.getProviderId(),
                     currentUser != null ? currentUser.getId() : null));
             log.info("📤 [EVENT] Published ClaimApprovedEvent for claim {} (direct entry)", savedClaim.getId());
-        }
-
-        // ═══════════════════════════════════════════════════════════════════════════
-        // PHASE 5: Auto-mark PreAuthorization as USED when linked to claim
-        // ═══════════════════════════════════════════════════════════════════════════
-        if (savedClaim.getStatus() == ClaimStatus.APPROVED
-                && savedClaim.getPreAuthorization() != null) {
-            PreAuthorization linkedPreAuth = savedClaim.getPreAuthorization();
-
-            // Auto-transition to USED if currently APPROVED or ACKNOWLEDGED
-            if (linkedPreAuth.getStatus() == PreAuthStatus.APPROVED ||
-                    linkedPreAuth.getStatus() == PreAuthStatus.ACKNOWLEDGED) {
-
-                String createdBy = currentUser != null ? currentUser.getUsername() : "system";
-                try {
-                    preAuthorizationService.markAsUsed(
-                            linkedPreAuth.getId(),
-                            savedClaim.getId().toString(),
-                            createdBy);
-                    log.info("✅ Pre-authorization {} auto-marked as USED (linked to claim {})",
-                            linkedPreAuth.getReferenceNumber(), savedClaim.getId());
-                } catch (Exception e) {
-                    log.warn("⚠️ Failed to auto-mark pre-authorization {} as USED: {}",
-                            linkedPreAuth.getId(), e.getMessage());
-                    // Non-critical: Don't fail claim creation if pre-auth update fails
-                }
-            } else {
-                log.warn(
-                        "⚠️ Pre-authorization {} has status {} (expected APPROVED or ACKNOWLEDGED). Not auto-marking as USED.",
-                        linkedPreAuth.getId(), linkedPreAuth.getStatus());
-            }
         }
 
         return claimMapper.toViewDto(savedClaim);
@@ -1031,6 +1006,13 @@ public class ClaimService {
             claims = claims.stream().filter(c -> providerId.equals(c.getProviderId())).collect(Collectors.toList());
         }
 
+        if (reviewerIsolationService.isSubjectToIsolation(currentUser)) {
+            List<Long> allowedProviderIds = reviewerIsolationService.getAllowedProviderIds(currentUser);
+            claims = claims.stream()
+                    .filter(c -> allowedProviderIds.contains(c.getProviderId()))
+                    .collect(Collectors.toList());
+        }
+
         return claims.stream()
                 .map(claimMapper::toViewDto)
                 .collect(Collectors.toList());
@@ -1051,8 +1033,12 @@ public class ClaimService {
         List<Claim> claims = claimRepository.findByPreAuthorizationId(preAuthorizationId);
 
         // SECURITY: Prevent IDOR — only return claims the user can access
+        List<Long> reviewerProviderIds = reviewerIsolationService.isSubjectToIsolation(currentUser)
+                ? reviewerIsolationService.getAllowedProviderIds(currentUser)
+                : null;
         return claims.stream()
                 .filter(c -> c != null && c.getId() != null && authorizationService.canAccessClaim(currentUser, c.getId()))
+                .filter(c -> reviewerProviderIds == null || reviewerProviderIds.contains(c.getProviderId()))
                 .map(claimMapper::toViewDto)
                 .collect(Collectors.toList());
     }

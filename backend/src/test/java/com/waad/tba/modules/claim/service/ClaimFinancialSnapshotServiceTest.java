@@ -56,6 +56,8 @@ class ClaimFinancialSnapshotServiceTest {
     private ClaimLimitSnapshotService limitSnapshotService;
     @Mock
     private MemberRepository memberRepository;
+    @Mock
+    private com.waad.tba.modules.member.service.MemberPolicyResolver memberPolicyResolver;
     @InjectMocks
     private ClaimFinancialSnapshotService service;
 
@@ -65,6 +67,11 @@ class ClaimFinancialSnapshotServiceTest {
                 .companyShare(new BigDecimal("648.00"))
                 .patientShare(new BigDecimal("180.00"))
                 .refusedAmount(new BigDecimal("172.00"))
+                // Deliberately distinct from companyShare: proves the ceiling check
+                // reads ClaimFinancialTotals.sumLimitConsumption (WAAD-FIN-1.0 S4's
+                // axis), not approvedAmount -- the two would be indistinguishable in
+                // this test if they happened to share a value.
+                .limitConsumption(new BigDecimal("700.00"))
                 .build();
     }
 
@@ -106,13 +113,20 @@ class ClaimFinancialSnapshotServiceTest {
                 .build();
         Claim claim = balancedClaim(member);
         when(memberRepository.findByIdWithLock(10L)).thenReturn(Optional.of(member));
+        // The ceiling is validated against the policy in force on the SERVICE
+        // DATE, resolved through MemberPolicyResolver -- not the member's
+        // current pointer, which is what this used to read.
+        BenefitPolicy policyOnServiceDate = BenefitPolicy.builder().id(99L)
+                .annualLimit(new BigDecimal("5000.00")).build();
+        when(memberPolicyResolver.resolveFor(member, claim.getServiceDate()))
+                .thenReturn(Optional.of(policyOnServiceDate));
 
         service.finalizeSnapshot(claim);
 
         verify(memberRepository, times(1)).findByIdWithLock(10L);
         verify(claimFinancialInvariantGuard, times(1)).assertConsistent(claim);
         verify(benefitPolicyCoverageService, times(1)).validateAmountLimits(
-                eq(member), eq(member.getBenefitPolicy()), eq(new BigDecimal("648.00")),
+                eq(member), eq(policyOnServiceDate), eq(new BigDecimal("700.00")),
                 eq(claim.getServiceDate()), eq(claim.getId()));
     }
 
@@ -121,6 +135,8 @@ class ClaimFinancialSnapshotServiceTest {
         Member member = Member.builder().id(10L).benefitPolicy(null).build();
         Claim claim = balancedClaim(member);
         when(memberRepository.findByIdWithLock(10L)).thenReturn(Optional.of(member));
+        when(memberPolicyResolver.resolveFor(member, claim.getServiceDate()))
+                .thenReturn(Optional.empty());
 
         service.finalizeSnapshot(claim);
 

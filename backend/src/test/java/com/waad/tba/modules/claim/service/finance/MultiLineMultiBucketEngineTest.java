@@ -77,7 +77,7 @@ class MultiLineMultiBucketEngineTest {
 
     private LimitBalanceReader.BalanceSet set(Long memberId, LimitBalanceReader.LimitBalance... balances) {
         BigDecimal binding = java.util.Arrays.stream(balances)
-                .map(LimitBalanceReader.LimitBalance::signedAvailable).min(BigDecimal::compareTo).orElse(null);
+                .map(LimitBalanceReader.LimitBalance::reservableAvailable).min(BigDecimal::compareTo).orElse(null);
         return new LimitBalanceReader.BalanceSet(memberId, List.of(balances), binding, List.of());
     }
 
@@ -89,6 +89,10 @@ class MultiLineMultiBucketEngineTest {
                 10L, 20L, null, limitValue, "ANNUAL",
                 LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31), 1, 0);
         var effective = new EffectiveLimit(definition, limitValue, SourceType.POLICY_DEFAULT, null, null);
-        return new LimitBalanceReader.LimitBalance(effective, BigDecimal.ZERO, BigDecimal.ZERO, limitValue);
+        // no committed, no reserved: both balances equal the full limit.
+        // The occurrence dimension is null -- this bucket declares no times
+        // limit, which is not the same as having none left.
+        return new LimitBalanceReader.LimitBalance(effective, BigDecimal.ZERO, BigDecimal.ZERO,
+                limitValue, limitValue, null, null, null, null, null);
     }
 }

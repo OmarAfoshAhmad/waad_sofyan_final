@@ -35,7 +35,7 @@ import lombok.extern.slf4j.Slf4j;
 @RequestMapping("/api/v1/provider-accounts/reconciliation")
 @RequiredArgsConstructor
 @Tag(name = "Settlement - Reconciliation (v2)")
-@PreAuthorize("isAuthenticated()")
+@PreAuthorize("@permissionGuard.has('SETTLEMENT_VIEW')")
 public class ProviderAccountReconciliationController {
 
     private final ProviderAccountReconciliationService reconciliation;
@@ -60,7 +60,7 @@ public class ProviderAccountReconciliationController {
     }
 
     @PostMapping("/by-provider/{providerId}/adjust")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
+    @PreAuthorize("@permissionGuard.has('SETTLEMENT_MANAGE')")
     @Operation(summary = "Align totalPaid with the ledger", description = "Gated by PROVIDER_PAYMENT_POSTING_ENABLED")
     public ResponseEntity<ApiResponse<ProviderAccountAdjustmentResultDto>> adjust(
             @PathVariable Long providerId, @RequestBody AdjustProviderAccountRequest request) {

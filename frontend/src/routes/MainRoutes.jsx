@@ -137,6 +137,7 @@ const AdminUsersList = Loadable(lazy(() => import('pages/rbac/users')));
 const AdminUserDetails = Loadable(lazy(() => import('pages/rbac/users/UserDetails')));
 const AdminUserCreate = Loadable(lazy(() => import('pages/rbac/users/UserCreate')));
 const AdminUserEdit = Loadable(lazy(() => import('pages/rbac/users/UserEdit')));
+const AdminRolePermissions = Loadable(lazy(() => import('pages/rbac/users/RolePermissions')));
 const AdminMedicalAuditLogs = Loadable(lazy(() => import('pages/admin/MedicalAuditLogs')));
 // ==============================|| LAZY LOADING - SETTINGS ||============================== //
 
@@ -206,7 +207,7 @@ const MainRoutes = {
         {
           path: '',
           element: (
-            <PermissionGuard isRouteGuard>
+            <PermissionGuard requiredPermission="MEMBER_VIEW" isRouteGuard>
               <UnifiedMembersList />
             </PermissionGuard>
           )
@@ -214,7 +215,7 @@ const MainRoutes = {
         {
           path: 'add',
           element: (
-            <PermissionGuard isRouteGuard>
+            <PermissionGuard requiredPermission="MEMBER_CREATE" isRouteGuard>
               <UnifiedMemberCreate />
             </PermissionGuard>
           )
@@ -222,7 +223,7 @@ const MainRoutes = {
         {
           path: ':id',
           element: (
-            <PermissionGuard isRouteGuard>
+            <PermissionGuard requiredPermission="MEMBER_VIEW" isRouteGuard>
               <UnifiedMemberView />
             </PermissionGuard>
           )
@@ -230,7 +231,7 @@ const MainRoutes = {
         {
           path: ':id/edit',
           element: (
-            <PermissionGuard isRouteGuard>
+            <PermissionGuard requiredPermission="MEMBER_EDIT_IDENTITY" isRouteGuard>
               <UnifiedMemberEdit />
             </PermissionGuard>
           )
@@ -238,7 +239,7 @@ const MainRoutes = {
         {
           path: ':id/add-dependent',
           element: (
-            <PermissionGuard isRouteGuard>
+            <PermissionGuard requiredPermission="MEMBER_CREATE" isRouteGuard>
               <AddDependent />
             </PermissionGuard>
           )
@@ -246,7 +247,7 @@ const MainRoutes = {
         {
           path: 'eligibility',
           element: (
-            <PermissionGuard isRouteGuard>
+            <PermissionGuard requiredPermission="MEMBER_VIEW" isRouteGuard>
               <EligibilityCheck />
             </PermissionGuard>
           )
@@ -254,7 +255,7 @@ const MainRoutes = {
         {
           path: 'family-eligibility',
           element: (
-            <PermissionGuard isRouteGuard>
+            <PermissionGuard requiredPermission="MEMBER_VIEW" isRouteGuard>
               <FamilyEligibilityPage />
             </PermissionGuard>
           )
@@ -453,7 +454,7 @@ const MainRoutes = {
         {
           path: '',
           element: (
-            <PermissionGuard isRouteGuard>
+            <PermissionGuard requiredPermission="CONTRACT_VIEW" isRouteGuard>
               <ProviderContractsList />
             </PermissionGuard>
           )
@@ -461,7 +462,7 @@ const MainRoutes = {
         {
           path: 'create',
           element: (
-            <PermissionGuard isRouteGuard>
+            <PermissionGuard requiredPermission="CONTRACT_MANAGE" isRouteGuard>
               <ProviderContractCreate />
             </PermissionGuard>
           )
@@ -469,7 +470,7 @@ const MainRoutes = {
         {
           path: 'edit/:id',
           element: (
-            <PermissionGuard isRouteGuard>
+            <PermissionGuard requiredPermission="CONTRACT_MANAGE" isRouteGuard>
               <ProviderContractEdit />
             </PermissionGuard>
           )
@@ -477,7 +478,7 @@ const MainRoutes = {
         {
           path: ':id',
           element: (
-            <PermissionGuard isRouteGuard>
+            <PermissionGuard requiredPermission="CONTRACT_VIEW" isRouteGuard>
               <ProviderContractView />
             </PermissionGuard>
           )
@@ -626,7 +627,7 @@ const MainRoutes = {
     {
       path: 'medical-dictionary',
       element: (
-        <PermissionGuard isRouteGuard>
+        <PermissionGuard requiredPermission="PRICE_LIST_IMPORT" isRouteGuard>
           <MedicalDictionaryPage />
         </PermissionGuard>
       )
@@ -634,7 +635,7 @@ const MainRoutes = {
     {
       path: 'price-list-classifier',
       element: (
-        <PermissionGuard isRouteGuard>
+        <PermissionGuard requiredPermission="PRICE_LIST_IMPORT" isRouteGuard>
           <PriceListClassifierPage />
         </PermissionGuard>
       )
@@ -642,7 +643,7 @@ const MainRoutes = {
     {
       path: 'price-list-sessions',
       element: (
-        <PermissionGuard isRouteGuard>
+        <PermissionGuard requiredPermissions={['PRICE_LIST_IMPORT', 'PRICE_LIST_POST']} requireAll={false} isRouteGuard>
           <PriceListSessionsPage />
         </PermissionGuard>
       )
@@ -863,6 +864,14 @@ const MainRoutes = {
               element: (
                 <PermissionGuard isRouteGuard>
                   <AdminUserCreate />
+                </PermissionGuard>
+              )
+            },
+            {
+              path: 'roles',
+              element: (
+                <PermissionGuard isRouteGuard>
+                  <AdminRolePermissions />
                 </PermissionGuard>
               )
             },

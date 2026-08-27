@@ -58,6 +58,7 @@ import usersService from 'services/rbac/users.service';
 import { openSnackbar } from 'api/snackbar';
 import { getRoleDisplayName, SystemRole } from 'constants/rbac';
 import ProviderUsersImportModal from './ProviderUsersImportModal';
+import useAuth from 'hooks/useAuth';
 
 /**
  * Get initials from name
@@ -103,6 +104,9 @@ const TABLE_BADGE_SX = {
  */
 const UsersList = () => {
   const navigate = useNavigate();
+  const { user: currentUser } = useAuth();
+  const permissions = new Set(currentUser?.permissions || []);
+  const canManageUsers = permissions.has('USER_MANAGE');
   const [searchParams] = useSearchParams();
   const preferredPageSize = useMediaQuery('(max-height:900px)') ? 6 : 7;
 
@@ -243,7 +247,7 @@ const UsersList = () => {
         breadcrumbs={[{ label: 'الرئيسية', path: '/' }, { label: 'المستخدمين' }]}
         actions={
           <Stack direction="row" spacing={1} flexWrap="nowrap" sx={{ overflowX: 'auto', maxWidth: '100%' }}>
-            <Button
+            {canManageUsers && <Button
               variant="outlined"
               color="secondary"
               startIcon={<UploadFileIcon />}
@@ -251,15 +255,15 @@ const UsersList = () => {
               sx={{ minWidth: '9.6875rem', whiteSpace: 'nowrap' }}
             >
               استيراد مستخدمي المرافق
-            </Button>
-            <Button
+            </Button>}
+            {canManageUsers && <Button
               variant="contained"
               startIcon={<AddIcon />}
               onClick={() => navigate('/admin/users/create')}
               sx={{ minWidth: '9.6875rem', whiteSpace: 'nowrap' }}
             >
               إضافة مستخدم
-            </Button>
+            </Button>}
           </Stack>
         }
         sx={{ mb: 0.5 }}
@@ -413,14 +417,14 @@ const UsersList = () => {
                         <Typography variant="h6" color="text.secondary">
                           لا توجد نتائج
                         </Typography>
-                        <Button
+                        {canManageUsers && <Button
                           variant="outlined"
                           startIcon={<AddIcon />}
                           onClick={() => navigate('/admin/users/create')}
                           sx={{ mt: '1.0rem' }}
                         >
                           إضافة مستخدم
-                        </Button>
+                        </Button>}
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -480,12 +484,12 @@ const UsersList = () => {
                                 <VisibilityIcon fontSize="small" />
                               </IconButton>
                             </Tooltip>
-                            <Tooltip title="تعديل">
+                            {canManageUsers && <Tooltip title="تعديل">
                               <IconButton size="small" color="info" onClick={() => navigate(`/admin/users/${user.id}/edit`)}>
                                 <EditIcon fontSize="small" />
                               </IconButton>
-                            </Tooltip>
-                            <Tooltip title={user?.active !== false ? 'تعطيل' : 'تفعيل'}>
+                            </Tooltip>}
+                            {canManageUsers && <Tooltip title={user?.active !== false ? 'تعطيل' : 'تفعيل'}>
                               <span>
                                 <IconButton
                                   size="small"
@@ -496,7 +500,7 @@ const UsersList = () => {
                                   {user?.active !== false ? <BlockIcon fontSize="small" /> : <CheckCircleIcon fontSize="small" />}
                                 </IconButton>
                               </span>
-                            </Tooltip>
+                            </Tooltip>}
                           </Stack>
                         </TableCell>
                       </TableRow>
@@ -535,6 +539,13 @@ const UsersList = () => {
         <DialogActions>
           <Button onClick={handleToggleClose} disabled={toggling}>
             إلغاء
+          </Button>
+          <Button
+            variant="outlined"
+            startIcon={<AdminPanelSettingsIcon />}
+            onClick={() => navigate('/admin/users/roles')}
+          >
+            الأدوار والصلاحيات
           </Button>
           <Button
             onClick={handleToggleConfirm}

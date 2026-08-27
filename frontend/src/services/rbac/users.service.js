@@ -65,11 +65,6 @@ export const usersService = {
       userType: current.role || current.userType || 'DATA_ENTRY',
       employerId: current.employerId ?? null,
       providerId: current.providerId ?? null,
-      canViewClaims: current.canViewClaims,
-      canViewVisits: current.canViewVisits,
-      canViewReports: current.canViewReports,
-      canViewMembers: current.canViewMembers,
-      canViewBenefitPolicies: current.canViewBenefitPolicies,
       ...patchData
     };
 

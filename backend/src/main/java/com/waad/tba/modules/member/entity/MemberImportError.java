@@ -94,14 +94,14 @@ public class MemberImportError {
     /**
      * Factory method for duplicate errors
      */
-    public static MemberImportError duplicateError(MemberImportLog log, int rowNum, 
-            String civilId, String rowJson) {
+    public static MemberImportError duplicateError(MemberImportLog log, int rowNum,
+            String nationalNumber, String rowJson) {
         return MemberImportError.builder()
                 .importLog(log)
                 .rowNumber(rowNum)
                 .errorType(ErrorType.DUPLICATE)
                 .errorField("national_id")
-                .errorMessage("Duplicate national ID: " + civilId)
+                .errorMessage("Duplicate national ID: " + nationalNumber)
                 .rowData(rowJson)
                 .build();
     }

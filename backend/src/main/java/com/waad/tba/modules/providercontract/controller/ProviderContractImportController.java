@@ -30,12 +30,13 @@ import java.nio.charset.StandardCharsets;
 @RequiredArgsConstructor
 @Tag(name = "Provider Contract Bulk Import", description = "Template download and two-stage bulk import of provider contracts")
 @SecurityRequirement(name = "bearer-jwt")
-@PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
+@PreAuthorize("@permissionGuard.has('CONTRACT_MANAGE')")
 public class ProviderContractImportController {
 
     private final ProviderContractImportService importService;
 
     @GetMapping("/template")
+    @PreAuthorize("@permissionGuard.has('CONTRACT_MANAGE')")
     @Operation(summary = "Download provider-contract bulk import template")
     public ResponseEntity<byte[]> downloadTemplate() throws IOException {
         byte[] content = importService.generateTemplate();
@@ -48,6 +49,7 @@ public class ProviderContractImportController {
     }
 
     @PostMapping(value = "/preview", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("@permissionGuard.has('CONTRACT_MANAGE')")
     @Operation(summary = "Preview & validate a contract import file without persisting anything")
     public ResponseEntity<ApiResponse<ContractImportPreviewResultDto>> preview(@RequestParam("file") MultipartFile file) {
         ContractImportPreviewResultDto result = importService.preview(file);
@@ -57,6 +59,7 @@ public class ProviderContractImportController {
     }
 
     @PostMapping("/confirm")
+    @PreAuthorize("@permissionGuard.has('CONTRACT_MANAGE')")
     @Operation(summary = "Persist the valid rows from a previously previewed import session")
     public ResponseEntity<ApiResponse<ContractImportConfirmResultDto>> confirm(@RequestParam("sessionId") String sessionId) {
         ContractImportConfirmResultDto result = importService.confirm(sessionId);
@@ -65,6 +68,7 @@ public class ProviderContractImportController {
     }
 
     @GetMapping("/errors/{sessionId}")
+    @PreAuthorize("@permissionGuard.has('CONTRACT_MANAGE')")
     @Operation(summary = "Download an Excel report of the rows that failed validation")
     public ResponseEntity<byte[]> downloadErrorReport(@PathVariable String sessionId) throws IOException {
         byte[] content = importService.generateErrorReport(sessionId);

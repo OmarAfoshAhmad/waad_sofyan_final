@@ -72,6 +72,10 @@ public class Member {
     @Column(length = 20, name = "relationship")
     private Relationship relationship;
 
+    /** Visual order inside a family; never derived from or written into identity numbers. */
+    @Column(name = "family_order")
+    private Integer familyOrder;
+
     /** Auto-calculated: PRINCIPAL if parent==null, DEPENDENT if parent!=null */
     @Transient
     public MemberType getType() {
@@ -161,6 +165,8 @@ public class Member {
                 throw new IllegalStateException(
                         "Dependent Member must have a relationship type (e.g., SON, DAUGHTER, WIFE).");
             }
+        } else if (this.relationship != null) {
+            throw new IllegalStateException("Principal Member cannot have a relationship type.");
         }
 
     }
@@ -226,9 +232,49 @@ public class Member {
     @Column(length = 500, name = "blocked_reason")
     private String blockedReason;
 
+    /**
+     * Derived from {@code status}, never an independent business state --
+     * DB-enforced by chk_member_status_active_consistency (V169): true only
+     * when status=ACTIVE. Every write to this field MUST go through
+     * MemberStatusTransitionService; a direct setActive/setStatus call
+     * outside it risks violating that constraint (the transition service is
+     * what previously-missing toggleActive semantics broke: it used to set
+     * this flag without touching status at all).
+     */
     @Builder.Default
     @Column(nullable = false)
     private Boolean active = true;
+
+    // ==================== STATUS LIFECYCLE (last transition only --
+    // member_status_history is the append-only full timeline) ====================
+
+    @Column(name = "status_reason", length = 500)
+    private String statusReason;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status_source", length = 30)
+    private StatusSource statusSource;
+
+    @Column(name = "status_changed_at")
+    private LocalDateTime statusChangedAt;
+
+    @Column(name = "status_changed_by")
+    private Long statusChangedBy;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "previous_status", length = 20)
+    private MemberStatus previousStatus;
+
+    /**
+     * Groups every member (principal + whichever dependents a single
+     * suspend/terminate operation cascaded to) changed by ONE transition
+     * operation. restoreFamily uses this to reinstate exactly the dependents
+     * a specific cascade affected -- never a dependent who was independently
+     * suspended before or after it, even if they currently share the same
+     * status value.
+     */
+    @Column(name = "status_transition_id", length = 64)
+    private String statusTransitionId;
 
     // Eligibility
     @Builder.Default
@@ -276,6 +322,13 @@ public class Member {
     @Column(name = "updated_by")
     private String updatedBy;
 
+    // @Builder.Default is required here, not decorative: Lombok's @Builder
+    // ignores plain field initializers, so without it every member created
+    // via Member.builder() (the pattern used everywhere in this codebase)
+    // got kinshipVerified=null in the INSERT -- overriding V67's DB-level
+    // DEFAULT FALSE, since Hibernate sends an explicit NULL rather than
+    // omitting the column. Only the no-args constructor path ever saw false.
+    @Builder.Default
     @Column(name = "kinship_verified")
     private Boolean kinshipVerified = false;
 
@@ -335,7 +388,7 @@ public class Member {
     }
 
     public enum MemberStatus {
-        ACTIVE, SUSPENDED, TERMINATED, PENDING
+        ACTIVE, SUSPENDED, TERMINATED, PENDING, DUPLICATE_MERGED
     }
 
     public enum CardStatus {

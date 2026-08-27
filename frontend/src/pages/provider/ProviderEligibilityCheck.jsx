@@ -150,6 +150,17 @@ export default function ProviderEligibilityCheck() {
     );
   };
 
+  const hasGeneralAnnualLimit = (member) => {
+    const annualLimit = Number(member?.annualLimit);
+    return Number.isFinite(annualLimit) && annualLimit > 0;
+  };
+
+  const formatGeneralRemainingLimit = (member) =>
+    hasGeneralAnnualLimit(member) ? formatCurrency(member?.remainingLimit) : 'لا يوجد سقف عام';
+
+  const formatGeneralUsage = (member) =>
+    hasGeneralAnnualLimit(member) ? `${Number(member?.usagePercentage ?? 0).toFixed(0)}%` : 'لا توجد نسبة استخدام';
+
   const getUsageColor = (percentage) => {
     if (percentage >= 90) return 'error';
     if (percentage >= 70) return 'warning';
@@ -407,7 +418,7 @@ export default function ProviderEligibilityCheck() {
 
   const handleRegisterVisit = async () => {
     if (!selectedMember || !selectedVisitType) return;
-    
+
     if (selectedMember.hasOpenVisit) {
       // Navigate to the visit log passing the member's civil ID or card number for an exact match
       const exactIdentifier = selectedMember.civilId || selectedMember.cardNumber || selectedMember.fullName;
@@ -879,7 +890,6 @@ export default function ProviderEligibilityCheck() {
                     </Box>
 
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-
                       <IconButton onClick={handleReset} size="small" title="إعادة ضبط" sx={{ bgcolor: 'grey.100' }}>
                         <RefreshIcon />
                       </IconButton>
@@ -978,16 +988,24 @@ export default function ProviderEligibilityCheck() {
                                     size="small"
                                   />
                                 </TableCell>
-                                <TableCell align="center">{formatCurrency(member.remainingLimit)}</TableCell>
+                                <TableCell align="center">{formatGeneralRemainingLimit(member)}</TableCell>
                                 <TableCell align="center">
                                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                    <LinearProgress
-                                      variant="determinate"
-                                      value={member.usagePercentage || 0}
-                                      color={getUsageColor(member.usagePercentage || 0)}
-                                      sx={{ height: '0.375rem', borderRadius: 1, flex: 1, minWidth: '3.125rem' }}
-                                    />
-                                    <Typography variant="caption">{(member.usagePercentage || 0).toFixed(0)}%</Typography>
+                                    {hasGeneralAnnualLimit(member) ? (
+                                      <>
+                                        <LinearProgress
+                                          variant="determinate"
+                                          value={member.usagePercentage || 0}
+                                          color={getUsageColor(member.usagePercentage || 0)}
+                                          sx={{ height: '0.375rem', borderRadius: 1, flex: 1, minWidth: '3.125rem' }}
+                                        />
+                                        <Typography variant="caption">{formatGeneralUsage(member)}</Typography>
+                                      </>
+                                    ) : (
+                                      <Typography variant="caption" color="text.secondary">
+                                        {formatGeneralUsage(member)}
+                                      </Typography>
+                                    )}
                                   </Box>
                                 </TableCell>
                                 <TableCell align="center">
@@ -1037,7 +1055,7 @@ export default function ProviderEligibilityCheck() {
                                 {selectedMember.fullName}
                               </Typography>
                               <Typography variant="body2" color="text.secondary">
-                                المتبقي: {formatCurrency(selectedMember.remainingLimit)}
+                                المتبقي: {formatGeneralRemainingLimit(selectedMember)}
                               </Typography>
                             </Box>
                           </Stack>
@@ -1088,14 +1106,12 @@ export default function ProviderEligibilityCheck() {
                               <AssignmentIcon />
                             )
                           }
-                          disabled={(!selectedMember.hasOpenVisit && registeringVisit) || (!selectedMember.hasOpenVisit && !selectedVisitType)}
+                          disabled={
+                            (!selectedMember.hasOpenVisit && registeringVisit) || (!selectedMember.hasOpenVisit && !selectedVisitType)
+                          }
                           onClick={handleRegisterVisit}
                         >
-                          {selectedMember.hasOpenVisit
-                            ? 'فتح الزيارة الحالية'
-                            : registeringVisit
-                            ? 'جاري التسجيل...'
-                            : 'تسجيل زيارة'}
+                          {selectedMember.hasOpenVisit ? 'فتح الزيارة الحالية' : registeringVisit ? 'جاري التسجيل...' : 'تسجيل زيارة'}
                         </Button>
                       </Stack>
                     </Paper>

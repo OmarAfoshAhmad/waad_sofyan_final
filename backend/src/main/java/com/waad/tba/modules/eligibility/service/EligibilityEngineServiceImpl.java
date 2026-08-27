@@ -3,8 +3,6 @@ package com.waad.tba.modules.eligibility.service;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy;
 import com.waad.tba.modules.eligibility.domain.*;
 import com.waad.tba.modules.eligibility.dto.EligibilityCheckRequest;
-import com.waad.tba.modules.eligibility.entity.EligibilityCheck;
-import com.waad.tba.modules.eligibility.repository.EligibilityCheckRepository;
 import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.modules.member.repository.MemberRepository;
 import com.waad.tba.modules.provider.entity.Provider;
@@ -49,8 +47,10 @@ public class EligibilityEngineServiceImpl implements EligibilityEngineService {
     // Repositories
     private final MemberRepository memberRepository;
     private final ProviderRepository providerRepository;
-    private final EligibilityCheckRepository eligibilityCheckRepository;
+    private final EligibilityAuditRecorder auditRecorder;
     private final BenefitPolicyCoverageService coverageService;
+    private final com.waad.tba.modules.member.service.MemberPolicyResolver memberPolicyResolver;
+    private final com.waad.tba.modules.member.service.MemberEmployerResolver memberEmployerResolver;
 
     // Security
     private final AuthorizationService authorizationService;
@@ -67,26 +67,18 @@ public class EligibilityEngineServiceImpl implements EligibilityEngineService {
         log.info("[Eligibility] Starting check - RequestID: {}, MemberID: {}, ServiceDate: {}",
                 requestId, request.getMemberId(), request.getServiceDate());
 
+        // context stays null if buildContext itself throws (e.g. before a
+        // member/policy could even be resolved) -- in that case there is
+        // nothing meaningful to audit, and that is logged explicitly below
+        // rather than silently skipped.
+        EligibilityContext context = null;
+        EligibilityResult result;
         try {
-            // Build context
-            EligibilityContext context = buildContext(request, requestId);
-
-            // Evaluate rules
-            EligibilityResult result = evaluateRules(context, startTime);
-
-            // Log to audit
-            saveAuditLog(context, result);
-
-            log.info("[Eligibility] Check complete - RequestID: {}, Eligible: {}, Status: {}, Time: {}ms",
-                    requestId, result.isEligible(), result.getStatus(), result.getProcessingTimeMs());
-
-            return result;
-
+            context = buildContext(request, requestId);
+            result = evaluateRules(context, startTime);
         } catch (Exception e) {
             log.error("[Eligibility] Error during check - RequestID: {}, Error: {}", requestId, e.getMessage(), e);
-
-            // Return system error result
-            return EligibilityResult.notEligible(
+            result = EligibilityResult.notEligible(
                     requestId,
                     null,
                     List.of(EligibilityResult.ReasonDetail.from(
@@ -95,6 +87,23 @@ public class EligibilityEngineServiceImpl implements EligibilityEngineService {
                     System.currentTimeMillis() - startTime,
                     0);
         }
+
+        // Every exit from this method -- eligible, ineligible, or the
+        // SYSTEM_ERROR result built above -- passes through here.
+        boolean audited;
+        if (context != null) {
+            audited = auditRecorder.record(context, result);
+        } else {
+            audited = false;
+            log.error("[Eligibility][AUDIT_LOG_FAILURE] No context was built (failed before member/policy "
+                    + "resolution) - requestId={} cannot be audited", requestId);
+        }
+        result = result.toBuilder().auditRecorded(audited).build();
+
+        log.info("[Eligibility] Check complete - RequestID: {}, Eligible: {}, Status: {}, Time: {}ms, Audited: {}",
+                requestId, result.isEligible(), result.getStatus(), result.getProcessingTimeMs(), audited);
+
+        return result;
     }
 
     @Override
@@ -105,10 +114,25 @@ public class EligibilityEngineServiceImpl implements EligibilityEngineService {
         log.info("[Eligibility] Internal check - RequestID: {}, MemberID: {}",
                 context.getRequestId(), context.getMemberId());
 
-        EligibilityResult result = evaluateRules(context, startTime);
+        EligibilityResult result;
+        try {
+            result = evaluateRules(context, startTime);
+        } catch (Exception e) {
+            log.error("[Eligibility] Error during internal check - RequestID: {}, Error: {}",
+                    context.getRequestId(), e.getMessage(), e);
+            result = EligibilityResult.notEligible(
+                    context.getRequestId(),
+                    null,
+                    List.of(EligibilityResult.ReasonDetail.from(
+                            EligibilityReason.SYSTEM_ERROR,
+                            e.getMessage())),
+                    System.currentTimeMillis() - startTime,
+                    0);
+        }
 
-        // Log to audit
-        saveAuditLog(context, result);
+        // Log to audit -- own transaction, can never affect the decision above
+        boolean audited = auditRecorder.record(context, result);
+        result = result.toBuilder().auditRecorded(audited).build();
 
         return result;
     }
@@ -135,12 +159,22 @@ public class EligibilityEngineServiceImpl implements EligibilityEngineService {
             member = memberRepository.findById(request.getMemberId()).orElse(null);
         }
 
-        // Resolve BenefitPolicy from member (CANONICAL - only policy model)
+        // Resolve the policy that applied to this member ON THE SERVICE DATE --
+        // not the member's current pointer. This used to read
+        // member.getBenefitPolicy() with no reference to serviceDate at all,
+        // so a backdated eligibility check was evaluated against today's
+        // policy (its limits, coverage percentages and effective window),
+        // and could disagree with the claim path for the very same member and
+        // date. MemberPolicyResolver is now the single answer for both.
         BenefitPolicy benefitPolicy = null;
+        com.waad.tba.modules.employer.entity.Employer datedEmployer = null;
         Long benefitPolicyId = null;
-        if (member != null && member.getBenefitPolicy() != null) {
-            benefitPolicy = member.getBenefitPolicy();
-            benefitPolicyId = benefitPolicy.getId();
+        if (member != null) {
+            datedEmployer = memberEmployerResolver.resolveFor(member, request.getServiceDate()).orElse(null);
+            benefitPolicy = memberPolicyResolver.resolveFor(member, request.getServiceDate()).orElse(null);
+            if (benefitPolicy != null) {
+                benefitPolicyId = benefitPolicy.getId();
+            }
         }
 
         // Resolve provider (optional)
@@ -176,7 +210,7 @@ public class EligibilityEngineServiceImpl implements EligibilityEngineService {
                 .member(member)
                 .benefitPolicy(benefitPolicy)
                 .provider(provider)
-                .employer(member != null ? member.getEmployer() : null)
+                .employer(datedEmployer)
                 .checkedByUserId(userId)
                 .checkedByUsername(username)
                 .companyScopeId(employerId) // Using employerId as company scope in simplified model
@@ -361,92 +395,6 @@ public class EligibilityEngineServiceImpl implements EligibilityEngineService {
         }
 
         return builder.build();
-    }
-
-    /**
-     * Save audit log
-     */
-    @Transactional
-    protected void saveAuditLog(EligibilityContext context, EligibilityResult result) {
-        try {
-            EligibilityCheck check = EligibilityCheck.builder()
-                    .requestId(context.getRequestId())
-                    .checkTimestamp(context.getCheckTimestamp())
-                    // Input
-                    .memberId(context.getMemberId())
-                    .policyId(context.getBenefitPolicyId()) // Using benefitPolicyId as the policy reference
-                    .providerId(context.getProviderId())
-                    .serviceDate(context.getServiceDate())
-                    .serviceCode(context.getServiceCode())
-                    // Result
-                    .eligible(result.isEligible())
-                    .status(result.getStatus().name())
-                    .reasons(convertReasonsToJson(result.getReasons()))
-                    // Snapshot
-                    .memberName(result.getSnapshot() != null ? result.getSnapshot().getMemberName() : null)
-                    .memberCivilId(result.getSnapshot() != null ? result.getSnapshot().getMemberCivilId() : null)
-                    .memberStatus(result.getSnapshot() != null ? result.getSnapshot().getMemberStatus() : null)
-                    .policyNumber(result.getSnapshot() != null ? result.getSnapshot().getPolicyNumber() : null)
-                    .policyStatus(result.getSnapshot() != null ? result.getSnapshot().getPolicyStatus() : null)
-                    .policyStartDate(result.getSnapshot() != null ? result.getSnapshot().getCoverageStart() : null)
-                    .policyEndDate(result.getSnapshot() != null ? result.getSnapshot().getCoverageEnd() : null)
-                    .employerId(result.getSnapshot() != null ? result.getSnapshot().getEmployerId() : null)
-                    .employerName(result.getSnapshot() != null ? result.getSnapshot().getEmployerName() : null)
-                    // Security
-                    .checkedByUserId(context.getCheckedByUserId())
-                    .checkedByUsername(context.getCheckedByUsername())
-                    .companyScopeId(context.getCompanyScopeId())
-                    .ipAddress(context.getIpAddress())
-                    .userAgent(context.getUserAgent())
-                    // Metrics
-                    .processingTimeMs((int) result.getProcessingTimeMs())
-                    .rulesEvaluated(result.getRulesEvaluated())
-                    .build();
-
-            eligibilityCheckRepository.save(check);
-            log.debug("[Eligibility] Audit log saved - RequestID: {}", context.getRequestId());
-
-        } catch (Exception e) {
-            // Don't fail the eligibility check if audit logging fails
-            log.error("[Eligibility] Failed to save audit log: {}", e.getMessage());
-        }
-    }
-
-    /**
-     * Convert reasons list to JSON string
-     */
-    private String convertReasonsToJson(List<EligibilityResult.ReasonDetail> reasons) {
-        if (reasons == null || reasons.isEmpty()) {
-            return "[]";
-        }
-
-        try {
-            // Simple JSON array construction
-            StringBuilder sb = new StringBuilder("[");
-            for (int i = 0; i < reasons.size(); i++) {
-                EligibilityResult.ReasonDetail r = reasons.get(i);
-                if (i > 0)
-                    sb.append(",");
-                sb.append("{");
-                sb.append("\"code\":\"").append(escape(r.getCode())).append("\",");
-                sb.append("\"messageAr\":\"").append(escape(r.getMessageAr())).append("\",");
-                sb.append("\"details\":\"").append(escape(r.getDetails())).append("\"");
-                sb.append("}");
-            }
-            sb.append("]");
-            return sb.toString();
-        } catch (Exception e) {
-            return "[]";
-        }
-    }
-
-    private String escape(String s) {
-        if (s == null)
-            return "";
-        return s.replace("\\", "\\\\")
-                .replace("\"", "\\\"")
-                .replace("\n", "\\n")
-                .replace("\r", "\\r");
     }
 
     /**

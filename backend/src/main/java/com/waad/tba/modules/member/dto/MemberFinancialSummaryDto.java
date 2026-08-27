@@ -94,22 +94,41 @@ public class MemberFinancialSummaryDto {
     private BigDecimal totalClaimed;
     
     /**
-     * Total amount approved by insurance (sum of approvedAmount)
+     * Total amount approved by insurance (sum of approvedAmount) -- what the
+     * insurer ultimately pays. A distinct, legitimate metric from
+     * {@link #limitConsumedAmount}: do not use this one for "how much of the
+     * annual limit is used" or for {@link #remainingCoverage}. See
+     * {@link #limitConsumedAmount}'s doc for why the two differ.
      */
     private BigDecimal totalApproved;
-    
+
     /**
      * Total amount paid/settled (sum of claims with status PAID/SETTLED)
      */
     private BigDecimal totalPaid;
-    
+
     /**
-     * Remaining coverage (annualLimit - totalApproved)
+     * What this member has consumed against their annual benefit ceiling this
+     * year -- WAAD-FIN-1.0 S4's axis ({@code ClaimLine.limitConsumption}: the
+     * settlement value capped by the binding limit, summed across every
+     * approved/settled/batched claim line). This is <b>not</b>
+     * {@link #totalApproved}: a limit is consumed before coverage split,
+     * contract discount, and rejection are applied on top of it, so
+     * limitConsumedAmount is always &gt;= totalApproved for the same claim.
+     * "المستخدم من السقف" in any UI must read this field, never totalApproved
+     * -- see {@code BenefitPolicyCoverageService.getLimitConsumedForYear}.
+     */
+    private BigDecimal limitConsumedAmount;
+
+    /**
+     * Remaining coverage: {@code annualLimit - limitConsumedAmount}. Computed
+     * on the same axis limitConsumedAmount is, per WAAD-FIN-1.0 S4 -- never
+     * derived from totalApproved.
      */
     private BigDecimal remainingCoverage;
-    
+
     /**
-     * Utilization percentage ((totalApproved / annualLimit) * 100)
+     * Utilization percentage: {@code (limitConsumedAmount / annualLimit) * 100}.
      */
     private BigDecimal utilizationPercent;
     

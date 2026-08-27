@@ -3,16 +3,16 @@ package com.waad.tba.modules.member.service;
 import com.waad.tba.common.exception.ResourceNotFoundException;
 import com.waad.tba.common.exception.BusinessRuleException;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy;
-import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository;
 import com.waad.tba.modules.benefitpolicy.service.BenefitPolicyCoverageService;
-import com.waad.tba.modules.claim.entity.Claim;
-import com.waad.tba.modules.claim.entity.ClaimLine;
-import com.waad.tba.modules.claim.entity.ClaimStatus;
+import com.waad.tba.modules.benefitpolicy.service.LimitBalanceReader;
+import com.waad.tba.modules.claim.projection.MemberFinancialAggregateProjection;
 import com.waad.tba.modules.claim.repository.ClaimRepository;
 import com.waad.tba.modules.member.dto.MemberFinancialSummaryDto;
 import com.waad.tba.modules.member.dto.CoverageLimitsDto;
 import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.modules.member.repository.MemberRepository;
+import com.waad.tba.modules.member.security.MemberOperation;
+import com.waad.tba.modules.member.security.MemberQueryAccessPolicy;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalServiceRepository;
 import com.waad.tba.modules.medicaltaxonomy.entity.MedicalService;
 import lombok.RequiredArgsConstructor;
@@ -24,24 +24,34 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
-import java.util.Arrays;
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Member Financial Summary Service
- * 
+ *
  * Provides comprehensive financial overview for members by aggregating:
  * - Benefit policy information
- * - Claim statistics and amounts
- * - Utilization metrics
+ * - Claim statistics and amounts (via one grouped database query -- see
+ *   {@link #getFinancialSummaries(Collection)})
+ * - Utilization metrics, on the WAAD-FIN-1.0 limit-consumption axis
  * - Alerts and warnings
- * 
+ *
  * REUSES existing services (no duplicate logic):
- * - BenefitPolicyCoverageService for remaining coverage
- * - ClaimRepository for claim aggregations
- * 
- * @version 2026.1
- * @since Phase 1 - Financial Lifecycle Completion
+ * - BenefitPolicyCoverageService for limit-consumption reads (single AND
+ *   bulk) and remaining coverage
+ * - ClaimRepository.findFinancialAggregatesByMemberIds for claim statistics
+ *   (single AND bulk) -- no claim entity is ever loaded into memory here
+ *
+ * @version 2026.2
+ * @since Phase 1 - Financial Lifecycle Completion; rebuilt member-closure
+ *        2026-08 to fix two defects: the annual-ceiling axis mismatch
+ *        against the WAAD-FIN-1.0 engine, and unbounded per-member claim
+ *        loading (a family eligibility check cost one full claim-history
+ *        load per family member before this rewrite).
  */
 @Slf4j
 @Service
@@ -51,50 +61,133 @@ public class MemberFinancialSummaryService {
 
     private final MemberRepository memberRepository;
     private final BenefitPolicyCoverageService coverageService;
-    private final BenefitPolicyRepository benefitPolicyRepository;
     private final ClaimRepository claimRepository;
     private final MedicalServiceRepository medicalServiceRepository;
+    private final MemberQueryAccessPolicy queryAccessPolicy;
+    private final MemberPolicyResolver memberPolicyResolver;
+    private final LimitBalanceReader limitBalanceReader;
 
     /**
-     * Get comprehensive financial summary for a member
-     * 
+     * HTTP/read-model entry point. Internal eligibility batching deliberately uses
+     * {@link #getFinancialSummaries(Collection)} after its own member authorization;
+     * controllers must use this method so an id cannot bypass tenant scope.
+     */
+    public MemberFinancialSummaryDto getAuthorizedFinancialSummary(Long memberId, MemberOperation operation) {
+        Member member = memberRepository.findById(memberId)
+                .orElseThrow(() -> new ResourceNotFoundException("Member", "id", memberId));
+        Long employerId = member.getEmployer() == null ? null : member.getEmployer().getId();
+        queryAccessPolicy.requireMember(operation, employerId);
+        return getFinancialSummary(memberId);
+    }
+
+    /**
+     * Financial summary for exactly one member. Thin wrapper over
+     * {@link #getFinancialSummaries(Collection)} so the single- and
+     * bulk-member code paths can never drift apart -- there is only one
+     * implementation of "how a financial summary is built".
+     *
      * @param memberId Member ID
      * @return Financial summary DTO with all metrics
      * @throws ResourceNotFoundException if member not found
      */
     public MemberFinancialSummaryDto getFinancialSummary(Long memberId) {
-        log.info("📊 Generating financial summary for member ID: {}", memberId);
+        Map<Long, MemberFinancialSummaryDto> result = getFinancialSummaries(List.of(memberId));
+        MemberFinancialSummaryDto summary = result.get(memberId);
+        if (summary == null) {
+            throw new ResourceNotFoundException("Member", "id", memberId);
+        }
+        return summary;
+    }
 
-        // 1. Load member
-        Member member = memberRepository.findById(memberId)
-                .orElseThrow(() -> new ResourceNotFoundException("Member", "id", memberId));
+    /**
+     * Financial summary for every member in {@code memberIds}, in a fixed
+     * small number of database round trips regardless of how many members are
+     * requested (one member lookup, one claim-statistics aggregate, one
+     * limit-consumption aggregate) -- this is what lets a family-eligibility
+     * check (principal + N dependents) cost O(1) queries instead of O(N).
+     *
+     * Members that do not exist are silently omitted from the result map
+     * (not present as a null value) -- callers that need to distinguish
+     * "not found" from "found with zero claims" must check
+     * {@code result.containsKey(id)}.
+     *
+     * @param memberIds every member whose summary is being read together
+     * @return map from member id to its financial summary, one entry per
+     *         member id that actually exists
+     */
+    public Map<Long, MemberFinancialSummaryDto> getFinancialSummaries(Collection<Long> memberIds) {
+        if (memberIds == null || memberIds.isEmpty()) {
+            return Map.of();
+        }
+        log.info("📊 Generating financial summaries for {} member(s)", memberIds.size());
 
-        // 2. Load benefit policy — direct link first, fallback to employer's effective
-        // policy
-        BenefitPolicy policy = member.getBenefitPolicy();
-        if (policy == null && member.getEmployer() != null) {
-            policy = benefitPolicyRepository
-                    .findActiveEffectivePolicyForEmployer(member.getEmployer().getId(), LocalDate.now())
-                    .orElse(null);
-            if (policy != null) {
-                log.info("⚡ Using employer-level policy {} for member {}", policy.getId(), memberId);
-            }
+        List<Member> members = memberRepository.findAllById(memberIds);
+        if (members.isEmpty()) {
+            return Map.of();
         }
 
-        // 3. Load all claims for this member
-        List<Claim> allClaims = claimRepository.findByMemberId(memberId);
+        LocalDate today = LocalDate.now();
+        Map<Long, BenefitPolicy> policyByMember = resolvePolicies(members, today);
 
-        // 4. Build DTO
+        Map<Long, MemberFinancialAggregateProjection> claimStatsByMember = claimRepository
+                .findFinancialAggregatesByMemberIds(memberIds).stream()
+                .collect(Collectors.toMap(MemberFinancialAggregateProjection::getMemberId, row -> row));
+
+        // WAAD-FIN-1.0 S4 + finance-08: the ceiling's own axis, read once for the
+        // whole batch and filtered to each member's OWN policy id -- never
+        // BenefitPolicyCoverageService.getLimitConsumedForYear's unfiltered
+        // total, which sums a member's consumption across every policy they
+        // held that calendar year. A member who changed policies mid-year has
+        // two distinct ceilings; summing both into one figure understated (or
+        // overstated) whichever policy's remaining balance this screen shows.
+        Map<Long, Long> policyIdByMember = policyByMember.entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().getId()));
+        Map<Long, BigDecimal> consumedByMember = limitBalanceReader.readGeneralCeilingCommittedBulk(
+                policyIdByMember, LocalDate.of(today.getYear(), 1, 1), LocalDate.of(today.getYear(), 12, 31), null);
+
+        Map<Long, MemberFinancialSummaryDto> result = new LinkedHashMap<>();
+        for (Member member : members) {
+            result.put(member.getId(), buildSummary(
+                    member, policyByMember.get(member.getId()),
+                    claimStatsByMember.get(member.getId()),
+                    consumedByMember.getOrDefault(member.getId(), BigDecimal.ZERO)));
+        }
+        return result;
+    }
+
+    /**
+     * Direct policy first, employer-level effective policy as fallback --
+     * resolved once per member up front so the per-member build step never
+     * touches the database.
+     */
+    private Map<Long, BenefitPolicy> resolvePolicies(List<Member> members, LocalDate asOfDate) {
+        Map<Long, BenefitPolicy> byMember = new LinkedHashMap<>();
+        for (Member member : members) {
+            BenefitPolicy policy = memberPolicyResolver.resolveFor(member, asOfDate).orElse(null);
+            if (policy != null) {
+                byMember.put(member.getId(), policy);
+            }
+        }
+        return byMember;
+    }
+
+    /**
+     * Assembles one member's DTO from already-fetched pieces -- pure, no
+     * database access, so it stays trivially testable and identical for the
+     * single- and bulk-read paths.
+     */
+    private MemberFinancialSummaryDto buildSummary(
+            Member member, BenefitPolicy policy,
+            MemberFinancialAggregateProjection stats, BigDecimal limitConsumed) {
+
         MemberFinancialSummaryDto.MemberFinancialSummaryDtoBuilder builder = MemberFinancialSummaryDto.builder();
 
-        // ========== MEMBER INFO ==========
         builder.memberId(member.getId())
                 .fullName(member.getFullName())
                 .cardNumber(member.getCardNumber())
                 .barcode(member.getBarcode())
                 .isDependent(member.getParent() != null);
 
-        // ========== POLICY INFO ==========
         if (policy != null) {
             builder.policyId(policy.getId())
                     .policyName(policy.getName())
@@ -106,58 +199,35 @@ public class MemberFinancialSummaryService {
             builder.policyActive(false);
         }
 
-        // ========== FINANCIAL METRICS ==========
-        BigDecimal totalClaimed = calculateTotalClaimed(allClaims);
-        BigDecimal totalApproved = calculateTotalApproved(allClaims);
-        BigDecimal totalPaid = calculateTotalPaid(allClaims);
-        BigDecimal totalPatientCoPay = calculateTotalPatientCoPay(allClaims);
-        BigDecimal totalDeductible = calculateTotalDeductible(allClaims);
+        BigDecimal totalClaimed = stats == null ? BigDecimal.ZERO : nz(stats.getTotalClaimed());
+        BigDecimal totalApproved = stats == null ? BigDecimal.ZERO : nz(stats.getTotalApproved());
+        BigDecimal totalPaid = stats == null ? BigDecimal.ZERO : nz(stats.getTotalPaid());
+        BigDecimal totalPatientCoPay = stats == null ? BigDecimal.ZERO : nz(stats.getTotalPatientCoPay());
+        BigDecimal totalDeductible = stats == null ? BigDecimal.ZERO : nz(stats.getTotalDeductibleApplied());
 
         builder.totalClaimed(totalClaimed)
                 .totalApproved(totalApproved)
                 .totalPaid(totalPaid)
                 .totalPatientCoPay(totalPatientCoPay)
-                .totalDeductibleApplied(totalDeductible);
+                .totalDeductibleApplied(totalDeductible)
+                .limitConsumedAmount(limitConsumed);
 
-        // REUSE: Remaining coverage from existing service
         BigDecimal remainingCoverage = null;
         BigDecimal utilizationPercent = BigDecimal.ZERO;
-
-        if (policy != null) {
-            // Use policy-aware overload to support employer-level policy fallback
-            // (member.getBenefitPolicy() may be null when policy is inherited from
-            // employer)
-            remainingCoverage = coverageService.getRemainingCoverage(policy, member.getId(), LocalDate.now());
-            builder.remainingCoverage(remainingCoverage);
-
-            // Calculate utilization %
-            if (policy.getAnnualLimit() != null && policy.getAnnualLimit().compareTo(BigDecimal.ZERO) > 0) {
-                utilizationPercent = totalApproved
-                        .multiply(BigDecimal.valueOf(100))
-                        .divide(policy.getAnnualLimit(), 2, RoundingMode.HALF_UP);
-                builder.utilizationPercent(utilizationPercent);
-            }
+        if (policy != null && policy.getAnnualLimit() != null && policy.getAnnualLimit().compareTo(BigDecimal.ZERO) > 0) {
+            remainingCoverage = policy.getAnnualLimit().subtract(limitConsumed).max(BigDecimal.ZERO);
+            utilizationPercent = limitConsumed
+                    .multiply(BigDecimal.valueOf(100))
+                    .divide(policy.getAnnualLimit(), 2, RoundingMode.HALF_UP);
+            builder.remainingCoverage(remainingCoverage).utilizationPercent(utilizationPercent);
         }
 
-        // ========== CLAIM STATISTICS ==========
-        int totalCount = allClaims.size();
-        int pendingCount = (int) allClaims.stream()
-                .filter(c -> c.getStatus() == ClaimStatus.SUBMITTED || c.getStatus() == ClaimStatus.UNDER_REVIEW)
-                .count();
-        int approvedCount = (int) allClaims.stream()
-                .filter(c -> c.getStatus() == ClaimStatus.APPROVED ||
-                        c.getStatus() == ClaimStatus.SETTLED)
-                .count();
-        int rejectedCount = (int) allClaims.stream()
-                .filter(c -> c.getStatus() == ClaimStatus.REJECTED)
-                .count();
-
-        LocalDate lastClaimDate = allClaims.stream()
-                .map(Claim::getCreatedAt)
-                .filter(createdAt -> createdAt != null)
-                .max(java.time.LocalDateTime::compareTo)
-                .map(dateTime -> dateTime.toLocalDate())
-                .orElse(null);
+        int totalCount = stats == null ? 0 : stats.getClaimsCount().intValue();
+        int pendingCount = stats == null ? 0 : stats.getPendingClaimsCount().intValue();
+        int approvedCount = stats == null ? 0 : stats.getApprovedClaimsCount().intValue();
+        int rejectedCount = stats == null ? 0 : stats.getRejectedClaimsCount().intValue();
+        LocalDate lastClaimDate = stats == null || stats.getLastClaimAt() == null
+                ? null : stats.getLastClaimAt().toLocalDate();
 
         builder.claimsCount(totalCount)
                 .pendingClaimsCount(pendingCount)
@@ -165,19 +235,16 @@ public class MemberFinancialSummaryService {
                 .rejectedClaimsCount(rejectedCount)
                 .lastClaimDate(lastClaimDate);
 
-        // ========== WARNINGS / ALERTS ==========
         String warning = null;
         boolean nearingLimit = false;
         boolean expiringSoon = false;
 
         if (policy != null) {
-            // Check if nearing limit (>80% utilization)
             if (utilizationPercent.compareTo(BigDecimal.valueOf(80)) >= 0) {
                 nearingLimit = true;
                 warning = "⚠️ تنبيه: اقتربت من حد التغطية السنوي (" + utilizationPercent.intValue() + "% مستهلك)";
             }
 
-            // Check if policy expiring soon (within 30 days)
             if (policy.getEndDate() != null) {
                 long daysUntilExpiry = ChronoUnit.DAYS.between(LocalDate.now(), policy.getEndDate());
                 if (daysUntilExpiry > 0 && daysUntilExpiry <= 30) {
@@ -198,16 +265,23 @@ public class MemberFinancialSummaryService {
                 .policyExpiringSoon(expiringSoon);
 
         MemberFinancialSummaryDto summary = builder.build();
-        log.info("✅ Financial summary generated: Claimed={}, Approved={}, Remaining={}, Utilization={}%",
-                totalClaimed, totalApproved, remainingCoverage, utilizationPercent);
-
+        log.debug("✅ Financial summary built: member={}, claimed={}, approved={}, consumed={}, remaining={}",
+                member.getId(), totalClaimed, totalApproved, limitConsumed, remainingCoverage);
         return summary;
+    }
+
+    private static BigDecimal nz(BigDecimal value) {
+        return value == null ? BigDecimal.ZERO : value;
     }
 
     /**
      * Get Coverage Limits (times and amounts) for a specific service based on
-     * member's active policy.
-     * 
+     * member's active policy. Times-used is read via
+     * {@link ClaimRepository#countServiceUsageForMemberAndYear} -- a single
+     * COUNT query -- not by loading every claim for the member (the pattern
+     * {@link #getFinancialSummaries(Collection)} was rewritten to avoid;
+     * this method carried the same defect until member-closure Phase 4).
+     *
      * @param memberId    Member ID
      * @param serviceCode Medical Service Code
      * @return CoverageLimitsDto
@@ -246,23 +320,9 @@ public class MemberFinancialSummaryService {
 
         // If times limit exists, we must calculate historical usage
         if (timesLimit != null) {
-            List<Claim> claims = claimRepository.findByMemberId(memberId);
             int currentYear = LocalDate.now().getYear();
-
-            for (Claim c : claims) {
-                // Only consider claims from the current policy year and that are not rejected
-                if (c.getStatus() == ClaimStatus.REJECTED || c.getServiceDate() == null
-                        || c.getServiceDate().getYear() != currentYear) {
-                    continue;
-                }
-                if (c.getLines() != null) {
-                    for (ClaimLine line : c.getLines()) {
-                        if (serviceCode.equals(line.getServiceCode())) {
-                            timesUsed++;
-                        }
-                    }
-                }
-            }
+            timesUsed = (int) Math.min(Integer.MAX_VALUE,
+                    claimRepository.countServiceUsageForMemberAndYear(memberId, serviceCode, currentYear));
 
             remainingTimes = timesLimit - timesUsed;
             if (remainingTimes <= 0) {
@@ -285,70 +345,4 @@ public class MemberFinancialSummaryService {
                 .build();
     }
 
-    // ==================== PRIVATE HELPER METHODS ====================
-
-    /**
-     * Calculate total claimed amount (sum of requestedAmount)
-     */
-    private BigDecimal calculateTotalClaimed(List<Claim> claims) {
-        return claims.stream()
-                .filter(c -> c.getRequestedAmount() != null)
-                .map(Claim::getRequestedAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-    }
-
-    /**
-     * Calculate total approved amount (sum of approvedAmount for approved/settled
-     * claims)
-     */
-    private BigDecimal calculateTotalApproved(List<Claim> claims) {
-        List<ClaimStatus> approvedStatuses = Arrays.asList(
-                ClaimStatus.APPROVED, ClaimStatus.SETTLED);
-
-        return claims.stream()
-                .filter(c -> approvedStatuses.contains(c.getStatus()))
-                .filter(c -> c.getApprovedAmount() != null)
-                .map(Claim::getApprovedAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-    }
-
-    /**
-     * Calculate total paid amount (sum of approvedAmount for settled claims only)
-     */
-    private BigDecimal calculateTotalPaid(List<Claim> claims) {
-        return claims.stream()
-                .filter(c -> c.getStatus() == ClaimStatus.SETTLED)
-                .filter(c -> c.getApprovedAmount() != null)
-                .map(Claim::getApprovedAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-    }
-
-    /**
-     * Calculate total patient co-pay (sum of patientCoPay for approved claims)
-     */
-    private BigDecimal calculateTotalPatientCoPay(List<Claim> claims) {
-        List<ClaimStatus> approvedStatuses = Arrays.asList(
-                ClaimStatus.APPROVED, ClaimStatus.SETTLED);
-
-        return claims.stream()
-                .filter(c -> approvedStatuses.contains(c.getStatus()))
-                .filter(c -> c.getPatientCoPay() != null)
-                .map(Claim::getPatientCoPay)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-    }
-
-    /**
-     * Calculate total deductible applied (sum of deductibleApplied for approved
-     * claims)
-     */
-    private BigDecimal calculateTotalDeductible(List<Claim> claims) {
-        List<ClaimStatus> approvedStatuses = Arrays.asList(
-                ClaimStatus.APPROVED, ClaimStatus.SETTLED);
-
-        return claims.stream()
-                .filter(c -> approvedStatuses.contains(c.getStatus()))
-                .filter(c -> c.getDeductibleApplied() != null)
-                .map(Claim::getDeductibleApplied)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-    }
 }

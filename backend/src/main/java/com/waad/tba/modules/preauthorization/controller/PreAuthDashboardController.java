@@ -18,7 +18,7 @@ import java.util.List;
 @RequestMapping("/api/v1/pre-authorizations/dashboard")
 @RequiredArgsConstructor
 @Slf4j
-@PreAuthorize("isAuthenticated()")
+@PreAuthorize("@permissionGuard.has('PREAUTH_VIEW')")
 public class PreAuthDashboardController {
 
     private final PreAuthDashboardService dashboardService;
@@ -28,7 +28,6 @@ public class PreAuthDashboardController {
      * GET /api/pre-authorizations/dashboard
      */
     @GetMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
     public ResponseEntity<ApiResponse<PreAuthDashboardDto>> getDashboard(
             @RequestParam(name = "trendDays", defaultValue = "30") int trendDays,
             @RequestParam(name = "topProviders", defaultValue = "10") int topProviders
@@ -46,7 +45,6 @@ public class PreAuthDashboardController {
      * GET /api/pre-authorizations/dashboard/stats
      */
     @GetMapping("/stats")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
     public ResponseEntity<ApiResponse<PreAuthDashboardDto.OverallStats>> getOverallStats() {
         log.info("[DASHBOARD-API] Fetching overall statistics");
 
@@ -60,7 +58,6 @@ public class PreAuthDashboardController {
      * GET /api/pre-authorizations/dashboard/status-distribution
      */
     @GetMapping("/status-distribution")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
     public ResponseEntity<ApiResponse<PreAuthDashboardDto.StatusDistribution>> getStatusDistribution() {
         log.info("[DASHBOARD-API] Fetching status distribution");
 
@@ -74,7 +71,6 @@ public class PreAuthDashboardController {
      * GET /api/pre-authorizations/dashboard/high-priority
      */
     @GetMapping("/high-priority")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
     public ResponseEntity<ApiResponse<List<PreAuthDashboardDto.PreAuthSummaryDto>>> getHighPriorityQueue(
             @RequestParam(name = "limit", defaultValue = "10") int limit
     ) {
@@ -90,7 +86,6 @@ public class PreAuthDashboardController {
      * GET /api/pre-authorizations/dashboard/expiring-soon
      */
     @GetMapping("/expiring-soon")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
     public ResponseEntity<ApiResponse<List<PreAuthDashboardDto.PreAuthSummaryDto>>> getExpiringSoon(
             @RequestParam(name = "withinDays", defaultValue = "7") int withinDays,
             @RequestParam(name = "limit", defaultValue = "10") int limit
@@ -107,7 +102,6 @@ public class PreAuthDashboardController {
      * GET /api/pre-authorizations/dashboard/trends
      */
     @GetMapping("/trends")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
     public ResponseEntity<ApiResponse<List<PreAuthDashboardDto.TrendData>>> getTrends(
             @RequestParam(name = "days", defaultValue = "30") int days
     ) {
@@ -123,7 +117,6 @@ public class PreAuthDashboardController {
      * GET /api/pre-authorizations/dashboard/top-providers
      */
     @GetMapping("/top-providers")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
     public ResponseEntity<ApiResponse<List<PreAuthDashboardDto.ProviderSummary>>> getTopProviders(
             @RequestParam(name = "limit", defaultValue = "10") int limit
     ) {
@@ -139,7 +132,6 @@ public class PreAuthDashboardController {
      * GET /api/pre-authorizations/dashboard/recent-activity
      */
     @GetMapping("/recent-activity")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
     public ResponseEntity<ApiResponse<List<PreAuthDashboardDto.RecentActivity>>> getRecentActivity(
             @RequestParam(name = "limit", defaultValue = "10") int limit
     ) {

@@ -13,6 +13,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import com.waad.tba.modules.rbac.entity.User;
 import com.waad.tba.modules.rbac.repository.UserRepository;
+import com.waad.tba.modules.rbac.permission.EffectivePermissionService;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -33,6 +34,7 @@ import lombok.extern.slf4j.Slf4j;
 public class SessionAuthenticationFilter extends OncePerRequestFilter {
 
     private final UserRepository userRepository;
+    private final EffectivePermissionService effectivePermissionService;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
@@ -65,8 +67,11 @@ public class SessionAuthenticationFilter extends OncePerRequestFilter {
 
                     String role = user.getUserType() != null ? user.getUserType().trim().toUpperCase() : "DATA_ENTRY";
 
-                    List<SimpleGrantedAuthority> authorities = List.of(
-                            new SimpleGrantedAuthority("ROLE_" + role));
+                    List<SimpleGrantedAuthority> authorities = new java.util.ArrayList<>();
+                    authorities.add(new SimpleGrantedAuthority("ROLE_" + role));
+                    effectivePermissionService.resolve(user).stream()
+                            .map(permission -> new SimpleGrantedAuthority(permission.authority()))
+                            .forEach(authorities::add);
 
                     UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
                             username, null, authorities);

@@ -148,6 +148,14 @@ public class MemberImportParser {
             return null;
         }
         String val = normalizeExcelValue(value).toLowerCase();
+        if (val.equals("principal") || val.equals("employee") || val.equals("subscriber")) {
+            return null;
+        }
+        try {
+            return Relationship.valueOf(val.toUpperCase(java.util.Locale.ROOT));
+        } catch (IllegalArgumentException ignored) {
+            // Continue with the Arabic/legacy labels below.
+        }
         if (val.contains("موظف") || val.contains("موظفه") || val.contains("موظفة") || val.contains("مشترك") || val.contains("رئيسي")) {
             return null; // Principal
         }
@@ -169,7 +177,9 @@ public class MemberImportParser {
         if (val.contains("أم") || val.contains("ام") || val.contains("والدة") || val.contains("والده")) {
             return Relationship.MOTHER;
         }
-        return null;
+        if (val.contains("أخ") || val.equals("اخ")) return Relationship.BROTHER;
+        if (val.contains("أخت") || val.contains("اخت")) return Relationship.SISTER;
+        throw new MemberImportRowValidationException("صلة قرابة غير معروفة: " + value);
     }
 
     /**
@@ -187,7 +197,7 @@ public class MemberImportParser {
             case "موقوف", "معلق", "suspended", "blocked" -> MemberStatus.SUSPENDED;
             case "منتهي", "ملغي", "terminated", "inactive" -> MemberStatus.TERMINATED;
             case "قيد المراجعه", "قيد المراجعة", "pending" -> MemberStatus.PENDING;
-            default -> throw new IllegalArgumentException("حالة عضوية غير معروفة: " + value);
+            default -> throw new MemberImportRowValidationException("حالة عضوية غير معروفة: " + value);
         };
     }
 

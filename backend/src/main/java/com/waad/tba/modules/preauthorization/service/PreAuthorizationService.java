@@ -5,6 +5,9 @@ import com.waad.tba.modules.preauthorization.entity.PreAuthorization;
 import com.waad.tba.modules.preauthorization.entity.PreAuthorization.PreAuthStatus;
 import com.waad.tba.modules.preauthorization.entity.PreAuthorization.Priority;
 import com.waad.tba.modules.preauthorization.repository.PreAuthorizationRepository;
+import com.waad.tba.modules.preauthorization.security.AuthorizedPreAuthScope;
+import com.waad.tba.modules.preauthorization.security.PreAuthAccessScope;
+import com.waad.tba.modules.preauthorization.security.PreAuthAccessScopeResolver;
 import com.waad.tba.modules.provider.entity.Provider;
 import com.waad.tba.modules.provider.repository.ProviderRepository;
 import com.waad.tba.modules.provider.service.ProviderContractService;
@@ -53,18 +56,22 @@ import java.util.List;
 public class PreAuthorizationService {
 
     private final PreAuthorizationRepository preAuthorizationRepository;
+    private final com.waad.tba.modules.member.service.MemberPolicyResolver memberPolicyResolver;
     private final ProviderRepository providerRepository;
     private final MemberRepository memberRepository;
     private final com.waad.tba.modules.providercontract.repository.ProviderContractPricingItemRepository pricingItemRepository;
     private final VisitRepository visitRepository;
     private final ProviderContractService providerContractService;
     private final PreAuthorizationAuditService auditService;
+    private final PreAuthReservationLedgerService reservationLedgerService;
     private final AuthorizationService authorizationService;
     private final ProviderContextGuard providerContextGuard;
     private final BenefitPolicyCoverageService benefitPolicyCoverageService;
     private final ArchitecturalGuardService architecturalGuard;
     private final com.waad.tba.modules.claim.service.ReviewerProviderIsolationService reviewerIsolationService;
     private final NotificationSseService notificationSseService;
+    private final PreAuthAccessScopeResolver preAuthAccessScopeResolver;
+    private final com.waad.tba.modules.preauthorization.security.PreAuthAccessGuard preAuthAccessGuard;
 
     // ==================== CREATE ====================
 
@@ -714,39 +721,21 @@ public class PreAuthorizationService {
                         "PreAuthorization is not in APPROVAL_IN_PROGRESS status: " + preAuth.getStatus());
             }
 
-            BigDecimal approvedAmount = resolveApprovedAmount(preAuth, dto);
-            BigDecimal copayPercentage = resolveCopayPercentage(preAuth, dto);
-
-            // Validate approved amount against contract price
-            if (preAuth.getContractPrice() != null && approvedAmount.compareTo(preAuth.getContractPrice()) > 0) {
-                log.warn("[PRE-AUTH] Approved amount {} exceeds contract price {}",
-                        approvedAmount, preAuth.getContractPrice());
-            }
-
-            // Calculate copay
-            BigDecimal copayAmount = preAuth.calculateCopay(approvedAmount, copayPercentage);
-
-            // Validate coverage if member has benefit policy
-            Member member = memberRepository.findById(preAuth.getMemberId()).orElse(null);
-            if (member != null && member.getBenefitPolicy() != null) {
-                try {
-                    benefitPolicyCoverageService.validateAmountLimits(
-                            member, member.getBenefitPolicy(), approvedAmount,
-                            preAuth.getRequestDate() != null ? preAuth.getRequestDate() : LocalDate.now());
-                    log.debug("✅ BenefitPolicy amount validation passed");
-                } catch (Exception e) {
-                    log.error("❌ BenefitPolicy coverage validation failed: {}", e.getMessage());
-                    throw new IllegalStateException("فشل التحقق من التغطية: " + e.getMessage());
-                }
-            }
-
-            // Approve
-            preAuth.approve(approvedAmount, copayAmount, approvedBy);
-            preAuth.setCopayPercentage(copayPercentage);
-
-            preAuth = preAuthorizationRepository.save(preAuth);
-            log.info("[PRE-AUTH] Approved pre-authorization {} with amount {} and copay {}",
-                    id, approvedAmount, copayAmount);
+            // Delegates to the single financial engine -- the same one the
+            // reviewer's /finalize path uses. dto.approvedAmount/copayPercentage
+            // (already documented on the DTO as no longer strict) have no
+            // effect on the decision: approveAndReserve derives it from each
+            // line's reviewDecision (defaulting an unreviewed line to fully
+            // requested, which is exactly what "/approve with no line review"
+            // has always meant here), resolves every applicable bucket and the
+            // general ceiling via ApplicableLimitResolver, and reserves under
+            // lock in the same transaction that sets the approved status --
+            // so a reservation failure rolls back the status change with it,
+            // never leaving APPROVED with nothing held.
+            var snapshot = reservationLedgerService.approveAndReserve(id, null, approvedBy);
+            preAuth = preAuthorizationRepository.findById(id).orElseThrow();
+            log.info("[PRE-AUTH] Approved pre-authorization {} with amount {} (snapshot {})",
+                    id, preAuth.getApprovedTotalAmount(), snapshot.getId());
 
             // Note: visit status is NOT auto-set to COMPLETED here.
             // A visit may have multiple pre-authorizations and claims.
@@ -756,8 +745,7 @@ public class PreAuthorizationService {
 
             // Log audit trail
             auditService.logApprove(id, preAuth.getReferenceNumber(), approvedBy,
-                    "Approved amount: " + approvedAmount +
-                            ", Copay: " + copayPercentage + "%");
+                    "Approved amount: " + preAuth.getApprovedTotalAmount());
 
             log.info("✅ [SPLIT-PHASE] Phase 2 complete: PreAuth {} approved successfully", id);
 
@@ -860,13 +848,22 @@ public class PreAuthorizationService {
     public PreAuthorizationResponseDto cancelPreAuthorization(Long id, String cancelReason, String cancelledBy) {
         log.info("[PRE-AUTH] Cancelling pre-authorization {}", id);
 
+        if (!preAuthAccessGuard.canCancel(id)) {
+            throw new AccessDeniedException("لا تملك صلاحية إلغاء هذه الموافقة المسبقة");
+        }
+        if (cancelReason == null || cancelReason.isBlank()) {
+            throw new IllegalArgumentException("سبب إلغاء الموافقة المسبقة مطلوب");
+        }
+
+        // Through the ledger, not around it. Setting the status here would
+        // leave the reservation rows RESERVED while the approval says it is
+        // cancelled -- a hold nothing will ever release, quietly shrinking the
+        // member's limit for the rest of the period.
+        int released = reservationLedgerService.cancelAndRelease(id, cancelReason, cancelledBy);
+
         PreAuthorization preAuth = preAuthorizationRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("PreAuthorization not found with ID: " + id));
-
-        preAuth.cancel(cancelReason, cancelledBy);
-
-        preAuth = preAuthorizationRepository.save(preAuth);
-        log.info("[PRE-AUTH] Cancelled pre-authorization {}", id);
+        log.info("[PRE-AUTH] Cancelled pre-authorization {} ({} reservation(s) released)", id, released);
 
         // Log audit trail
         auditService.logCancel(id, preAuth.getReferenceNumber(), cancelledBy, cancelReason);
@@ -919,47 +916,6 @@ public class PreAuthorizationService {
 
     // ==================== MARK AS USED ====================
 
-    /**
-     * Mark pre-authorization as USED (called when linked to a claim)
-     * Lifecycle: APPROVED/ACKNOWLEDGED → USED
-     * 
-     * This is typically called automatically by ClaimService when a claim is
-     * created with a pre-auth.
-     */
-    @Transactional
-    public PreAuthorizationResponseDto markAsUsed(Long id, String claimNumber, String updatedBy) {
-        log.info("[PRE-AUTH] Marking pre-authorization {} as USED (linked to claim {})", id, claimNumber);
-
-        PreAuthorization preAuth = preAuthorizationRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("PreAuthorization not found with ID: " + id));
-
-        // Validation: Only APPROVED or ACKNOWLEDGED pre-auths can be marked as USED
-        if (preAuth.getStatus() != PreAuthStatus.APPROVED && preAuth.getStatus() != PreAuthStatus.ACKNOWLEDGED) {
-            throw new IllegalStateException(
-                    String.format(
-                            "Only APPROVED or ACKNOWLEDGED pre-authorizations can be marked as USED. Current status: %s",
-                            preAuth.getStatus()));
-        }
-
-        // Transition to USED
-        PreAuthStatus oldStatus = preAuth.getStatus();
-        preAuth.setStatus(PreAuthStatus.USED);
-        preAuth.setUpdatedBy(updatedBy);
-
-        preAuth = preAuthorizationRepository.save(preAuth);
-        log.info("✅ Pre-authorization {} marked as USED (claim: {})", id, claimNumber);
-
-        // Log audit trail
-        auditService.logUpdate(id, preAuth.getReferenceNumber(), updatedBy,
-                "status", oldStatus.toString(), PreAuthStatus.USED.toString());
-
-        // Fetch related entities for response
-        Member member = memberRepository.findById(preAuth.getMemberId()).orElse(null);
-        Provider provider = providerRepository.findById(preAuth.getProviderId()).orElse(null);
-
-        return mapToResponseDto(preAuth, member, provider, null);
-    }
-
     // ==================== DELETE ====================
 
     /**
@@ -969,19 +925,15 @@ public class PreAuthorizationService {
     public void deletePreAuthorization(Long id, String deletedBy) {
         log.info("[PRE-AUTH] Deleting pre-authorization {}", id);
 
+        if (!preAuthAccessGuard.canDelete(id)) {
+            throw new AccessDeniedException("لا تملك صلاحية حذف هذه الموافقة المسبقة");
+        }
+
         PreAuthorization preAuth = preAuthorizationRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("PreAuthorization not found with ID: " + id));
 
-        // Check provider restrictions
-        Long providerId = providerContextGuard.getProviderFilter();
-        if (providerId != null) {
-            if (preAuth.getProviderId() == null || !preAuth.getProviderId().equals(providerId)) {
-                throw new SecurityException("Provider cannot access this pre-authorization");
-            }
-            if (preAuth.getStatus() != com.waad.tba.modules.preauthorization.entity.PreAuthorization.PreAuthStatus.DRAFT && 
-                preAuth.getStatus() != com.waad.tba.modules.preauthorization.entity.PreAuthorization.PreAuthStatus.PENDING) {
-                throw new IllegalStateException("لا يمكن حذف الموافقة المسبقة إلا إذا كانت مسودة أو قيد الانتظار");
-            }
+        if (preAuth.getStatus() != PreAuthStatus.DRAFT && preAuth.getStatus() != PreAuthStatus.PENDING) {
+            throw new IllegalStateException("لا يمكن حذف الموافقة المسبقة إلا إذا كانت مسودة أو قيد الانتظار");
         }
 
         preAuth.setActive(false);
@@ -1004,7 +956,7 @@ public class PreAuthorizationService {
         PreAuthorization preAuth = preAuthorizationRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("PreAuthorization not found with ID: " + id));
 
-        assertCanAccessPreAuthorization(preAuth);
+        assertCanViewPreAuthorization(preAuth);
 
         Member member = memberRepository.findById(preAuth.getMemberId()).orElse(null);
         Provider provider = providerRepository.findById(preAuth.getProviderId()).orElse(null);
@@ -1021,7 +973,7 @@ public class PreAuthorizationService {
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "PreAuthorization not found with reference: " + referenceNumber));
 
-        assertCanAccessPreAuthorization(preAuth);
+        assertCanViewPreAuthorization(preAuth);
 
         Member member = memberRepository.findById(preAuth.getMemberId()).orElse(null);
         Provider provider = providerRepository.findById(preAuth.getProviderId()).orElse(null);
@@ -1035,18 +987,10 @@ public class PreAuthorizationService {
      * employer admins only requests for members in their own employer.
      * Mirrors {@code PreAuthorizationAttachmentService.assertCanAccessPreAuthorization}.
      */
-    private void assertCanAccessPreAuthorization(PreAuthorization preAuth) {
-        User currentUser = authorizationService.getCurrentUser();
-
-        boolean allowed = authorizationService.isInternalStaff(currentUser)
-                || (authorizationService.isProvider(currentUser)
-                        && currentUser.getProviderId() != null
-                        && currentUser.getProviderId().equals(preAuth.getProviderId()))
-                || (authorizationService.isEmployerAdmin(currentUser)
-                        && authorizationService.canAccessMember(currentUser, preAuth.getMemberId()));
-
-        if (!allowed) {
-            log.warn("❌ Access denied: user {} attempted to access pre-authorization {}",
+    private void assertCanViewPreAuthorization(PreAuthorization preAuth) {
+        if (!preAuthAccessGuard.canView(preAuth.getId())) {
+            User currentUser = authorizationService.getCurrentUser();
+            log.warn("Access denied: user {} attempted to access pre-authorization {}",
                     currentUser != null ? currentUser.getUsername() : "unknown", preAuth.getId());
             throw new AccessDeniedException("Access to this pre-authorization is denied");
         }
@@ -1073,34 +1017,48 @@ public class PreAuthorizationService {
             LocalDate dateFrom,
             LocalDate dateTo,
             Pageable pageable) {
-        User currentUser = authorizationService.getCurrentUser();
+        AuthorizedPreAuthScope accessScope = preAuthAccessScopeResolver.requireViewScope();
         String normalizedMemberSearch = normalizeReportSearch(memberSearch);
 
         Page<PreAuthorization> preAuths;
-        if (currentUser != null && authorizationService.isProvider(currentUser)) {
-            Long enforcedProviderId = providerContextGuard.enforceProviderId(requestedProviderId);
-            preAuths = preAuthorizationRepository.findForOperationalReportByProvider(
-                    status, enforcedProviderId, employerId, normalizedMemberSearch, dateFrom, dateTo, pageable);
-        } else if (currentUser != null && authorizationService.isReviewer(currentUser)
-                && !authorizationService.isSuperAdmin(currentUser)) {
+        if (accessScope.kind() == PreAuthAccessScope.Kind.PROVIDERS) {
+            if (requestedProviderId != null && !accessScope.ids().contains(requestedProviderId)) {
+                throw new AccessDeniedException("مقدم الخدمة المطلوب خارج نطاق صلاحيتك");
+            }
             if (requestedProviderId != null) {
-                reviewerIsolationService.validateReviewerAccess(currentUser, requestedProviderId);
                 preAuths = preAuthorizationRepository.findForOperationalReportByProvider(
                         status, requestedProviderId, employerId, normalizedMemberSearch, dateFrom, dateTo, pageable);
+            } else if (accessScope.ids().size() == 1) {
+                Long providerId = accessScope.ids().iterator().next();
+                preAuths = preAuthorizationRepository.findForOperationalReportByProvider(
+                        status, providerId, employerId, normalizedMemberSearch, dateFrom, dateTo, pageable);
             } else {
-                List<Long> allowedProviderIds = reviewerIsolationService.getAllowedProviderIds(currentUser);
-                if (allowedProviderIds.isEmpty()) {
-                    return Page.empty(pageable);
-                }
                 preAuths = preAuthorizationRepository.findForOperationalReportByProviders(
-                        status, allowedProviderIds, employerId, normalizedMemberSearch, dateFrom, dateTo, pageable);
+                        status, accessScope.ids(), employerId, normalizedMemberSearch, dateFrom, dateTo, pageable);
             }
-        } else if (requestedProviderId != null) {
+        } else if (accessScope.kind() == PreAuthAccessScope.Kind.EMPLOYERS) {
+            if (employerId != null && !accessScope.ids().contains(employerId)) {
+                throw new AccessDeniedException("جهة العمل المطلوبة خارج نطاق صلاحيتك");
+            }
+            if (accessScope.ids().size() != 1) {
+                throw new IllegalStateException("EMPLOYER_SCOPE_MUST_RESOLVE_TO_ONE_EMPLOYER");
+            }
+            Long enforcedEmployerId = accessScope.ids().iterator().next();
+            if (requestedProviderId != null) {
+                preAuths = preAuthorizationRepository.findForOperationalReportByProvider(
+                        status, requestedProviderId, enforcedEmployerId, normalizedMemberSearch, dateFrom, dateTo, pageable);
+            } else {
+                preAuths = preAuthorizationRepository.findForOperationalReport(
+                        status, enforcedEmployerId, normalizedMemberSearch, dateFrom, dateTo, pageable);
+            }
+        } else if (accessScope.kind() == PreAuthAccessScope.Kind.GLOBAL && requestedProviderId != null) {
             preAuths = preAuthorizationRepository.findForOperationalReportByProvider(
                     status, requestedProviderId, employerId, normalizedMemberSearch, dateFrom, dateTo, pageable);
-        } else {
+        } else if (accessScope.kind() == PreAuthAccessScope.Kind.GLOBAL) {
             preAuths = preAuthorizationRepository.findForOperationalReport(
                     status, employerId, normalizedMemberSearch, dateFrom, dateTo, pageable);
+        } else {
+            throw new AccessDeniedException("لا تملك نطاقاً لعرض الموافقات المسبقة");
         }
         return preAuths.map(this::mapToResponseDtoLight);
     }
@@ -1144,9 +1102,7 @@ public class PreAuthorizationService {
      */
     @Transactional(readOnly = true)
     public Page<PreAuthorizationResponseDto> getPreAuthorizationsByProvider(Long providerId, Pageable pageable) {
-        Page<PreAuthorization> preAuths = preAuthorizationRepository.findByProviderIdAndActiveTrue(providerId,
-                pageable);
-        return preAuths.map(this::mapToResponseDtoLight);
+        return getOperationalReport(null, providerId, null, null, null, null, pageable);
     }
 
     /**
@@ -1154,8 +1110,7 @@ public class PreAuthorizationService {
      */
     @Transactional(readOnly = true)
     public Page<PreAuthorizationResponseDto> getPreAuthorizationsByStatus(PreAuthStatus status, Pageable pageable) {
-        Page<PreAuthorization> preAuths = preAuthorizationRepository.findByStatusAndActiveTrue(status, pageable);
-        return preAuths.map(this::mapToResponseDtoLight);
+        return getOperationalReport(status, null, null, null, null, null, pageable);
     }
 
     /**
@@ -1204,9 +1159,27 @@ public class PreAuthorizationService {
                         PreAuthStatus.NEEDS_CORRECTION)
                 : inboxStatuses;
 
-        Page<PreAuthorization> preAuths = preAuthorizationRepository.findByStatusIn(
-                resolvedStatuses,
-                pageable);
+        var currentUser = authorizationService.getCurrentUser();
+        if (currentUser == null) {
+            throw new org.springframework.security.access.AccessDeniedException("Authentication is required");
+        }
+
+        Page<PreAuthorization> preAuths;
+        if (currentUser.getProviderId() != null) {
+            preAuths = preAuthorizationRepository.findByStatusInAndProviderId(
+                    resolvedStatuses, currentUser.getProviderId(), pageable);
+        } else if (currentUser.getEmployerId() != null) {
+            preAuths = preAuthorizationRepository.findByStatusInAndEmployerId(
+                    resolvedStatuses, currentUser.getEmployerId(), pageable);
+        } else if (reviewerIsolationService.isSubjectToIsolation(currentUser)) {
+            List<Long> providerIds = reviewerIsolationService.getAllowedProviderIds(currentUser);
+            preAuths = providerIds.isEmpty()
+                    ? Page.empty(pageable)
+                    : preAuthorizationRepository.findByStatusInAndProviderIdIn(
+                            resolvedStatuses, providerIds, pageable);
+        } else {
+            preAuths = preAuthorizationRepository.findByStatusIn(resolvedStatuses, pageable);
+        }
 
         log.info("[SERVICE] Found {} pre-authorizations in inbox (Total Elements), Content Size: {}", preAuths.getTotalElements(), preAuths.getContent().size());
         
@@ -1220,6 +1193,8 @@ public class PreAuthorizationService {
      */
     @Transactional(readOnly = true)
     public PreAuthorizationResponseDto findValidPreAuthorization(Long memberId, Long providerId, String serviceCode) {
+        AuthorizedPreAuthScope accessScope = preAuthAccessScopeResolver.requireViewScope();
+        assertValidityLookupAllowed(accessScope, memberId, providerId);
         List<PreAuthorization> validPreAuths = preAuthorizationRepository.findValidPreAuthorizations(
                 memberId, providerId, serviceCode, LocalDate.now());
 
@@ -1300,9 +1275,16 @@ public class PreAuthorizationService {
     public PreAuthorizationResponseDto checkValidity(Long memberId, String serviceCode) {
         log.info("[PRE-AUTH] Checking validity for member {} and service {}", memberId, serviceCode);
 
-        // Find approved and valid pre-authorizations for this member and service
-        List<PreAuthorization> validPreAuths = preAuthorizationRepository
-                .findValidByMemberAndService(memberId, serviceCode, LocalDate.now());
+        AuthorizedPreAuthScope accessScope = preAuthAccessScopeResolver.requireViewScope();
+        LocalDate today = LocalDate.now();
+        List<PreAuthorization> validPreAuths;
+        if (accessScope.kind() == PreAuthAccessScope.Kind.PROVIDERS) {
+            validPreAuths = preAuthorizationRepository.findValidByMemberServiceAndProviderIds(
+                    memberId, serviceCode, accessScope.ids(), today);
+        } else {
+            assertEmployerCanAccessMember(accessScope, memberId);
+            validPreAuths = preAuthorizationRepository.findValidByMemberAndService(memberId, serviceCode, today);
+        }
 
         if (validPreAuths.isEmpty()) {
             log.info("[PRE-AUTH] No valid pre-authorization found for member {} and service {}", memberId, serviceCode);
@@ -1323,6 +1305,22 @@ public class PreAuthorizationService {
         return mapToResponseDto(preAuth, member, provider, null);
     }
 
+    private void assertValidityLookupAllowed(AuthorizedPreAuthScope accessScope, Long memberId, Long providerId) {
+        if (accessScope.kind() == PreAuthAccessScope.Kind.PROVIDERS
+                && !accessScope.ids().contains(providerId)) {
+            throw new AccessDeniedException("مقدم الخدمة المطلوب خارج نطاق صلاحيتك");
+        }
+        assertEmployerCanAccessMember(accessScope, memberId);
+    }
+
+    private void assertEmployerCanAccessMember(AuthorizedPreAuthScope accessScope, Long memberId) {
+        if (accessScope.kind() != PreAuthAccessScope.Kind.EMPLOYERS) return;
+        User currentUser = authorizationService.getCurrentUser();
+        if (currentUser == null || !authorizationService.canAccessMember(currentUser, memberId)) {
+            throw new AccessDeniedException("المستفيد المطلوب خارج نطاق جهة عملك");
+        }
+    }
+
     // ==================== MAINTENANCE ====================
 
     /**
@@ -1332,14 +1330,15 @@ public class PreAuthorizationService {
     public int markExpiredPreAuthorizations() {
         log.info("[PRE-AUTH] Marking expired pre-authorizations");
 
-        List<PreAuthorization> expiredList = preAuthorizationRepository.findExpiredPreAuthorizations(LocalDate.now());
+        LocalDate today = LocalDate.now();
+        List<PreAuthorization> expiredList = preAuthorizationRepository.findExpiredPreAuthorizations(today);
 
+        // One at a time through the ledger, so an expiring approval hands its
+        // hold back instead of stranding it. The event id is the sweep's own
+        // date: running the job twice in a day releases once.
         for (PreAuthorization preAuth : expiredList) {
-            preAuth.markAsExpired();
-        }
-
-        if (!expiredList.isEmpty()) {
-            preAuthorizationRepository.saveAll(expiredList);
+            reservationLedgerService.expireAndRelease(
+                    preAuth.getId(), "EXPIRY_SWEEP:" + today);
         }
 
         log.info("[PRE-AUTH] Marked {} expired pre-authorizations", expiredList.size());
@@ -1511,9 +1510,14 @@ public class PreAuthorizationService {
     public Page<PreAuthorizationResponseDto> search(String query, Pageable pageable) {
         log.debug("Searching pre-authorizations with query: {}", query);
         if (query == null || query.isBlank()) {
-            return getAllPreAuthorizations(pageable);
+            return getOperationalReport(null, null, null, null, null, null, pageable);
         }
-        return preAuthorizationRepository.search(query, pageable)
+        AuthorizedPreAuthScope accessScope = preAuthAccessScopeResolver.requireViewScope();
+        java.util.Collection<Long> queryScopeIds = accessScope.isGlobal()
+                ? java.util.Set.of(-1L)
+                : accessScope.ids();
+        return preAuthorizationRepository.searchScoped(
+                        query.trim(), accessScope.kind().name(), queryScopeIds, pageable)
                 .map(pa -> mapToResponseDto(pa,
                         memberRepository.findById(pa.getMemberId()).orElse(null),
                         providerRepository.findById(pa.getProviderId()).orElse(null),

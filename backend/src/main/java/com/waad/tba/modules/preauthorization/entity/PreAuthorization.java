@@ -588,16 +588,12 @@ public class PreAuthorization {
         this.updatedBy = cancelledBy;
     }
 
-    /**
-     * Mark as used (when claim is submitted)
-     */
-    public void markAsUsed(String usedBy) {
-        if (status != PreAuthStatus.APPROVED) {
-            throw new IllegalStateException("Only approved pre-authorizations can be marked as used");
-        }
-        this.status = PreAuthStatus.USED;
-        this.updatedBy = usedBy;
-    }
+    // markAsUsed(String) deliberately absent. USED means "this approval's hold
+    // was handed back because its claim posted consumption", and only
+    // PreAuthReservationLedgerService.releaseOnConversion can make that true.
+    // A setter here could move the status without moving the ledger, leaving a
+    // live hold behind a status that says it is gone -- and the claim would
+    // then post on top of it, charging the member twice for one service.
 
     /**
      * Mark as expired

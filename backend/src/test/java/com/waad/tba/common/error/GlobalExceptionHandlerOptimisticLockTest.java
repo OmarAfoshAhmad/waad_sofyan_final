@@ -19,7 +19,8 @@ class GlobalExceptionHandlerOptimisticLockTest {
 
     @Test
     void optimisticLockConflictMapsToHttp409WithArabicMessage() {
-        GlobalExceptionHandler handler = new GlobalExceptionHandler();
+        GlobalExceptionHandler handler = new GlobalExceptionHandler(
+                new com.waad.tba.modules.benefitpolicy.service.LedgerConstraintTranslator());
         HttpServletRequest request = mock(HttpServletRequest.class);
         when(request.getRequestURI()).thenReturn("/api/v1/provider-contracts/42");
 

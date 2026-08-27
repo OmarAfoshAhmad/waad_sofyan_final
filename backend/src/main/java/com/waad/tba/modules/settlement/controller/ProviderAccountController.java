@@ -60,7 +60,7 @@ import lombok.extern.slf4j.Slf4j;
 @RequestMapping("/api/v1/provider-accounts")
 @RequiredArgsConstructor
 @Tag(name = "Settlement - Provider Accounts (v1)", description = "APIs for viewing provider financial accounts - Version 1")
-@PreAuthorize("isAuthenticated()")
+@PreAuthorize("@permissionGuard.has('SETTLEMENT_VIEW')")
 public class ProviderAccountController {
 
         private final ProviderAccountService providerAccountService;
@@ -78,7 +78,7 @@ public class ProviderAccountController {
          * - hasBalance: true = only accounts with balance > 0
          */
         @GetMapping
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER')")
+        @PreAuthorize("@permissionGuard.has('SETTLEMENT_VIEW')")
         @Operation(summary = "List provider accounts", description = "Returns provider accounts with provider names and optional filters")
         @ApiResponses({
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Accounts retrieved successfully"),
@@ -112,7 +112,7 @@ public class ProviderAccountController {
          * - Transaction count
          */
         @GetMapping("/by-provider/{providerId}")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER')")
+        @PreAuthorize("@permissionGuard.has('SETTLEMENT_VIEW')")
         @Operation(summary = "Get account summary by provider ID", description = "Returns comprehensive account summary including balance verification")
         @ApiResponses({
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Account summary retrieved"),
@@ -133,7 +133,7 @@ public class ProviderAccountController {
          * Get account details by account ID.
          */
         @GetMapping("/{accountId}")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER')")
+        @PreAuthorize("@permissionGuard.has('SETTLEMENT_VIEW')")
         @Operation(summary = "Get account by ID", description = "Returns provider account details")
         @ApiResponses({
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Account retrieved"),
@@ -161,7 +161,7 @@ public class ProviderAccountController {
          * - Date range filtering
          */
         @GetMapping("/by-provider/{providerId}/transactions")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER')")
+        @PreAuthorize("@permissionGuard.has('SETTLEMENT_VIEW')")
         @Operation(summary = "Get transaction history", description = "Returns paginated transaction history for a provider")
         @ApiResponses({
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Transactions retrieved"),
@@ -210,7 +210,7 @@ public class ProviderAccountController {
          * Get recent transactions (last 10) for quick view.
          */
         @GetMapping("/by-provider/{providerId}/transactions/recent")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER')")
+        @PreAuthorize("@permissionGuard.has('SETTLEMENT_VIEW')")
         @Operation(summary = "Get recent transactions", description = "Returns last 10 transactions for quick view")
         public ResponseEntity<ApiResponse<List<AccountTransaction>>> getRecentTransactions(
                         @Parameter(description = "Provider ID", required = true) @PathVariable("providerId") Long providerId) {
@@ -232,7 +232,7 @@ public class ProviderAccountController {
          * Used for financial dashboard / reporting.
          */
         @GetMapping("/summary/total-outstanding")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER')")
+        @PreAuthorize("@permissionGuard.has('SETTLEMENT_VIEW')")
         @Operation(summary = "Get total outstanding balance", description = "Returns the total outstanding balance across all provider accounts")
         public ResponseEntity<ApiResponse<Map<String, Object>>> getTotalOutstanding() {
 
@@ -260,7 +260,7 @@ public class ProviderAccountController {
          * Checks: running_balance == SUM(credits) - SUM(debits)
          */
         @GetMapping("/{accountId}/verify-balance")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER')")
+        @PreAuthorize("@permissionGuard.has('SETTLEMENT_VIEW')")
         @Operation(summary = "Verify account balance", description = "Verifies that account balance matches transaction history")
         public ResponseEntity<ApiResponse<Map<String, Object>>> verifyBalance(
                         @Parameter(description = "Account ID", required = true) @PathVariable("accountId") Long accountId) {
@@ -295,7 +295,7 @@ public class ProviderAccountController {
          * because claims were deleted before the financial reversal fix was applied.
          */
         @PostMapping("/by-provider/{providerId}/recalculate-balance")
-        @PreAuthorize("hasRole('SUPER_ADMIN')")
+        @PreAuthorize("@permissionGuard.has('SETTLEMENT_MANAGE') and @permissionGuard.has('DANGER_ZONE_EXECUTE')")
         @Operation(summary = "Recalculate account balance from transactions", description = "Repairs running_balance by recomputing from transaction history. Use after deleting claims without proper reversal.")
         public ResponseEntity<ApiResponse<Map<String, Object>>> recalculateBalance(
                         @Parameter(description = "Provider ID", required = true) @PathVariable("providerId") Long providerId) {
@@ -313,7 +313,7 @@ public class ProviderAccountController {
          * Safe to call multiple times — idempotent per claim.
          */
         @PostMapping("/recalculate-all-balances")
-        @PreAuthorize("hasRole('SUPER_ADMIN')")
+        @PreAuthorize("@permissionGuard.has('SETTLEMENT_MANAGE') and @permissionGuard.has('DANGER_ZONE_EXECUTE')")
         @Operation(summary = "Recalculate all provider account balances", description = "Bulk repair: scans every provider account and reverses orphaned credits from deleted claims.")
         public ResponseEntity<ApiResponse<Map<String, Object>>> recalculateAllBalances() {
                 log.warn("MANUAL ALL-PROVIDERS BALANCE RECALC requested");
@@ -358,7 +358,7 @@ public class ProviderAccountController {
          * (optional) }
          */
         @PostMapping("/by-provider/{providerId}/pay")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
+        @PreAuthorize("@permissionGuard.has('SETTLEMENT_MANAGE')")
         @Operation(summary = "Record installment payment", description = "Debits the provider account for a partial/installment payment")
         public ResponseEntity<ApiResponse<AccountTransaction>> recordInstallmentPayment(
                         @Parameter(description = "Provider ID", required = true) @PathVariable("providerId") Long providerId,
@@ -407,7 +407,7 @@ public class ProviderAccountController {
          * Intended for legacy balances that are not tied to currently available claims.
          */
         @PostMapping("/by-provider/{providerId}/settle-remaining")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
+        @PreAuthorize("@permissionGuard.has('SETTLEMENT_MANAGE')")
         @Operation(summary = "Settle remaining balance", description = "Creates manual debit adjustment to settle the full outstanding balance for provider account")
         public ResponseEntity<ApiResponse<Map<String, Object>>> settleRemainingBalance(
                         @Parameter(description = "Provider ID", required = true) @PathVariable("providerId") Long providerId,

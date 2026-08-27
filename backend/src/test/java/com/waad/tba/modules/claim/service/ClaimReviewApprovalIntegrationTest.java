@@ -187,6 +187,7 @@ class ClaimReviewApprovalIntegrationTest extends PostgresIntegrationTestBase {
         Member member = memberRepository.save(Member.builder()
                 .fullName("Member " + suffix).barcode("BC-" + suffix).nationalNumber("NAT-" + suffix)
                 .employer(employer).benefitPolicy(policy).active(true).build());
+        initializeTemporalAssignments(member);
 
         Provider provider = providerRepository.save(Provider.builder()
                 .name("Hospital " + suffix).providerType(ProviderType.HOSPITAL)
@@ -318,12 +319,29 @@ class ClaimReviewApprovalIntegrationTest extends PostgresIntegrationTestBase {
                 .subtract(approved.getPatientCoPay()).subtract(approved.getRefusedAmount()))
                 .isEqualByComparingTo("80.00");
 
-        // 3) The bucket ledger commits settlementBase once (1000), deliberately
-        // distinct from insurerFinalPayment (720).
+        // 3) The ledger commits settlementBase once against EACH ceiling the
+        // line spends -- its bucket, and the policy's general annual limit --
+        // both deliberately distinct from insurerFinalPayment (720).
+        //
+        // Two rows, not one, and they are not a double charge: they measure
+        // two different ceilings. Asserting a bare row count here would say
+        // nothing about which, so each is named.
         List<BenefitBucketConsumption> committed = benefitBucketConsumptionRepository
                 .findByClaimIdAndStatus(claimId, BenefitBucketConsumption.Status.COMMITTED);
-        assertThat(committed).hasSize(1);
-        assertThat(committed.get(0).getApprovedAmount()).isEqualByComparingTo("1000.00");
+
+        List<BenefitBucketConsumption> bucketRows = committed.stream()
+                .filter(c -> c.getLimitScope() == BenefitBucketConsumption.LimitScope.BUCKET)
+                .toList();
+        assertThat(bucketRows).hasSize(1);
+        assertThat(bucketRows.get(0).getApprovedAmount()).isEqualByComparingTo("1000.00");
+
+        List<BenefitBucketConsumption> generalRows = committed.stream()
+                .filter(c -> c.getLimitScope() == BenefitBucketConsumption.LimitScope.POLICY_GENERAL)
+                .toList();
+        assertThat(generalRows).hasSize(1);
+        assertThat(generalRows.get(0).getApprovedAmount()).isEqualByComparingTo("1000.00");
+        assertThat(generalRows.get(0).getBucket())
+                .as("the general ceiling is a scope, not a bucket").isNull();
 
         // 4) Every applicable monetary limit is explained by an append-only
         // approval-time snapshot using the same settlement consumption.
@@ -374,8 +392,17 @@ class ClaimReviewApprovalIntegrationTest extends PostgresIntegrationTestBase {
             claimApprovalOrchestrator.commitApprovedClaim(claimId, 1L);
             claimApprovalOrchestrator.commitApprovedClaim(claimId, 1L);
         });
-        assertThat(benefitBucketConsumptionRepository.findByClaimIdAndStatus(
-                claimId, BenefitBucketConsumption.Status.COMMITTED)).hasSize(1);
+        // Still one movement per ceiling after replaying the gate twice. The
+        // claim spends two of them -- its bucket, and the policy's general
+        // annual limit -- so "exactly once" means one row EACH. A bare total
+        // of 1 would now be asserting that one of the two went missing rather
+        // than that neither was written twice.
+        List<BenefitBucketConsumption> afterReplay = benefitBucketConsumptionRepository
+                .findByClaimIdAndStatus(claimId, BenefitBucketConsumption.Status.COMMITTED);
+        assertThat(afterReplay).filteredOn(
+                c -> c.getLimitScope() == BenefitBucketConsumption.LimitScope.BUCKET).hasSize(1);
+        assertThat(afterReplay).filteredOn(
+                c -> c.getLimitScope() == BenefitBucketConsumption.LimitScope.POLICY_GENERAL).hasSize(1);
         assertThat(accountTransactionRepository.countByReferenceTypeAndReferenceId(
                 com.waad.tba.modules.settlement.entity.AccountTransaction.ReferenceType.CLAIM_APPROVAL,
                 claimId)).isEqualTo(1);
@@ -404,10 +431,40 @@ class ClaimReviewApprovalIntegrationTest extends PostgresIntegrationTestBase {
         // Difference is derived (requested - payable), so while no payable
         // snapshot exists the full requested amount is intentionally exposed.
         assertThat(correction.getDifferenceAmount()).isEqualByComparingTo("1000.00");
-        assertThat(benefitBucketConsumptionRepository.findByClaimIdAndStatus(
-                claimId, BenefitBucketConsumption.Status.COMMITTED)).isEmpty();
-        assertThat(benefitBucketConsumptionRepository.findByClaimIdAndStatus(
-                claimId, BenefitBucketConsumption.Status.REVERSED)).hasSize(2);
+        // The ledger is append-only: the COMMITTED movements stay on record and
+        // are neutralised by an equal compensating movement each, rather than
+        // being flipped to REVERSED. What proves the money was released is
+        // net = committed - reversals == 0, not the disappearance of the
+        // original rows.
+        var committedRows = benefitBucketConsumptionRepository.findByClaimIdAndStatus(
+                claimId, BenefitBucketConsumption.Status.COMMITTED);
+        var reversalRows = benefitBucketConsumptionRepository.findByClaimIdAndStatus(
+                claimId, BenefitBucketConsumption.Status.REVERSED);
+        // Previously this read "2 REVERSED": one flipped original plus one
+        // marker. Now the original stays COMMITTED and exactly one
+        // compensating movement neutralises it.
+        // One commitment per ceiling the claim spends -- its bucket and the
+        // policy's general annual limit -- and each of them still present.
+        assertThat(committedRows).as("the original commitments remain in the ledger")
+                .filteredOn(c -> c.getLimitScope() == BenefitBucketConsumption.LimitScope.BUCKET)
+                .hasSize(1);
+        assertThat(committedRows)
+                .filteredOn(c -> c.getLimitScope() == BenefitBucketConsumption.LimitScope.POLICY_GENERAL)
+                .hasSize(1);
+        assertThat(reversalRows).as("one compensating movement per commitment")
+                .hasSameSizeAs(committedRows);
+        assertThat(reversalRows).allSatisfy(reversal -> {
+            assertThat(reversal.getReversalOf()).isNotNull();
+            assertThat(reversal.getReversalReason())
+                    .isEqualTo(BenefitBucketConsumption.ReversalReason.CLAIM_REVERSAL);
+        });
+        java.math.BigDecimal netConsumption = committedRows.stream()
+                .map(BenefitBucketConsumption::getApprovedAmount)
+                .reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add)
+                .subtract(reversalRows.stream().map(BenefitBucketConsumption::getApprovedAmount)
+                        .reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add));
+        assertThat(netConsumption).as("the reversal fully released the consumption")
+                .isEqualByComparingTo("0.00");
         assertThat(accountTransactionRepository.countByReferenceTypeAndReferenceId(
                 com.waad.tba.modules.settlement.entity.AccountTransaction.ReferenceType.CLAIM_REVERSAL,
                 claimId)).isEqualTo(1);
@@ -457,10 +514,48 @@ class ClaimReviewApprovalIntegrationTest extends PostgresIntegrationTestBase {
                 .isEqualTo(ClaimStatus.APPROVED);
         assertThat(claimRepository.findById(claimId).orElseThrow().getServiceDate())
                 .isEqualTo(correctedServiceDate);
-        assertThat(benefitBucketConsumptionRepository.findByClaimIdAndStatus(
-                claimId, BenefitBucketConsumption.Status.COMMITTED)).hasSize(1);
-        assertThat(benefitBucketConsumptionRepository.findByClaimIdAndStatus(
-                claimId, BenefitBucketConsumption.Status.COMMITTED).get(0).getApprovedAmount())
+        // After the correction there are TWO commitments on record -- the first
+        // approval's (neutralised by its compensating movement) and the
+        // re-approval's -- because nothing is ever rewritten. What must equal
+        // 2000 is the NET, not the latest row in isolation.
+        // Scoped to the bucket: the same two approvals also moved the policy's
+        // general ceiling, and netting the two ceilings together would report
+        // 4000 for a member who spent 2000 -- one amount counted once per
+        // ceiling it was measured against.
+        var committedAfterCorrection = benefitBucketConsumptionRepository.findByClaimIdAndStatus(
+                claimId, BenefitBucketConsumption.Status.COMMITTED).stream()
+                .filter(c -> c.getLimitScope() == BenefitBucketConsumption.LimitScope.BUCKET)
+                .toList();
+        var reversedAfterCorrection = benefitBucketConsumptionRepository.findByClaimIdAndStatus(
+                claimId, BenefitBucketConsumption.Status.REVERSED).stream()
+                .filter(c -> c.getLimitScope() == BenefitBucketConsumption.LimitScope.BUCKET)
+                .toList();
+        assertThat(committedAfterCorrection).hasSize(2);
+        java.math.BigDecimal netAfterCorrection = committedAfterCorrection.stream()
+                .map(BenefitBucketConsumption::getApprovedAmount)
+                .reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add)
+                .subtract(reversedAfterCorrection.stream().map(BenefitBucketConsumption::getApprovedAmount)
+                        .reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add));
+        assertThat(netAfterCorrection)
+                .as("only the corrected consumption counts against the limit")
+                .isEqualByComparingTo("2000.00");
+
+        // And the general ceiling nets to the same corrected figure. The two
+        // ceilings must move together: a correction that neutralised one and
+        // not the other would leave the member's annual limit carrying a
+        // consumption their bucket says never happened.
+        java.math.BigDecimal netGeneralAfterCorrection = benefitBucketConsumptionRepository
+                .findByClaimIdAndStatus(claimId, BenefitBucketConsumption.Status.COMMITTED).stream()
+                .filter(c -> c.getLimitScope() == BenefitBucketConsumption.LimitScope.POLICY_GENERAL)
+                .map(BenefitBucketConsumption::getApprovedAmount)
+                .reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add)
+                .subtract(benefitBucketConsumptionRepository
+                        .findByClaimIdAndStatus(claimId, BenefitBucketConsumption.Status.REVERSED).stream()
+                        .filter(c -> c.getLimitScope() == BenefitBucketConsumption.LimitScope.POLICY_GENERAL)
+                        .map(BenefitBucketConsumption::getApprovedAmount)
+                        .reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add));
+        assertThat(netGeneralAfterCorrection)
+                .as("the annual ceiling was corrected in step with the bucket")
                 .isEqualByComparingTo("2000.00");
         assertThat(claimRepository.findById(claimId).orElseThrow().getApprovedAmount())
                 .isEqualByComparingTo("1440.00");

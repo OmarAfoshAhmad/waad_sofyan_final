@@ -50,7 +50,7 @@ import java.io.IOException;
 @RequiredArgsConstructor
 @Tag(name = "Price List Excel Import", description = "System-generated Excel template download and import for contract pricing")
 @SecurityRequirement(name = "bearer-jwt")
-@PreAuthorize("isAuthenticated()")
+@PreAuthorize("@permissionGuard.has('CONTRACT_VIEW') or @permissionGuard.has('PRICE_LIST_IMPORT')")
 public class ProviderContractPricingExcelController {
 
     private final PriceListExcelTemplateService templateService;
@@ -58,7 +58,7 @@ public class ProviderContractPricingExcelController {
     private final BulkPriceListImportService bulkImportService;
 
     @GetMapping("/bulk-import/template")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
+    @PreAuthorize("@permissionGuard.has('PRICE_LIST_IMPORT')")
     @Operation(summary = "Download canonical multi-provider services and prices template")
     public ResponseEntity<byte[]> downloadBulkImportTemplate() throws IOException {
         byte[] content = bulkImportService.generateTemplate();
@@ -78,7 +78,7 @@ public class ProviderContractPricingExcelController {
      * GET /api/provider-contracts/{contractId}/pricing/import/template
      */
     @GetMapping("/{contractId}/pricing/import/template")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
+    @PreAuthorize("@permissionGuard.has('CONTRACT_VIEW')")
     @Operation(
         summary = "Download Price List Template",
         description = "Downloads a contract-specific Excel template for importing pricing items. " +
@@ -113,7 +113,7 @@ public class ProviderContractPricingExcelController {
      * GET /api/provider-contracts/{contractId}/pricing/export
      */
     @GetMapping("/{contractId}/pricing/export")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
+    @PreAuthorize("@permissionGuard.has('CONTRACT_VIEW')")
     @Operation(
         summary = "Export Price List to Excel",
         description = "Exports all existing pricing items for a contract into an Excel file."
@@ -148,7 +148,7 @@ public class ProviderContractPricingExcelController {
         value = "/{contractId}/pricing/import/preview",
         consumes = MediaType.MULTIPART_FORM_DATA_VALUE
     )
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
+    @PreAuthorize("@permissionGuard.has('PRICE_LIST_IMPORT')")
     @Operation(
         summary = "Preview Price List Import",
         description = "Analyzes Excel file and returns proposed classification for review."
@@ -174,7 +174,7 @@ public class ProviderContractPricingExcelController {
      * POST /api/provider-contracts/{contractId}/pricing/import/confirm
      */
     @PostMapping("/{contractId}/pricing/import/confirm")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
+    @PreAuthorize("@permissionGuard.has('PRICE_LIST_IMPORT')")
     @Operation(
         summary = "Confirm Price List Import",
         description = "Applies user modifications and confirms the import."
@@ -201,7 +201,7 @@ public class ProviderContractPricingExcelController {
         value = "/{contractId}/pricing/import",
         consumes = MediaType.MULTIPART_FORM_DATA_VALUE
     )
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
+    @PreAuthorize("denyAll()")
     @Operation(
         summary = "Import Price List from Template (Legacy)",
         description = "Imports pricing items from a system-generated Excel template directly. " +
@@ -246,7 +246,7 @@ public class ProviderContractPricingExcelController {
         value = "/bulk-import",
         consumes = MediaType.MULTIPART_FORM_DATA_VALUE
     )
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
+    @PreAuthorize("@permissionGuard.has('PRICE_LIST_IMPORT')")
     @Operation(
         summary = "Bulk Import — Multi-Provider Classified Price List",
         description = "Accepts the full classified price-list Excel file " +

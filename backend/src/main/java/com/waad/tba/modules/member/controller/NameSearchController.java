@@ -26,7 +26,7 @@ import java.util.List;
 @RequestMapping("/api/v1/members")
 @RequiredArgsConstructor
 @Tag(name = "Name Search", description = "Fuzzy name search and autocomplete endpoints")
-@PreAuthorize("isAuthenticated()")
+@PreAuthorize("@permissionGuard.has('MEMBER_VIEW')")
 public class NameSearchController {
 
     private final NameSearchService nameSearchService;
@@ -59,7 +59,7 @@ public class NameSearchController {
             )
     })
     @GetMapping("/autocomplete")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF')")
+    @PreAuthorize("@permissionGuard.has('MEMBER_VIEW')")
     public ResponseEntity<List<MemberAutocompleteDto>> searchByName(
             @Parameter(
                     description = "Search query (Arabic or English name, minimum 3 characters)",

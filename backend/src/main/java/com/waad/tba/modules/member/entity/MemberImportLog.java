@@ -52,6 +52,29 @@ public class MemberImportLog {
     @Column(name = "file_size_bytes")
     private Long fileSizeBytes;
 
+    /**
+     * SHA-256 of the uploaded file's bytes alone (metadata / diagnostics).
+     * Uniqueness is NOT enforced on this column directly -- see
+     * importScopeHash, which is what the file_hash feeds into.
+     */
+    @Column(name = "file_hash", length = 64)
+    private String fileHash;
+
+    @Column(name = "employer_id")
+    private Long employerId;
+
+    /**
+     * Fingerprint of every input that changes an import's outcome: fileHash
+     * + employerId + benefitPolicyId + resolvedHeaderRowNumber +
+     * clearOldMembers. A partial unique index on this column (status =
+     * 'COMPLETED') is what actually enforces idempotency -- see V168 for why
+     * V167's original fileHash + employerId key was insufficient (NULL
+     * employerId, different benefit policy/header row/clearOldMembers all
+     * change the outcome and must NOT be folded into "the same import").
+     */
+    @Column(name = "import_scope_hash", length = 64)
+    private String importScopeHash;
+
     // Statistics
     @Builder.Default
     @Column(name = "total_rows")

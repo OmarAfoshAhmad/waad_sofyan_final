@@ -6,6 +6,8 @@ import PlusOutlined from '@ant-design/icons/PlusOutlined';
 import UserAddOutlined from '@ant-design/icons/UserAddOutlined';
 import MedicineBoxOutlined from '@ant-design/icons/MedicineBoxOutlined';
 import FileTextOutlined from '@ant-design/icons/FileTextOutlined';
+import useAuth from 'hooks/useAuth';
+import { getMemberCapabilities } from 'pages/members/memberCapabilities';
 
 /**
  * QuickActions Component
@@ -20,6 +22,8 @@ import FileTextOutlined from '@ant-design/icons/FileTextOutlined';
  */
 export default function QuickActions() {
   const theme = useTheme();
+  const { user } = useAuth();
+  const memberCapabilities = getMemberCapabilities(user);
 
   const actions = [
     {
@@ -27,7 +31,8 @@ export default function QuickActions() {
       description: 'تسجيل عضو جديد في النظام',
       icon: UserAddOutlined,
       color: 'primary',
-      link: '/members/add'
+      link: '/members/add',
+      visible: memberCapabilities.create
     },
     {
       title: 'إضافة زيارة طبية',
@@ -62,7 +67,7 @@ export default function QuickActions() {
         إجراءات سريعة
       </Typography>
       <Grid container spacing={3}>
-        {actions.map((action) => {
+        {actions.filter((action) => action.visible !== false).map((action) => {
           const mainColor = getColor(action.color);
           const Icon = action.icon;
 

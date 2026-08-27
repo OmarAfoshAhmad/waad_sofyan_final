@@ -108,6 +108,12 @@ public class MemberImportPreviewDto {
      * Available benefit policies for selection (NEW)
      */
     private List<BenefitPolicyOptionDto> availableBenefitPolicies;
+
+    /** Distinct resolved employers of every importable row; execution rechecks it. */
+    private java.util.Set<Long> resolvedEmployerIds;
+
+    /** Exact zero-based header row used by the parser and bound into the ticket. */
+    private Integer resolvedHeaderRowNumber;
     
     /**
      * Single row in preview

@@ -69,7 +69,11 @@ import {
   ReceiptLong as ClaimIcon,
   FactCheck as PreAuthIcon,
   Search as SearchIcon,
-  Visibility as VisibilityIcon
+  Visibility as VisibilityIcon,
+  Undo as UndoIcon,
+  SwapHoriz as SwapHorizIcon,
+  Reorder as ReorderIcon,
+  CompareArrows as CompareArrowsIcon
 } from '@mui/icons-material';
 import DatePicker from 'components/common/SystemDatePicker';
 import { TablePagination } from '@mui/material';
@@ -83,18 +87,28 @@ import MemberAvatar from 'components/tba/MemberAvatar';
 import DependentModal from './DependentModal';
 import {
   getMember,
-  deleteMember,
+  terminateMembership,
   hardDeleteMember,
-  restoreMember,
   changeMemberStatus,
+  reinstateTerminatedMember,
+  restoreFamily,
+  transferDependent,
+  correctRelationship,
+  changeFamilyPolicy,
+  reorderFamily,
+  searchMembers,
   MEMBER_TYPES,
   GENDERS,
   RELATIONSHIPS
 } from 'services/api/unified-members.service';
 import { openSnackbar } from 'api/snackbar';
+import { getBenefitPoliciesByEmployer } from 'services/api/benefit-policies.service';
 
 import { RELATIONSHIP_AR } from './member.shared';
 import api from 'utils/axios';
+import MemberLifecycleDialog from './MemberLifecycleDialog';
+import useAuth from 'hooks/useAuth';
+import { getMemberCapabilities } from './memberCapabilities';
 
 const unwrapApi = (response) => response?.data?.data ?? response?.data ?? response;
 
@@ -155,6 +169,8 @@ const UnifiedMemberView = () => {
   const theme = useTheme();
   const navigate = useNavigate();
   const { id } = useParams();
+  const { user } = useAuth();
+  const capabilities = getMemberCapabilities(user);
 
   const [loading, setLoading] = useState(true);
   const [member, setMember] = useState(null);
@@ -188,6 +204,30 @@ const UnifiedMemberView = () => {
   const [statusMenuAnchor, setStatusMenuAnchor] = useState(null);
   const [statusMenuTargetId, setStatusMenuTargetId] = useState(null);
   const [statusChangeDialog, setStatusChangeDialog] = useState({ open: false, targetId: null, targetStatus: null, reason: '' });
+
+  // Batch ج -- the four atomic family operations, previously endpoints with no UI caller.
+  const [correctionDialog, setCorrectionDialog] = useState({ open: false, dependent: null, relationship: '', reason: '' });
+  const [correctionLoading, setCorrectionLoading] = useState(false);
+
+  const [transferDialog, setTransferDialog] = useState({
+    open: false,
+    dependent: null,
+    searchQuery: '',
+    searchResults: [],
+    searching: false,
+    newPrincipalId: null,
+    newPrincipalLabel: '',
+    relationship: '',
+    effectiveDate: '',
+    reason: ''
+  });
+  const [transferLoading, setTransferLoading] = useState(false);
+
+  const [policyDialog, setPolicyDialog] = useState({ open: false, policyId: '', policyOptions: [], effectiveDate: '', reason: '' });
+  const [policyLoading, setPolicyLoading] = useState(false);
+
+  const [reorderDialog, setReorderDialog] = useState({ open: false, ordered: [] });
+  const [reorderLoading, setReorderLoading] = useState(false);
   const [statusChangeLoading, setStatusChangeLoading] = useState(false);
 
   const MEMBER_STATUS_OPTIONS = [
@@ -197,10 +237,53 @@ const UnifiedMemberView = () => {
     { value: 'TERMINATED', label: 'منتهي' }
   ];
 
-  const applyStatusChange = async (targetId, targetStatus, reason) => {
+  /**
+   * Only the transitions MemberStatusTransitionService actually accepts from
+   * each status -- offering more here just means the request reaches the
+   * server and bounces. TERMINATED -> ACTIVE is the one exception: it is not
+   * changeStatus's ACTIVE case (restoreFromSuspended, which refuses a
+   * TERMINATED member outright) but the separate reinstate operation, gated
+   * to the explicit exceptional permission. DUPLICATE_MERGED has no valid
+   * outgoing transition at all.
+   */
+  const VALID_STATUS_TRANSITIONS = {
+    ACTIVE: [
+      { value: 'SUSPENDED', label: 'تعليق' },
+      { value: 'TERMINATED', label: 'إنهاء عضوية' }
+    ],
+    SUSPENDED: [
+      { value: 'ACTIVE', label: 'استعادة' },
+      { value: 'TERMINATED', label: 'إنهاء عضوية' }
+    ],
+    PENDING: [
+      { value: 'ACTIVE', label: 'اعتماد وتفعيل' },
+      { value: 'TERMINATED', label: 'إنهاء عضوية' }
+    ],
+    TERMINATED: capabilities.reinstateTerminated ? [{ value: 'ACTIVE', label: 'إعادة عضوية استثنائية', reinstate: true }] : [],
+    DUPLICATE_MERGED: []
+  };
+
+  // Standard reasons for frequent, low-risk transitions -- picking one is
+  // instant, but "أخرى" always falls back to free text so nothing forces a
+  // reason that doesn't fit. TERMINATE, reinstate, and the four family
+  // operations stay free-text-only: rare and high-impact, not sped up.
+  const STANDARD_REASONS = {
+    SUSPENDED: ['غياب عن العمل', 'إجراء إداري مؤقت', 'بطلب جهة العمل'],
+    RESTORE: ['انتهاء فترة الإيقاف', 'تصحيح إداري']
+  };
+  const PENDING_ACTIVATION_REASON = 'اعتماد بيانات العضو';
+
+  const currentStatusOf = (targetId) =>
+    targetId === member.id ? member.status : dependents.find((d) => d.id === targetId)?.status;
+
+  const applyStatusChange = async (targetId, targetStatus, reason, reinstate) => {
     setStatusChangeLoading(true);
     try {
-      await changeMemberStatus(targetId, targetStatus, reason);
+      if (reinstate) {
+        await reinstateTerminatedMember(targetId, reason);
+      } else {
+        await changeMemberStatus(targetId, targetStatus, reason);
+      }
       openSnackbar({ open: true, message: 'تم تحديث حالة المستفيد بنجاح', variant: 'alert', alert: { color: 'success' } });
       setStatusChangeDialog({ open: false, targetId: null, targetStatus: null, reason: '' });
       fetchMemberData();
@@ -216,20 +299,230 @@ const UnifiedMemberView = () => {
     }
   };
 
+  const handleRestoreFamily = async (transitionId) => {
+    setStatusChangeLoading(true);
+    try {
+      const res = await restoreFamily(transitionId);
+      const data = res?.data || res;
+      const restoredCount = data?.restoredMemberIds?.length || 0;
+      const skippedCount = data?.skipped?.length || 0;
+      openSnackbar({
+        open: true,
+        message: `تمت استعادة ${restoredCount} من أفراد الأسرة${skippedCount ? `، وتعذّرت استعادة ${skippedCount}` : ''}`,
+        variant: 'alert',
+        alert: { color: skippedCount ? 'warning' : 'success' }
+      });
+      fetchMemberData();
+    } catch (err) {
+      openSnackbar({
+        open: true,
+        message: err?.response?.data?.message || 'تعذرت استعادة الأسرة',
+        variant: 'alert',
+        alert: { color: 'error' }
+      });
+    } finally {
+      setStatusChangeLoading(false);
+    }
+  };
+
+  // ── تصحيح صلة القرابة ──────────────────────────────────────────────────
+  const openCorrectionDialog = (dependent) => {
+    setCorrectionDialog({ open: true, dependent, relationship: dependent.relationship || '', reason: '' });
+  };
+
+  const submitCorrection = async () => {
+    const { dependent, relationship, reason } = correctionDialog;
+    if (!reason.trim()) {
+      openSnackbar({ open: true, message: 'سبب التصحيح إلزامي', variant: 'alert', alert: { color: 'warning' } });
+      return;
+    }
+    setCorrectionLoading(true);
+    try {
+      await correctRelationship(dependent.id, { relationship, reason: reason.trim(), expectedVersion: dependent.version });
+      openSnackbar({ open: true, message: 'تم تصحيح صلة القرابة', variant: 'alert', alert: { color: 'success' } });
+      setCorrectionDialog({ open: false, dependent: null, relationship: '', reason: '' });
+      fetchMemberData();
+    } catch (err) {
+      openSnackbar({
+        open: true,
+        message: err?.response?.data?.message || 'تعذر تصحيح صلة القرابة',
+        variant: 'alert',
+        alert: { color: 'error' }
+      });
+    } finally {
+      setCorrectionLoading(false);
+    }
+  };
+
+  // ── نقل تابع إلى رئيس أسرة آخر ─────────────────────────────────────────
+  const openTransferDialog = (dependent) => {
+    setTransferDialog({
+      open: true,
+      dependent,
+      searchQuery: '',
+      searchResults: [],
+      searching: false,
+      newPrincipalId: null,
+      newPrincipalLabel: '',
+      relationship: dependent.relationship || '',
+      effectiveDate: new Date().toISOString().slice(0, 10),
+      reason: ''
+    });
+  };
+
+  const searchNewPrincipal = async (query) => {
+    setTransferDialog((prev) => ({ ...prev, searchQuery: query, searching: true }));
+    try {
+      const res = await searchMembers({ nameAr: query, nationalNumber: query, cardNumber: query, type: 'PRINCIPAL', size: 10 });
+      const data = res?.data || res;
+      const results = data?.content || data?.items || (Array.isArray(data) ? data : []);
+      setTransferDialog((prev) => (prev.searchQuery === query ? { ...prev, searchResults: results, searching: false } : prev));
+    } catch {
+      setTransferDialog((prev) => ({ ...prev, searchResults: [], searching: false }));
+    }
+  };
+
+  const submitTransfer = async () => {
+    const { dependent, newPrincipalId, relationship, effectiveDate, reason } = transferDialog;
+    if (!newPrincipalId || !relationship || !effectiveDate || !reason.trim()) {
+      openSnackbar({ open: true, message: 'جميع الحقول إلزامية لنقل التابع', variant: 'alert', alert: { color: 'warning' } });
+      return;
+    }
+    setTransferLoading(true);
+    try {
+      await transferDependent(dependent.id, {
+        newPrincipalId,
+        relationship,
+        effectiveDate,
+        reason: reason.trim(),
+        expectedVersion: dependent.version
+      });
+      openSnackbar({ open: true, message: 'تم نقل التابع بنجاح', variant: 'alert', alert: { color: 'success' } });
+      setTransferDialog((prev) => ({ ...prev, open: false }));
+      fetchMemberData();
+    } catch (err) {
+      openSnackbar({
+        open: true,
+        message: err?.response?.data?.message || 'تعذر نقل التابع',
+        variant: 'alert',
+        alert: { color: 'error' }
+      });
+    } finally {
+      setTransferLoading(false);
+    }
+  };
+
+  // ── تغيير وثيقة الأسرة ─────────────────────────────────────────────────
+  const openPolicyDialog = async () => {
+    setPolicyDialog({ open: true, policyId: '', policyOptions: [], effectiveDate: new Date().toISOString().slice(0, 10), reason: '' });
+    try {
+      const policies = await getBenefitPoliciesByEmployer(member.employerId);
+      const list = Array.isArray(policies) ? policies : policies?.content || [];
+      setPolicyDialog((prev) => ({ ...prev, policyOptions: list }));
+    } catch {
+      // Leave the list empty -- the select will show nothing to choose from,
+      // which is a safer failure than pretending policies loaded.
+    }
+  };
+
+  const submitPolicyChange = async () => {
+    const { policyId, effectiveDate, reason } = policyDialog;
+    if (!policyId || !effectiveDate || !reason.trim()) {
+      openSnackbar({ open: true, message: 'جميع الحقول إلزامية لتغيير وثيقة الأسرة', variant: 'alert', alert: { color: 'warning' } });
+      return;
+    }
+    const expectedVersions = { [member.id]: member.version };
+    dependents.forEach((d) => {
+      expectedVersions[d.id] = d.version;
+    });
+    setPolicyLoading(true);
+    try {
+      await changeFamilyPolicy(member.id, { policyId, effectiveDate, reason: reason.trim(), expectedVersions });
+      openSnackbar({ open: true, message: 'تم تغيير وثيقة الأسرة', variant: 'alert', alert: { color: 'success' } });
+      setPolicyDialog({ open: false, policyId: '', policyOptions: [], effectiveDate: '', reason: '' });
+      fetchMemberData();
+    } catch (err) {
+      openSnackbar({
+        open: true,
+        message: err?.response?.data?.message || 'تعذر تغيير وثيقة الأسرة -- تأكد أن بيانات الأسرة لم تتغير أثناء العملية',
+        variant: 'alert',
+        alert: { color: 'error' }
+      });
+    } finally {
+      setPolicyLoading(false);
+    }
+  };
+
+  // ── إعادة ترتيب التابعين ───────────────────────────────────────────────
+  const openReorderDialog = () => {
+    setReorderDialog({ open: true, ordered: [...dependents] });
+  };
+
+  const moveDependent = (index, direction) => {
+    setReorderDialog((prev) => {
+      const ordered = [...prev.ordered];
+      const target = index + direction;
+      if (target < 0 || target >= ordered.length) return prev;
+      [ordered[index], ordered[target]] = [ordered[target], ordered[index]];
+      return { ...prev, ordered };
+    });
+  };
+
+  const submitReorder = async () => {
+    const expectedVersions = {};
+    reorderDialog.ordered.forEach((d) => {
+      expectedVersions[d.id] = d.version;
+    });
+    setReorderLoading(true);
+    try {
+      await reorderFamily(member.id, { dependentIds: reorderDialog.ordered.map((d) => d.id), expectedVersions });
+      openSnackbar({ open: true, message: 'تم تحديث ترتيب الأسرة', variant: 'alert', alert: { color: 'success' } });
+      setReorderDialog({ open: false, ordered: [] });
+      fetchMemberData();
+    } catch (err) {
+      openSnackbar({
+        open: true,
+        message: err?.response?.data?.message || 'تعذرت إعادة الترتيب -- تأكد أن بيانات الأسرة لم تتغير أثناء العملية',
+        variant: 'alert',
+        alert: { color: 'error' }
+      });
+    } finally {
+      setReorderLoading(false);
+    }
+  };
+
   const handleOpenStatusMenu = (event, targetId) => {
     setStatusMenuAnchor(event.currentTarget);
     setStatusMenuTargetId(targetId);
   };
 
-  const handleSelectStatus = (targetStatus) => {
+  const handleSelectStatus = (targetStatus, reinstate) => {
     const targetId = statusMenuTargetId;
+    const currentStatus = currentStatusOf(targetId);
     setStatusMenuAnchor(null);
     setStatusMenuTargetId(null);
-    if (targetStatus === 'SUSPENDED') {
-      setStatusChangeDialog({ open: true, targetId, targetStatus, reason: '' });
-      return;
-    }
-    applyStatusChange(targetId, targetStatus, null);
+    const isPendingActivation = !reinstate && currentStatus === 'PENDING' && targetStatus === 'ACTIVE';
+    setStatusChangeDialog({
+      open: true,
+      targetId,
+      targetStatus,
+      reason: isPendingActivation ? PENDING_ACTIVATION_REASON : '',
+      reinstate: Boolean(reinstate),
+      currentStatus,
+      isPendingActivation
+    });
+  };
+
+  const openReinstateDialog = (targetId) => {
+    setStatusChangeDialog({
+      open: true,
+      targetId,
+      targetStatus: 'ACTIVE',
+      reason: '',
+      reinstate: true,
+      currentStatus: 'TERMINATED',
+      isPendingActivation: false
+    });
   };
 
   const handleChangePage = (event, newPage) => {
@@ -401,26 +694,15 @@ const UnifiedMemberView = () => {
     setModalOpen(false);
   };
 
-  const handleRestore = async (id) => {
-    try {
-      await restoreMember(id);
-      openSnackbar({ open: true, message: 'تم استعادة التابع بنجاح', variant: 'alert', alert: { color: 'success' } });
-      fetchMemberData();
-    } catch (error) {
-      console.error('Error restoring member:', error);
-      openSnackbar({ open: true, message: 'خطأ في استعادة التابع', variant: 'alert', alert: { color: 'error' } });
-    }
-  };
-
   const handleHardDeleteDepConfirm = (dep) => {
     setHardDeletingDep(dep);
     setHardDeleteDepDialogOpen(true);
   };
 
-  const handleHardDeleteDepExecute = async () => {
+  const handleHardDeleteDepExecute = async (reason) => {
     if (!hardDeletingDep) return;
     try {
-      await hardDeleteMember(hardDeletingDep.id);
+      await hardDeleteMember(hardDeletingDep.id, reason);
       openSnackbar({ open: true, message: 'تم الحذف النهائي للتابع بنجاح', variant: 'alert', alert: { color: 'success' } });
       fetchMemberData();
     } catch (error) {
@@ -442,17 +724,17 @@ const UnifiedMemberView = () => {
     setDeleteDialogOpen(true);
   };
 
-  const handleDeleteExecute = async () => {
+  const handleDeleteExecute = async (reason) => {
     if (!deletingMember) return;
 
     try {
-      await deleteMember(deletingMember.id);
+      await terminateMembership(deletingMember.id, reason);
 
       const isPrincipal = deletingMember.type === MEMBER_TYPES.PRINCIPAL;
 
       openSnackbar({
         open: true,
-        message: isPrincipal ? 'تم حذف الموظف وجميع تابعيه بنجاح' : 'تم حذف المنتفع التابع بنجاح',
+        message: isPrincipal ? 'تم إنهاء عضوية الموظف والتابعين العاملين' : 'تم إنهاء عضوية المنتفع التابع',
         variant: 'alert',
         alert: { color: 'success' }
       });
@@ -509,12 +791,12 @@ const UnifiedMemberView = () => {
             <Button variant="outlined" startIcon={<ArrowBackIcon />} onClick={() => navigate('/members')}>
               رجوع
             </Button>
-            <Button variant="outlined" color="primary" startIcon={<EditIcon />} onClick={() => navigate(`/members/${id}/edit`)}>
+            {capabilities.edit && <Button variant="outlined" color="primary" startIcon={<EditIcon />} onClick={() => navigate(`/members/${id}/edit`)}>
               تعديل
-            </Button>
-            <Button variant="outlined" color="error" startIcon={<DeleteIcon />} onClick={() => handleDeleteConfirm(member)}>
-              حذف
-            </Button>
+            </Button>}
+            {capabilities.lifecycle && <Button variant="outlined" color="error" startIcon={<DeleteIcon />} onClick={() => handleDeleteConfirm(member)}>
+              إنهاء العضوية
+            </Button>}
           </Stack>
         }
       />
@@ -599,7 +881,7 @@ const UnifiedMemberView = () => {
                           title={
                             member.status === 'SUSPENDED' && member.blockedReason
                               ? `سبب الإيقاف: ${member.blockedReason}`
-                              : 'اضغط لتغيير حالة المستفيد'
+                              : capabilities.lifecycle ? 'اضغط لتغيير حالة المستفيد' : 'حالة المستفيد'
                           }
                         >
                           <Chip
@@ -612,24 +894,44 @@ const UnifiedMemberView = () => {
                               'default'
                             }
                             size="small"
-                            onClick={(e) => handleOpenStatusMenu(e, member.id)}
-                            sx={{ height: '1.5rem', fontSize: '0.75rem', cursor: 'pointer' }}
+                            onClick={capabilities.lifecycle ? (e) => handleOpenStatusMenu(e, member.id) : undefined}
+                            sx={{ height: '1.5rem', fontSize: '0.75rem', cursor: capabilities.lifecycle ? 'pointer' : 'default' }}
                           />
                         </Tooltip>
-                        <Menu anchorEl={statusMenuAnchor} open={Boolean(statusMenuAnchor)} onClose={() => setStatusMenuAnchor(null)}>
-                          {MEMBER_STATUS_OPTIONS.filter((opt) => {
+                        {capabilities.lifecycle && <Menu anchorEl={statusMenuAnchor} open={Boolean(statusMenuAnchor)} onClose={() => setStatusMenuAnchor(null)}>
+                          {(() => {
                             const currentStatus =
                               statusMenuTargetId === member.id
                                 ? member.status
                                 : dependents.find((d) => d.id === statusMenuTargetId)?.status;
-                            return opt.value !== currentStatus;
-                          }).map((opt) => (
-                            <MenuItem key={opt.value} onClick={() => handleSelectStatus(opt.value)}>
-                              {opt.label}
-                            </MenuItem>
-                          ))}
-                        </Menu>
+                            const options = VALID_STATUS_TRANSITIONS[currentStatus] || [];
+                            if (options.length === 0) {
+                              return <MenuItem disabled>لا توجد إجراءات متاحة لهذه الحالة</MenuItem>;
+                            }
+                            return options.map((opt) => (
+                              <MenuItem key={opt.value} onClick={() => handleSelectStatus(opt.value, opt.reinstate)}>
+                                {opt.label}
+                              </MenuItem>
+                            ));
+                          })()}
+                        </Menu>}
                       </Stack>
+
+                      {capabilities.lifecycle && isPrincipal && member.statusTransitionId && (
+                        <Tooltip title="يستعيد بالضبط التابعين الذين تأثروا بآخر عملية تعليق/إنهاء جماعية لهذه الأسرة، ويتخطى من تغيّرت حالته بشكل مستقل منذ ذلك">
+                          <span>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              startIcon={<UndoIcon fontSize="small" />}
+                              onClick={() => handleRestoreFamily(member.statusTransitionId)}
+                              disabled={statusChangeLoading}
+                            >
+                              استعادة الأسرة بعد التعليق/الإنهاء
+                            </Button>
+                          </span>
+                        </Tooltip>
+                      )}
 
                       <Divider flexItem sx={{ width: '100%', my: 0.5 }} />
 
@@ -842,14 +1144,26 @@ const UnifiedMemberView = () => {
                       }
                     />
                   </Stack>
-                  <Button
-                    variant="contained"
-                    startIcon={<AddIcon />}
-                    onClick={handleAddClick}
-                    disabled={showDeleted} // Disable add in deleted view
-                  >
-                    إضافة تابع
-                  </Button>
+                  <Stack direction="row" spacing={1}>
+                    {capabilities.edit && dependents.length > 0 && !showDeleted && (
+                      <Button size="small" variant="outlined" startIcon={<SwapHorizIcon />} onClick={openPolicyDialog}>
+                        تغيير وثيقة الأسرة
+                      </Button>
+                    )}
+                    {capabilities.edit && dependents.length > 1 && !showDeleted && (
+                      <Button size="small" variant="outlined" startIcon={<ReorderIcon />} onClick={openReorderDialog}>
+                        إعادة ترتيب التابعين
+                      </Button>
+                    )}
+                    {capabilities.create && <Button
+                      variant="contained"
+                      startIcon={<AddIcon />}
+                      onClick={handleAddClick}
+                      disabled={showDeleted} // Disable add in deleted view
+                    >
+                      إضافة تابع
+                    </Button>}
+                  </Stack>
                 </Stack>
 
                 <Divider />
@@ -918,7 +1232,7 @@ const UnifiedMemberView = () => {
                                       title={
                                         dep.status === 'SUSPENDED' && dep.blockedReason
                                           ? `سبب الإيقاف: ${dep.blockedReason}`
-                                          : 'اضغط لتغيير حالة التابع'
+                                          : capabilities.lifecycle ? 'اضغط لتغيير حالة التابع' : 'حالة التابع'
                                       }
                                     >
                                       <Chip
@@ -933,8 +1247,8 @@ const UnifiedMemberView = () => {
                                           ] || 'default'
                                         }
                                         size="small"
-                                        onClick={(e) => handleOpenStatusMenu(e, dep.id)}
-                                        sx={{ height: '1.5rem', cursor: 'pointer' }}
+                                        onClick={capabilities.lifecycle ? (e) => handleOpenStatusMenu(e, dep.id) : undefined}
+                                        sx={{ height: '1.5rem', cursor: capabilities.lifecycle ? 'pointer' : 'default' }}
                                       />
                                     </Tooltip>
                                   </TableCell>
@@ -942,29 +1256,39 @@ const UnifiedMemberView = () => {
                                     <Stack direction="row" spacing={1} justifyContent="center">
                                       {showDeleted ? (
                                         <>
-                                          <Tooltip title="استعادة">
-                                            <IconButton size="small" color="success" onClick={() => handleRestore(dep.id)}>
+                                          {capabilities.reinstateTerminated && <Tooltip title="إعادة عضوية استثنائية">
+                                            <IconButton size="small" color="success" onClick={() => openReinstateDialog(dep.id)}>
                                               <RestoreFromTrashIcon fontSize="small" />
                                             </IconButton>
-                                          </Tooltip>
-                                          <Tooltip title="حذف نهائي">
+                                          </Tooltip>}
+                                          {capabilities.hardDelete && <Tooltip title="حذف نهائي">
                                             <IconButton size="small" color="error" onClick={() => handleHardDeleteDepConfirm(dep)}>
                                               <DeleteIcon fontSize="small" />
                                             </IconButton>
-                                          </Tooltip>
+                                          </Tooltip>}
                                         </>
                                       ) : (
                                         <>
-                                          <Tooltip title="تعديل">
+                                          {capabilities.edit && <Tooltip title="تعديل">
                                             <IconButton size="small" color="secondary" onClick={() => handleEditClick(dep)}>
                                               <EditIcon fontSize="small" />
                                             </IconButton>
-                                          </Tooltip>
-                                          <Tooltip title="حذف">
+                                          </Tooltip>}
+                                          {capabilities.edit && <Tooltip title="تصحيح صلة القرابة">
+                                            <IconButton size="small" color="info" onClick={() => openCorrectionDialog(dep)}>
+                                              <FamilyRestroomIcon fontSize="small" />
+                                            </IconButton>
+                                          </Tooltip>}
+                                          {capabilities.transfer && <Tooltip title="نقل إلى رئيس أسرة آخر">
+                                            <IconButton size="small" color="info" onClick={() => openTransferDialog(dep)}>
+                                              <CompareArrowsIcon fontSize="small" />
+                                            </IconButton>
+                                          </Tooltip>}
+                                          {capabilities.lifecycle && <Tooltip title="إنهاء العضوية">
                                             <IconButton size="small" color="error" onClick={() => handleDeleteConfirm(dep)}>
                                               <DeleteIcon fontSize="small" />
                                             </IconButton>
-                                          </Tooltip>
+                                          </Tooltip>}
                                         </>
                                       )}
                                     </Stack>
@@ -1204,18 +1528,70 @@ const UnifiedMemberView = () => {
         maxWidth="xs"
         fullWidth
       >
-        <DialogTitle>تعليق المستفيد</DialogTitle>
+        <DialogTitle>{statusChangeDialog.reinstate ? 'إعادة عضوية استثنائية' : 'تغيير حالة المستفيد'}</DialogTitle>
         <DialogContent>
-          <DialogContentText sx={{ mb: 2 }}>يرجى توضيح سبب تعليق هذا المستفيد.</DialogContentText>
-          <TextField
-            autoFocus
-            fullWidth
-            multiline
-            minRows={2}
-            label="سبب التعليق"
-            value={statusChangeDialog.reason}
-            onChange={(e) => setStatusChangeDialog((prev) => ({ ...prev, reason: e.target.value }))}
-          />
+          <DialogContentText sx={{ mb: 2 }}>
+            {statusChangeDialog.reinstate
+              ? 'سيُعاد المستفيد من حالة "منتهية العضوية" إلى نشط. لا يُمس أي سجل مالي أو طبي سابق.'
+              : `الحالة الجديدة: ${MEMBER_STATUS_OPTIONS.find((option) => option.value === statusChangeDialog.targetStatus)?.label || statusChangeDialog.targetStatus}.`}
+            {!statusChangeDialog.isPendingActivation && ' يرجى توضيح سبب التغيير ليُحفظ في سجل التدقيق.'}
+          </DialogContentText>
+          {statusChangeDialog.isPendingActivation ? (
+            <Typography variant="body2" color="text.secondary">
+              يُسجَّل السبب تلقائياً: "{PENDING_ACTIVATION_REASON}".
+            </Typography>
+          ) : !statusChangeDialog.reinstate &&
+            statusChangeDialog.targetStatus !== 'TERMINATED' &&
+            (STANDARD_REASONS[statusChangeDialog.targetStatus] ||
+              (statusChangeDialog.targetStatus === 'ACTIVE' && STANDARD_REASONS.RESTORE)) ? (
+            <Stack spacing={2}>
+              <TextField
+                select
+                fullWidth
+                label="السبب"
+                value={
+                  (STANDARD_REASONS[statusChangeDialog.targetStatus] || STANDARD_REASONS.RESTORE).includes(statusChangeDialog.reason)
+                    ? statusChangeDialog.reason
+                    : statusChangeDialog.reason
+                      ? '__OTHER__'
+                      : ''
+                }
+                onChange={(e) =>
+                  setStatusChangeDialog((prev) => ({ ...prev, reason: e.target.value === '__OTHER__' ? '' : e.target.value }))
+                }
+              >
+                {(STANDARD_REASONS[statusChangeDialog.targetStatus] || STANDARD_REASONS.RESTORE).map((r) => (
+                  <MenuItem key={r} value={r}>
+                    {r}
+                  </MenuItem>
+                ))}
+                <MenuItem value="__OTHER__">
+                  <em>سبب آخر...</em>
+                </MenuItem>
+              </TextField>
+              {(!(STANDARD_REASONS[statusChangeDialog.targetStatus] || STANDARD_REASONS.RESTORE).includes(statusChangeDialog.reason)) && (
+                <TextField
+                  autoFocus
+                  fullWidth
+                  multiline
+                  minRows={2}
+                  label="اذكر السبب"
+                  value={statusChangeDialog.reason}
+                  onChange={(e) => setStatusChangeDialog((prev) => ({ ...prev, reason: e.target.value }))}
+                />
+              )}
+            </Stack>
+          ) : (
+            <TextField
+              autoFocus
+              fullWidth
+              multiline
+              minRows={2}
+              label="سبب تغيير الحالة"
+              value={statusChangeDialog.reason}
+              onChange={(e) => setStatusChangeDialog((prev) => ({ ...prev, reason: e.target.value }))}
+            />
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setStatusChangeDialog({ open: false, targetId: null, targetStatus: null, reason: '' })} disabled={statusChangeLoading}>
@@ -1223,60 +1599,222 @@ const UnifiedMemberView = () => {
           </Button>
           <Button
             variant="contained"
-            color="warning"
+            color="primary"
             disabled={statusChangeLoading || !statusChangeDialog.reason.trim()}
-            onClick={() => applyStatusChange(statusChangeDialog.targetId, statusChangeDialog.targetStatus, statusChangeDialog.reason)}
+            onClick={() =>
+              applyStatusChange(statusChangeDialog.targetId, statusChangeDialog.targetStatus, statusChangeDialog.reason, statusChangeDialog.reinstate)
+            }
           >
-            تأكيد التعليق
+            {statusChangeDialog.reinstate ? 'تأكيد إعادة العضوية' : 'تأكيد تغيير الحالة'}
           </Button>
         </DialogActions>
       </Dialog>
 
-      {/* Hard Delete Dependent Confirmation Dialog */}
-      <Dialog open={hardDeleteDepDialogOpen} onClose={() => setHardDeleteDepDialogOpen(false)}>
-        <DialogTitle sx={{ fontWeight: 600 }}>حذف نهائي؟</DialogTitle>
+      {/* تصحيح صلة القرابة */}
+      <Dialog open={correctionDialog.open} onClose={() => (correctionLoading ? null : setCorrectionDialog({ ...correctionDialog, open: false }))} maxWidth="xs" fullWidth>
+        <DialogTitle>تصحيح صلة قرابة {correctionDialog.dependent?.fullName}</DialogTitle>
         <DialogContent>
-          <DialogContentText>
-            سيتم حذف التابع <strong>{hardDeletingDep?.fullName}</strong> نهائياً من قاعدة البيانات. هذا الإجراء لا يمكن التراجع عنه!
-            <Alert severity="error" sx={{ mt: '1.0rem' }}>
-              <strong>تنبيه:</strong> إذا كان للتابع مطالبات أو زيارات مرتبطة سيفشل الحذف.
-            </Alert>
-          </DialogContentText>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <TextField
+              select
+              fullWidth
+              label="صلة القرابة الصحيحة"
+              value={correctionDialog.relationship}
+              onChange={(e) => setCorrectionDialog((prev) => ({ ...prev, relationship: e.target.value }))}
+            >
+              {Object.entries(RELATIONSHIP_AR).map(([value, label]) => (
+                <MenuItem key={value} value={value}>
+                  {label}
+                </MenuItem>
+              ))}
+            </TextField>
+            <TextField
+              label="سبب التصحيح"
+              required
+              fullWidth
+              multiline
+              minRows={2}
+              value={correctionDialog.reason}
+              onChange={(e) => setCorrectionDialog((prev) => ({ ...prev, reason: e.target.value }))}
+            />
+          </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setHardDeleteDepDialogOpen(false)}>إلغاء</Button>
-          <Button onClick={handleHardDeleteDepExecute} color="error" variant="contained" autoFocus>
-            تأكيد الحذف النهائي
+          <Button onClick={() => setCorrectionDialog({ ...correctionDialog, open: false })} disabled={correctionLoading}>
+            إلغاء
+          </Button>
+          <Button variant="contained" disabled={correctionLoading || !correctionDialog.reason.trim()} onClick={submitCorrection}>
+            {correctionLoading ? 'جارِ التصحيح...' : 'تأكيد التصحيح'}
           </Button>
         </DialogActions>
       </Dialog>
 
-      {/* Delete Confirmation Dialog */}
-      <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>
-        <DialogTitle sx={{ fontWeight: 600 }}>تأكيد الحذف</DialogTitle>
+      {/* نقل تابع إلى رئيس أسرة آخر */}
+      <Dialog open={transferDialog.open} onClose={() => (transferLoading ? null : setTransferDialog((prev) => ({ ...prev, open: false })))} maxWidth="sm" fullWidth>
+        <DialogTitle>نقل {transferDialog.dependent?.fullName} إلى رئيس أسرة آخر</DialogTitle>
         <DialogContent>
-          <DialogContentText>
-            {deletingMember?.type === MEMBER_TYPES.PRINCIPAL ? (
-              <>
-                هل أنت متأكد من حذف الموظف <strong>{deletingMember?.fullName}</strong>؟
-                <Alert severity="warning" sx={{ mt: '1.0rem' }}>
-                  <strong>تنبيه:</strong> سيتم حذف جميع التابعين ({member.dependentsCount || 0}) تلقائياً (CASCADE DELETE).
-                </Alert>
-              </>
-            ) : (
-              <>
-                هل أنت متأكد من حذف التابع <strong>{deletingMember?.fullName}</strong>؟
-              </>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <TextField
+              label="ابحث عن رئيس الأسرة الجديد (اسم / رقم وطني / رقم بطاقة)"
+              fullWidth
+              value={transferDialog.searchQuery}
+              onChange={(e) => searchNewPrincipal(e.target.value)}
+              InputProps={{ endAdornment: transferDialog.searching ? <CircularProgress size={16} /> : null }}
+            />
+            {transferDialog.searchResults.length > 0 && (
+              <Paper variant="outlined" sx={{ maxHeight: 180, overflow: 'auto' }}>
+                {transferDialog.searchResults.map((r) => (
+                  <MenuItem
+                    key={r.id}
+                    selected={transferDialog.newPrincipalId === r.id}
+                    onClick={() =>
+                      setTransferDialog((prev) => ({ ...prev, newPrincipalId: r.id, newPrincipalLabel: `${r.fullName} (${r.cardNumber || r.id})` }))
+                    }
+                  >
+                    {r.fullName} — {r.cardNumber || r.nationalNumber || r.id}
+                  </MenuItem>
+                ))}
+              </Paper>
             )}
-          </DialogContentText>
+            {transferDialog.newPrincipalId && (
+              <Typography variant="body2" color="success.main">
+                رئيس الأسرة المختار: {transferDialog.newPrincipalLabel}
+              </Typography>
+            )}
+            <TextField
+              select
+              fullWidth
+              label="صلة القرابة الجديدة"
+              value={transferDialog.relationship}
+              onChange={(e) => setTransferDialog((prev) => ({ ...prev, relationship: e.target.value }))}
+            >
+              {Object.entries(RELATIONSHIP_AR).map(([value, label]) => (
+                <MenuItem key={value} value={value}>
+                  {label}
+                </MenuItem>
+              ))}
+            </TextField>
+            <TextField
+              type="date"
+              label="تاريخ السريان"
+              fullWidth
+              InputLabelProps={{ shrink: true }}
+              value={transferDialog.effectiveDate}
+              onChange={(e) => setTransferDialog((prev) => ({ ...prev, effectiveDate: e.target.value }))}
+            />
+            <TextField
+              label="سبب النقل"
+              required
+              fullWidth
+              multiline
+              minRows={2}
+              value={transferDialog.reason}
+              onChange={(e) => setTransferDialog((prev) => ({ ...prev, reason: e.target.value }))}
+            />
+          </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDeleteDialogOpen(false)}>إلغاء</Button>
-          <Button onClick={handleDeleteExecute} color="error" variant="contained" autoFocus>
-            تأكيد الحذف
+          <Button onClick={() => setTransferDialog((prev) => ({ ...prev, open: false }))} disabled={transferLoading}>
+            إلغاء
+          </Button>
+          <Button
+            variant="contained"
+            disabled={transferLoading || !transferDialog.newPrincipalId || !transferDialog.reason.trim()}
+            onClick={submitTransfer}
+          >
+            {transferLoading ? 'جارِ النقل...' : 'تأكيد النقل'}
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* تغيير وثيقة الأسرة */}
+      <Dialog open={policyDialog.open} onClose={() => (policyLoading ? null : setPolicyDialog({ ...policyDialog, open: false }))} maxWidth="xs" fullWidth>
+        <DialogTitle>تغيير وثيقة الأسرة</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <DialogContentText>
+              سيتغيّر انتماء الوثيقة لكل أفراد الأسرة معاً ({1 + dependents.length} فرد) بتاريخ السريان المحدد -- كل الأسرة أو لا أحد.
+            </DialogContentText>
+            <TextField
+              select
+              fullWidth
+              label="الوثيقة الجديدة"
+              value={policyDialog.policyId}
+              onChange={(e) => setPolicyDialog((prev) => ({ ...prev, policyId: e.target.value }))}
+            >
+              {policyDialog.policyOptions.map((p) => (
+                <MenuItem key={p.id} value={p.id}>
+                  {p.policyName || p.name || `وثيقة #${p.id}`}
+                </MenuItem>
+              ))}
+            </TextField>
+            <TextField
+              type="date"
+              label="تاريخ السريان"
+              fullWidth
+              InputLabelProps={{ shrink: true }}
+              value={policyDialog.effectiveDate}
+              onChange={(e) => setPolicyDialog((prev) => ({ ...prev, effectiveDate: e.target.value }))}
+            />
+            <TextField
+              label="سبب التغيير"
+              required
+              fullWidth
+              multiline
+              minRows={2}
+              value={policyDialog.reason}
+              onChange={(e) => setPolicyDialog((prev) => ({ ...prev, reason: e.target.value }))}
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPolicyDialog({ ...policyDialog, open: false })} disabled={policyLoading}>
+            إلغاء
+          </Button>
+          <Button variant="contained" disabled={policyLoading || !policyDialog.policyId || !policyDialog.reason.trim()} onClick={submitPolicyChange}>
+            {policyLoading ? 'جارِ التغيير...' : 'تأكيد تغيير الوثيقة'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* إعادة ترتيب التابعين */}
+      <Dialog open={reorderDialog.open} onClose={() => (reorderLoading ? null : setReorderDialog({ open: false, ordered: [] }))} maxWidth="xs" fullWidth>
+        <DialogTitle>إعادة ترتيب التابعين</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 1 }}>يغيّر هذا ترتيب العرض فقط، ولا يغيّر رقم البطاقة أو الباركود.</DialogContentText>
+          <Stack spacing={1}>
+            {reorderDialog.ordered.map((d, index) => (
+              <Paper key={d.id} variant="outlined" sx={{ p: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Typography variant="body2">
+                  {index + 1}. {d.fullName} ({RELATIONSHIP_AR[d.relationship] || d.relationship})
+                </Typography>
+                <Stack direction="row">
+                  <IconButton size="small" disabled={index === 0} onClick={() => moveDependent(index, -1)}>
+                    ▲
+                  </IconButton>
+                  <IconButton size="small" disabled={index === reorderDialog.ordered.length - 1} onClick={() => moveDependent(index, 1)}>
+                    ▼
+                  </IconButton>
+                </Stack>
+              </Paper>
+            ))}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setReorderDialog({ open: false, ordered: [] })} disabled={reorderLoading}>
+            إلغاء
+          </Button>
+          <Button variant="contained" disabled={reorderLoading} onClick={submitReorder}>
+            {reorderLoading ? 'جارِ الحفظ...' : 'حفظ الترتيب'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <MemberLifecycleDialog open={hardDeleteDepDialogOpen} action="HARD_DELETE" member={hardDeletingDep}
+        onClose={() => setHardDeleteDepDialogOpen(false)} onConfirm={handleHardDeleteDepExecute} />
+      <MemberLifecycleDialog open={deleteDialogOpen} action="TERMINATE" member={deletingMember}
+        affectedDependents={deletingMember?.type === MEMBER_TYPES.PRINCIPAL ? member?.dependentsCount || 0 : 0}
+        onClose={() => setDeleteDialogOpen(false)} onConfirm={handleDeleteExecute} />
     </>
   );
 };

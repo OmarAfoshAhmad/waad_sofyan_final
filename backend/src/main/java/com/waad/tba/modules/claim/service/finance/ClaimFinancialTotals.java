@@ -32,6 +32,25 @@ public final class ClaimFinancialTotals {
         claim.setDifferenceAmount(money(requested.subtract(approved)));
     }
 
+    /**
+     * What this claim consumes against its member's annual benefit ceiling --
+     * WAAD-FIN-1.0 S4's axis (settlement value inside the binding limit), not
+     * {@link Claim#getApprovedAmount()}. The two are different numbers by
+     * construction: a limit is capped, coverage-split, discounted, and
+     * rejected on top of it before insurerFinalPayment (approvedAmount) is
+     * reached. Any code that checks a claim against a benefit-limit ceiling
+     * must use this, not approvedAmount -- see
+     * {@link com.waad.tba.modules.benefitpolicy.service.BenefitPolicyCoverageService#getLimitConsumedForYear}
+     * for the matching "previously consumed" read.
+     */
+    public static BigDecimal sumLimitConsumption(Claim claim) {
+        List<ClaimLine> lines = claim.getLines();
+        if (lines == null || lines.isEmpty()) {
+            return BigDecimal.ZERO;
+        }
+        return sum(lines, ClaimLine::getLimitConsumption);
+    }
+
     private static BigDecimal sum(List<ClaimLine> lines, Function<ClaimLine, BigDecimal> field) {
         return money(lines.stream().map(field).map(ClaimFinancialTotals::zero)
                 .reduce(BigDecimal.ZERO, BigDecimal::add));

@@ -72,7 +72,7 @@ public class EligibilityController {
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request parameters"),
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions")
         })
-        @PostMapping("/check")
+        @PostMapping({"/check", "/evaluations"})
         @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
         public ResponseEntity<ApiResponse<EligibilityCheckResponse>> checkEligibility(
                         @Valid @RequestBody EligibilityCheckRequest request) {
@@ -108,7 +108,7 @@ public class EligibilityController {
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request parameters"),
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Member not found")
         })
-        @GetMapping("/family/{memberId}")
+        @PostMapping("/family/{memberId}/evaluations")
         @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
         public ResponseEntity<ApiResponse<FamilyEligibilityResponse>> checkFamilyEligibility(
                         @PathVariable("memberId") Long memberId,

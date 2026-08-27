@@ -1,5 +1,6 @@
 package com.waad.tba.modules.member.service;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -16,6 +17,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.waad.tba.common.exception.BusinessRuleException;
 import com.waad.tba.common.exception.ResourceNotFoundException;
+import com.waad.tba.modules.eligibility.domain.EligibilityResult;
+import com.waad.tba.modules.eligibility.service.FamilyEligibilityService;
 import com.waad.tba.modules.employer.entity.Employer;
 import com.waad.tba.modules.employer.repository.EmployerRepository;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy;
@@ -26,12 +29,21 @@ import com.waad.tba.modules.member.dto.MemberCreateDto;
 import com.waad.tba.modules.member.dto.MemberUpdateDto;
 import com.waad.tba.modules.member.dto.MemberViewDto;
 import com.waad.tba.modules.member.entity.Member;
+import com.waad.tba.modules.member.entity.EmployerAssignmentSource;
+import com.waad.tba.modules.member.entity.PolicyAssignmentSource;
+import com.waad.tba.modules.member.entity.StatusSource;
 import com.waad.tba.modules.member.mapper.UnifiedMemberMapper;
 import com.waad.tba.modules.member.repository.MemberRepository;
-import com.waad.tba.modules.provider.service.ProviderService;
+import com.waad.tba.modules.member.security.AuthorizedMemberScope;
+import com.waad.tba.modules.member.security.MemberOperation;
+import com.waad.tba.modules.member.security.MemberCommandAccessPolicy;
+import com.waad.tba.modules.member.security.MemberQueryAccessPolicy;
+import com.waad.tba.modules.member.security.MemberScopeFilter;
 import com.waad.tba.modules.systemadmin.service.AuditLogService;
 import com.waad.tba.security.AuthorizationService;
 import com.waad.tba.modules.rbac.entity.User;
+import com.waad.tba.modules.rbac.permission.EffectivePermissionService;
+import com.waad.tba.modules.rbac.permission.SystemPermission;
 
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
@@ -76,10 +88,16 @@ public class UnifiedMemberService {
     private final CardNumberGeneratorService cardNumberGenerator;
     private final UnifiedMemberMapper mapper;
     private final AuthorizationService authorizationService;
-    private final ProviderService providerService;
+    private final EffectivePermissionService effectivePermissionService;
     private final MemberFinancialSummaryService financialSummaryService;
     private final JdbcTemplate jdbcTemplate;
     private final AuditLogService auditLogService;
+    private final FamilyEligibilityService familyEligibilityService;
+    private final MemberStatusTransitionService statusTransitionService;
+    private final MemberPolicyResolver memberPolicyResolver;
+    private final MemberEmployerResolver memberEmployerResolver;
+    private final MemberQueryAccessPolicy queryAccessPolicy;
+    private final MemberCommandAccessPolicy commandAccessPolicy;
 
     /**
      * Create a PRINCIPAL member (optionally with dependents inline).
@@ -102,8 +120,8 @@ public class UnifiedMemberService {
         // An EMPLOYER_ADMIN must not be able to enroll a member into a
         // different employer by sending an arbitrary employerId — force it
         // to their own employer regardless of what the request carries.
-        Long scopedEmployerId = authorizationService.resolveEmployerScope(
-                authorizationService.getCurrentUser(), dto.getEmployerId());
+        commandAccessPolicy.require(MemberOperation.CREATE_MEMBER, dto.getEmployerId());
+        Long scopedEmployerId = dto.getEmployerId();
         Employer employer = employerRepository.findById(scopedEmployerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Employer not found: " + scopedEmployerId));
 
@@ -131,10 +149,11 @@ public class UnifiedMemberService {
         principal.setBenefitPolicy(benefitPolicy);
         principal.setParent(null); // PRINCIPAL
         principal.setRelationship(null); // PRINCIPAL has no relationship
-        // Sync status with active flag on creation
-        if (Boolean.FALSE.equals(dto.getActive())) {
-            principal.setStatus(Member.MemberStatus.TERMINATED);
-        }
+        Member.MemberStatus initialStatus = Boolean.FALSE.equals(dto.getActive())
+                ? Member.MemberStatus.TERMINATED
+                : (dto.getStatus() != null ? dto.getStatus() : Member.MemberStatus.ACTIVE);
+        statusTransitionService.initializeStatus(principal, initialStatus, StatusSource.MANUAL,
+                "تهيئة حالة المستفيد عند الإنشاء اليدوي");
 
         // 3. Generate CARD NUMBER (formula: EMPLOYER_CODE + EMPLOYEE_NUMBER)
         String cardNumber = dto.getCardNumber();
@@ -152,6 +171,8 @@ public class UnifiedMemberService {
 
         // 4. Save principal
         principal = memberRepository.save(principal);
+        recordInitialEmployerAssignment(principal, "تعيين جهة العمل عند إنشاء المستفيد");
+        recordInitialPolicyAssignment(principal, "تعيين وثيقة عند إنشاء المستفيد");
         log.info("✅ Created PRINCIPAL member ID={}, barcode={}, cardNumber={}, employer={}",
                 principal.getId(), principal.getBarcode(), principal.getCardNumber(),
                 principal.getEmployer() != null ? principal.getEmployer().getName() : "NONE");
@@ -188,6 +209,7 @@ public class UnifiedMemberService {
         // 1. Load principal member
         Member principal = memberRepository.findById(principalId)
                 .orElseThrow(() -> new ResourceNotFoundException("Principal member not found: " + principalId));
+        commandAccessPolicy.require(MemberOperation.ADD_DEPENDENT, employerIdOf(principal));
 
         // Validate principal is not a dependent
         if (principal.isDependent()) {
@@ -232,6 +254,7 @@ public class UnifiedMemberService {
         // 1. Load principal member
         Member principal = memberRepository.findById(dto.getParentId())
                 .orElseThrow(() -> new ResourceNotFoundException("Principal member not found: " + dto.getParentId()));
+        commandAccessPolicy.require(MemberOperation.ADD_DEPENDENT, employerIdOf(principal));
 
         // Validate principal is not a dependent
         if (principal.isDependent()) {
@@ -287,13 +310,14 @@ public class UnifiedMemberService {
         dependent.setBenefitPolicy(principal.getBenefitPolicy());
         dependent.setPolicyNumber(principal.getPolicyNumber());
 
-        // Sync status with active flag on creation
-        if (Boolean.FALSE.equals(dto.getActive())) {
-            dependent.setStatus(Member.MemberStatus.TERMINATED);
-        }
+        statusTransitionService.initializeStatus(dependent,
+                Boolean.FALSE.equals(dto.getActive()) ? Member.MemberStatus.TERMINATED : Member.MemberStatus.ACTIVE,
+                StatusSource.MANUAL, "تهيئة حالة التابع عند الإنشاء اليدوي");
 
         // 4. Save
         dependent = memberRepository.save(dependent);
+        recordInitialEmployerAssignment(dependent, "تعيين جهة العمل عند إنشاء التابع (موروثة من الموظف الرئيسي)");
+        recordInitialPolicyAssignment(dependent, "تعيين وثيقة عند إنشاء التابع (موروثة من الموظف الرئيسي)");
         log.info("✅ Created DEPENDENT member ID={}, cardNumber={}, relationship={}",
                 dependent.getId(), dependent.getCardNumber(), dependent.getRelationship());
 
@@ -301,8 +325,106 @@ public class UnifiedMemberService {
     }
 
     /**
-     * Update a member (principal or dependent).
-     * 
+     * Records the assignment row that makes a newly-created member's policy
+     * resolvable BY DATE (MemberPolicyResolver), not just via the denormalized
+     * members.benefit_policy_id pointer. Without this a new member would have
+     * a pointer but no dated assignment, and every dated resolution would fall
+     * through to the resolver's legacy-gap warning path.
+     *
+     * Start date is the member's own start date when known, else today --
+     * never earlier, so a new member never appears to have been covered before
+     * they existed.
+     */
+    private void recordInitialPolicyAssignment(Member member, String reason) {
+        if (member.getBenefitPolicy() == null) {
+            return;
+        }
+        User currentUser = authorizationService.getCurrentUser();
+        memberPolicyResolver.assignPolicy(member, member.getBenefitPolicy(),
+                member.getStartDate() != null ? member.getStartDate() : LocalDate.now(),
+                reason, PolicyAssignmentSource.MANUAL,
+                currentUser != null ? currentUser.getId() : null);
+    }
+
+    private void recordInitialEmployerAssignment(Member member, String reason) {
+        if (member.getEmployer() == null) {
+            throw new BusinessRuleException("جهة العمل إلزامية عند إنشاء المستفيد");
+        }
+        User currentUser = authorizationService.getCurrentUser();
+        memberEmployerResolver.assignEmployer(member, member.getEmployer(),
+                member.getStartDate() != null ? member.getStartDate() : LocalDate.now(),
+                reason, EmployerAssignmentSource.MANUAL,
+                currentUser != null ? currentUser.getId() : null);
+    }
+
+    /**
+     * The generic update path may only change descriptive attributes. Anything
+     * that alters a member's LIFECYCLE, MONEY or IDENTITY belongs to a
+     * dedicated, reasoned, audited operation -- routing it through here would
+     * bypass the status transition service, the policy assignment record, and
+     * every audit trail attached to them.
+     *
+     * The rule is applied to CHANGES, not to mere presence: an edit form that
+     * round-trips the member's current employerId or relationship unchanged is
+     * harmless and must keep working, while changing either through this path
+     * is refused. Silently dropping the field instead (as the mapper still does
+     * for status/active) is worse than refusing -- the caller is told the save
+     * succeeded and never learns their change was discarded.
+     */
+    private void rejectSensitiveFieldChanges(Member member, MemberUpdateDto dto) {
+        List<String> violations = new ArrayList<>();
+
+        if (dto.getStatus() != null && dto.getStatus() != member.getStatus()) {
+            violations.add("حالة العضوية (status): استخدم PATCH /{id}/status أو POST /{id}/terminate");
+        }
+        if (dto.getActive() != null && !dto.getActive().equals(member.getActive())) {
+            violations.add("حالة التفعيل (active): استخدم PATCH /{id}/active");
+        }
+        Long currentPolicyId = member.getBenefitPolicy() != null ? member.getBenefitPolicy().getId() : null;
+        if (dto.getBenefitPolicyId() != null && !dto.getBenefitPolicyId().equals(currentPolicyId)) {
+            violations.add("وثيقة المنافع (benefitPolicyId): تغيير الوثيقة عملية مستقلة تتطلب تاريخ سريان وسبب"
+                    + " (غير متاحة عبر هذا المسار)");
+        }
+        Long currentEmployerId = member.getEmployer() != null ? member.getEmployer().getId() : null;
+        if (dto.getEmployerId() != null && !dto.getEmployerId().equals(currentEmployerId)) {
+            violations.add("جهة العمل (employerId): نقل جهة العمل عملية مستقلة تتطلب تاريخ سريان وسبب"
+                    + " (غير متاحة عبر هذا المسار)");
+        }
+        if (dto.getRelationship() != null && dto.getRelationship() != member.getRelationship()) {
+            violations.add("صلة القرابة (relationship): تغيير البناء الأسري عملية مستقلة (غير متاحة عبر هذا المسار)");
+        }
+        // Normalized comparison: a blank string means "not supplied" (not "clear
+        // the card number"), and surrounding whitespace is a representation
+        // difference, not an edit. Comparing raw strings here would reject a
+        // request that changes nothing -- the exact false positive that makes a
+        // guard like this get disabled instead of fixed.
+        String submittedCard = normalizeForComparison(dto.getCardNumber());
+        if (submittedCard != null && !submittedCard.equals(normalizeForComparison(member.getCardNumber()))) {
+            violations.add("رقم البطاقة (cardNumber): هوية نظامية مرتبطة بالباركود، تغييرها عملية مستقلة مدقَّقة"
+                    + " (غير متاحة عبر هذا المسار)");
+        }
+
+        if (!violations.isEmpty()) {
+            throw new BusinessRuleException(
+                    "لا يمكن تعديل الحقول الحساسة التالية عبر التعديل العام:\n- "
+                            + String.join("\n- ", violations));
+        }
+    }
+
+    /** null and blank both mean "not supplied"; whitespace is not an edit. */
+    private static String normalizeForComparison(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    /**
+     * Update a member (principal or dependent) -- DESCRIPTIVE fields only.
+     * Lifecycle, money and identity changes are refused here; see
+     * {@link #rejectSensitiveFieldChanges}.
+     *
      * @param id  Member ID
      * @param dto Update DTO
      * @return Updated member view DTO
@@ -313,40 +435,12 @@ public class UnifiedMemberService {
 
         Member member = memberRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Member not found: " + id));
+        commandAccessPolicy.require(MemberOperation.EDIT_DEMOGRAPHICS, employerIdOf(member));
 
-        User currentUser = authorizationService.getCurrentUser();
-        if (!authorizationService.canAccessMember(currentUser, id)) {
-            log.warn("❌ Access denied: user {} attempted to update member {}",
-                    currentUser != null ? currentUser.getUsername() : "unknown", id);
-            throw new AccessDeniedException("Access denied to this member");
-        }
+        rejectSensitiveFieldChanges(member, dto);
 
         // Update common fields
         mapper.updateEntityFromDto(member, dto);
-
-        if (dto.getEmployerId() != null) {
-            // An EMPLOYER_ADMIN must not be able to move a member to another
-            // employer's roster (and thus another employer's policy/claims
-            // liability) by sending a different employerId; resolveEmployerScope
-            // forces it back to their own employer. Internal staff pass through
-            // unchanged and can still reassign members between employers.
-            Long scopedEmployerId = authorizationService.resolveEmployerScope(currentUser, dto.getEmployerId());
-            Employer employer = employerRepository.findById(scopedEmployerId)
-                    .orElseThrow(() -> new ResourceNotFoundException("Employer not found: " + scopedEmployerId));
-            member.setEmployer(employer);
-        }
-
-        if (dto.getBenefitPolicyId() != null) {
-            Long employerId = member.getEmployer() != null ? member.getEmployer().getId() : null;
-            member.setBenefitPolicy(loadAndValidateBenefitPolicy(dto.getBenefitPolicyId(), employerId));
-        } else if (member.getBenefitPolicy() == null && member.getEmployer() != null) {
-            BenefitPolicy autoPolicy = findActiveEmployerPolicy(member.getEmployer().getId());
-            if (autoPolicy != null) {
-                member.setBenefitPolicy(autoPolicy);
-                log.info("✅ Auto-assigned policy during member update: memberId={}, policyId={}",
-                        member.getId(), autoPolicy.getId());
-            }
-        }
 
         // Save
         member = memberRepository.save(member);
@@ -362,28 +456,34 @@ public class UnifiedMemberService {
     }
 
     /**
-     * Activate or deactivate a member.
+     * Compatibility alias over {@link MemberStatusTransitionService}. Used to
+     * write the {@code active} flag directly and independently of
+     * {@code status} -- exactly the divergence that let a member end up
+     * status=SUSPENDED with active=true, since nothing kept them in sync.
+     * Now: active=true translates to "restore from SUSPENDED" (rejects a
+     * TERMINATED member -- reinstating one is an exceptional action, not a
+     * flag flip, see {@link #reinstateTerminatedMember}); active=false
+     * translates to "suspend" and requires a reason, same as the dedicated
+     * suspend path.
      *
      * @param id     Member ID
-     * @param active true = activate, false = deactivate
+     * @param active true = restore from suspension, false = suspend
+     * @param reason Required when active=false
      * @return Updated member view DTO
      */
     @Transactional
-    public MemberViewDto toggleActive(Long id, boolean active) {
+    public MemberViewDto toggleActive(Long id, boolean active, String reason) {
         log.info("🔄 Setting active={} for member ID={}", active, id);
 
-        Member member = memberRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Member not found: " + id));
-
+        Member stored = requireStoredMember(id);
+        commandAccessPolicy.require(active ? MemberOperation.REINSTATE : MemberOperation.CHANGE_STATUS,
+                employerIdOf(stored));
         User currentUser = authorizationService.getCurrentUser();
-        if (!authorizationService.canAccessMember(currentUser, id)) {
-            log.warn("❌ Access denied: user {} attempted to toggle active status of member {}",
-                    currentUser != null ? currentUser.getUsername() : "unknown", id);
-            throw new AccessDeniedException("Access denied to this member");
-        }
+        Long userId = currentUser != null ? currentUser.getId() : null;
 
-        member.setActive(active);
-        member = memberRepository.save(member);
+        Member member = active
+                ? statusTransitionService.restoreFromSuspended(id, reason, userId)
+                : statusTransitionService.suspend(id, reason, userId);
 
         log.info("✅ Member ID={} active status set to {}", id, active);
 
@@ -396,18 +496,13 @@ public class UnifiedMemberService {
 
     /**
      * Explicitly transition a member's membership status (ACTIVE / SUSPENDED / PENDING / TERMINATED).
-     *
-     * Distinct from {@link #toggleActive}: that only flips the coarse `active` flag used for
-     * eligibility checks, but never touched the richer {@code MemberStatus} enum, leaving it
-     * permanently stale after creation. This is the first endpoint that lets an operator move a
-     * member to SUSPENDED or PENDING (not just active/terminated).
-     *
-     * `active` is kept in sync: true only while status == ACTIVE, so eligibility checks continue
-     * to rely solely on the `active` flag with no behavior change elsewhere.
+     * Delegates the actual status/active write, family cascade, and history recording to
+     * {@link MemberStatusTransitionService} -- this method only resolves the specific target-status
+     * transition to call and adapts the result to this controller's DTO shape.
      *
      * @param id        Member ID
      * @param newStatus Target status
-     * @param reason    Optional reason, required for SUSPENDED (stored as blockedReason)
+     * @param reason    Reason (required for SUSPENDED/TERMINATED via the transition service)
      * @return Updated member view DTO
      */
     @Transactional
@@ -416,70 +511,72 @@ public class UnifiedMemberService {
             throw new BusinessRuleException("يجب تحديد الحالة الجديدة");
         }
 
-        Member member = memberRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Member not found: " + id));
-
         User currentUser = authorizationService.getCurrentUser();
-        if (!authorizationService.canAccessMember(currentUser, id)) {
-            log.warn("❌ Access denied: user {} attempted to change status of member {}",
-                    currentUser != null ? currentUser.getUsername() : "unknown", id);
-            throw new AccessDeniedException("Access denied to this member");
-        }
+        Member stored = requireStoredMember(id);
+        MemberOperation operation = switch (newStatus) {
+            case ACTIVE -> MemberOperation.REINSTATE;
+            case TERMINATED -> MemberOperation.TERMINATE;
+            case SUSPENDED, PENDING -> MemberOperation.CHANGE_STATUS;
+            case DUPLICATE_MERGED -> throw new BusinessRuleException(
+                    "حالة الدمج تُنشأ حصراً من عملية معالجة المكررات");
+        };
+        commandAccessPolicy.require(operation, employerIdOf(stored));
+        Long userId = currentUser != null ? currentUser.getId() : null;
 
-        Member.MemberStatus previousStatus = member.getStatus();
-        if (previousStatus == newStatus) {
-            throw new BusinessRuleException("المستفيد بالفعل في هذه الحالة: " + newStatus);
-        }
+        Member member = switch (newStatus) {
+            case ACTIVE -> statusTransitionService.restoreFromSuspended(id, reason, userId);
+            case SUSPENDED -> statusTransitionService.suspend(id, reason, userId);
+            case TERMINATED -> statusTransitionService.terminateMembership(id, reason, userId, StatusSource.MANUAL);
+            case PENDING -> statusTransitionService.transitionTo(id, Member.MemberStatus.PENDING, reason,
+                    StatusSource.MANUAL, java.util.UUID.randomUUID().toString(), userId);
+            case DUPLICATE_MERGED -> throw new BusinessRuleException(
+                    "حالة الدمج تُنشأ حصراً من عملية معالجة المكررات");
+        };
 
-        if (newStatus == Member.MemberStatus.SUSPENDED && (reason == null || reason.trim().isEmpty())) {
-            throw new BusinessRuleException("سبب الإيقاف مطلوب عند تعليق المستفيد");
-        }
-
-        if (newStatus == Member.MemberStatus.ACTIVE) {
-            ensureBenefitPolicyForActivation(member);
-        }
-
-        member.setStatus(newStatus);
-        // `active` is this system's archive/soft-delete flag (same convention as Employer/Provider),
-        // NOT a mirror of "status == ACTIVE" — it drives default-list visibility. Only TERMINATED
-        // is an archival state; SUSPENDED/PENDING members must stay visible in the normal list with
-        // their status chip reflecting the real state, not vanish as if soft-deleted.
-        member.setActive(newStatus != Member.MemberStatus.TERMINATED);
-        member.setBlockedReason(newStatus == Member.MemberStatus.SUSPENDED ? reason : null);
-        member = memberRepository.save(member);
-
-        // Suspending/terminating a principal removes coverage for the whole family; reactivation
-        // is deliberately NOT cascaded — each dependent must be reactivated individually so a
-        // dependent who was separately suspended for their own reason isn't silently reinstated.
-        if (member.isPrincipal()
-                && (newStatus == Member.MemberStatus.SUSPENDED || newStatus == Member.MemberStatus.TERMINATED)) {
-            List<Member> dependents = memberRepository.findByParentId(id);
-            dependents.forEach(dep -> {
-                dep.setStatus(newStatus);
-                dep.setActive(newStatus != Member.MemberStatus.TERMINATED);
-                // Dependents inherit the principal's suspension reason — they weren't suspended
-                // for their own reason, so the tooltip/badge should explain it's a family-wide
-                // effect of the principal's status, not show a blank reason.
-                dep.setBlockedReason(newStatus == Member.MemberStatus.SUSPENDED
-                        ? "إيقاف تلقائي لتوقف الرئيسي: " + reason
-                        : null);
-            });
-            memberRepository.saveAll(dependents);
-        }
-
-        auditLogService.createAuditLog("STATUS_CHANGE", "MEMBER", id,
-                String.format("Status changed from %s to %s%s", previousStatus, newStatus,
-                        reason != null && !reason.isBlank() ? " — " + reason : ""),
-                currentUser != null ? currentUser.getId() : null,
-                currentUser != null ? currentUser.getUsername() : "system", null, null);
-
-        log.info("✅ Member ID={} status changed: {} -> {}", id, previousStatus, newStatus);
+        log.info("✅ Member ID={} status changed to: {}", id, newStatus);
 
         if (member.isPrincipal()) {
             List<Member> dependents = memberRepository.findByParentId(member.getId());
             return mapper.toViewDto(member, dependents);
         }
         return mapper.toViewDto(member);
+    }
+
+    /**
+     * TERMINATED -> ACTIVE. Exceptional action: requires SUPER_ADMIN and a
+     * mandatory reason, unlike the ordinary {@link #toggleActive}/restore
+     * path (which explicitly refuses to touch a TERMINATED member).
+     */
+    @Transactional
+    public MemberViewDto reinstateTerminatedMember(Long id, String reason) {
+        Member stored = requireStoredMember(id);
+        commandAccessPolicy.require(MemberOperation.REINSTATE, employerIdOf(stored));
+        User currentUser = authorizationService.getCurrentUser();
+        boolean mayReinstateTerminated = currentUser != null
+                && effectivePermissionService.resolve(currentUser)
+                        .contains(SystemPermission.MEMBER_REINSTATE_TERMINATED);
+        Member member = statusTransitionService.reinstateTerminated(id, reason,
+                currentUser != null ? currentUser.getId() : null, mayReinstateTerminated);
+        if (member.isPrincipal()) {
+            List<Member> dependents = memberRepository.findByParentId(member.getId());
+            return mapper.toViewDto(member, dependents);
+        }
+        return mapper.toViewDto(member);
+    }
+
+    /**
+     * Restores exactly the dependents ONE specific family-cascade operation
+     * affected (see {@link MemberStatusTransitionService#restoreFamily}) --
+     * an explicit, opt-in action, never triggered automatically by restoring
+     * the principal.
+     */
+    @Transactional
+    public MemberStatusTransitionService.FamilyRestoreResult restoreFamily(String transitionId) {
+        commandAccessPolicy.requireBulk(MemberOperation.REINSTATE,
+                statusTransitionService.familyCascadeEmployerIds(transitionId));
+        User currentUser = authorizationService.getCurrentUser();
+        Long userId = currentUser != null ? currentUser.getId() : null;
+        return statusTransitionService.restoreFamily(transitionId, userId);
     }
 
     /**
@@ -535,13 +632,7 @@ public class UnifiedMemberService {
     public MemberViewDto getMember(Long id) {
         Member member = memberRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Member not found: " + id));
-
-        User currentUser = authorizationService.getCurrentUser();
-        if (!authorizationService.canAccessMember(currentUser, id)) {
-            log.warn("❌ Access denied: user {} attempted to read member {}",
-                    currentUser != null ? currentUser.getUsername() : "unknown", id);
-            throw new AccessDeniedException("Access denied to this member");
-        }
+        queryAccessPolicy.requireMember(MemberOperation.VIEW_DETAILS, employerIdOf(member));
 
         if (member.isPrincipal()) {
             List<Member> dependents = memberRepository.findByParentId(member.getId());
@@ -553,19 +644,26 @@ public class UnifiedMemberService {
 
     /**
      * Check family eligibility by barcode (principal's barcode).
-     * 
+     *
      * Returns principal + all dependents for selection.
-     * 
-     * @param barcode Principal member's barcode
+     *
+     * @param barcode     Principal member's barcode
+     * @param serviceDate Date to check eligibility against; defaults to today
+     *                    when null (matches the previous hardcoded behavior,
+     *                    but now callers -- e.g. checking eligibility for a
+     *                    backdated visit -- can override it, the same way
+     *                    modules/eligibility.FamilyEligibilityService always
+     *                    could).
      * @return Family eligibility response
      */
     @Transactional(readOnly = true)
-    public FamilyEligibilityResponseDto checkFamilyEligibility(String barcode) {
-        log.info("🔍 Checking family eligibility for barcode: {}", barcode);
+    public FamilyEligibilityResponseDto checkFamilyEligibility(String barcode, LocalDate serviceDate) {
+        log.info("🔍 Checking family eligibility for barcode: {}, serviceDate: {}", barcode, serviceDate);
 
         // 1. Find principal by barcode
         Member principal = memberRepository.findByBarcode(barcode)
                 .orElseThrow(() -> new ResourceNotFoundException("No member found with barcode: " + barcode));
+        queryAccessPolicy.requireMember(MemberOperation.VIEW_DETAILS, employerIdOf(principal));
 
         // Validate it's a principal (should always be true if barcode exists)
         if (principal.isDependent()) {
@@ -573,70 +671,73 @@ public class UnifiedMemberService {
                     "Invalid state: Dependent member has barcode. Only principals should have barcodes.");
         }
 
-        // 🔍 Debug logging for employer organization
-        log.info("📋 Member details: id={}, fullName={}, active={}, eligibilityStatus={}",
-                principal.getId(), principal.getFullName(), principal.getActive(), principal.getEligibilityStatus());
-
-        if (principal.getEmployer() != null) {
-            log.info("✅ Employer: id={}, name={}",
-                    principal.getEmployer().getId(),
-                    principal.getEmployer().getName());
-        } else {
-            log.warn("⚠️ Member ID={} has NO Employer! This will cause eligibility failure.",
-                    principal.getId());
-        }
-
-        if (principal.getBenefitPolicy() != null) {
-            log.info("✅ Benefit Policy: id={}, name={}, status={}",
-                    principal.getBenefitPolicy().getId(),
-                    principal.getBenefitPolicy().getName(),
-                    principal.getBenefitPolicy().getStatus());
-        } else {
-            log.warn("⚠️ Member ID={} has NO Benefit Policy assigned.", principal.getId());
-        }
-
-        // 2. Load all dependents
-        List<Member> dependents = memberRepository.findByParentId(principal.getId());
+        // 2. Resolve family + evaluate eligibility through the SAME orchestrator
+        // modules/eligibility.FamilyEligibilityService uses for its own
+        // memberId-based endpoint (evaluateFamily). Previously this method had
+        // its own independent copy of this loop -- one endpoint resolved the
+        // family by barcode and always used today's date, the other by member
+        // id with a caller-supplied date, and each ran its own engine-calling
+        // loop. Now there is exactly one "evaluate this family" implementation;
+        // this method only resolves barcode -> principal and maps the shared
+        // result into its own response DTO shape.
+        FamilyEligibilityService.FamilyGroup family = familyEligibilityService.resolveFamily(principal);
+        List<Member> dependents = family.dependents();
+        Map<Long, EligibilityResult> eligibilityByMemberId =
+                familyEligibilityService.evaluateFamily(family.principal(), dependents, serviceDate);
 
         // 3. Build response
-        FamilyEligibilityResponseDto response = mapper.toFamilyEligibilityResponse(principal, dependents);
+        FamilyEligibilityResponseDto response = mapper.toFamilyEligibilityResponse(principal, dependents, eligibilityByMemberId);
 
-        // 4. Populate financial details
+        // 4. Populate financial details -- ONE bulk read for principal + every
+        // dependent together (MemberFinancialSummaryService.getFinancialSummaries),
+        // not one query per family member. "usedAmount"/"remainingLimit" here are the
+        // WAAD-FIN-1.0 limit-consumption axis (limitConsumedAmount), never
+        // totalApproved -- see MemberFinancialSummaryDto's field docs for why the two
+        // are different numbers, and MEMBER_MODULE_CLOSURE_PLAN.md for the incident
+        // this axis previously caused (member window overstated remaining coverage).
         try {
-            var principalSummary = financialSummaryService.getFinancialSummary(principal.getId());
-            response.setAnnualLimit(principalSummary.getAnnualLimit());
-            response.setRemainingFamilyLimit(principalSummary.getRemainingCoverage());
+            List<Long> familyMemberIds = new ArrayList<>();
+            familyMemberIds.add(principal.getId());
+            if (response.getDependents() != null) {
+                response.getDependents().forEach(dep -> familyMemberIds.add(dep.getId()));
+            }
+            var summariesByMember = financialSummaryService.getFinancialSummaries(familyMemberIds);
 
-            // Map financial info to Principal DTO
-            if (response.getPrincipal() != null) {
-                response.getPrincipal().setAnnualLimit(principalSummary.getAnnualLimit());
-                response.getPrincipal().setUsedAmount(principalSummary.getTotalApproved());
-                response.getPrincipal().setRemainingLimit(principalSummary.getRemainingCoverage());
-                response.getPrincipal()
-                        .setUsagePercentage(principalSummary.getUtilizationPercent() != null
-                                ? principalSummary.getUtilizationPercent().doubleValue()
-                                : 0.0);
+            var principalSummary = summariesByMember.get(principal.getId());
+            if (principalSummary != null) {
+                response.setAnnualLimit(principalSummary.getAnnualLimit());
+                response.setRemainingFamilyLimit(principalSummary.getRemainingCoverage());
+
+                if (response.getPrincipal() != null) {
+                    response.getPrincipal().setAnnualLimit(principalSummary.getAnnualLimit());
+                    response.getPrincipal().setUsedAmount(principalSummary.getLimitConsumedAmount());
+                    response.getPrincipal().setRemainingLimit(principalSummary.getRemainingCoverage());
+                    response.getPrincipal().setUsagePercentage(toDouble(principalSummary.getUtilizationPercent()));
+                }
             }
 
-            // Map financial info to Dependents DTOs
             if (response.getDependents() != null) {
                 for (var depDto : response.getDependents()) {
-                    try {
-                        var depSummary = financialSummaryService.getFinancialSummary(depDto.getId());
-                        depDto.setAnnualLimit(depSummary.getAnnualLimit());
-                        depDto.setUsedAmount(depSummary.getTotalApproved());
-                        depDto.setRemainingLimit(depSummary.getRemainingCoverage());
-                        depDto.setUsagePercentage(depSummary.getUtilizationPercent() != null
-                                ? depSummary.getUtilizationPercent().doubleValue()
-                                : 0.0);
-                    } catch (Exception e) {
-                        log.warn("⚠️ Failed to load financial summary for dependent ID={}: {}", depDto.getId(),
-                                e.getMessage());
+                    var depSummary = summariesByMember.get(depDto.getId());
+                    if (depSummary == null) {
+                        log.warn("⚠️ No financial summary returned for dependent ID={}", depDto.getId());
+                        continue;
                     }
+                    depDto.setAnnualLimit(depSummary.getAnnualLimit());
+                    depDto.setUsedAmount(depSummary.getLimitConsumedAmount());
+                    depDto.setRemainingLimit(depSummary.getRemainingCoverage());
+                    depDto.setUsagePercentage(toDouble(depSummary.getUtilizationPercent()));
                 }
             }
         } catch (Exception e) {
             log.error("💥 Failed to populate financial data for family eligibility: barcode={}", barcode, e);
+            // Previously swallowed entirely: the response returned as if financial
+            // data were simply absent/zero, with no signal that the read failed.
+            // A null/zero remainingFamilyLimit is indistinguishable from "no limit
+            // left" -- callers must check financialDataAvailable before trusting
+            // the limit fields.
+            response.setFinancialDataAvailable(false);
+            response.setFinancialDataError("تعذر جلب بيانات السقف المالي، يرجى إعادة المحاولة");
         }
 
         log.info(
@@ -647,75 +748,89 @@ public class UnifiedMemberService {
         return response;
     }
 
+    /** Null-safe BigDecimal-to-double conversion for the DTO's Double-typed percentage fields. */
+    private static double toDouble(BigDecimal value) {
+        return value != null ? value.doubleValue() : 0.0;
+    }
+
     /**
-     * Soft-delete a member (principal or dependent).
+     * Ends a member's membership (principal or dependent) -- what used to be
+     * called "delete" here, but nothing is deleted: this sets
+     * status=TERMINATED (active becomes false as a consequence, never
+     * independently) via {@link MemberStatusTransitionService}, which
+     * preserves all financial/medical history, cascades to currently-
+     * ACTIVE dependents only, and records the transition in the append-only
+     * status history. Existing financial and medical records are retained.
      *
-     * Sets active=false and status=TERMINATED. Physical deletion is intentionally
-     * avoided because FK constraints (claims, visits, pre-auth, etc.) use
-     * ON DELETE RESTRICT, which would cause a 500 for any member with related
-     * records. The hard-delete path ({@link #hardDeleteMember}) still exists for
-     * admin use when all related records have been removed.
-     *
-     * IMPORTANT: Soft-deleting a principal will cascade the same flags to all
-     * dependents.
-     *
-     * @param id Member ID
+     * @param id     Member ID
+     * @param reason Mandatory reason recorded on the transition
      */
     @Transactional
+    public void terminateMembership(Long id, String reason) {
+        Member stored = requireStoredMember(id);
+        commandAccessPolicy.require(MemberOperation.TERMINATE, employerIdOf(stored));
+        User currentUser = authorizationService.getCurrentUser();
+        statusTransitionService.terminateMembership(id, reason,
+                currentUser != null ? currentUser.getId() : null, StatusSource.MANUAL);
+        log.info("✅ Membership terminated for member ID={}", id);
+    }
+
+    /**
+     * @deprecated kept only for existing callers of the old name; delegates
+     *             entirely to {@link #terminateMembership(Long, String)}.
+     *             "Delete" was always the wrong word here -- this never
+     *             removed a row, it ends membership. Use
+     *             {@link #terminateMembership(Long, String)} directly in new
+     *             code.
+     */
+    @Deprecated
+    @Transactional
     public void deleteMember(Long id) {
-        Member member = memberRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Member not found: " + id));
+        Member stored = requireStoredMember(id);
+        commandAccessPolicy.require(MemberOperation.TERMINATE, employerIdOf(stored));
+        User currentUser = authorizationService.getCurrentUser();
+        statusTransitionService.terminateMembership(id, "LEGACY_TERMINATE_ENDPOINT",
+                currentUser != null ? currentUser.getId() : null, StatusSource.SYSTEM);
+    }
+
+    /**
+     * Compatibility bulk termination, deliberately atomic: every stored
+     * member is authorised before the first transition. A failure on any
+     * member rolls the whole transaction back, so the response can never
+     * claim a partially completed selection as a successful bulk action.
+     */
+    @Transactional
+    public void bulkTerminateMemberships(java.util.Collection<Long> memberIds) {
+        bulkTerminateMemberships(memberIds, "LEGACY_BULK_TERMINATE_ENDPOINT");
+    }
+
+    /**
+     * @param reason must be the caller's actual justification, not a
+     *               placeholder -- this ends coverage for every id in the
+     *               batch and is recorded once per member in the same
+     *               append-only status history a single termination uses.
+     */
+    @Transactional
+    public void bulkTerminateMemberships(java.util.Collection<Long> memberIds, String reason) {
+        if (memberIds == null || memberIds.isEmpty()) {
+            throw new BusinessRuleException("يجب تحديد مستفيد واحد على الأقل");
+        }
+        if (reason == null || reason.isBlank()) {
+            throw new BusinessRuleException("سبب إنهاء العضوية إلزامي");
+        }
+        java.util.List<Member> members = memberIds.stream()
+                .distinct()
+                .map(this::requireStoredMember)
+                .toList();
+        commandAccessPolicy.requireBulk(MemberOperation.BULK_OPERATION,
+                members.stream().map(this::employerIdOf).toList());
 
         User currentUser = authorizationService.getCurrentUser();
-        if (!authorizationService.canAccessMember(currentUser, id)) {
-            log.warn("❌ Access denied: user {} attempted to delete member {}",
-                    currentUser != null ? currentUser.getUsername() : "unknown", id);
-            throw new AccessDeniedException("Access denied to this member");
+        Long userId = currentUser != null ? currentUser.getId() : null;
+        for (Member member : members) {
+            statusTransitionService.terminateMembership(member.getId(),
+                    reason, userId, StatusSource.SYSTEM);
         }
-
-        // Collect IDs to check (principal + its dependents)
-        List<Long> allIds = new java.util.ArrayList<>();
-        allIds.add(id);
-        if (member.isPrincipal()) {
-            memberRepository.findByParentId(id).forEach(d -> allIds.add(d.getId()));
-        }
-        String idList = allIds.stream().map(String::valueOf).collect(java.util.stream.Collectors.joining(","));
-
-        // Block soft deletion if any financial/medical records exist
-        long claimsCount = jdbcTemplate
-                .queryForObject("SELECT COUNT(*) FROM claims WHERE member_id IN (" + idList + ")", Long.class);
-        long preAuthCount = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM preauthorization_requests WHERE member_id IN (" + idList + ")", Long.class);
-        long visitsCount = jdbcTemplate
-                .queryForObject("SELECT COUNT(*) FROM visits WHERE member_id IN (" + idList + ")", Long.class);
-
-        if (claimsCount > 0 || preAuthCount > 0 || visitsCount > 0) {
-            String details = String.format(
-                    "مطالبات: %d، موافقات مسبقة: %d، زيارات: %d",
-                    claimsCount, preAuthCount, visitsCount);
-            throw new IllegalStateException(
-                    "لا يمكن حذف المستفيد لأن له معاملات مالية مرتبطة (" + details + "). " +
-                            "يُرجى أرشفة المستفيد بدلاً من الحذف، أو مراجعة السجلات المالية أولاً.");
-        }
-
-        member.setActive(false);
-        member.setStatus(Member.MemberStatus.TERMINATED);
-        memberRepository.save(member);
-
-        if (member.isPrincipal()) {
-            List<Member> dependents = memberRepository.findByParentId(id);
-            if (!dependents.isEmpty()) {
-                log.warn("⚠️ Soft-deleting PRINCIPAL member ID={} — cascading TERMINATED to {} dependents",
-                        id, dependents.size());
-                dependents.forEach(dep -> {
-                    dep.setActive(false);
-                    dep.setStatus(Member.MemberStatus.TERMINATED);
-                });
-                memberRepository.saveAll(dependents);
-            }
-        }
-
-        log.info("✅ Soft-deleted member ID={} (status=TERMINATED, active=false)", id);
     }
 
     // ==================== ADDITIONAL METHODS FOR UNIFIED CONTROLLER
@@ -753,21 +868,27 @@ public class UnifiedMemberService {
      */
     @Transactional(readOnly = true)
     public FamilyEligibilityResponseDto checkEligibility(String barcode) {
-        return checkFamilyEligibility(barcode);
+        return checkFamilyEligibility(barcode, null);
+    }
+
+    /** Alias for checkFamilyEligibility(barcode, serviceDate) for controller compatibility. */
+    @Transactional(readOnly = true)
+    public FamilyEligibilityResponseDto checkEligibility(String barcode, LocalDate serviceDate) {
+        return checkFamilyEligibility(barcode, serviceDate);
     }
 
     /**
      * Get all members with pagination and optional filters.
-     * 
+     *
      * @param pageable   Pagination info
      * @param employerId Optional employer filter
      * @param status     Optional status filter
      * @param type       Optional member type filter (PRINCIPAL/DEPENDENT)
      * @return Page of members
-     * 
-     *         SECURITY (2026-01-16):
-     *         - EMPLOYER_ADMIN: Automatically filtered to their employer only
-     *         - Internal/financial roles: No automatic filter when explicitly allowed by endpoint/service checks
+     *
+     *         SECURITY: the caller's reach is decided by MemberQueryAccessPolicy
+     *         and applied through MemberScopeFilter. A caller outside scope is
+     *         refused (403), not served an empty page.
      */
     @Transactional(readOnly = true)
     public Page<MemberViewDto> getAllMembers(
@@ -779,64 +900,10 @@ public class UnifiedMemberService {
         log.info("Fetching all members: page={}, size={}, employerId={}, status={}, type={}",
                 pageable.getPageNumber(), pageable.getPageSize(), employerId, status, type);
 
-        // ═══════════════════════════════════════════════════════════════════════════
-        // EMPLOYER_ADMIN SECURITY FILTER (2026-01-16)
-        // ═══════════════════════════════════════════════════════════════════════════
-        User currentUser = authorizationService.getCurrentUser();
-        Long effectiveEmployerId = employerId;
+        final AuthorizedMemberScope scope = queryAccessPolicy.requireListing(
+                MemberOperation.LIST, employerId);
 
-        if (currentUser != null && authorizationService.isEmployerAdmin(currentUser)) {
-            // Check feature toggle
-            if (!authorizationService.canEmployerViewMembers(currentUser)) {
-                log.warn("❌ EMPLOYER_ADMIN user {} attempted to view members but feature VIEW_MEMBERS is disabled",
-                        currentUser.getUsername());
-                return Page.empty();
-            }
-
-            // EMPLOYER_ADMIN is LOCKED to their employer - override any provided filter
-            Long employerFilter = authorizationService.getEmployerFilterForUser(currentUser);
-            if (employerFilter == null) {
-                log.warn("⚠️ EMPLOYER_ADMIN user {} has no employerId assigned", currentUser.getUsername());
-                return Page.empty();
-            }
-
-            effectiveEmployerId = employerFilter;
-            log.info("🔒 EMPLOYER_ADMIN filter applied: user={}, locked to employerId={}",
-                    currentUser.getUsername(), effectiveEmployerId);
-        }
-
-        final Long finalEmployerId = effectiveEmployerId;
-
-        Specification<Member> spec = (root, query, cb) -> {
-            List<Predicate> predicates = new ArrayList<>();
-
-            if (finalEmployerId != null) {
-                predicates.add(cb.equal(root.get("employer").get("id"), finalEmployerId));
-            }
-
-            if (status != null && !status.trim().isEmpty()) {
-                predicates.add(cb.equal(root.get("status"), status));
-            }
-
-            if (type != null && !type.trim().isEmpty()) {
-                if ("PRINCIPAL".equalsIgnoreCase(type)) {
-                    predicates.add(cb.isNull(root.get("parent")));
-                } else if ("DEPENDENT".equalsIgnoreCase(type)) {
-                    predicates.add(cb.isNotNull(root.get("parent")));
-                } else {
-                    // Try to filter by specific relationship
-                    try {
-                        Member.Relationship rel = Member.Relationship.valueOf(type.toUpperCase());
-                        predicates.add(cb.equal(root.get("relationship"), rel));
-                        predicates.add(cb.isNotNull(root.get("parent")));
-                    } catch (IllegalArgumentException e) {
-                        // Invalid relationship type, ignore or fallback
-                    }
-                }
-            }
-
-            return cb.and(predicates.toArray(new Predicate[0]));
-        };
+        Specification<Member> spec = MemberFilter.listing(status, type).toSpecification(scope);
 
         // Fix Pageable sort since 'type' is transient
         org.springframework.data.domain.Pageable safePageable = pageable;
@@ -872,12 +939,14 @@ public class UnifiedMemberService {
 
         // Map to DTOs using Page.map() to preserve metadata
         final Map<Long, List<Member>> finalDependentsMap = dependentsMap;
+        final com.waad.tba.modules.member.mapper.UnifiedMemberMapper.ReadContext readContext =
+                new com.waad.tba.modules.member.mapper.UnifiedMemberMapper.ReadContext(scope.maskSensitiveFields());
         return membersPage.map(member -> {
             if (member.isPrincipal()) {
                 List<Member> dependents = finalDependentsMap.getOrDefault(member.getId(), List.of());
-                return mapper.toViewDto(member, dependents);
+                return mapper.toViewDto(member, dependents, readContext);
             }
-            return mapper.toViewDto(member);
+            return mapper.toViewDto(member, List.of(), readContext);
         });
     }
 
@@ -893,58 +962,14 @@ public class UnifiedMemberService {
     @Transactional(readOnly = true)
     public long countMembers(Long employerId, String status, String type) {
 
-        // ═══════════════════════════════════════════════════════════════════════════
-        // EMPLOYER_ADMIN SECURITY FILTER (COPIED from getAllMembers)
-        // ═══════════════════════════════════════════════════════════════════════════
-        User currentUser = authorizationService.getCurrentUser();
-        Long effectiveEmployerId = employerId;
+        // The same authorisation as getAllMembers, deliberately: a count is a
+        // listing whose rows were summed. Answering it under a looser rule
+        // would leak the size of a tenant's roster to someone barred from
+        // reading it.
+        final AuthorizedMemberScope scope = queryAccessPolicy.requireListing(
+                MemberOperation.LIST, employerId);
 
-        if (currentUser != null && authorizationService.isEmployerAdmin(currentUser)) {
-            // Check feature toggle
-            if (!authorizationService.canEmployerViewMembers(currentUser)) {
-                return 0;
-            }
-
-            // EMPLOYER_ADMIN is LOCKED to their employer - override any provided filter
-            Long employerFilter = authorizationService.getEmployerFilterForUser(currentUser);
-            if (employerFilter == null) {
-                return 0;
-            }
-
-            effectiveEmployerId = employerFilter;
-        }
-
-        final Long finalEmployerId = effectiveEmployerId;
-
-        Specification<Member> spec = (root, query, cb) -> {
-            List<Predicate> predicates = new ArrayList<>();
-
-            if (finalEmployerId != null) {
-                predicates.add(cb.equal(root.get("employer").get("id"), finalEmployerId));
-            }
-
-            if (status != null && !status.trim().isEmpty()) {
-                predicates.add(cb.equal(root.get("status"), status));
-            }
-
-            if (type != null && !type.trim().isEmpty()) {
-                if ("PRINCIPAL".equalsIgnoreCase(type)) {
-                    predicates.add(cb.isNull(root.get("parent")));
-                } else if ("DEPENDENT".equalsIgnoreCase(type)) {
-                    predicates.add(cb.isNotNull(root.get("parent")));
-                } else {
-                    try {
-                        Member.Relationship rel = Member.Relationship.valueOf(type.toUpperCase());
-                        predicates.add(cb.equal(root.get("relationship"), rel));
-                        predicates.add(cb.isNotNull(root.get("parent")));
-                    } catch (IllegalArgumentException e) {
-                        // Ignore
-                    }
-                }
-            }
-
-            return cb.and(predicates.toArray(new Predicate[0]));
-        };
+        Specification<Member> spec = MemberFilter.listing(status, type).toSpecification(scope);
 
         return memberRepository.count(spec);
     }
@@ -954,7 +979,7 @@ public class UnifiedMemberService {
      * 
      * @param nameAr          Arabic name filter
      * @param nameEn          English name filter
-     * @param civilId         Civil ID filter
+     * @param nationalNumber  National number filter
      * @param barcode         Barcode filter
      * @param cardNumber      Card number filter
      * @param employerId      Employer filter
@@ -964,15 +989,15 @@ public class UnifiedMemberService {
      * @param pageable        Pagination info
      * @return Page of search results
      * 
-     *         SECURITY (2026-01-16):
-     *         - EMPLOYER_ADMIN: Automatically filtered to their employer only
-     *         - Internal/financial roles: No automatic filter when explicitly allowed by endpoint/service checks
+     *         SECURITY: the caller's reach is decided by MemberQueryAccessPolicy
+     *         and applied through MemberScopeFilter. A caller outside scope is
+     *         refused (403), not served an empty page.
      */
     @Transactional(readOnly = true)
     public Page<MemberViewDto> searchMembers(
             String nameAr,
             String nameEn,
-            String civilId,
+            String nationalNumber,
             String barcode,
             String cardNumber,
             Long employerId,
@@ -982,125 +1007,27 @@ public class UnifiedMemberService {
             boolean deleted,
             Pageable pageable) {
 
-        log.info("Searching members: nameAr={}, civilId={}, barcode={}, cardNumber={}",
-                nameAr, civilId, barcode, cardNumber);
+        log.info("Searching members: nameAr={}, nationalNumber={}, barcode={}, cardNumber={}",
+                nameAr, nationalNumber, barcode, cardNumber);
+
+        // Before the short-query shortcut, not after: authorisation decides
+        // whether this caller may search at all, and a refusal that arrives as
+        // an empty page is indistinguishable from a search that found nothing.
+        final AuthorizedMemberScope scope = queryAccessPolicy.requireListing(
+                MemberOperation.SEARCH, employerId);
 
         boolean hasNameSearch = hasText(nameAr) || hasText(nameEn);
-        boolean hasExactIdentifierSearch = hasText(civilId) || hasText(barcode) || hasText(cardNumber);
+        boolean hasExactIdentifierSearch = hasText(nationalNumber) || hasText(barcode) || hasText(cardNumber);
         if (hasNameSearch && !hasExactIdentifierSearch
                 && isShortTextSearch(nameAr) && isShortTextSearch(nameEn)) {
             log.info("Skipping member name search shorter than {} characters", MIN_MEMBER_TEXT_SEARCH_LENGTH);
             return Page.empty(pageable);
         }
 
-        // ═══════════════════════════════════════════════════════════════════════════
-        // EMPLOYER_ADMIN SECURITY FILTER (2026-01-16)
-        // ═══════════════════════════════════════════════════════════════════════════
-        User currentUser = authorizationService.getCurrentUser();
-        Long effectiveEmployerId = employerId;
-
-        if (currentUser != null && authorizationService.isEmployerAdmin(currentUser)) {
-            // Check feature toggle
-            if (!authorizationService.canEmployerViewMembers(currentUser)) {
-                log.warn("❌ EMPLOYER_ADMIN user {} attempted to search members but feature VIEW_MEMBERS is disabled",
-                        currentUser.getUsername());
-                return Page.empty();
-            }
-
-            // EMPLOYER_ADMIN is LOCKED to their employer - override any provided filter
-            Long employerFilter = authorizationService.getEmployerFilterForUser(currentUser);
-            if (employerFilter == null) {
-                log.warn("⚠️ EMPLOYER_ADMIN user {} has no employerId assigned", currentUser.getUsername());
-                return Page.empty();
-            }
-
-            effectiveEmployerId = employerFilter;
-            log.info("🔒 EMPLOYER_ADMIN search filter applied: user={}, locked to employerId={}",
-                    currentUser.getUsername(), effectiveEmployerId);
-        }
-
-        final Long finalEmployerId = effectiveEmployerId;
-
-        Specification<Member> spec = (root, query, cb) -> {
-            List<Predicate> predicates = new ArrayList<>();
-
-            if (nameAr != null && !nameAr.trim().isEmpty()) {
-                String searchAr = "%" + nameAr.toLowerCase() + "%";
-                if (nameEn != null && !nameEn.trim().isEmpty() && !nameEn.equalsIgnoreCase(nameAr)) {
-                    // If both are provided and different, combine with OR to search fullName
-                    String searchEn = "%" + nameEn.toLowerCase() + "%";
-                    predicates.add(cb.or(
-                            cb.like(cb.lower(root.get("fullName")), searchAr),
-                            cb.like(cb.lower(root.get("fullName")), searchEn),
-                            cb.like(cb.lower(root.get("cardNumber")), searchAr),
-                            cb.like(cb.lower(root.get("cardNumber")), searchEn),
-                            cb.like(root.get("civilId"), searchAr),
-                            cb.like(root.get("barcode"), searchAr)));
-                } else {
-                    predicates.add(cb.or(
-                            cb.like(cb.lower(root.get("fullName")), searchAr),
-                            cb.like(cb.lower(root.get("cardNumber")), searchAr),
-                            cb.like(root.get("civilId"), searchAr),
-                            cb.like(root.get("barcode"), searchAr)));
-                }
-            } else if (nameEn != null && !nameEn.trim().isEmpty()) {
-                String searchEn = "%" + nameEn.toLowerCase() + "%";
-                predicates.add(cb.or(
-                        cb.like(cb.lower(root.get("fullName")), searchEn),
-                        cb.like(cb.lower(root.get("cardNumber")), searchEn),
-                        cb.like(root.get("civilId"), searchEn),
-                        cb.like(root.get("barcode"), searchEn)));
-            }
-
-            if (civilId != null && !civilId.trim().isEmpty()) {
-                predicates.add(cb.like(root.get("civilId"), "%" + civilId + "%"));
-            }
-
-            if (barcode != null && !barcode.trim().isEmpty()) {
-                predicates.add(cb.like(root.get("barcode"), "%" + barcode + "%"));
-            }
-
-            if (cardNumber != null && !cardNumber.trim().isEmpty()) {
-                predicates.add(cb.like(root.get("cardNumber"), "%" + cardNumber + "%"));
-            }
-
-            if (finalEmployerId != null) {
-                predicates.add(cb.equal(root.get("employer").get("id"), finalEmployerId));
-            }
-
-            if (benefitPolicyId != null) {
-                predicates.add(cb.equal(root.get("benefitPolicy").get("id"), benefitPolicyId));
-            }
-
-            if (status != null && !status.trim().isEmpty()) {
-                predicates.add(cb.equal(root.get("status"), status));
-            }
-
-            if (type != null && !type.trim().isEmpty()) {
-                if ("PRINCIPAL".equalsIgnoreCase(type)) {
-                    predicates.add(cb.isNull(root.get("parent")));
-                } else if ("DEPENDENT".equalsIgnoreCase(type)) {
-                    predicates.add(cb.isNotNull(root.get("parent")));
-                } else {
-                    try {
-                        Member.Relationship rel = Member.Relationship.valueOf(type.toUpperCase());
-                        predicates.add(cb.equal(root.get("relationship"), rel));
-                        predicates.add(cb.isNotNull(root.get("parent")));
-                    } catch (IllegalArgumentException e) {
-                        // Ignore
-                    }
-                }
-            }
-
-            // active / soft-delete filter
-            if (deleted) {
-                predicates.add(cb.equal(root.get("active"), false));
-            } else {
-                predicates.add(cb.or(cb.isNull(root.get("active")), cb.equal(root.get("active"), true)));
-            }
-
-            return cb.and(predicates.toArray(new Predicate[0]));
-        };
+        Specification<Member> spec = new MemberFilter(nameAr, nameEn, nationalNumber, barcode, cardNumber,
+                benefitPolicyId, status, type,
+                deleted ? MemberFilter.DeletedMode.DELETED_ONLY : MemberFilter.DeletedMode.ACTIVE_ONLY)
+                .toSpecification(scope);
 
         // Fix Pageable sort since 'type' is transient
         org.springframework.data.domain.Pageable safePageable = pageable;
@@ -1136,12 +1063,14 @@ public class UnifiedMemberService {
 
         // Map to DTOs using Page.map() to preserve metadata
         final Map<Long, List<Member>> finalDependentsMap = dependentsMap;
+        final com.waad.tba.modules.member.mapper.UnifiedMemberMapper.ReadContext readContext =
+                new com.waad.tba.modules.member.mapper.UnifiedMemberMapper.ReadContext(scope.maskSensitiveFields());
         return membersPage.map(member -> {
             if (member.isPrincipal()) {
                 List<Member> dependents = finalDependentsMap.getOrDefault(member.getId(), List.of());
-                return mapper.toViewDto(member, dependents);
+                return mapper.toViewDto(member, dependents, readContext);
             }
-            return mapper.toViewDto(member);
+            return mapper.toViewDto(member, List.of(), readContext);
         });
     }
 
@@ -1155,10 +1084,7 @@ public class UnifiedMemberService {
     public List<MemberViewDto> getDependents(Long principalId) {
         Member principal = memberRepository.findById(principalId)
                 .orElseThrow(() -> new ResourceNotFoundException("Principal member not found: " + principalId));
-
-        if (!authorizationService.canAccessMember(authorizationService.getCurrentUser(), principalId)) {
-            throw new AccessDeniedException("Access denied to this member");
-        }
+        queryAccessPolicy.requireMember(MemberOperation.VIEW_DETAILS, employerIdOf(principal));
 
         if (principal.isDependent()) {
             throw new BusinessRuleException("Member ID " + principalId + " is a Dependent, not a Principal");
@@ -1181,10 +1107,7 @@ public class UnifiedMemberService {
     public long countDependents(Long principalId) {
         Member principal = memberRepository.findById(principalId)
                 .orElseThrow(() -> new ResourceNotFoundException("Principal member not found: " + principalId));
-
-        if (!authorizationService.canAccessMember(authorizationService.getCurrentUser(), principalId)) {
-            throw new AccessDeniedException("Access denied to this member");
-        }
+        queryAccessPolicy.requireMember(MemberOperation.VIEW_DETAILS, employerIdOf(principal));
 
         if (principal.isDependent()) {
             throw new BusinessRuleException("Member ID " + principalId + " is a Dependent, not a Principal");
@@ -1206,7 +1129,7 @@ public class UnifiedMemberService {
     public MemberViewDto updateMemberPhoto(Long memberId, String photoPath) {
         log.info("📸 Updating photo for member: memberId={}, path={}", memberId, photoPath);
 
-        Member member = requirePhotoAccess(memberId);
+        Member member = requirePhotoWriteAccess(memberId);
 
         member.setProfilePhotoPath(photoPath);
 
@@ -1232,7 +1155,7 @@ public class UnifiedMemberService {
      */
     @Transactional(readOnly = true)
     public String getMemberPhotoPath(Long memberId) {
-        Member member = requirePhotoAccess(memberId);
+        Member member = requirePhotoReadAccess(memberId);
 
         return member.getProfilePhotoPath();
     }
@@ -1242,28 +1165,20 @@ public class UnifiedMemberService {
      */
     @Transactional(readOnly = true)
     public void assertCanAccessMemberPhoto(Long memberId) {
-        requirePhotoAccess(memberId);
+        requirePhotoWriteAccess(memberId);
     }
 
-    private Member requirePhotoAccess(Long memberId) {
-        User currentUser = authorizationService.requireCurrentUser();
+    private Member requirePhotoReadAccess(Long memberId) {
         Member member = memberRepository.findById(memberId)
                 .orElseThrow(() -> new ResourceNotFoundException("Member not found: " + memberId));
+        queryAccessPolicy.requireMember(MemberOperation.VIEW_DETAILS, employerIdOf(member));
+        return member;
+    }
 
-        boolean allowed = authorizationService.isInternalStaff(currentUser)
-                || authorizationService.canAccessMember(currentUser, memberId);
-
-        if (!allowed && authorizationService.isProvider(currentUser)
-                && currentUser.getProviderId() != null
-                && member.getEmployer() != null) {
-            allowed = providerService.getAllowedEmployerIds(currentUser.getProviderId())
-                    .contains(member.getEmployer().getId());
-        }
-
-        if (!allowed) {
-            throw new org.springframework.security.access.AccessDeniedException(
-                    "Access to member photo denied");
-        }
+    private Member requirePhotoWriteAccess(Long memberId) {
+        Member member = memberRepository.findById(memberId)
+                .orElseThrow(() -> new ResourceNotFoundException("Member not found: " + memberId));
+        commandAccessPolicy.require(MemberOperation.EDIT_DEMOGRAPHICS, employerIdOf(member));
         return member;
     }
 
@@ -1279,32 +1194,23 @@ public class UnifiedMemberService {
     // ==================== RESTORE & HARD DELETE ====================
 
     /**
-     * Restore a terminated/suspended member to ACTIVE status.
-     * 
+     * Restore a SUSPENDED (or PENDING) member to ACTIVE. Refuses a
+     * TERMINATED member -- reinstating one is a separate, elevated-privilege
+     * action, see {@link #reinstateTerminatedMember}.
+     *
      * @param memberId Member ID
      * @return Restored member view DTO
      */
     @Transactional
-    public MemberViewDto restoreMember(Long memberId) {
+    public MemberViewDto restoreMember(Long memberId, String reason) {
         log.info("♻️ Restoring member: memberId={}", memberId);
 
-        Member member = memberRepository.findById(memberId)
-                .orElseThrow(() -> new ResourceNotFoundException("Member not found: " + memberId));
+        Member stored = requireStoredMember(memberId);
+        commandAccessPolicy.require(MemberOperation.REINSTATE, employerIdOf(stored));
+        User currentUser = authorizationService.getCurrentUser();
 
-        if (!authorizationService.canAccessMember(authorizationService.getCurrentUser(), memberId)) {
-            throw new AccessDeniedException("Access denied to this member");
-        }
-
-        if (member.getStatus() == Member.MemberStatus.ACTIVE) {
-            throw new BusinessRuleException("Member is already active: " + memberId);
-        }
-
-        ensureBenefitPolicyForActivation(member);
-
-        member.setStatus(Member.MemberStatus.ACTIVE);
-        member.setActive(true);
-
-        Member saved = memberRepository.save(member);
+        Member saved = statusTransitionService.restoreFromSuspended(memberId, reason,
+                currentUser != null ? currentUser.getId() : null);
 
         log.info("✅ Member restored to ACTIVE: memberId={}", memberId);
 
@@ -1312,71 +1218,38 @@ public class UnifiedMemberService {
     }
 
     /**
-     * Permanently delete a member (hard delete).
-     * Warning: This cannot be undone!
+     * Permanently delete a member (hard delete). Warning: this cannot be
+     * undone! Delegates entirely to {@link MemberStatusTransitionService#hardDelete},
+     * which blocks the operation if any financial/medical/audit footprint
+     * exists and writes an independent (non-FK'd) audit record before
+     * deleting.
      *
-     * Production rule:
-     * Hard delete is allowed only for members with no financial/medical footprint.
-     * Claims, visits, pre-authorizations, eligibility checks and benefit-bucket
-     * consumptions are audit evidence and must never be physically removed through
-     * the member screen.
-     * 
      * @param memberId Member ID
+     * @param reason   Mandatory reason for the permanent deletion
      */
     @Transactional
-    public void hardDeleteMember(Long memberId) {
+    public void hardDeleteMember(Long memberId, String reason) {
         log.warn("⚠️ HARD DELETE member: memberId={}", memberId);
 
+        Member stored = requireStoredMember(memberId);
+        commandAccessPolicy.require(MemberOperation.HARD_DELETE, employerIdOf(stored));
         User currentUser = authorizationService.getCurrentUser();
-        if (currentUser == null || !"SUPER_ADMIN".equalsIgnoreCase(currentUser.getUserType())) {
-            throw new AccessDeniedException("Only SUPER_ADMIN can permanently delete members");
-        }
+        boolean isSuperAdmin = currentUser != null && "SUPER_ADMIN".equalsIgnoreCase(currentUser.getUserType());
 
-        Member member = memberRepository.findById(memberId)
-                .orElseThrow(() -> new ResourceNotFoundException("Member not found: " + memberId));
-
-        // Collect all IDs to delete (principal + its dependents)
-        List<Long> allIds = new java.util.ArrayList<>();
-        allIds.add(memberId);
-        if (!member.isDependent()) {
-            List<Member> dependents = memberRepository.findByParentId(memberId);
-            dependents.forEach(d -> allIds.add(d.getId()));
-        }
-
-        String idList = allIds.stream().map(String::valueOf).collect(java.util.stream.Collectors.joining(","));
-        log.warn("⚠️ Cascade hard delete for member IDs: {}", idList);
-
-        long claimsCount = jdbcTemplate
-                .queryForObject("SELECT COUNT(*) FROM claims WHERE member_id IN (" + idList + ")", Long.class);
-        long preAuthCount = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM preauthorization_requests WHERE member_id IN (" + idList + ")", Long.class);
-        long visitsCount = jdbcTemplate
-                .queryForObject("SELECT COUNT(*) FROM visits WHERE member_id IN (" + idList + ")", Long.class);
-        long eligibilityChecksCount = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM eligibility_checks WHERE member_id IN (" + idList + ")", Long.class);
-        long bucketConsumptionsCount = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM benefit_bucket_consumptions WHERE member_id IN (" + idList + ")", Long.class);
-
-        if (claimsCount > 0 || preAuthCount > 0 || visitsCount > 0
-                || eligibilityChecksCount > 0 || bucketConsumptionsCount > 0) {
-            String details = String.format(
-                    "مطالبات: %d، موافقات مسبقة: %d، زيارات: %d، فحوص أهلية: %d، استهلاك سقوف: %d",
-                    claimsCount, preAuthCount, visitsCount, eligibilityChecksCount, bucketConsumptionsCount);
-            throw new BusinessRuleException(
-                    "لا يمكن حذف المستفيد نهائياً لوجود أثر مالي أو طبي مرتبط به (" + details + "). "
-                            + "استخدم الإيقاف/الأرشفة للحفاظ على سلامة السجل المالي والتدقيقي.");
-        }
-
-        jdbcTemplate.update("DELETE FROM member_policy_assignments WHERE member_id IN (" + idList + ")");
-        jdbcTemplate.update("DELETE FROM member_deductibles WHERE member_id IN (" + idList + ")");
-
-        // Delete dependents first (self-FK parent_id SET NULL is OK, but easier to
-        // delete directly)
-        if (!member.isDependent()) {
-            memberRepository.deleteByParentId(memberId);
-        }
-        memberRepository.delete(member);
+        statusTransitionService.hardDelete(memberId, reason,
+                currentUser != null ? currentUser.getId() : null,
+                currentUser != null ? currentUser.getUsername() : null,
+                isSuperAdmin);
 
         log.info("✅ Member hard deleted: memberId={}", memberId);
+    }
+
+    private Member requireStoredMember(Long memberId) {
+        return memberRepository.findById(memberId)
+                .orElseThrow(() -> new ResourceNotFoundException("Member not found: " + memberId));
+    }
+
+    private Long employerIdOf(Member member) {
+        return member.getEmployer() == null ? null : member.getEmployer().getId();
     }
 }

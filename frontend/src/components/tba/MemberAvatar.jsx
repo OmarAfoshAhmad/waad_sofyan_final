@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import { Avatar, Box, CircularProgress, Tooltip } from '@mui/material';
-import { Star as VIPIcon, Bolt as FlashIcon } from '@mui/icons-material';
+import VIPIcon from '@mui/icons-material/Star';
+import FlashIcon from '@mui/icons-material/Bolt';
 import axiosClient from 'utils/axios';
 
 /**

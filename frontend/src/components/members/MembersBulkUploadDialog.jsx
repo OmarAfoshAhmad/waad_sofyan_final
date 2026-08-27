@@ -16,15 +16,14 @@ import {
   FormControlLabel,
   Checkbox
 } from '@mui/material';
-import {
-  CloudUpload as CloudUploadIcon,
-  Close as CloseIcon,
-  Download as DownloadIcon,
-  InsertDriveFile as FileIcon
-} from '@mui/icons-material';
+import CloudUploadIcon from '@mui/icons-material/CloudUpload';
+import CloseIcon from '@mui/icons-material/Close';
+import DownloadIcon from '@mui/icons-material/Download';
+import FileIcon from '@mui/icons-material/InsertDriveFile';
 import { useSnackbar } from 'notistack';
-import { downloadTemplate, importMembers } from 'services/api/unified-members.service';
+import { downloadTemplate, previewImport, executeImport } from 'services/api/unified-members.service';
 import EmployerFilterSelector from 'components/tba/EmployerFilterSelector';
+import useAuth from 'hooks/useAuth';
 
 // Static Arabic labels
 const LABELS = {
@@ -46,10 +45,13 @@ const LABELS = {
 
 const MembersBulkUploadDialog = ({ open, onClose, onSuccess }) => {
   const { enqueueSnackbar } = useSnackbar();
+  const { user } = useAuth();
+  const canClearOldMembers = new Set(user?.permissions || []).has('DANGER_ZONE_EXECUTE');
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [result, setResult] = useState(null);
+  const [preview, setPreview] = useState(null);
   const [progress, setProgress] = useState(0);
   const [clearOldMembers, setClearOldMembers] = useState(false);
   const [selectedEmployerId, setSelectedEmployerId] = useState('');
@@ -82,6 +84,7 @@ const MembersBulkUploadDialog = ({ open, onClose, onSuccess }) => {
         return;
       }
       setSelectedFile(file);
+      setPreview(null);
       setResult(null); // Clear result when a new file is selected
     }
   };
@@ -116,7 +119,28 @@ const MembersBulkUploadDialog = ({ open, onClose, onSuccess }) => {
     setResult(null);
     startProgressSimulation();
     try {
-      const response = await importMembers(selectedFile, clearOldMembers, selectedEmployerId);
+      if (!preview) {
+        const response = await previewImport(selectedFile, {
+          employerId: selectedEmployerId,
+          clearOldMembers
+        });
+        const data = response?.data || response;
+        stopProgressSimulation(100);
+        setPreview(data);
+        if (!data?.canProceed) {
+          enqueueSnackbar('لا توجد صفوف صالحة للتنفيذ. راجع أخطاء المعاينة.', { variant: 'warning' });
+        } else {
+          enqueueSnackbar(`اكتملت المعاينة: ${data.validRows || 0} صف صالح`, { variant: 'success' });
+        }
+        return;
+      }
+
+      const response = await executeImport(selectedFile, {
+        employerId: selectedEmployerId,
+        batchId: preview.batchId,
+        headerRowNumber: preview.headerRowNumber,
+        clearOldMembers
+      });
       const data = response?.data || response;
       stopProgressSimulation(100);
       setResult(data);
@@ -141,6 +165,7 @@ const MembersBulkUploadDialog = ({ open, onClose, onSuccess }) => {
   const handleClose = () => {
     if (!uploading) {
       setSelectedFile(null);
+      setPreview(null);
       setResult(null);
       setProgress(0);
       setClearOldMembers(false);
@@ -152,6 +177,7 @@ const MembersBulkUploadDialog = ({ open, onClose, onSuccess }) => {
   const handleRemoveFile = (e) => {
     e.stopPropagation();
     setSelectedFile(null);
+    setPreview(null);
     setResult(null);
     setProgress(0);
     setClearOldMembers(false);
@@ -192,7 +218,10 @@ const MembersBulkUploadDialog = ({ open, onClose, onSuccess }) => {
 
               <EmployerFilterSelector
                 selectedEmployerId={selectedEmployerId}
-                onEmployerChange={(employer) => setSelectedEmployerId(employer?.id || '')}
+                onEmployerChange={(employer) => {
+                  setSelectedEmployerId(employer?.id || '');
+                  setPreview(null);
+                }}
                 showAllOption={false}
                 label="جهة العمل (الشريك)"
                 placeholder="اختر جهة العمل التي ترغب بالاستيراد إليها..."
@@ -244,23 +273,40 @@ const MembersBulkUploadDialog = ({ open, onClose, onSuccess }) => {
                   )}
                 </Stack>
               </Box>
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={clearOldMembers}
-                    onChange={(e) => setClearOldMembers(e.target.checked)}
-                    color="primary"
-                    disabled={uploading}
-                  />
-                }
-                label={
-                  <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
-                    مسح المستفيدين القدامى قبل الاستيراد (سيتم الإبقاء على المستفيدين الذين لديهم حركات مالية)
-                  </Typography>
-                }
-                sx={{ alignSelf: 'flex-start', mt: 1 }}
-              />
+              {canClearOldMembers && (
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={clearOldMembers}
+                      onChange={(e) => {
+                        setClearOldMembers(e.target.checked);
+                        setPreview(null);
+                      }}
+                      color="primary"
+                      disabled={uploading}
+                    />
+                  }
+                  label={
+                    <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                      مسح المستفيدين القدامى قبل الاستيراد (سيتم الإبقاء على المستفيدين الذين لديهم حركات مالية)
+                    </Typography>
+                  }
+                  sx={{ alignSelf: 'flex-start', mt: 1 }}
+                />
+              )}
             </>
+          )}
+
+          {preview && !result && (
+            <Alert severity={preview.canProceed ? 'success' : 'warning'}>
+              <Typography variant="subtitle1" fontWeight="bold">نتيجة المعاينة قبل التنفيذ</Typography>
+              <Typography variant="body2">
+                الإجمالي: {preview.totalRows || 0} — صالح: {preview.validRows || 0} — غير صالح: {preview.invalidRows || 0}
+              </Typography>
+              {preview.warnings?.map((warning) => (
+                <Typography key={warning} variant="caption" display="block">{warning}</Typography>
+              ))}
+            </Alert>
           )}
 
           {result && ( // Show import summary and errors if result is available
@@ -359,12 +405,12 @@ const MembersBulkUploadDialog = ({ open, onClose, onSuccess }) => {
         {!result && ( // Only show upload button if no result is displayed
           <Button
             onClick={handleUpload}
-            disabled={!selectedFile || !selectedEmployerId || uploading}
+            disabled={!selectedFile || !selectedEmployerId || uploading || (preview && !preview.canProceed)}
             variant="contained"
             color="primary"
             startIcon={<CloudUploadIcon />}
           >
-            {uploading ? 'جاري المعالجة...' : LABELS.upload}
+            {uploading ? 'جاري المعالجة...' : preview ? 'تأكيد وتنفيذ الاستيراد' : 'معاينة الملف'}
           </Button>
         )}
       </DialogActions>

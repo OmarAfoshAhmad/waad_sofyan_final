@@ -1,6 +1,7 @@
 package com.waad.tba.modules.member.dto;
 
 import java.util.List;
+import java.util.Map;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
@@ -104,6 +105,36 @@ public class FamilyEligibilityResponseDto {
 
     @Schema(description = "Total remaining family limit", example = "42000.00")
     private java.math.BigDecimal remainingFamilyLimit;
+
+    /**
+     * Whether the financial limit fields above ({@link #annualLimit},
+     * {@link #remainingFamilyLimit}) were successfully computed. False means
+     * a financial lookup failed and those fields are stale/absent -- the
+     * caller must not treat a null/zero remainingFamilyLimit as "no limit
+     * left" in that case. Previously this failure was silently swallowed and
+     * the response returned as if financial data were simply zero.
+     */
+    @Schema(description = "False if financial limit data could not be retrieved (fields above are unreliable)", example = "true")
+    @Builder.Default
+    private Boolean financialDataAvailable = true;
+
+    @Schema(description = "Arabic explanation when financialDataAvailable is false", example = "تعذر جلب بيانات السقف المالي")
+    private String financialDataError;
+
+    /**
+     * Per-member reason a member was found NOT eligible, keyed by member id.
+     * Only populated for ineligible members. A member here does not
+     * necessarily mean a genuine coverage denial -- see
+     * {@link #systemErrorMemberIds} to distinguish "the rules engine
+     * rejected this member" from "the engine could not be reached for this
+     * member", which callers must present differently (a system error is
+     * retry-able and not the member's fault).
+     */
+    @Schema(description = "Arabic ineligibility reason per member id, for members that are not eligible")
+    private Map<Long, String> ineligibilityReasonsAr;
+
+    @Schema(description = "Member ids whose eligibility check failed with a system error rather than a genuine rule denial")
+    private java.util.Set<Long> systemErrorMemberIds;
 
     // ==================== HELPER METHODS ====================
 

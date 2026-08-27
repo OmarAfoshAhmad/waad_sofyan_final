@@ -26,12 +26,16 @@ class UserSchemaCleanupArchitectureTest {
     void frontendUsersScreensMustReadCanonicalActiveState() throws Exception {
         String editSource = Files.readString(Path.of(
                 "../frontend/src/pages/rbac/users/UserEdit.jsx"));
+        String sharedEditorSource = Files.readString(Path.of(
+                "../frontend/src/pages/rbac/users/UserCreate.jsx"));
         String detailsSource = Files.readString(Path.of(
                 "../frontend/src/pages/rbac/users/UserDetails.jsx"));
 
         assertFalse(editSource.contains("user.enabled"));
+        assertFalse(sharedEditorSource.contains("user.enabled"));
         assertFalse(detailsSource.contains("user?.enabled"));
-        assertTrue(editSource.contains("user.active"));
+        assertTrue(editSource.contains("'./UserCreate'"));
+        assertTrue(sharedEditorSource.contains("user.active"));
         assertTrue(detailsSource.contains("user?.active"));
     }
 }

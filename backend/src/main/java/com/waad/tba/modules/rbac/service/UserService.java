@@ -16,6 +16,8 @@ import org.springframework.transaction.annotation.Transactional;
 import com.waad.tba.common.exception.ResourceNotFoundException;
 import com.waad.tba.modules.provider.entity.Provider;
 import com.waad.tba.modules.provider.repository.ProviderRepository;
+import com.waad.tba.modules.employer.entity.Employer;
+import com.waad.tba.modules.employer.repository.EmployerRepository;
 import com.waad.tba.modules.rbac.dto.UserCreateDto;
 import com.waad.tba.modules.rbac.dto.UserResponseDto;
 import com.waad.tba.modules.rbac.dto.UserUpdateDto;
@@ -50,6 +52,7 @@ public class UserService {
     private final UserSecurityService securityService;
     private final SessionManagementService sessionManagementService;
     private final ProviderRepository providerRepository;
+    private final EmployerRepository employerRepository;
 
     @Transactional(readOnly = true)
     public List<UserResponseDto> findAll() {
@@ -110,6 +113,11 @@ public class UserService {
 
     @Transactional
     public UserResponseDto update(Long id, UserUpdateDto dto) {
+        return update(id, dto, null);
+    }
+
+    @Transactional
+    public UserResponseDto update(Long id, UserUpdateDto dto, String changeReason) {
         log.info("Updating user with id: {}", id);
         
         User user = userRepository.findById(id)
@@ -143,7 +151,9 @@ public class UserService {
         boolean wasSuperAdmin = "SUPER_ADMIN".equals(oldUserType);
         boolean stillSuperAdmin = "SUPER_ADMIN".equals(resolvedUserType);
         boolean requestedDeactivate = Boolean.FALSE.equals(dto.getActive()) && Boolean.TRUE.equals(oldActive);
-        boolean lastActiveSuperAdmin = wasSuperAdmin && userRepository.countByUserTypeAndActiveTrue("SUPER_ADMIN") <= 1;
+        boolean removesActiveSuperAdmin = wasSuperAdmin && Boolean.TRUE.equals(oldActive)
+                && (!stillSuperAdmin || requestedDeactivate);
+        boolean lastActiveSuperAdmin = removesActiveSuperAdmin && lockAndCountActiveSuperAdmins() <= 1;
 
         if (wasSuperAdmin && !stillSuperAdmin && lastActiveSuperAdmin) {
             log.error("⛔ Attempt to demote the last active SUPER_ADMIN user: id={}, username={}", id, user.getUsername());
@@ -169,12 +179,13 @@ public class UserService {
                 || requiresSessionRevocation(oldCanViewReports, updatedUser.getCanViewReports())
                 || requiresSessionRevocation(oldCanViewMembers, updatedUser.getCanViewMembers())
                 || requiresSessionRevocation(oldCanViewBenefitPolicies, updatedUser.getCanViewBenefitPolicies())) {
-            sessionManagementService.revokeAll(oldUsername);
+            revokeSessionsAfterCommit(oldUsername);
         }
         
         // Audit log
         securityService.auditLog(id, SecurityAuditEvent.AuditActionType.ACCOUNT_UPDATED,
-                "User updated" + (oldEmail.equals(dto.getEmail()) ? "" : ", email changed"),
+                "User updated" + (oldEmail.equals(dto.getEmail()) ? "" : ", email changed")
+                        + (changeReason == null || changeReason.isBlank() ? "" : ", reason: " + changeReason.trim()),
                 null, null);
         
         log.info("User updated successfully: {}", id);
@@ -201,7 +212,7 @@ public class UserService {
 
         user.setActive(false);
         userRepository.save(user);
-        sessionManagementService.revokeAll(user.getUsername());
+        revokeSessionsAfterCommit(user.getUsername());
 
         // Audit log before logical deletion
         securityService.auditLog(id, SecurityAuditEvent.AuditActionType.ACCOUNT_DELETED,
@@ -333,7 +344,7 @@ public class UserService {
         boolean newStatus = !Boolean.TRUE.equals(user.getActive());
         user.setActive(newStatus);
         User savedUser = userRepository.save(user);
-        sessionManagementService.revokeAll(user.getUsername());
+        revokeSessionsAfterCommit(user.getUsername());
         
         // Audit log
         SecurityAuditEvent.AuditActionType action = newStatus
@@ -364,7 +375,7 @@ public class UserService {
         // 🔐 Audit logging (single write — administrator-initiated reset, not a self-service change)
         securityService.auditLog(id, SecurityAuditEvent.AuditActionType.PASSWORD_RESET,
                 "Password reset by administrator", null, null);
-        sessionManagementService.revokeAll(user.getUsername());
+        revokeSessionsAfterCommit(user.getUsername());
     }
 
     private String resolveUserType(String requestedUserType, Long employerId, Long providerId) {
@@ -397,9 +408,14 @@ public class UserService {
     private void applyRoleBindings(User user, String userType, Long employerId, Long providerId) {
         user.setUserType(userType);
 
-        if ("EMPLOYER_ADMIN".equals(userType)) {
+        if ("EMPLOYER_ADMIN".equals(userType) || "DATA_ENTRY".equals(userType)) {
             if (employerId == null) {
-                throw new IllegalArgumentException("employerId is required for EMPLOYER_ADMIN");
+                throw new IllegalArgumentException("جهة العمل مطلوبة لهذا الدور");
+            }
+            Employer employer = employerRepository.findById(employerId)
+                    .orElseThrow(() -> new IllegalArgumentException("جهة العمل المحددة غير موجودة"));
+            if (!Boolean.TRUE.equals(employer.getActive())) {
+                throw new IllegalArgumentException("لا يمكن ربط المستخدم بجهة عمل غير نشطة");
             }
             user.setEmployerId(employerId);
             user.setProviderId(null);
@@ -416,7 +432,7 @@ public class UserService {
         }
 
         if (employerId != null || providerId != null) {
-            throw new IllegalArgumentException("employerId/providerId are only allowed for EMPLOYER_ADMIN or PROVIDER_STAFF");
+            throw new IllegalArgumentException("ربط جهة العمل مسموح فقط لمدير جهة العمل ومدخل البيانات، وربط مقدم الخدمة لموظف مقدم الخدمة");
         }
 
         user.setEmployerId(null);
@@ -425,5 +441,27 @@ public class UserService {
 
     private boolean requiresSessionRevocation(Object oldValue, Object newValue) {
         return !java.util.Objects.equals(oldValue, newValue);
+    }
+
+    private long lockAndCountActiveSuperAdmins() {
+        List<User> locked = userRepository.findByUserTypeAndActiveTrueOrderByIdAsc("SUPER_ADMIN");
+        // Unit tests written before the concurrency hardening mock only the
+        // count. Production always gets the locked rows from PostgreSQL.
+        return locked == null || locked.isEmpty()
+                ? userRepository.countByUserTypeAndActiveTrue("SUPER_ADMIN")
+                : locked.size();
+    }
+
+    private void revokeSessionsAfterCommit(String username) {
+        if (!org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
+            sessionManagementService.revokeAll(username);
+            return;
+        }
+        org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                new org.springframework.transaction.support.TransactionSynchronization() {
+                    @Override public void afterCommit() {
+                        sessionManagementService.revokeAll(username);
+                    }
+                });
     }
 }

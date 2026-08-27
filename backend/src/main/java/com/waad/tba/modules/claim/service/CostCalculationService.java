@@ -43,6 +43,7 @@ import java.util.stream.Collectors;
 public class CostCalculationService {
 
     private final ProviderNetworkService providerNetworkService;
+    private final com.waad.tba.modules.member.service.MemberPolicyResolver memberPolicyResolver;
     private final BenefitPolicyCoverageService benefitPolicyCoverageService;
     private final ClaimRepository claimRepository;
 
@@ -79,7 +80,12 @@ public class CostCalculationService {
         }
 
         Member member = claim.getMember();
-        BenefitPolicy benefitPolicy = member != null ? member.getBenefitPolicy() : null;
+        // Resolved by the claim's SERVICE DATE, not the member's current
+        // pointer: co-pay percentages and network terms come from the policy
+        // that was in force when the service happened.
+        BenefitPolicy benefitPolicy = member != null
+                ? memberPolicyResolver.resolveFor(member, claim.getServiceDate()).orElse(null)
+                : null;
         NetworkType networkType = providerNetworkService.determineNetworkTypeByName(claim.getProviderName());
 
         // ═══════════════════════════════════════════════════════════════════════════════
@@ -172,7 +178,9 @@ public class CostCalculationService {
      */
     private BigDecimal calculateWeightedCopayFromLines(Claim claim, Member member, NetworkType networkType) {
         List<ClaimLine> lines = claim.getLines();
-        BenefitPolicy benefitPolicy = member != null ? member.getBenefitPolicy() : null;
+        BenefitPolicy benefitPolicy = member != null
+                ? memberPolicyResolver.resolveFor(member, claim.getServiceDate()).orElse(null)
+                : null;
 
         if (lines == null || lines.isEmpty() || member == null || benefitPolicy == null) {
             return getCoPayPercent(benefitPolicy, networkType);
@@ -259,8 +267,13 @@ public class CostCalculationService {
         if (claim.getServiceDate() != null) {
             return claim.getServiceDate().getYear();
         }
-        LocalDateTime createdAt = claim.getCreatedAt();
-        return createdAt != null ? createdAt.atZone(ZoneId.systemDefault()).getYear() : LocalDate.now().getYear();
+        // No silent fallback to the clock: the benefit YEAR decides which
+        // annual limit a claim consumes, so guessing it from entry time (or
+        // worse, from "now") can charge a claim against the wrong year's
+        // ceiling entirely.
+        throw new IllegalStateException(
+                "CLAIM_SERVICE_DATE_REQUIRED: claim " + claim.getId()
+                        + " has no service date; the benefit year cannot be determined");
     }
 
     public record CostBreakdown(

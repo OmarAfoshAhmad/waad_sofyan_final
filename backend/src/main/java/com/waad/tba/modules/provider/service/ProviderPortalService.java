@@ -11,8 +11,6 @@ import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.modules.benefitpolicy.service.BenefitPolicyCoverageService;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository;
-import com.waad.tba.modules.claim.entity.Claim;
-import com.waad.tba.modules.claim.repository.ClaimRepository;
 import com.waad.tba.modules.preauthorization.repository.PreAuthorizationRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -51,10 +49,10 @@ public class ProviderPortalService {
     private final MemberRepository memberRepository;
     private final BenefitPolicyCoverageService benefitPolicyCoverageService;
     private final BenefitPolicyRepository benefitPolicyRepository;
-    private final ClaimRepository claimRepository;
     private final com.waad.tba.modules.visit.repository.VisitRepository visitRepository;
     private final com.waad.tba.security.ProviderContextGuard providerContextGuard;
     private final PreAuthorizationRepository preAuthorizationRepository;
+    private final com.waad.tba.modules.member.service.MemberPolicyResolver memberPolicyResolver;
     
     /**
      * Check Member Eligibility for Provider.
@@ -240,28 +238,8 @@ public class ProviderPortalService {
             message = "العائلة غير مؤهلة - يرجى التواصل مع شركة التأمين";
         }
         
-        // Calculate principal limits
-        BigDecimal principalAnnualLimit = BigDecimal.ZERO;
-        BigDecimal principalUsedAmount = BigDecimal.ZERO;
-        BigDecimal principalRemainingLimit = BigDecimal.ZERO;
-        Double principalUsagePercentage = 0.0;
-        
         BenefitPolicy principalPolicy = resolveEffectivePolicy(principalMemberEntity, LocalDate.now());
-        if (principalPolicy != null) {
-                principalAnnualLimit = principalPolicy.getAnnualLimit() != null 
-                    ? principalPolicy.getAnnualLimit() 
-                    : BigDecimal.ZERO;
-
-                principalUsedAmount = calculateUsedAmount(principalMemberEntity, principalPolicy, LocalDate.now());
-                principalRemainingLimit = calculateRemainingLimit(principalPolicy, principalUsedAmount);
-                
-                if (principalAnnualLimit.compareTo(BigDecimal.ZERO) > 0) {
-                    principalUsagePercentage = principalUsedAmount
-                        .divide(principalAnnualLimit, 4, RoundingMode.HALF_UP)
-                        .multiply(BigDecimal.valueOf(100))
-                        .doubleValue();
-                }
-        }
+        AnnualLimitView principalLimit = calculateAnnualLimitView(principalMemberEntity, principalPolicy, LocalDate.now());
         
         // Build warnings
         List<String> warnings = buildWarnings(familyMembers);
@@ -303,10 +281,10 @@ public class ProviderPortalService {
                 : null)
             
             // Annual limit information (principal)
-            .principalAnnualLimit(principalAnnualLimit)
-            .principalUsedAmount(principalUsedAmount)
-            .principalRemainingLimit(principalRemainingLimit)
-            .principalUsagePercentage(principalUsagePercentage)
+            .principalAnnualLimit(principalLimit.annualLimit())
+            .principalUsedAmount(principalLimit.usedAmount())
+            .principalRemainingLimit(principalLimit.remainingLimit())
+            .principalUsagePercentage(principalLimit.usagePercentage())
             
             // Additional information
             .warnings(warnings)
@@ -326,28 +304,8 @@ public class ProviderPortalService {
             boolean isPrincipal,
             String principalBarcode) {
         
-        // Calculate annual limits using BenefitPolicyCoverageService
-        BigDecimal annualLimit = BigDecimal.ZERO;
-        BigDecimal usedAmount = BigDecimal.ZERO;
-        BigDecimal remainingLimit = BigDecimal.ZERO;
-        Double usagePercentage = 0.0;
-        
         BenefitPolicy policy = resolveEffectivePolicy(member, LocalDate.now());
-        if (policy != null) {
-            annualLimit = policy.getAnnualLimit() != null 
-                ? policy.getAnnualLimit() 
-                : BigDecimal.ZERO;
-
-            usedAmount = calculateUsedAmount(member, policy, LocalDate.now());
-            remainingLimit = calculateRemainingLimit(policy, usedAmount);
-            
-            if (annualLimit.compareTo(BigDecimal.ZERO) > 0) {
-                usagePercentage = usedAmount
-                    .divide(annualLimit, 4, RoundingMode.HALF_UP)
-                    .multiply(BigDecimal.valueOf(100))
-                    .doubleValue();
-            }
-        }
+        AnnualLimitView limit = calculateAnnualLimitView(member, policy, LocalDate.now());
         
         Integer age = memberDto.getBirthDate() != null 
             ? Period.between(memberDto.getBirthDate(), LocalDate.now()).getYears() 
@@ -374,10 +332,10 @@ public class ProviderPortalService {
             .barcode(memberDto.getBarcode())
             .eligible(eligible)
             .eligibilityMessage(eligibilityMessage)
-            .annualLimit(annualLimit)
-            .usedAmount(usedAmount)
-            .remainingLimit(remainingLimit)
-            .usagePercentage(usagePercentage)
+            .annualLimit(limit.annualLimit())
+            .usedAmount(limit.usedAmount())
+            .remainingLimit(limit.remainingLimit())
+            .usagePercentage(limit.usagePercentage())
             .active(memberDto.getActive())
                 .cardNumber(memberDto.getCardNumber())
                 .profileImage(resolveProfileImageUrl(memberDto.getId(), memberDto.getPhotoUrl(), member))
@@ -397,28 +355,8 @@ public class ProviderPortalService {
             boolean isPrincipal,
             String principalBarcode) {
         
-        // Calculate annual limits using BenefitPolicyCoverageService
-        BigDecimal annualLimit = BigDecimal.ZERO;
-        BigDecimal usedAmount = BigDecimal.ZERO;
-        BigDecimal remainingLimit = BigDecimal.ZERO;
-        Double usagePercentage = 0.0;
-        
         BenefitPolicy policy = resolveEffectivePolicy(member, LocalDate.now());
-        if (policy != null) {
-            annualLimit = policy.getAnnualLimit() != null 
-                ? policy.getAnnualLimit() 
-                : BigDecimal.ZERO;
-
-            usedAmount = calculateUsedAmount(member, policy, LocalDate.now());
-            remainingLimit = calculateRemainingLimit(policy, usedAmount);
-            
-            if (annualLimit.compareTo(BigDecimal.ZERO) > 0) {
-                usagePercentage = usedAmount
-                    .divide(annualLimit, 4, RoundingMode.HALF_UP)
-                    .multiply(BigDecimal.valueOf(100))
-                    .doubleValue();
-            }
-        }
+        AnnualLimitView limit = calculateAnnualLimitView(member, policy, LocalDate.now());
         
         Integer age = dependent.getBirthDate() != null 
             ? Period.between(dependent.getBirthDate(), LocalDate.now()).getYears() 
@@ -447,10 +385,10 @@ public class ProviderPortalService {
             .barcode(principalBarcode) // Dependents use principal's barcode
             .eligible(eligible)
             .eligibilityMessage(eligibilityMessage)
-            .annualLimit(annualLimit)
-            .usedAmount(usedAmount)
-            .remainingLimit(remainingLimit)
-            .usagePercentage(usagePercentage)
+            .annualLimit(limit.annualLimit())
+            .usedAmount(limit.usedAmount())
+            .remainingLimit(limit.remainingLimit())
+            .usagePercentage(limit.usagePercentage())
             .active(dependent.getActive())
             .cardNumber(dependent.getCardNumber())
             .profileImage(resolveProfileImageUrl(dependent.getId(), dependent.getPhotoUrl(), member))
@@ -503,33 +441,39 @@ public class ProviderPortalService {
         return null;
     }
     
-    /**
-     * Calculate used amount for member in current year.
-     */
-    private BigDecimal calculateUsedAmount(Member member, BenefitPolicy policy, LocalDate asOfDate) {
+    AnnualLimitView calculateAnnualLimitView(Member member, BenefitPolicy policy, LocalDate asOfDate) {
         if (member == null || policy == null || asOfDate == null) {
-            return BigDecimal.ZERO;
+            return AnnualLimitView.noGeneralCeiling();
         }
-        
+
         BigDecimal annualLimit = policy.getAnnualLimit();
         if (annualLimit == null || annualLimit.compareTo(BigDecimal.ZERO) <= 0) {
-            return BigDecimal.ZERO;
+            return AnnualLimitView.noGeneralCeiling();
         }
 
-        List<Claim> claims = claimRepository.findByMemberId(member.getId());
+        BigDecimal remainingLimit = benefitPolicyCoverageService.getRemainingCoverage(policy, member.getId(), asOfDate);
+        if (remainingLimit == null) {
+            return AnnualLimitView.noGeneralCeiling();
+        }
 
-        return claims.stream()
-            .filter(c -> c.getServiceDate() != null && c.getServiceDate().getYear() == asOfDate.getYear())
-            .filter(c -> c.getApprovedAmount() != null)
-            .map(Claim::getApprovedAmount)
-            .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal normalizedRemaining = remainingLimit.max(BigDecimal.ZERO);
+        BigDecimal usedAmount = annualLimit.subtract(normalizedRemaining).max(BigDecimal.ZERO);
+        Double usagePercentage = usedAmount
+            .divide(annualLimit, 4, RoundingMode.HALF_UP)
+            .multiply(BigDecimal.valueOf(100))
+            .doubleValue();
+        return new AnnualLimitView(annualLimit, usedAmount, normalizedRemaining, usagePercentage);
     }
 
-    private BigDecimal calculateRemainingLimit(BenefitPolicy policy, BigDecimal usedAmount) {
-        if (policy == null || policy.getAnnualLimit() == null || policy.getAnnualLimit().compareTo(BigDecimal.ZERO) <= 0) {
-            return BigDecimal.ZERO;
+    record AnnualLimitView(
+            BigDecimal annualLimit,
+            BigDecimal usedAmount,
+            BigDecimal remainingLimit,
+            Double usagePercentage
+    ) {
+        static AnnualLimitView noGeneralCeiling() {
+            return new AnnualLimitView(null, null, null, null);
         }
-        return policy.getAnnualLimit().subtract(usedAmount != null ? usedAmount : BigDecimal.ZERO).max(BigDecimal.ZERO);
     }
 
     private BenefitPolicy resolveEffectivePolicy(Member member, LocalDate asOfDate) {
@@ -537,18 +481,7 @@ public class ProviderPortalService {
             return null;
         }
 
-        BenefitPolicy directPolicy = member.getBenefitPolicy();
-        if (directPolicy != null && directPolicy.isActive() && directPolicy.isEffectiveOn(asOfDate)) {
-            return directPolicy;
-        }
-
-        if (member.getEmployer() == null) {
-            return null;
-        }
-
-        return benefitPolicyRepository
-            .findActiveEffectivePolicyForEmployer(member.getEmployer().getId(), asOfDate)
-            .orElse(null);
+        return memberPolicyResolver.resolveFor(member, asOfDate).orElse(null);
     }
     
     /**

@@ -87,7 +87,7 @@ const DependentModal = ({ open, onClose, dependent, principalId, onSave, existin
       if (isEditMode && dependent) {
         setFormData({
           fullName: dependent.fullName || dependent.nameAr || dependent.nameEn || '',
-          nationalNumber: dependent.nationalNumber || dependent.civilId || '',
+          nationalNumber: dependent.nationalNumber || '',
           birthDate: dependent.birthDate ? dayjs(dependent.birthDate) : null,
           gender: dependent.gender || '',
           relationship: dependent.relationship || '',
@@ -165,9 +165,14 @@ const DependentModal = ({ open, onClose, dependent, principalId, onSave, existin
         nationalNumber: formData.nationalNumber || null,
         birthDate: formData.birthDate ? formData.birthDate.format('YYYY-MM-DD') : null,
         gender: formData.gender,
-        relationship: formData.relationship,
         nationality: formData.nationality,
-        status: formData.active ? 'ACTIVE' : 'SUSPENDED'
+        // Relationship and lifecycle status are sensitive operations. They are
+        // accepted during creation only; editing them requires the dedicated
+        // family/lifecycle workflows.
+        ...(!isEditMode && {
+          relationship: formData.relationship,
+          status: formData.active ? 'ACTIVE' : 'SUSPENDED'
+        })
       };
 
       let savedMember;
@@ -280,11 +285,17 @@ const DependentModal = ({ open, onClose, dependent, principalId, onSave, existin
               </Badge>
             </Box>
 
-            <FormControlLabel
-              control={<Switch checked={formData.active} onChange={handleActiveChange} color="success" />}
-              label={formData.active ? 'نشط' : 'غير نشط'}
-              sx={{ display: 'flex', justifyContent: 'center', mr: 0 }}
-            />
+            {isEditMode ? (
+              <Typography variant="body2" color="text.secondary" textAlign="center">
+                الحالة: {formData.active ? 'نشط' : 'غير نشط'} — تُغيّر من إجراء الحالة المدقّق.
+              </Typography>
+            ) : (
+              <FormControlLabel
+                control={<Switch checked={formData.active} onChange={handleActiveChange} color="success" />}
+                label={formData.active ? 'نشط' : 'غير نشط'}
+                sx={{ display: 'flex', justifyContent: 'center', mr: 0 }}
+              />
+            )}
           </Grid>
 
           {/* Right Column: Form Fields (8 columns) */}
@@ -304,7 +315,7 @@ const DependentModal = ({ open, onClose, dependent, principalId, onSave, existin
                 <Grid size={{ xs: 6 }}>
                   <FormControl fullWidth required error={!!errors.relationship}>
                     <InputLabel>القرابة</InputLabel>
-                    <Select value={formData.relationship} onChange={handleChange('relationship')} label="القرابة">
+                    <Select value={formData.relationship} onChange={handleChange('relationship')} label="القرابة" disabled={isEditMode}>
                       {Object.keys(RELATIONSHIPS)
                         .filter((key) => !GENDER_EXCLUDED_RELATIONSHIPS.includes(key))
                         .filter((key) => !usedUniqueRelationships.includes(key) || key === formData.relationship)
@@ -314,6 +325,11 @@ const DependentModal = ({ open, onClose, dependent, principalId, onSave, existin
                           </MenuItem>
                         ))}
                     </Select>
+                    {isEditMode && (
+                      <Typography variant="caption" color="text.secondary">
+                        تغيير القرابة عملية أسرية مستقلة ومدققة.
+                      </Typography>
+                    )}
                   </FormControl>
                 </Grid>
                 <Grid size={{ xs: 6 }}>

@@ -121,6 +121,26 @@ public class MemberViewDto {
     @Schema(description = "Blocked reason", example = "Exceeded limit")
     private String blockedReason;
 
+    @Schema(description = "Reason recorded on the last status transition")
+    private String statusReason;
+
+    @Schema(description = "Source of the last status transition", example = "MANUAL")
+    private com.waad.tba.modules.member.entity.StatusSource statusSource;
+
+    @Schema(description = "When the last status transition happened")
+    private java.time.LocalDateTime statusChangedAt;
+
+    @Schema(description = "Status before the last transition", example = "SUSPENDED")
+    private Member.MemberStatus previousStatus;
+
+    @Schema(description = "Groups this member with others changed by the same family-cascade operation, if any")
+    private String statusTransitionId;
+
+    @Schema(description = "Optimistic-lock row version. Required as expectedVersion/expectedVersions when calling "
+            + "a family operation (transfer, relationship correction, policy change, reorder) so a concurrent edit "
+            + "is rejected instead of silently overwritten.")
+    private Long version;
+
     // Eligibility
     @Schema(description = "Eligibility status", example = "true")
     private Boolean eligibilityStatus;
@@ -192,6 +212,9 @@ public class MemberViewDto {
      */
     @Schema(description = "Relationship type - for dependents only", example = "SON")
     private Member.Relationship relationship;
+
+    @Schema(description = "Visual order inside the family; does not alter card identity")
+    private Integer familyOrder;
 
     /**
      * List of Dependents - Only populated for PRINCIPAL members.

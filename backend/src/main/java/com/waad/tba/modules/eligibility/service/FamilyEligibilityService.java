@@ -32,44 +32,26 @@ public class FamilyEligibilityService {
         String requestId = UUID.randomUUID().toString();
         log.info("[FamilyEligibility] Checking family eligibility for member {} on {}", memberId, serviceDate);
 
-        // Find the member
         Member member = memberRepository.findById(memberId)
                 .orElseThrow(() -> new IllegalArgumentException("Member not found: " + memberId));
 
-        // Determine principal and get all family members
-        Member principal;
-        List<Member> allFamilyMembers = new ArrayList<>();
-        
-        if (member.getParent() == null) {
-            // This is the principal
-            principal = member;
-            allFamilyMembers.add(principal);
-            if (principal.getDependents() != null) {
-                allFamilyMembers.addAll(principal.getDependents());
-            }
-        } else {
-            // This is a dependent - get the principal and all dependents
-            principal = member.getParent();
-            allFamilyMembers.add(principal);
-            if (principal.getDependents() != null) {
-                allFamilyMembers.addAll(principal.getDependents());
-            }
-        }
+        FamilyGroup family = resolveFamily(member);
+        Map<Long, EligibilityResult> resultsByMemberId = evaluateFamily(family.principal(), family.dependents(), serviceDate);
 
-        // Check eligibility for each family member
         List<FamilyMemberEligibility> familyEligibilities = new ArrayList<>();
         FamilyMemberEligibility primaryMemberEligibility = null;
         int eligibleCount = 0;
         int ineligibleCount = 0;
 
-        for (Member familyMember : allFamilyMembers) {
-            FamilyMemberEligibility eligibility = checkMemberEligibility(familyMember, serviceDate);
+        for (Member familyMember : family.all()) {
+            FamilyMemberEligibility eligibility = toFamilyMemberEligibility(
+                    familyMember, resultsByMemberId.get(familyMember.getId()));
             familyEligibilities.add(eligibility);
-            
+
             if (familyMember.getId().equals(memberId)) {
                 primaryMemberEligibility = eligibility;
             }
-            
+
             if (eligibility.isEligible()) {
                 eligibleCount++;
             } else {
@@ -77,9 +59,8 @@ public class FamilyEligibilityService {
             }
         }
 
-        // Build summary
         String familyStatus;
-        if (eligibleCount == allFamilyMembers.size()) {
+        if (eligibleCount == family.all().size()) {
             familyStatus = "ALL_ELIGIBLE";
         } else if (eligibleCount > 0) {
             familyStatus = "PARTIAL";
@@ -88,7 +69,7 @@ public class FamilyEligibilityService {
         }
 
         FamilySummary summary = FamilySummary.builder()
-                .totalMembers(allFamilyMembers.size())
+                .totalMembers(family.all().size())
                 .eligibleCount(eligibleCount)
                 .ineligibleCount(ineligibleCount)
                 .familyStatus(familyStatus)
@@ -105,32 +86,67 @@ public class FamilyEligibilityService {
                 .build();
     }
 
-    private FamilyMemberEligibility checkMemberEligibility(Member member, LocalDate serviceDate) {
-        // Build eligibility request
+    /**
+     * Resolves the principal + dependents for whichever family member was
+     * looked up (by id or by the principal's barcode -- see
+     * UnifiedMemberService.checkFamilyEligibility). A dependent's own id
+     * resolves to their principal's family, same as checkFamilyEligibility
+     * always did.
+     */
+    public FamilyGroup resolveFamily(Member anyFamilyMember) {
+        Member principal = anyFamilyMember.getParent() == null ? anyFamilyMember : anyFamilyMember.getParent();
+        List<Member> dependents = principal.getDependents() != null
+                ? new ArrayList<>(principal.getDependents())
+                : new ArrayList<>();
+        return new FamilyGroup(principal, dependents);
+    }
+
+    public record FamilyGroup(Member principal, List<Member> dependents) {
+        public List<Member> all() {
+            List<Member> all = new ArrayList<>();
+            all.add(principal);
+            all.addAll(dependents);
+            return all;
+        }
+    }
+
+    /**
+     * Single source of truth for "is this family member eligible on this
+     * date" -- the actual engine call, shared by checkFamilyEligibility
+     * above (memberId + serviceDate, used by the eligibility module's own
+     * endpoint) and UnifiedMemberService.checkFamilyEligibility (barcode,
+     * used by the member module's provider-facing endpoint). Both used to
+     * run their own independent copy of this loop; now there is one.
+     * Fails closed per member: an engine error marks that one member
+     * not-eligible with a SYSTEM_ERROR reason rather than defaulting the
+     * whole family check, and does not stop the rest of the family from
+     * being evaluated.
+     */
+    @Transactional(readOnly = true)
+    public Map<Long, EligibilityResult> evaluateFamily(Member principal, List<Member> dependents, LocalDate serviceDate) {
+        Map<Long, EligibilityResult> results = new HashMap<>();
+        List<Member> all = new ArrayList<>();
+        all.add(principal);
+        all.addAll(dependents);
+        for (Member member : all) {
+            results.put(member.getId(), evaluateMember(member, serviceDate));
+        }
+        return results;
+    }
+
+    private EligibilityResult evaluateMember(Member member, LocalDate serviceDate) {
         EligibilityCheckRequest request = EligibilityCheckRequest.builder()
                 .memberId(member.getId())
                 .serviceDate(serviceDate != null ? serviceDate : LocalDate.now())
                 .build();
 
-        // Check eligibility
-        EligibilityResult result;
-        String reason = null;
-        String reasonAr = null;
-        
         try {
-            result = eligibilityService.checkEligibility(request);
-            
-            if (!result.isEligible() && result.getReasons() != null && !result.getReasons().isEmpty()) {
-                EligibilityResult.ReasonDetail firstReason = result.getReasons().get(0);
-                reason = firstReason.getDetails();
-                reasonAr = firstReason.getMessageAr();
-            }
+            return eligibilityService.checkEligibility(request);
         } catch (Exception e) {
             log.error("[FamilyEligibility] Error checking eligibility for member {}: {}", member.getId(), e.getMessage());
-            // Create a simple not-eligible result for errors
-            result = EligibilityResult.notEligible(
+            return EligibilityResult.notEligible(
                     UUID.randomUUID().toString(),
-                    null,  // no snapshot
+                    null,
                     List.of(EligibilityResult.ReasonDetail.builder()
                             .code("SYSTEM_ERROR")
                             .messageAr("حدث خطأ أثناء التحقق من الأهلية")
@@ -139,20 +155,25 @@ public class FamilyEligibilityService {
                             .hardFailure(true)
                             .build()),
                     0L,
-                    0
-            );
-            reason = e.getMessage();
-            reasonAr = "حدث خطأ أثناء التحقق من الأهلية";
+                    0);
+        }
+    }
+
+    private FamilyMemberEligibility toFamilyMemberEligibility(Member member, EligibilityResult result) {
+        String reason = null;
+        String reasonAr = null;
+        if (!result.isEligible() && result.getReasons() != null && !result.getReasons().isEmpty()) {
+            EligibilityResult.ReasonDetail firstReason = result.getReasons().get(0);
+            reason = firstReason.getDetails();
+            reasonAr = firstReason.getMessageAr();
         }
 
-        // Determine relationship type
         String relationshipType = "PRINCIPAL";
         if (member.getParent() != null) {
-            relationshipType = member.getRelationship() != null ? 
+            relationshipType = member.getRelationship() != null ?
                     member.getRelationship().name() : "DEPENDENT";
         }
 
-        // Build response
         return FamilyMemberEligibility.builder()
                 .memberId(member.getId())
                 .memberName(member.getFullName())
@@ -170,7 +191,7 @@ public class FamilyEligibilityService {
                 .policyNumber(result.getSnapshot() != null ? result.getSnapshot().getPolicyNumber() : null)
                 .coverageStart(result.getSnapshot() != null ? result.getSnapshot().getCoverageStart() : null)
                 .coverageEnd(result.getSnapshot() != null ? result.getSnapshot().getCoverageEnd() : null)
-                .employerName(result.getSnapshot() != null ? result.getSnapshot().getEmployerName() : 
+                .employerName(result.getSnapshot() != null ? result.getSnapshot().getEmployerName() :
                         (member.getEmployer() != null ? member.getEmployer().getName() : null))
                 .build();
     }

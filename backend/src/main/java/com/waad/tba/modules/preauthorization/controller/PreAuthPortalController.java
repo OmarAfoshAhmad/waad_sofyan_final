@@ -18,6 +18,8 @@ import jakarta.transaction.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+
+import com.waad.tba.common.exception.BusinessRuleException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -74,8 +76,25 @@ public class PreAuthPortalController {
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> lines = (List<Map<String, Object>>) payload.get("lines");
 
-        Long memberId = memberData != null && memberData.get("id") != null ? Long.valueOf(memberData.get("id").toString()) : 1L;
-        Long providerId = 1L; // Mock provider
+        // Identity is never invented. Each of these previously fell back to
+        // entity 1 -- so a request naming no member, no provider and no
+        // classification was persisted against whichever rows happen to hold
+        // id 1, and would later resolve the WRONG benefit rule, the wrong
+        // buckets and the wrong contract. Once approval places holds, that
+        // takes limit from a member who never asked for the service.
+        if (memberData == null || memberData.get("id") == null) {
+            throw new BusinessRuleException("لا يمكن إنشاء طلب موافقة مسبقة دون تحديد المستفيد.");
+        }
+        Long memberId = Long.valueOf(memberData.get("id").toString());
+
+        if (payload.get("providerId") == null) {
+            throw new BusinessRuleException("لا يمكن إنشاء طلب موافقة مسبقة دون تحديد مقدم الخدمة.");
+        }
+        Long providerId = Long.valueOf(payload.get("providerId").toString());
+
+        if (lines == null || lines.isEmpty()) {
+            throw new BusinessRuleException("لا يمكن إنشاء طلب موافقة مسبقة دون بنود.");
+        }
 
         List<PreAuthorization> savedRequests = new ArrayList<>();
 
@@ -102,12 +121,21 @@ public class PreAuthPortalController {
                         .providerId(providerId)
                         .serviceCode(code != null ? code : "UNLISTED")
                         .serviceName(name != null ? name : "Unknown Service")
-                        .serviceCategoryId(1L) // Mock Category
-                        .serviceCategoryName("General Medical")
+                        // The medical classification decides which benefit rule
+                        // applies, and therefore which buckets a hold lands on.
+                        // There is no safe default: not id 1, not the first
+                        // category, and not "no classification" (which the
+                        // limit resolver would read as no ceiling at all).
+                        .serviceCategoryId(requiredCategoryId(line))
+                        .serviceCategoryName((String) line.get("categoryName"))
                         .status(PreAuthorization.PreAuthStatus.PENDING)
                         .priority(PreAuthorization.Priority.URGENT)
                         .requestDate(LocalDate.now())
-                        .expectedServiceDate(LocalDate.now())
+                        // Not today by default: the policy, the assignment and
+                        // the contract terms are all resolved ON this date, so
+                        // substituting today prices a future service with
+                        // today's configuration.
+                        .expectedServiceDate(requiredExpectedServiceDate(payload))
                         .expiryDate(LocalDate.now().plusDays(5))
                         .contractPrice(contractPrice)
                         .requestedTotalAmount(requestedPrice)
@@ -146,5 +174,30 @@ public class PreAuthPortalController {
             @RequestParam(value = "lineId", required = false) Long lineId) {
         // Save file to disk/S3 and create PreAuthorizationAttachment entity
         return ResponseEntity.ok("Attachment Uploaded (Mock)");
+    }
+
+    /**
+     * The line's medical classification. Absent, the benefit rule cannot be
+     * resolved -- and an unresolved rule means no bucket applies, which the
+     * limit resolver reports as "unlimited". Approving against no ceiling is
+     * the worst of the available failures, so this fails closed instead.
+     */
+    private Long requiredCategoryId(Map<String, Object> line) {
+        Object categoryId = line.get("medicalCategoryId") != null
+                ? line.get("medicalCategoryId") : line.get("categoryId");
+        if (categoryId == null) {
+            throw new BusinessRuleException(
+                    "لا يمكن قبول بند بلا تصنيف طبي؛ التصنيف يحدد قاعدة المنفعة والأوعية المنطبقة.");
+        }
+        return Long.valueOf(categoryId.toString());
+    }
+
+    private LocalDate requiredExpectedServiceDate(Map<String, Object> payload) {
+        Object value = payload.get("expectedServiceDate");
+        if (value == null) {
+            throw new BusinessRuleException(
+                    "لا يمكن إنشاء طلب موافقة مسبقة دون تاريخ الخدمة المتوقع.");
+        }
+        return LocalDate.parse(value.toString());
     }
 }

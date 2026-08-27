@@ -12,6 +12,8 @@ import com.waad.tba.modules.employer.entity.Employer;
 import com.waad.tba.modules.employer.mapper.EmployerMapper;
 import com.waad.tba.modules.employer.repository.EmployerRepository;
 import com.waad.tba.modules.member.repository.MemberRepository;
+import com.waad.tba.modules.rbac.entity.User;
+import com.waad.tba.security.AuthorizationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -51,6 +53,7 @@ public class EmployerService {
     private final com.waad.tba.modules.provider.repository.ProviderRepository providerRepository;
     private final MemberRepository memberRepository;
     private final BenefitPolicyRepository benefitPolicyRepository;
+    private final AuthorizationService authorizationService;
 
     /**
      * Get all active, non-archived employers (paginated)
@@ -117,12 +120,27 @@ public class EmployerService {
      * If current user is PROVIDER_STAFF, filter by their allowed employers.
      */
     public List<EmployerSelectorDto> getSelectors() {
-        Object principal = org.springframework.security.core.context.SecurityContextHolder.getContext()
-                .getAuthentication().getPrincipal();
-
-        if (principal instanceof com.waad.tba.modules.rbac.entity.User user) {
+        User user = authorizationService.requireCurrentUser();
+        if (user != null) {
             String role = user.getUserType();
             Long providerId = user.getProviderId();
+
+            // Tenant-scoped member operators need an employer selector in the
+            // create/import screens, but must never receive the system-wide
+            // employer list. Return the single configured employer. A missing
+            // link is a misconfigured account, not an empty catalogue and not
+            // permission to choose another tenant.
+            if ("DATA_ENTRY".equals(role) || "EMPLOYER_ADMIN".equals(role)) {
+                if (user.getEmployerId() == null) {
+                    throw new BusinessRuleException(
+                            "الحساب غير مرتبط بجهة عمل؛ يرجى ربط المستخدم بجهة قبل إدارة المستفيدين");
+                }
+                Employer employer = employerRepository.findById(user.getEmployerId())
+                        .filter(e -> Boolean.TRUE.equals(e.getActive()))
+                        .orElseThrow(() -> new BusinessRuleException(
+                                "جهة العمل المرتبطة بالحساب غير موجودة أو غير نشطة"));
+                return List.of(mapper.toSelector(employer));
+            }
 
             if ("PROVIDER_STAFF".equals(role) && providerId != null) {
                 log.debug("[EmployerService] Filtering selectors for PROVIDER_STAFF user: {}, Provider: {}",

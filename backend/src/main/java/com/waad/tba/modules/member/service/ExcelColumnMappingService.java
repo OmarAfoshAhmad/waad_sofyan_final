@@ -24,8 +24,8 @@ public class ExcelColumnMappingService {
      * Field definitions with Arabic and English labels
      */
     private static final Map<String, FieldDefinition> FIELD_DEFINITIONS = new HashMap<>() {{
-        put("civilId", new FieldDefinition("civilId", "الرقم المدني", "Civil ID", 
-            Arrays.asList("civil id", "civilid", "رقم مدني", "national id", "id number", "رقم", "معرف")));
+        put("nationalNumber", new FieldDefinition("nationalNumber", "الرقم الوطني", "National Number",
+            Arrays.asList("national number", "nationalnumber", "رقم وطني", "الرقم الوطني", "national id", "id number", "رقم", "معرف")));
         put("fullName", new FieldDefinition("fullName", "الاسم الكامل", "Full Name",
             Arrays.asList("full name", "fullname", "name", "اسم", "الاسم", "اسم كامل")));
         put("email", new FieldDefinition("email", "البريد الإلكتروني", "Email",
@@ -43,10 +43,12 @@ public class ExcelColumnMappingService {
     }};
 
     /**
-     * Required fields for Member import
+     * Required fields for Member import.
+     * nationalNumber is intentionally NOT required here -- it's an optional,
+     * non-unique field system-wide (see Member.java), so only fullName is mandatory.
      */
-    private static final Set<String> REQUIRED_FIELDS = new HashSet<>(Arrays.asList(
-        "civilId", "fullName"
+    private static final Set<String> REQUIRED_FIELDS = new HashSet<>(List.of(
+        "fullName"
     ));
 
     /**
@@ -248,7 +250,7 @@ public class ExcelColumnMappingService {
      */
     private boolean matchesExpectedPattern(String fieldName, String value) {
         switch (fieldName) {
-            case "civilId":
+            case "nationalNumber":
                 return value.matches("\\d{12}"); // 12 digits
             case "email":
                 return value.contains("@");

@@ -3,6 +3,7 @@ package com.waad.tba.security;
 import com.waad.tba.modules.rbac.entity.User;
 import com.waad.tba.modules.rbac.repository.UserRepository;
 import com.waad.tba.modules.rbac.service.UserSecurityService;
+import com.waad.tba.modules.rbac.permission.EffectivePermissionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.GrantedAuthority;
@@ -29,6 +30,7 @@ public class CustomUserDetailsService implements UserDetailsService {
 
     private final UserRepository userRepository;
     private final UserSecurityService securityService;
+    private final EffectivePermissionService effectivePermissionService;
 
     @Override
     @Transactional(readOnly = true)
@@ -63,9 +65,14 @@ public class CustomUserDetailsService implements UserDetailsService {
      */
     private Collection<? extends GrantedAuthority> getAuthorities(User user) {
         String role = user.getUserType() != null ? user.getUserType().trim().toUpperCase() : "DATA_ENTRY";
-        SimpleGrantedAuthority authority = new SimpleGrantedAuthority("ROLE_" + role);
-        log.debug("LOGIN: User {} loaded with role authority: {}", user.getUsername(), authority.getAuthority());
+        List<SimpleGrantedAuthority> authorities = new java.util.ArrayList<>();
+        authorities.add(new SimpleGrantedAuthority("ROLE_" + role));
+        effectivePermissionService.resolve(user).stream()
+                .map(permission -> new SimpleGrantedAuthority(permission.authority()))
+                .forEach(authorities::add);
+        log.debug("LOGIN: User {} loaded with role and {} permission authorities",
+                user.getUsername(), authorities.size() - 1);
         log.debug("LOGIN: Raw userType from DB: '{}', Normalized: 'ROLE_{}'", user.getUserType(), role);
-        return List.of(authority);
+        return List.copyOf(authorities);
     }
 }

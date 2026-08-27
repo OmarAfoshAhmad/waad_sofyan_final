@@ -5,6 +5,8 @@ import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.modules.member.exception.InvalidEligibilityInputException;
 import com.waad.tba.modules.member.exception.MemberNotFoundException;
 import com.waad.tba.modules.member.repository.MemberRepository;
+import com.waad.tba.modules.eligibility.dto.EligibilityCheckRequest;
+import com.waad.tba.modules.eligibility.service.EligibilityEngineService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -35,6 +37,7 @@ import java.util.regex.Pattern;
 public class UnifiedEligibilityService {
 
     private final MemberRepository memberRepository;
+    private final EligibilityEngineService eligibilityEngineService;
 
     // Barcode pattern: WAD-YYYY-NNNNNNNN
     private static final Pattern BARCODE_PATTERN = Pattern.compile("^WAD-\\d{4}-\\d{8}$");
@@ -56,6 +59,10 @@ public class UnifiedEligibilityService {
      * @throws MemberNotFoundException if member not found
      */
     public EligibilityResultDto checkEligibility(String query) {
+        return checkEligibility(query, java.time.LocalDate.now());
+    }
+
+    public EligibilityResultDto checkEligibility(String query, java.time.LocalDate serviceDate) {
         if (query == null || query.trim().isEmpty()) {
             throw new InvalidEligibilityInputException("Query cannot be empty");
         }
@@ -66,11 +73,11 @@ public class UnifiedEligibilityService {
         // Auto-detect input type
         if (BARCODE_PATTERN.matcher(trimmedQuery).matches()) {
             log.info("🔍 [BARCODE-DETECTED] Format: WAD-YYYY-NNNNNNNN");
-            return checkByBarcode(trimmedQuery);
+            return checkByBarcode(trimmedQuery, serviceDate);
         } 
         else if (CARD_NUMBER_PATTERN.matcher(trimmedQuery).matches()) {
             log.info("🔍 [CARD-NUMBER-DETECTED] Format: Digits only");
-            return checkByCardNumber(trimmedQuery);
+            return checkByCardNumber(trimmedQuery, serviceDate);
         } 
         else {
             log.warn("⚠️ [INVALID-FORMAT] Query does not match Card Number or Barcode pattern");
@@ -83,7 +90,7 @@ public class UnifiedEligibilityService {
     /**
      * Check eligibility by barcode (exact match)
      */
-    private EligibilityResultDto checkByBarcode(String barcode) {
+    private EligibilityResultDto checkByBarcode(String barcode, java.time.LocalDate serviceDate) {
         log.debug("Searching by barcode: {}", barcode);
 
         Member member = memberRepository.findByBarcode(barcode)
@@ -93,13 +100,13 @@ public class UnifiedEligibilityService {
                 });
         log.info("✅ [FOUND] Member ID: {}, Name: {}", member.getId(), member.getFullName());
 
-        return buildEligibilityResult(member);
+        return buildEligibilityResult(member, serviceDate);
     }
 
     /**
      * Check eligibility by card number (exact match)
      */
-    private EligibilityResultDto checkByCardNumber(String cardNumber) {
+    private EligibilityResultDto checkByCardNumber(String cardNumber, java.time.LocalDate serviceDate) {
         log.debug("Searching by card number: {}", cardNumber);
 
         Member member = memberRepository.findByCardNumber(cardNumber)
@@ -109,17 +116,21 @@ public class UnifiedEligibilityService {
                 });
         log.info("✅ [FOUND] Member ID: {}, Name: {}", member.getId(), member.getFullName());
 
-        return buildEligibilityResult(member);
+        return buildEligibilityResult(member, serviceDate);
     }
 
     /**
      * Build eligibility result DTO from Member entity
      */
-    private EligibilityResultDto buildEligibilityResult(Member member) {
-        // Determine eligibility decision based on member status
+    private EligibilityResultDto buildEligibilityResult(Member member, java.time.LocalDate serviceDate) {
+        if (serviceDate == null) {
+            throw new InvalidEligibilityInputException("Service date is required");
+        }
+        var engineResult = eligibilityEngineService.checkEligibility(
+                EligibilityCheckRequest.of(member.getId(), serviceDate));
         String statusValue = member.getStatus() != null ? member.getStatus().name() : "UNKNOWN";
         EligibilityResultDto.EligibilityDecision decision = 
-            "ACTIVE".equals(statusValue) ? 
+            engineResult.isEligible() ?
             EligibilityResultDto.EligibilityDecision.ELIGIBLE : 
             EligibilityResultDto.EligibilityDecision.NOT_ELIGIBLE;
 
@@ -137,6 +148,10 @@ public class UnifiedEligibilityService {
             .memberStatus(statusValue)
             .cardStatus(member.getCardStatus() != null ? member.getCardStatus().name() : "UNKNOWN")
             .eligibilityDecision(decision)
+            .eligible(engineResult.isEligible())
+            .ineligibilityReason(engineResult.getReasons() == null ? null : engineResult.getReasons().stream()
+                    .map(r -> r.getMessageAr()).filter(java.util.Objects::nonNull)
+                    .collect(java.util.stream.Collectors.joining("؛ ")))
             .build();
     }
 }

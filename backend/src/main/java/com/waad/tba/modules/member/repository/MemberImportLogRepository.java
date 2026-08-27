@@ -21,6 +21,13 @@ public interface MemberImportLogRepository extends JpaRepository<MemberImportLog
      * Find by batch ID
      */
     Optional<MemberImportLog> findByImportBatchId(String importBatchId);
+
+    /**
+     * Idempotency lookup: has this exact logical import (same file bytes AND
+     * the same employer/benefitPolicy/headerRow/clearOldMembers choices --
+     * see MemberImportLog.importScopeHash) already completed?
+     */
+    Optional<MemberImportLog> findByImportScopeHashAndStatus(String importScopeHash, ImportStatus status);
     
     /**
      * Find by user with pagination

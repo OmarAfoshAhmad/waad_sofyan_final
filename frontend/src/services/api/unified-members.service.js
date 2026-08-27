@@ -240,7 +240,10 @@ export const searchBeneficiaries = async (params = {}) => {
  */
 export const checkEligibility = async (barcode) => {
   try {
-    const response = await api.get(`${UNIFIED_MEMBERS_BASE_URL}/eligibility/${barcode}`);
+    const response = await api.post(`${UNIFIED_MEMBERS_BASE_URL}/eligibility/evaluations`, {
+      barcode,
+      serviceDate: new Date().toISOString().slice(0, 10)
+    });
     return response.data;
   } catch (error) {
     console.error('Error checking eligibility:', error);
@@ -283,14 +286,33 @@ export const deleteMember = async (id) => {
 };
 
 /**
+ * End a member's membership. Nothing is physically deleted -- status
+ * becomes TERMINATED. Prefer this over deleteMember() in new code; that
+ * name is kept only for existing callers (it calls the same backend
+ * endpoint that this function's route now aliases to internally).
+ *
+ * @param {number} id - Member ID
+ * @param {string} [reason] - Reason recorded on the transition
+ * @returns {Promise<void>}
+ */
+export const terminateMembership = async (id, reason) => {
+  try {
+    await api.post(`${UNIFIED_MEMBERS_BASE_URL}/${id}/terminate`, null, { params: { reason } });
+  } catch (error) {
+    console.error('Error terminating membership:', error);
+    throw error;
+  }
+};
+
+/**
  * Bulk delete members by IDs
  *
  * @param {Array<number>} ids - Array of Member IDs
  * @returns {Promise<Object>} Response
  */
-export const bulkDeleteMembers = async (ids) => {
+export const bulkDeleteMembers = async (ids, reason) => {
   try {
-    const response = await api.post(`${UNIFIED_MEMBERS_BASE_URL}/bulk-delete`, ids);
+    const response = await api.post(`${UNIFIED_MEMBERS_BASE_URL}/bulk-delete`, { ids, reason });
     return response.data;
   } catch (error) {
     console.error('Error bulk deleting members:', error);
@@ -304,9 +326,9 @@ export const bulkDeleteMembers = async (ids) => {
  * @param {number} id - Member ID
  * @returns {Promise<Object>} Response
  */
-export const restoreMember = async (id) => {
+export const restoreMember = async (id, reason) => {
   try {
-    const response = await api.put(`${UNIFIED_MEMBERS_BASE_URL}/${id}/restore`);
+    const response = await api.put(`${UNIFIED_MEMBERS_BASE_URL}/${id}/restore`, null, { params: { reason } });
     return response.data;
   } catch (error) {
     console.error('Error restoring member:', error);
@@ -315,20 +337,140 @@ export const restoreMember = async (id) => {
 };
 
 /**
- * Toggle active/inactive status for a member
+ * Toggle active/inactive status for a member.
+ *
+ * active=true restores from SUSPENDED (rejects a TERMINATED member -- use
+ * reinstateTerminatedMember for that). active=false suspends and requires
+ * a reason.
  *
  * @param {number} id - Member ID
  * @param {boolean} active - true to activate, false to deactivate
+ * @param {string} [reason] - Required when active=false
  * @returns {Promise<Object>} Updated member
  */
-export const toggleMemberActive = async (id, active) => {
+export const toggleMemberActive = async (id, active, reason) => {
   try {
-    const response = await api.patch(`${UNIFIED_MEMBERS_BASE_URL}/${id}/active`, null, { params: { active } });
+    const response = await api.patch(`${UNIFIED_MEMBERS_BASE_URL}/${id}/active`, null, { params: { active, reason } });
     return response.data;
   } catch (error) {
     console.error('Error toggling member active status:', error);
     throw error;
   }
+};
+
+/**
+ * TERMINATED -> ACTIVE. Exceptional action requiring SUPER_ADMIN and a
+ * mandatory reason -- distinct from the ordinary restore/toggle-active
+ * path, which explicitly refuses to touch a TERMINATED member.
+ *
+ * @param {number} id - Member ID
+ * @param {string} reason - Mandatory reason
+ * @returns {Promise<Object>} Updated member
+ */
+export const reinstateTerminatedMember = async (id, reason) => {
+  try {
+    const response = await api.put(`${UNIFIED_MEMBERS_BASE_URL}/${id}/reinstate`, null, { params: { reason } });
+    return response.data;
+  } catch (error) {
+    console.error('Error reinstating terminated member:', error);
+    throw error;
+  }
+};
+
+/**
+ * Restores exactly the dependents ONE specific suspend/terminate family
+ * cascade affected (identified by transitionId, found on the principal's
+ * statusTransitionId after that cascade ran) -- never every dependent
+ * currently sharing that status, and never one who changed independently
+ * since. Restoring the principal never does this automatically.
+ *
+ * @param {string} transitionId
+ * @returns {Promise<Object>} { restoredMemberIds, skipped }
+ */
+export const restoreFamily = async (transitionId) => {
+  try {
+    const response = await api.put(`${UNIFIED_MEMBERS_BASE_URL}/family-restore/${transitionId}`);
+    return response.data;
+  } catch (error) {
+    console.error('Error restoring family cascade:', error);
+    throw error;
+  }
+};
+
+/**
+ * Move a dependent to a different principal's family. Atomic, dated,
+ * requires the dependent's current row version to guard against a
+ * concurrent edit.
+ */
+export const transferDependent = async (dependentId, { newPrincipalId, relationship, effectiveDate, reason, expectedVersion }) => {
+  const response = await api.post(`${UNIFIED_MEMBERS_BASE_URL}/${dependentId}/family-transfer`, {
+    newPrincipalId,
+    relationship,
+    effectiveDate,
+    reason,
+    expectedVersion
+  });
+  return response.data;
+};
+
+/** Corrects a dependent's kinship/relationship value -- a dedicated, audited operation, not a field edit. */
+export const correctRelationship = async (dependentId, { relationship, reason, expectedVersion }) => {
+  const response = await api.post(`${UNIFIED_MEMBERS_BASE_URL}/${dependentId}/relationship-correction`, {
+    relationship,
+    reason,
+    expectedVersion
+  });
+  return response.data;
+};
+
+/**
+ * Changes the whole family's benefit policy as of an effective date. All or
+ * nothing: expectedVersions must name every affected member's current
+ * version or the whole call is rejected.
+ */
+export const changeFamilyPolicy = async (principalId, { policyId, effectiveDate, reason, expectedVersions }) => {
+  const response = await api.post(`${UNIFIED_MEMBERS_BASE_URL}/${principalId}/family-policy`, {
+    policyId,
+    effectiveDate,
+    reason,
+    expectedVersions
+  });
+  return response.data;
+};
+
+/** Reorders a family's dependents for display only -- never touches card number or barcode. */
+export const reorderFamily = async (principalId, { dependentIds, expectedVersions }) => {
+  const response = await api.post(`${UNIFIED_MEMBERS_BASE_URL}/${principalId}/family-order`, {
+    dependentIds,
+    expectedVersions
+  });
+  return response.data;
+};
+
+/** Read-only impact preview for transferring a principal and their whole family to another employer. */
+export const previewEmployerTransfer = async (principalId, newEmployerId) => {
+  const response = await api.get(`${UNIFIED_MEMBERS_BASE_URL}/${principalId}/employer-transfer/preview`, {
+    params: { newEmployerId }
+  });
+  return response.data;
+};
+
+/**
+ * Moves a principal and their whole family to another employer as of an
+ * effective date. All-or-nothing: expectedVersions must name every family
+ * member's current version. Pass noPolicy:true instead of newPolicyId only
+ * to explicitly confirm the family should carry no policy for now.
+ */
+export const transferEmployerFamily = async (principalId, { newEmployerId, newPolicyId, noPolicy, effectiveDate, reason, expectedVersions }) => {
+  const response = await api.post(`${UNIFIED_MEMBERS_BASE_URL}/${principalId}/employer-transfer`, {
+    newEmployerId,
+    newPolicyId: noPolicy ? null : newPolicyId,
+    noPolicy: Boolean(noPolicy),
+    effectiveDate,
+    reason,
+    expectedVersions
+  });
+  return response.data;
 };
 
 /**
@@ -350,14 +492,18 @@ export const changeMemberStatus = async (id, status, reason) => {
 };
 
 /**
- * Physically delete a member from the database
+ * Physically delete a member from the database. SUPER_ADMIN only, blocked
+ * entirely if any financial/medical/audit footprint exists, and requires a
+ * reason -- an independent (non-FK'd) audit record is written before the
+ * delete.
  *
  * @param {number} id - Member ID
+ * @param {string} reason - Mandatory reason
  * @returns {Promise<void>}
  */
-export const hardDeleteMember = async (id) => {
+export const hardDeleteMember = async (id, reason) => {
   try {
-    await api.delete(`${UNIFIED_MEMBERS_BASE_URL}/${id}/hard`);
+    await api.delete(`${UNIFIED_MEMBERS_BASE_URL}/${id}/hard`, { params: { reason } });
   } catch (error) {
     console.error('Error physically deleting member:', error);
     throw error;
@@ -397,42 +543,6 @@ export const countDependents = async (principalId) => {
 };
 
 /**
- * Import members from Excel file
- *
- * @param {File} file - Excel file
- * @returns {Promise<any>} Import result
- */
-export const importMembers = async (file, clearOldMembers = false, employerId = null) => {
-  try {
-    const formData = new FormData();
-    formData.append('file', file);
-    if (clearOldMembers) {
-      formData.append('clearOldMembers', clearOldMembers);
-    }
-    if (employerId) {
-      formData.append('employerId', employerId);
-    }
-    const response = await api.post(`${UNIFIED_MEMBERS_BASE_URL}/import`, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data'
-      },
-      timeout: 300000 // 5 minutes for large Excel files
-    });
-    return response.data;
-  } catch (error) {
-    console.error('Error importing members:', error);
-
-    // Preserve server response data for better error display
-    if (error.response?.data) {
-      error.importResult = error.response.data.data; // The ExcelImportResult
-      error.serverMessage = error.response.data.message;
-    }
-
-    throw error;
-  }
-};
-
-/**
  * Detect Excel columns and suggest mappings
  *
  * @param {File} file - Excel file
@@ -459,15 +569,20 @@ export const detectColumns = async (file) => {
  * @param {Object} customMappings - Optional mappings
  * @returns {Promise<any>} Preview result
  */
-export const previewImport = async (file, customMappings = null, headerRowNumber = null) => {
+export const previewImport = async (file, params = {}) => {
   try {
     const formData = new FormData();
     formData.append('file', file);
-    if (customMappings) {
-      formData.append('customMappings', JSON.stringify(customMappings));
+    if (params.employerId) {
+      formData.append('employerId', params.employerId);
     }
-    if (headerRowNumber !== null && headerRowNumber !== undefined) {
-      formData.append('headerRowNumber', headerRowNumber);
+    if (params.headerRowNumber !== null && params.headerRowNumber !== undefined) {
+      formData.append('headerRowNumber', params.headerRowNumber);
+    }
+    if (params.benefitPolicyId) formData.append('benefitPolicyId', params.benefitPolicyId);
+    if (params.clearOldMembers !== undefined) formData.append('clearOldMembers', params.clearOldMembers);
+    if (params.customMappings) {
+      formData.append('customMappingsJson', JSON.stringify(params.customMappings));
     }
     const response = await api.post(`${UNIFIED_MEMBERS_BASE_URL}/import/preview`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
@@ -501,6 +616,9 @@ export const executeImport = async (file, params) => {
     }
     if (params.clearOldMembers !== undefined) {
       formData.append('clearOldMembers', params.clearOldMembers);
+    }
+    if (params.customMappings) {
+      formData.append('customMappingsJson', JSON.stringify(params.customMappings));
     }
 
     const response = await api.post(`${UNIFIED_MEMBERS_BASE_URL}/import/execute`, formData, {
@@ -556,7 +674,14 @@ export const downloadTemplate = async () => {
 export const exportMembers = async (params = {}) => {
   try {
     const response = await api.get(`${UNIFIED_MEMBERS_BASE_URL}/export/excel`, {
-      params,
+      params: {
+        searchQuery: params.searchQuery ?? params.searchTerm,
+        employerId: params.employerId ?? params.organizationId,
+        benefitPolicyId: params.benefitPolicyId,
+        status: params.status,
+        type: params.type,
+        includeDeleted: params.includeDeleted ?? params.deleted ?? false
+      },
       responseType: 'blob'
     });
     return response.data;
@@ -564,6 +689,22 @@ export const exportMembers = async (params = {}) => {
     console.error('Error exporting members:', error);
     throw error;
   }
+};
+
+/** Canonical workbook that can be sent back through preview -> execute. */
+export const exportReimportableMembers = async (params = {}) => {
+  const response = await api.get(`${UNIFIED_MEMBERS_BASE_URL}/export/reimportable-excel`, {
+    params: {
+      searchQuery: params.searchQuery ?? params.searchTerm,
+      employerId: params.employerId ?? params.organizationId,
+      benefitPolicyId: params.benefitPolicyId,
+      status: params.status,
+      type: params.type,
+      includeDeleted: params.includeDeleted ?? params.deleted ?? false
+    },
+    responseType: 'blob'
+  });
+  return response.data;
 };
 
 /**
@@ -597,7 +738,17 @@ export const MEMBER_STATUSES = {
   ACTIVE: 'ACTIVE',
   SUSPENDED: 'SUSPENDED',
   TERMINATED: 'TERMINATED',
-  PENDING: 'PENDING'
+  PENDING: 'PENDING',
+  DUPLICATE_MERGED: 'DUPLICATE_MERGED'
+};
+
+/** Arabic display labels. TERMINATED reads as "ended membership", not "deleted" -- the record still exists. */
+export const MEMBER_STATUS_LABELS = {
+  ACTIVE: 'نشط',
+  SUSPENDED: 'معلّق',
+  PENDING: 'قيد المراجعة',
+  TERMINATED: 'منتهية العضوية',
+  DUPLICATE_MERGED: 'مدموج'
 };
 
 /**
@@ -677,11 +828,11 @@ export default {
   hardDeleteMember,
   getDependents,
   countDependents,
-  importMembers,
   detectColumns,
   previewImport,
   executeImport,
   exportMembers,
+  exportReimportableMembers,
   downloadTemplate,
   uploadPhoto,
   deletePhoto,
@@ -689,5 +840,13 @@ export default {
   RELATIONSHIPS,
   GENDERS,
   MEMBER_STATUSES,
-  MEMBER_TYPES
+  MEMBER_STATUS_LABELS,
+  MEMBER_TYPES,
+  restoreFamily,
+  transferDependent,
+  correctRelationship,
+  changeFamilyPolicy,
+  reorderFamily,
+  previewEmployerTransfer,
+  transferEmployerFamily
 };

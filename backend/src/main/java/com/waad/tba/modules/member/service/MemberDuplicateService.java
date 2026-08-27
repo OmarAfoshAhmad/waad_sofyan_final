@@ -4,20 +4,26 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.waad.tba.modules.claim.entity.Claim;
 import com.waad.tba.modules.claim.repository.ClaimRepository;
 import com.waad.tba.modules.member.dto.MemberDuplicateGroupDto;
 import com.waad.tba.modules.member.dto.MemberDuplicateGroupDto.DuplicateMemberInfo;
 import com.waad.tba.modules.member.entity.Member;
-import com.waad.tba.modules.member.repository.MemberAttributeRepository;
 import com.waad.tba.modules.member.repository.MemberRepository;
-import com.waad.tba.modules.visit.entity.Visit;
+import com.waad.tba.modules.member.security.MemberCommandAccessPolicy;
+import com.waad.tba.modules.member.security.MemberOperation;
 import com.waad.tba.modules.visit.repository.VisitRepository;
+import com.waad.tba.modules.member.entity.StatusSource;
+import com.waad.tba.modules.rbac.entity.User;
+import com.waad.tba.security.AuthorizationService;
+import org.springframework.jdbc.core.JdbcTemplate;
+import com.waad.tba.common.exception.BusinessRuleException;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -30,8 +36,11 @@ public class MemberDuplicateService {
     private final MemberRepository memberRepository;
     private final VisitRepository visitRepository;
     private final ClaimRepository claimRepository;
-    private final MemberAttributeRepository memberAttributeRepository;
-    private final CardNumberGeneratorService cardNumberGeneratorService;
+    private final MemberCommandAccessPolicy commandAccessPolicy;
+    private final MemberStatusTransitionService statusTransitionService;
+    private final MemberIdentityResolver identityResolver;
+    private final AuthorizationService authorizationService;
+    private final JdbcTemplate jdbc;
 
     /**
      * Finds duplicate members across the entire system.
@@ -39,6 +48,7 @@ public class MemberDuplicateService {
      */
     @Transactional(readOnly = true)
     public List<MemberDuplicateGroupDto> findDuplicates() {
+        commandAccessPolicy.require(MemberOperation.RESOLVE_DUPLICATES, null);
         // Fetch all active members using lightweight projection to avoid N+1 and slow initialization
         List<com.waad.tba.modules.member.dto.MemberLightProjection> activeMembers = memberRepository.findAllActiveMembersLight(Member.MemberStatus.ACTIVE);
 
@@ -123,64 +133,63 @@ public class MemberDuplicateService {
     }
 
     /**
-     * Merges duplicate members into the primary member.
-     * Transfers all relations (Visits, Claims, PreAuths, Dependents) and soft-deletes the duplicates.
+     * Retires duplicate identities without moving or deleting any historical row.
      */
     @Transactional
-    public void mergeDuplicates(Long primaryMemberId, List<Long> duplicateMemberIds) {
-        log.info("Merging duplicates {} into primary member {}", duplicateMemberIds, primaryMemberId);
+    public void mergeDuplicates(Long primaryMemberId, List<Long> duplicateMemberIds, String reason,
+            Map<Long, Long> expectedVersions) {
+        commandAccessPolicy.require(MemberOperation.RESOLVE_DUPLICATES, null);
+        if (reason == null || reason.isBlank()) throw new BusinessRuleException("سبب دمج المكرر إلزامي");
+        if (duplicateMemberIds == null || duplicateMemberIds.isEmpty())
+            throw new BusinessRuleException("يجب تحديد سجل مكرر واحد على الأقل");
+        if (expectedVersions == null) throw new BusinessRuleException("نسخ السجلات مطلوبة");
 
-        if (duplicateMemberIds == null || duplicateMemberIds.isEmpty()) return;
+        Long canonicalPrimaryId = identityResolver.resolveCanonicalId(primaryMemberId);
+        if (!Objects.equals(canonicalPrimaryId, primaryMemberId))
+            throw new BusinessRuleException("السجل الأساسي المحدد مكرر بدوره؛ اختر السجل النهائي");
 
-        Member primary = memberRepository.findById(primaryMemberId)
-                .orElseThrow(() -> new IllegalArgumentException("Primary member not found: " + primaryMemberId));
+        List<Long> ids = java.util.stream.Stream.concat(java.util.stream.Stream.of(primaryMemberId),
+                duplicateMemberIds.stream()).distinct().sorted().toList();
+        if (ids.size() != duplicateMemberIds.size() + 1 || duplicateMemberIds.contains(primaryMemberId))
+            throw new BusinessRuleException("لا يجوز تكرار المعرفات أو دمج السجل في نفسه");
+        if (!expectedVersions.keySet().equals(new java.util.HashSet<>(ids)))
+            throw new BusinessRuleException("يجب إرسال نسخة السجل الأساسي وكل سجل مكرر");
 
-        for (Long dupId : duplicateMemberIds) {
-            if (dupId.equals(primaryMemberId)) continue; // skip self
-
-            Member duplicate = memberRepository.findById(dupId).orElse(null);
-            if (duplicate == null) continue;
-
-            // 1. Transfer Visits
-            List<Visit> visits = visitRepository.findByMemberId(dupId);
-            for (Visit v : visits) {
-                v.setMember(primary);
-            }
-            visitRepository.saveAll(visits);
-
-            // 2. Transfer Claims
-            List<Claim> claims = claimRepository.findByMemberId(dupId);
-            for (Claim c : claims) {
-                c.setMember(primary);
-            }
-            claimRepository.saveAll(claims);
-
-            // 3. Transfer Dependents (if duplicate was a principal)
-            if (duplicate.isPrincipal()) {
-                List<Member> dependents = memberRepository.findByParentId(dupId);
-                for (Member dep : dependents) {
-                    dep.setParent(primary);
-                }
-                memberRepository.saveAll(dependents);
-            }
-
-            // 4. Update PreAuths
-            
-            // 5. Delete Member Attributes to avoid FK constraints during duplicate deletion
-            memberAttributeRepository.deleteByMemberId(dupId);
-
-            // 6. Delete or Soft Delete Duplicate
-            // We will hard delete them to clean up the system since all relations are transferred!
-            memberRepository.delete(duplicate);
-            log.info("Transferred {} visits, {} claims, and deleted duplicate member {}", visits.size(), claims.size(), dupId);
+        Map<Long, Member> locked = new java.util.LinkedHashMap<>();
+        for (Long id : ids) locked.put(id, memberRepository.findByIdWithLock(id)
+                .orElseThrow(() -> new BusinessRuleException("أحد سجلات الدمج غير موجود")));
+        Member primary = locked.get(primaryMemberId);
+        User actor = authorizationService.requireCurrentUser();
+        for (Member member : locked.values()) {
+            if (!Objects.equals(member.getVersion(), expectedVersions.get(member.getId())))
+                throw new BusinessRuleException("تم تعديل أحد السجلات؛ حدّث الصفحة وأعد المحاولة");
         }
 
-        // Resequence card numbers for dependents of the same parent if a dependent was merged
-        if (primary.isDependent() && primary.getParent() != null) {
-            cardNumberGeneratorService.resequenceDependents(primary.getParent());
-        }
+        for (Long duplicateId : duplicateMemberIds) {
+            Member duplicate = locked.get(duplicateId);
+            assertCompatible(primary, duplicate);
+            if (jdbc.queryForObject("select exists(select 1 from member_merge_records where duplicate_member_id=?)",
+                    Boolean.class, duplicateId)) throw new BusinessRuleException("السجل المكرر مدمج مسبقاً");
 
-        log.info("Merge completed for primary member {}", primaryMemberId);
+            jdbc.update("""
+                    insert into member_merge_records(merge_id,duplicate_member_id,primary_member_id,reason,merged_by,
+                        duplicate_name,duplicate_card_number,primary_name,primary_card_number)
+                    values (?,?,?,?,?,?,?,?,?)
+                    """, UUID.randomUUID(), duplicateId, primaryMemberId, reason.trim(), actor.getId(),
+                    duplicate.getFullName(), duplicate.getCardNumber(), primary.getFullName(), primary.getCardNumber());
+            statusTransitionService.transitionTo(duplicate, Member.MemberStatus.DUPLICATE_MERGED,
+                    reason.trim(), StatusSource.SYSTEM, UUID.randomUUID().toString(), actor.getId());
+        }
+        log.info("Retired duplicate identities {} in favour of {} without moving history", duplicateMemberIds, primaryMemberId);
+    }
+
+    private static void assertCompatible(Member primary, Member duplicate) {
+        if (primary.isPrincipal() != duplicate.isPrincipal())
+            throw new BusinessRuleException("لا يمكن دمج رئيس أسرة مع تابع");
+        if (!Objects.equals(primary.getEmployer().getId(), duplicate.getEmployer().getId()))
+            throw new BusinessRuleException("لا يمكن دمج مستفيدين من جهتي عمل مختلفتين");
+        if (primary.isDependent() && !Objects.equals(primary.getParent().getId(), duplicate.getParent().getId()))
+            throw new BusinessRuleException("لا يمكن دمج تابعين من أسرتين مختلفتين");
     }
 
     private String normalizeText(String text) {

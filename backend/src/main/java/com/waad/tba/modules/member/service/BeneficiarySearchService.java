@@ -5,10 +5,10 @@ import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.modules.member.mapper.UnifiedMemberMapper;
 import com.waad.tba.modules.member.service.search.BeneficiarySearchStrategy;
 import com.waad.tba.modules.member.service.search.BeneficiarySearchType;
-import com.waad.tba.modules.rbac.entity.User;
-import com.waad.tba.security.AuthorizationService;
-import com.waad.tba.modules.provider.service.ProviderService;
-import org.springframework.security.access.AccessDeniedException;
+import com.waad.tba.modules.member.security.AuthorizedMemberScope;
+import com.waad.tba.modules.member.security.MemberAccessDeniedException;
+import com.waad.tba.modules.member.security.MemberOperation;
+import com.waad.tba.modules.member.security.MemberQueryAccessPolicy;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,8 +33,7 @@ public class BeneficiarySearchService {
 
     private final List<BeneficiarySearchStrategy> strategies;
     private final UnifiedMemberMapper unifiedMemberMapper;
-    private final AuthorizationService authorizationService;
-    private final ProviderService providerService;
+    private final MemberQueryAccessPolicy queryAccessPolicy;
 
     public List<MemberViewDto> search(
             BeneficiarySearchType type,
@@ -57,15 +56,14 @@ public class BeneficiarySearchService {
             throw new ResponseStatusException(BAD_REQUEST, "Unsupported beneficiary search type: " + type);
         }
 
-        User currentUser = authorizationService.requireCurrentUser();
-        Long effectiveEmployerId = authorizationService.resolveEmployerScope(currentUser, employerId);
-        if (authorizationService.isProvider(currentUser)) {
-            if (currentUser.getProviderId() == null || effectiveEmployerId == null) {
-                throw new AccessDeniedException("Provider beneficiary search requires an employer scope");
+        AuthorizedMemberScope scope = queryAccessPolicy.requireListing(MemberOperation.SEARCH, employerId);
+        Long effectiveEmployerId = employerId;
+        if (effectiveEmployerId == null && !scope.isGlobal()) {
+            if (scope.employerIds().size() != 1) {
+                throw new MemberAccessDeniedException(MemberOperation.SEARCH,
+                        "يجب تحديد جهة عمل واحدة ضمن النطاق المسموح لهذا البحث");
             }
-            if (!providerService.getAllowedEmployerIds(currentUser.getProviderId()).contains(effectiveEmployerId)) {
-                throw new AccessDeniedException("Provider is not allowed to access the requested employer");
-            }
+            effectiveEmployerId = scope.employerIds().iterator().next();
         }
 
         return strategy.search(normalizedValue, effectiveEmployerId, normalizedStatus, normalizedSize)

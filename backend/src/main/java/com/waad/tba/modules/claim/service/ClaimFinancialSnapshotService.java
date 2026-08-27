@@ -40,14 +40,17 @@ import lombok.RequiredArgsConstructor;
  *      same member from both reading a stale "used" total and jointly
  *      exceeding the annual policy ceiling.
  *   2. The annual-limit check via BenefitPolicyCoverageService.validateAmountLimits
- *      -- now validated against the claim's own correct approvedAmount
- *      instead of a recomputed number.
+ *      -- validated against the claim's own limit-consumption total
+ *      (ClaimFinancialTotals.sumLimitConsumption), the same WAAD-FIN-1.0 S4
+ *      axis the engine itself already capped each line to; never
+ *      approvedAmount, which is a different, smaller number by construction.
  */
 @Service
 @RequiredArgsConstructor
 public class ClaimFinancialSnapshotService {
 
     private final BenefitPolicyCoverageService benefitPolicyCoverageService;
+    private final com.waad.tba.modules.member.service.MemberPolicyResolver memberPolicyResolver;
     private final ClaimFinancialInvariantGuard claimFinancialInvariantGuard;
     private final ClaimFinancialAdjudicationService financialAdjudicationService;
     private final ClaimLimitSnapshotFactory limitSnapshotFactory;
@@ -77,13 +80,26 @@ public class ClaimFinancialSnapshotService {
             // numbers, this is what catches it -- fail closed, not a warning.
             claimFinancialInvariantGuard.assertConsistent(claim);
 
-            if (lockedMember.getBenefitPolicy() != null) {
+            // Resolved by the claim's SERVICE DATE. The approval gate must
+            // validate against the limits that were in force then, and the
+            // limit snapshot written below must record that same policy.
+            var policyOnServiceDate = memberPolicyResolver
+                    .resolveFor(lockedMember, claim.getServiceDate()).orElse(null);
+            if (policyOnServiceDate != null) {
                 // excludeClaimId = claim.getId(): this claim may already exist as a row
                 // (e.g. the direct-entry path saves it before finalizeSnapshot runs), so
                 // the "previously used" aggregation must not count this claim's own
                 // amount against itself.
+                //
+                // WAAD-FIN-1.0 S4: what the ceiling tracks is limit consumption, not
+                // approvedAmount -- ClaimFinancialTotals.sumLimitConsumption(claim) is
+                // the same axis validateAmountLimits' own "previously consumed" read
+                // now uses (BenefitPolicyCoverageService.getLimitConsumedForYear).
+                // Comparing the two on the same axis is what fixed the member window's
+                // "remaining limit" figure disagreeing with what the engine itself
+                // already capped each line to.
                 benefitPolicyCoverageService.validateAmountLimits(
-                        lockedMember, lockedMember.getBenefitPolicy(), claim.getApprovedAmount(),
+                        lockedMember, policyOnServiceDate, ClaimFinancialTotals.sumLimitConsumption(claim),
                         claim.getServiceDate(), claim.getId());
             }
 

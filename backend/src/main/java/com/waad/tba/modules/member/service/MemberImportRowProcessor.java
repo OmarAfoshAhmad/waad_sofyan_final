@@ -11,7 +11,6 @@ import java.util.Set;
 import org.apache.poi.ss.usermodel.Row;
 import org.springframework.stereotype.Component;
 
-import com.waad.tba.common.exception.BusinessRuleException;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository;
 import com.waad.tba.modules.employer.entity.Employer;
@@ -41,6 +40,7 @@ public class MemberImportRowProcessor {
     private final BenefitPolicyRepository benefitPolicyRepository;
     private final BarcodeGeneratorService barcodeGeneratorService;
     private final CardNumberGeneratorService cardNumberGeneratorService;
+    private final MemberStatusTransitionService statusTransitionService;
     private final Map<String, Optional<Employer>> employerCache = new java.util.concurrent.ConcurrentHashMap<>();
 
     private Optional<Employer> findEmployerCached(String nameOrCode) {
@@ -70,7 +70,7 @@ public class MemberImportRowProcessor {
         String cardNumber = parser.getFieldValue(row, fieldToColumnIndex, "cardNumber");
         String fullName = parser.getFieldValue(row, fieldToColumnIndex, "fullName");
         String employerName = parser.getFieldValue(row, fieldToColumnIndex, "employer");
-        String civilId = parser.getFieldValue(row, fieldToColumnIndex, "nationalNumber");
+        String nationalNumber = parser.getFieldValue(row, fieldToColumnIndex, "nationalNumber");
         String membershipStatus = parser.getFieldValue(row, fieldToColumnIndex, "memberStatus");
 
         if (fullName == null || fullName.isBlank()) {
@@ -81,7 +81,7 @@ public class MemberImportRowProcessor {
             hasError = true;
         }
 
-        if (civilId == null || civilId.isBlank()) {
+        if (nationalNumber == null || nationalNumber.isBlank()) {
             rowWarnings.add("الرقم الوطني غير موجود - الحقل اختياري لكن يُفضّل إضافته");
             hasWarning = true;
         }
@@ -140,6 +140,34 @@ public class MemberImportRowProcessor {
             }
         }
 
+        String relationshipValue = parser.getFieldValue(row, fieldToColumnIndex, "relationship");
+        String principalCardNumber = parser.getFieldValue(row, fieldToColumnIndex, "principalCardNumber");
+        if (relationshipValue != null && !relationshipValue.isBlank()) {
+            try {
+                Relationship parsedRelationship = parser.parseRelationship(relationshipValue);
+                if (parsedRelationship != null && (principalCardNumber == null || principalCardNumber.isBlank())) {
+                    throw new MemberImportRowValidationException(
+                            "رقم بطاقة الموظف مطلوب عند تحديد صلة تابع");
+                }
+                if (parsedRelationship == null && principalCardNumber != null && !principalCardNumber.isBlank()) {
+                    throw new MemberImportRowValidationException(
+                            "لا يجوز تحديد رقم بطاقة موظف لصف رئيسي");
+                }
+            } catch (MemberImportRowValidationException ex) {
+                rowErrors.add(ex.getMessage());
+                validationErrors.add(ImportValidationErrorDto.builder()
+                        .rowNumber(rowNum).field("relationship").value(relationshipValue).severity("ERROR")
+                        .message(ex.getMessage()).build());
+                hasError = true;
+            }
+        } else if (principalCardNumber != null && !principalCardNumber.isBlank()) {
+            rowErrors.add("صلة القرابة مطلوبة عند تحديد رقم بطاقة الموظف");
+            validationErrors.add(ImportValidationErrorDto.builder()
+                    .rowNumber(rowNum).field("relationship").severity("ERROR")
+                    .message("صلة القرابة مطلوبة عند تحديد رقم بطاقة الموظف").build());
+            hasError = true;
+        }
+
         // Attributes
         for (Map.Entry<String, Integer> entry : fieldToColumnIndex.entrySet()) {
             if (entry.getKey().startsWith("attr:")) {
@@ -171,14 +199,14 @@ public class MemberImportRowProcessor {
             Member existingMember) {
 
         String fullName = parser.getFieldValue(row, fieldToColumnIndex, "fullName");
-        String civilId = parser.getFieldValue(row, fieldToColumnIndex, "nationalNumber");
+        String nationalNumber = parser.getFieldValue(row, fieldToColumnIndex, "nationalNumber");
         String policyNumber = parser.getFieldValue(row, fieldToColumnIndex, "policyNumber");
         String startDateStr = parser.getFieldValue(row, fieldToColumnIndex, "startDate");
         String memberStatusStr = parser.getFieldValue(row, fieldToColumnIndex, "memberStatus");
         MemberStatus importedStatus = parser.parseMemberStatus(memberStatusStr);
 
         if (fullName == null || fullName.isBlank()) {
-            throw new BusinessRuleException("الصف " + rowNum + ": الاسم الكامل مطلوب");
+            throw new MemberImportRowValidationException("الصف " + rowNum + ": الاسم الكامل مطلوب");
         }
 
         Employer rowEmployer = resolveEmployerForRow(row, rowNum, fieldToColumnIndex, defaultEmployer);
@@ -189,7 +217,7 @@ public class MemberImportRowProcessor {
         BenefitPolicy policyCandidate = parent != null && parent.getBenefitPolicy() != null
                 ? parent.getBenefitPolicy()
                 : benefitPolicy;
-        BenefitPolicy resolvedPolicy = resolveAndValidatePolicy(policyCandidate, finalEmployer, rowNum);
+        BenefitPolicy resolvedPolicy = resolveAndValidatePolicy(policyCandidate, policyNumber, finalEmployer, rowNum);
         BenefitPolicy finalPolicy = resolvedPolicy;
         String finalPolicyNumber = parent != null && parent.getPolicyNumber() != null
                 && !parent.getPolicyNumber().isBlank()
@@ -213,25 +241,26 @@ public class MemberImportRowProcessor {
             member.setBenefitPolicy(finalPolicy);
             member.setParent(parent);
             member.setRelationship(relationship);
-            member.setStatus(importedStatus);
             member.setCardStatus(importedStatus == MemberStatus.TERMINATED
                     ? Member.CardStatus.INACTIVE : Member.CardStatus.ACTIVE);
-            // Suspended/Pending remain visible in operational lists; eligibility
-            // is denied by MemberStatus, while TERMINATED is the archival state.
-            member.setActive(importedStatus != MemberStatus.TERMINATED);
             member.getAttributes().clear();
         } else {
             member = Member.builder()
                     .fullName(fullName)
                     .employer(finalEmployer)
                     .benefitPolicy(finalPolicy)
-                    .status(importedStatus)
                     .cardStatus(importedStatus == MemberStatus.TERMINATED
                             ? Member.CardStatus.INACTIVE : Member.CardStatus.ACTIVE)
-                    .active(importedStatus != MemberStatus.TERMINATED)
                     .parent(parent)
                     .relationship(relationship)
                     .build();
+        }
+        // status/active/statusReason/statusSource/etc. are set in exactly one
+        // place (MemberStatusTransitionService), even on this batching path
+        // that saves the entity itself rather than calling a transition
+        // method -- see applyStatusFieldsForImport's Javadoc for why.
+        if (existingMember == null || member.getStatus() != importedStatus) {
+            statusTransitionService.applyStatusFieldsForImport(member, importedStatus, "استيراد Excel");
         }
 
         // Set card number: use value from Excel if present, otherwise generate a unique one
@@ -247,8 +276,8 @@ public class MemberImportRowProcessor {
         }
         member.setBarcode(member.getCardNumber());
 
-        if (civilId != null && !civilId.isBlank())
-            member.setNationalNumber(civilId);
+        if (nationalNumber != null && !nationalNumber.isBlank())
+            member.setNationalNumber(nationalNumber);
 
         // Optional fields
         String birthDateStr = parser.getFieldValue(row, fieldToColumnIndex, "birthDate");
@@ -307,24 +336,28 @@ public class MemberImportRowProcessor {
         return member;
     }
 
-    BenefitPolicy resolveAndValidatePolicy(BenefitPolicy selectedPolicy, Employer employer, int rowNum) {
+    BenefitPolicy resolveAndValidatePolicy(BenefitPolicy selectedPolicy, String policyNumber,
+            Employer employer, int rowNum) {
         if (employer == null) {
-            throw new BusinessRuleException("الصف " + rowNum + ": تعذر تحديد جهة العمل لربط وثيقة المنافع");
+            throw new MemberImportRowValidationException("الصف " + rowNum + ": تعذر تحديد جهة العمل لربط وثيقة المنافع");
         }
 
-        BenefitPolicy resolved = selectedPolicy != null
-                ? selectedPolicy
-                : benefitPolicyRepository
+        BenefitPolicy resolved = selectedPolicy != null ? selectedPolicy
+                : policyNumber != null && !policyNumber.isBlank()
+                        ? benefitPolicyRepository.findByPolicyCode(policyNumber.trim())
+                                .orElseThrow(() -> new MemberImportRowValidationException(
+                                        "الصف " + rowNum + ": وثيقة المنافع غير موجودة: " + policyNumber.trim()))
+                        : benefitPolicyRepository
                         .findActiveEffectivePolicyForEmployer(employer.getId(), LocalDate.now())
-                        .orElseThrow(() -> new BusinessRuleException(
+                        .orElseThrow(() -> new MemberImportRowValidationException(
                                 "الصف " + rowNum + ": لا توجد وثيقة منافع فعالة لجهة العمل " + employer.getName()));
 
         if (resolved.getEmployer() == null || !employer.getId().equals(resolved.getEmployer().getId())) {
-            throw new BusinessRuleException(
+            throw new MemberImportRowValidationException(
                     "الصف " + rowNum + ": وثيقة المنافع المختارة لا تتبع جهة عمل المستفيد");
         }
         if (!resolved.isEffectiveOn(LocalDate.now())) {
-            throw new BusinessRuleException(
+            throw new MemberImportRowValidationException(
                     "الصف " + rowNum + ": وثيقة المنافع المختارة غير فعالة في تاريخ الاستيراد");
         }
         return resolved;
@@ -336,7 +369,7 @@ public class MemberImportRowProcessor {
         if (employerNameOrCode == null || employerNameOrCode.isBlank()) {
             if (defaultEmployer != null)
                 return defaultEmployer;
-            throw new BusinessRuleException("الصف " + rowNum + ": جهة العمل مطلوبة");
+            throw new MemberImportRowValidationException("الصف " + rowNum + ": جهة العمل مطلوبة");
         }
 
         String normalized = employerNameOrCode.trim();
@@ -345,7 +378,7 @@ public class MemberImportRowProcessor {
         if (resolvedOptional.isEmpty()) {
             if (defaultEmployer != null)
                 return defaultEmployer;
-            throw new BusinessRuleException("الصف " + rowNum + ": جهة العمل غير موجودة: " + normalized);
+            throw new MemberImportRowValidationException("الصف " + rowNum + ": جهة العمل غير موجودة: " + normalized);
         }
 
         return resolvedOptional.get();

@@ -2,18 +2,25 @@ package com.waad.tba.modules.member.controller;
 
 import com.waad.tba.common.dto.ApiResponse;
 import com.waad.tba.common.dto.PaginationResponse;
+import com.waad.tba.common.exception.BusinessRuleException;
 import com.waad.tba.modules.member.dto.DependentMemberDto;
 import com.waad.tba.modules.member.dto.FamilyEligibilityResponseDto;
 import com.waad.tba.modules.member.dto.MemberCreateDto;
 import com.waad.tba.modules.member.dto.MemberFinancialSummaryDto;
 import com.waad.tba.modules.member.dto.MemberUpdateDto;
 import com.waad.tba.modules.member.dto.MemberViewDto;
+import com.waad.tba.modules.member.dto.MemberFamilyTransferRequest;
+import com.waad.tba.modules.member.dto.MemberRelationshipCorrectionRequest;
+import com.waad.tba.modules.member.dto.MemberFamilyPolicyChangeRequest;
+import com.waad.tba.modules.member.dto.MemberFamilyReorderRequest;
 import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.modules.member.service.MemberFinancialSummaryService;
 import com.waad.tba.modules.member.service.UnifiedMemberService;
+import com.waad.tba.modules.member.service.MemberFamilyService;
 import com.waad.tba.modules.member.service.MemberExcelExportService;
 import com.waad.tba.modules.member.service.UnifiedSearchService;
 import com.waad.tba.modules.member.dto.MemberSearchDto;
+import com.waad.tba.modules.member.security.MemberOperation;
 import com.waad.tba.common.file.FileStorageService;
 import com.waad.tba.common.file.FileUploadResult;
 import com.waad.tba.services.pdf.HtmlToPdfService;
@@ -32,6 +39,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -114,7 +122,6 @@ import java.util.Map;
                 "Supports: Principal creation with inline Dependents, Dependent management, " +
                 "Family eligibility checks via Barcode, CASCADE deletion, and unified CRUD operations.")
 @SuppressWarnings("deprecation")
-@PreAuthorize("isAuthenticated()")
 public class UnifiedMemberController {
 
         private static final int DEFAULT_PAGE_SIZE = 20;
@@ -127,6 +134,67 @@ public class UnifiedMemberController {
         private final HtmlToPdfService htmlToPdfService;
         private final FileStorageService fileStorageService;
         private final MemberExcelExportService excelExportService;
+        private final MemberFamilyService memberFamilyService;
+
+        @PostMapping("/{id}/family-transfer")
+        @PreAuthorize("@permissionGuard.has('MEMBER_TRANSFER_EMPLOYER')")
+        @Operation(summary = "نقل تابع إلى رئيس أسرة آخر", description = "عملية ذرية مؤرخة ومدققة؛ تنقل جهة العمل والوثيقة عند الحاجة ولا تسمح بتداخل أسري أو نقل جزئي.")
+        public ResponseEntity<ApiResponse<MemberViewDto>> transferDependent(
+                        @PathVariable("id") Long id,
+                        @Valid @RequestBody MemberFamilyTransferRequest request) {
+                return ResponseEntity.ok(ApiResponse.success("تم نقل التابع وتسجيل أثر العملية",
+                                memberFamilyService.transferDependent(id, request)));
+        }
+
+        @PostMapping("/{id}/relationship-correction")
+        @PreAuthorize("@permissionGuard.has('MEMBER_EDIT_IDENTITY')")
+        @Operation(summary = "تصحيح صلة قرابة تابع", description = "تصحيح مدقق يتطلب سبباً ونسخة السجل لمنع تعارض التعديلات.")
+        public ResponseEntity<ApiResponse<MemberViewDto>> correctRelationship(
+                        @PathVariable("id") Long id,
+                        @Valid @RequestBody MemberRelationshipCorrectionRequest request) {
+                return ResponseEntity.ok(ApiResponse.success("تم تصحيح صلة القرابة وتسجيل أثر العملية",
+                                memberFamilyService.correctRelationship(id, request)));
+        }
+
+        @PostMapping("/{id}/family-policy")
+        @PreAuthorize("@permissionGuard.has('MEMBER_EDIT_IDENTITY')")
+        @Operation(summary = "تغيير وثيقة الأسرة بتاريخ سريان صريح", description = "كل أفراد الأسرة أو لا أحد؛ يتطلب نسخة كل سجل ولا يكتب تغييراً جزئياً.")
+        public ResponseEntity<ApiResponse<List<MemberViewDto>>> changeFamilyPolicy(
+                        @PathVariable("id") Long id,
+                        @Valid @RequestBody MemberFamilyPolicyChangeRequest request) {
+                return ResponseEntity.ok(ApiResponse.success("تم تغيير وثيقة الأسرة وتسجيل الفترات الزمنية",
+                                memberFamilyService.changeFamilyPolicy(id, request)));
+        }
+
+        @PostMapping("/{id}/family-order")
+        @PreAuthorize("@permissionGuard.has('MEMBER_EDIT_IDENTITY')")
+        @Operation(summary = "إعادة ترتيب التابعين", description = "يغيّر ترتيب العرض فقط ولا يغيّر رقم البطاقة أو الباركود.")
+        public ResponseEntity<ApiResponse<List<MemberViewDto>>> reorderFamily(
+                        @PathVariable("id") Long id,
+                        @Valid @RequestBody MemberFamilyReorderRequest request) {
+                return ResponseEntity.ok(ApiResponse.success("تم تحديث ترتيب الأسرة دون تغيير الهوية",
+                                memberFamilyService.reorderFamily(id, request)));
+        }
+
+        @GetMapping("/{id}/employer-transfer/preview")
+        @PreAuthorize("@permissionGuard.has('MEMBER_TRANSFER_EMPLOYER')")
+        @Operation(summary = "معاينة نقل رئيس أسرة وأسرته إلى جهة عمل أخرى", description = "قراءة فقط: يعرض الجهة الحالية والجديدة وكل أفراد الأسرة المتأثرين بنسخهم الحالية، دون أي كتابة.")
+        public ResponseEntity<ApiResponse<com.waad.tba.modules.member.dto.MemberEmployerTransferPreviewDto>> previewEmployerTransfer(
+                        @PathVariable("id") Long id,
+                        @RequestParam("newEmployerId") Long newEmployerId) {
+                return ResponseEntity.ok(ApiResponse.success("معاينة نقل الأسرة",
+                                memberFamilyService.previewTransferPrincipalToEmployer(id, newEmployerId)));
+        }
+
+        @PostMapping("/{id}/employer-transfer")
+        @PreAuthorize("@permissionGuard.has('MEMBER_TRANSFER_EMPLOYER')")
+        @Operation(summary = "نقل رئيس أسرة وأسرته إلى جهة عمل أخرى", description = "عملية ذرية مؤرخة: كل أفراد الأسرة ينتقلون معاً أو لا أحد. لا تُمس أي مطالبة أو تعيين سابق لتاريخ السريان.")
+        public ResponseEntity<ApiResponse<List<MemberViewDto>>> transferEmployerFamily(
+                        @PathVariable("id") Long id,
+                        @Valid @RequestBody com.waad.tba.modules.member.dto.MemberEmployerTransferRequest request) {
+                return ResponseEntity.ok(ApiResponse.success("تم نقل الأسرة إلى جهة العمل الجديدة",
+                                memberFamilyService.transferPrincipalToEmployer(id, request)));
+        }
 
         // ==================== CREATE OPERATIONS ====================
 
@@ -152,7 +220,7 @@ public class UnifiedMemberController {
          * {
          *   "nameAr": "أحمد محمد",
          *   "nameEn": "Ahmed Mohammed",
-         *   "civilId": "28012345678",  // OPTIONAL
+         *   "nationalNumber": "28012345678",  // OPTIONAL
          *   "birthDate": "1990-05-15",
          *   "gender": "MALE",
          *   "organizationId": 1,
@@ -161,7 +229,7 @@ public class UnifiedMemberController {
          *     {
          *       "nameAr": "فاطمة أحمد",
          *       "nameEn": "Fatima Ahmed",
-         *       "civilId": "30012345679",  // OPTIONAL
+         *       "nationalNumber": "30012345679",  // OPTIONAL
          *       "birthDate": "1995-03-20",
          *       "gender": "FEMALE",
          *       "relationship": "SPOUSE"
@@ -189,7 +257,7 @@ public class UnifiedMemberController {
          *   "cardNumber": "000123",
          *   "nameAr": "أحمد محمد",
          *   "nameEn": "Ahmed Mohammed",
-         *   "civilId": "28012345678",
+         *   "nationalNumber": "28012345678",
          *   "birthDate": "1990-05-15",
          *   "gender": "MALE",
          *   "status": "PENDING",
@@ -217,21 +285,21 @@ public class UnifiedMemberController {
          * @return ResponseEntity with created MemberViewDto (includes Principal +
          *         Dependents)
          * @throws ValidationException if DTO validation fails
-         * @throws BusinessException   if business rules violated (e.g., duplicate Civil
-         *                             ID if provided)
+         * @throws BusinessException   if business rules violated (e.g., duplicate name
+         *                             within the same employer)
          */
         @PostMapping
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN')")
+        @PreAuthorize("@permissionGuard.has('MEMBER_CREATE')")
         @Operation(summary = "Create Principal Member with inline Dependents", description = "Creates a new Principal Member with auto-generated Barcode (WAHA-YYYY-NNNNNN) and Card Number (NNNNNN). "
                         +
                         "Supports inline creation of 0 to N Dependents. Each Dependent receives a Card Number with suffix (e.g., 000123-01). "
                         +
                         "Transaction-safe: all members created atomically or rolled back on error. " +
-                        "Civil ID is OPTIONAL for both Principal and Dependents.", requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(required = true, content = @Content(mediaType = "application/json", schema = @Schema(implementation = MemberCreateDto.class), examples = @ExampleObject(name = "Principal with Dependents", value = """
+                        "National number is OPTIONAL for both Principal and Dependents.", requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(required = true, content = @Content(mediaType = "application/json", schema = @Schema(implementation = MemberCreateDto.class), examples = @ExampleObject(name = "Principal with Dependents", value = """
                                         {
                                           "nameAr": "أحمد محمد",
                                           "nameEn": "Ahmed Mohammed",
-                                          "civilId": "28012345678",
+                                          "nationalNumber": "28012345678",
                                           "birthDate": "1990-05-15",
                                           "gender": "MALE",
                                           "organizationId": 1,
@@ -240,7 +308,7 @@ public class UnifiedMemberController {
                                             {
                                               "nameAr": "فاطمة أحمد",
                                               "nameEn": "Fatima Ahmed",
-                                              "civilId": "30012345679",
+                                              "nationalNumber": "30012345679",
                                               "birthDate": "1995-03-20",
                                               "gender": "FEMALE",
                                               "relationship": "SPOUSE"
@@ -303,7 +371,7 @@ public class UnifiedMemberController {
          *                           violated
          */
         @PostMapping("/{principalId}/dependents")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN')")
+        @PreAuthorize("@permissionGuard.has('MEMBER_CREATE')")
         @Operation(summary = "Add Dependent to existing Principal", description = "Adds a new Dependent member to an existing Principal. "
                         +
                         "Auto-generates Card Number with suffix based on existing Dependents count (e.g., 000123-03). "
@@ -357,7 +425,7 @@ public class UnifiedMemberController {
          * @throws NotFoundException if Member not found
          */
         @GetMapping("/{id}")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
+        @PreAuthorize("@permissionGuard.has('MEMBER_VIEW')")
         @Operation(summary = "Get Member by ID", description = "Retrieves a Member by ID. If the Member is a Principal, returns Principal data with list of Dependents. "
                         +
                         "If the Member is a Dependent, returns only the Dependent's data without nested children. " +
@@ -382,7 +450,7 @@ public class UnifiedMemberController {
         }
 
         @GetMapping("/count")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN')")
+        @PreAuthorize("@permissionGuard.has('MEMBER_VIEW')")
         @Operation(summary = "Count members", description = "Returns the count of members matching the criteria.")
         public ResponseEntity<Long> countMembers(
                         @RequestParam(name = "employerId", required = false) Long employerId,
@@ -417,7 +485,7 @@ public class UnifiedMemberController {
          * @return ResponseEntity with paginated Member list
          */
         @GetMapping
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN', 'MEDICAL_REVIEWER')")
+        @PreAuthorize("@permissionGuard.has('MEMBER_VIEW')")
         @Operation(summary = "Get all Members with pagination", description = "Retrieves paginated list of all Members (Principals and Dependents). "
                         +
                         "Supports filtering by Organization, Status, and Member Type. " +
@@ -465,7 +533,7 @@ public class UnifiedMemberController {
          * </p>
          * <ul>
          * <li>nameAr/nameEn: Partial name match (case-insensitive)</li>
-         * <li>civilId: Exact or partial Civil ID match</li>
+         * <li>nationalNumber: Exact or partial national number match</li>
          * <li>barcode: Exact or partial Barcode match</li>
          * <li>cardNumber: Exact or partial Card Number match</li>
          * <li>employerId: Employer filter</li>
@@ -473,10 +541,10 @@ public class UnifiedMemberController {
          * <li>status: Status filter</li>
          * <li>type: Member type filter</li>
          * </ul>
-         * 
+         *
          * @param nameAr          Arabic name filter
          * @param nameEn          English name filter
-         * @param civilId         Civil ID filter
+         * @param nationalNumber  National number filter
          * @param barcode         Barcode filter
          * @param cardNumber      Card Number filter
          * @param employerId      Employer filter
@@ -488,15 +556,15 @@ public class UnifiedMemberController {
          * @return ResponseEntity with search results
          */
         @GetMapping("/search")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
-        @Operation(summary = "Advanced Member search", description = "Searches Members using multiple criteria. Supports partial matching for names, Civil ID, Barcode, and Card Number. "
+        @PreAuthorize("@permissionGuard.has('MEMBER_VIEW')")
+        @Operation(summary = "Advanced Member search", description = "Searches Members using multiple criteria. Supports partial matching for names, national number, Barcode, and Card Number. "
                         +
                         "Combines filters with AND logic. Returns paginated results. " +
                         "Useful for finding specific members or filtering by complex criteria.", parameters = {
                                         @Parameter(name = "fullName", description = "Full name (searches both Arabic and English names)"),
                                         @Parameter(name = "nameAr", description = "Arabic name (partial match)"),
                                         @Parameter(name = "nameEn", description = "English name (partial match)"),
-                                        @Parameter(name = "civilId", description = "Civil ID (partial match)"),
+                                        @Parameter(name = "nationalNumber", description = "National number (partial match)"),
                                         @Parameter(name = "barcode", description = "Barcode (partial match)"),
                                         @Parameter(name = "cardNumber", description = "Card Number (partial match)"),
                                         @Parameter(name = "employerId", description = "Employer ID"),
@@ -513,7 +581,7 @@ public class UnifiedMemberController {
                         @RequestParam(name = "fullName", required = false) String fullName,
                         @RequestParam(name = "nameAr", required = false) String nameAr,
                         @RequestParam(name = "nameEn", required = false) String nameEn,
-                        @RequestParam(name = "civilId", required = false) String civilId,
+                        @RequestParam(name = "nationalNumber", required = false) String nationalNumber,
                         @RequestParam(name = "barcode", required = false) String barcode,
                         @RequestParam(name = "cardNumber", required = false) String cardNumber,
                         @RequestParam(name = "employerId", required = false) Long employerId,
@@ -526,8 +594,8 @@ public class UnifiedMemberController {
                         @RequestParam(name = "sort", defaultValue = "createdAt") String sort,
                         @RequestParam(name = "direction", defaultValue = "DESC") String direction) {
 
-                log.info("Searching Members: fullName={}, nameAr={}, civilId={}, barcode={}, cardNumber={}, deleted={}",
-                                fullName, nameAr, civilId, barcode, cardNumber, deleted);
+                log.info("Searching Members: fullName={}, nameAr={}, nationalNumber={}, barcode={}, cardNumber={}, deleted={}",
+                                fullName, nameAr, nationalNumber, barcode, cardNumber, deleted);
 
                 // If fullName is provided, use it for both nameAr and nameEn
                 String searchNameAr = (fullName != null && !fullName.trim().isEmpty()) ? fullName : nameAr;
@@ -536,7 +604,7 @@ public class UnifiedMemberController {
                 Pageable pageable = safePageRequest(page, size, sort, direction);
 
                 Page<MemberViewDto> results = unifiedMemberService.searchMembers(
-                                searchNameAr, searchNameEn, civilId, barcode, cardNumber,
+                                searchNameAr, searchNameEn, nationalNumber, barcode, cardNumber,
                                 employerId, benefitPolicyId, status, type, deleted, pageable);
 
                 log.info("Search completed: found {} results", results.getTotalElements());
@@ -599,21 +667,24 @@ public class UnifiedMemberController {
          * }
          * </pre>
          * 
-         * @param barcode Principal's Barcode (WAHA-YYYY-NNNNNN format)
+         * @param barcode     Principal's Barcode (WAHA-YYYY-NNNNNN format)
+         * @param serviceDate Optional date to check eligibility against; defaults to
+         *                    today when omitted
          * @return ResponseEntity with FamilyEligibilityResponseDto containing Principal
          *         and Dependents
          * @throws NotFoundException if Barcode not found
          * @throws BusinessException if Barcode belongs to Dependent (invalid)
          */
-        @GetMapping("/eligibility/{barcode}")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
+        @PostMapping("/eligibility/evaluations")
+        @PreAuthorize("@permissionGuard.has('MEMBER_VIEW')")
         @Operation(summary = "Check Family Eligibility by Barcode", description = "Scans Principal's Barcode and returns entire family (Principal + Dependents) for member selection at point of service. "
                         +
                         "This is the PRIMARY eligibility check method in the unified architecture. " +
                         "Only Principal members have Barcodes (Dependents do not). " +
-                        "Returns eligibility status for each family member based on 7-condition eligibility rules. " +
+                        "Returns real-time eligibility status for each family member from the eligibility engine. " +
                         "Used by Providers to verify which family members can receive services.", parameters = {
-                                        @Parameter(name = "barcode", description = "Principal's Barcode in WAHA-YYYY-NNNNNN format (e.g., WAHA-2026-000123)", required = true, example = "WAHA-2026-000123")
+                                        @Parameter(name = "barcode", description = "Principal's Barcode in WAHA-YYYY-NNNNNN format (e.g., WAHA-2026-000123)", required = true, example = "WAHA-2026-000123"),
+                                        @Parameter(name = "serviceDate", description = "Date to check eligibility against (defaults to today)", example = "2026-08-12")
                         })
         @ApiResponses(value = {
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Family eligibility retrieved successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = FamilyEligibilityResponseDto.class))),
@@ -621,17 +692,22 @@ public class UnifiedMemberController {
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Barcode format invalid or belongs to Dependent (Dependents do not have Barcodes)", content = @Content(mediaType = "application/json"))
         })
         public ResponseEntity<FamilyEligibilityResponseDto> checkEligibility(
-                        @PathVariable("barcode") String barcode) {
+                        @RequestBody BarcodeEligibilityRequest request) {
 
-                log.info("Checking family eligibility: barcode={}", barcode);
+                String barcode = request == null ? null : request.barcode();
+                java.time.LocalDate serviceDate = request == null ? null : request.serviceDate();
 
-                FamilyEligibilityResponseDto response = unifiedMemberService.checkEligibility(barcode);
+                log.info("Checking family eligibility: barcode={}, serviceDate={}", barcode, serviceDate);
+
+                FamilyEligibilityResponseDto response = unifiedMemberService.checkEligibility(barcode, serviceDate);
 
                 log.info("Eligibility check completed: barcode={}, totalMembers={}, eligibleMembers={}",
                                 barcode, response.getTotalFamilyMembers(), response.getEligibleMembersCount());
 
                 return ResponseEntity.ok(response);
         }
+
+        public record BarcodeEligibilityRequest(String barcode, java.time.LocalDate serviceDate) {}
 
         /**
          * Generate PDF Report for Beneficiaries (Insured Members)
@@ -655,7 +731,7 @@ public class UnifiedMemberController {
         public ResponseEntity<byte[]> downloadBeneficiariesPdf(
                         @RequestParam(name = "nameAr", required = false) String nameAr,
                         @RequestParam(name = "nameEn", required = false) String nameEn,
-                        @RequestParam(name = "civilId", required = false) String civilId,
+                        @RequestParam(name = "nationalNumber", required = false) String nationalNumber,
                         @RequestParam(name = "barcode", required = false) String barcode,
                         @RequestParam(name = "cardNumber", required = false) String cardNumber,
                         @RequestParam(name = "organizationId", required = false) Long organizationId,
@@ -671,7 +747,7 @@ public class UnifiedMemberController {
                 Pageable pageable = PageRequest.of(0, 1000, Sort.by(Sort.Direction.DESC, "id"));
 
                 Page<MemberViewDto> membersPage = unifiedMemberService.searchMembers(
-                                nameAr, nameEn, civilId, barcode, cardNumber,
+                                nameAr, nameEn, nationalNumber, barcode, cardNumber,
                                 organizationId, benefitPolicyId, status, type, false, pageable);
 
                 List<MemberViewDto> members = membersPage.getContent();
@@ -780,10 +856,8 @@ public class UnifiedMemberController {
          * <b>Updatable Fields:</b>
          * </p>
          * <ul>
-         * <li>Personal information (names, birth date, gender, Civil ID)</li>
+         * <li>Personal information (names, birth date, gender, national number)</li>
          * <li>Contact information (phone, email, address)</li>
-         * <li>Organization/Benefit Policy (for Principals)</li>
-         * <li>Relationship (for Dependents)</li>
          * <li>Custom attributes</li>
          * </ul>
          * 
@@ -795,6 +869,8 @@ public class UnifiedMemberController {
          * <li>Card Number (cannot be changed)</li>
          * <li>Member Type (PRINCIPAL/DEPENDENT, cannot be changed)</li>
          * <li>Parent ID (cannot change family association)</li>
+         * <li>Employer, benefit policy, status, active flag, and relationship
+         * are owned by dedicated audited operations and are rejected here</li>
          * </ul>
          * 
          * @param id  Member ID
@@ -804,14 +880,14 @@ public class UnifiedMemberController {
          * @throws ValidationException if validation fails
          */
         @PutMapping("/{id}")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN')")
+        @PreAuthorize("@permissionGuard.has('MEMBER_EDIT_IDENTITY')")
         @Operation(summary = "Update Member data", description = "Updates an existing Member (Principal or Dependent). "
                         +
                         "Supports updating personal information, contact details, and custom attributes. " +
                         "IMMUTABLE FIELDS: Barcode, Card Number, Member Type, Parent ID (cannot be changed). " +
                         "Validation enforced for all business rules. " +
-                        "For Dependents: Can update Relationship. " +
-                        "For Principals: Can update Organization/Benefit Policy.", parameters = {
+                        "Employer, benefit policy, status, active flag, relationship and family association " +
+                        "cannot be changed through this descriptive update endpoint.", parameters = {
                                         @Parameter(name = "id", description = "Member ID to update", required = true)
                         }, requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(required = true, content = @Content(mediaType = "application/json", schema = @Schema(implementation = MemberUpdateDto.class))))
         @ApiResponses(value = {
@@ -841,7 +917,7 @@ public class UnifiedMemberController {
          * @return Updated member view DTO
          */
         @PatchMapping("/{id}/active")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN')")
+        @PreAuthorize("@permissionGuard.has('MEMBER_CHANGE_STATUS')")
         @Operation(summary = "Activate or deactivate a member", description = "Toggles the active flag of a member without changing any other data. "
                         +
                         "Inactive members are still stored but excluded from eligibility checks.", parameters = {
@@ -853,12 +929,49 @@ public class UnifiedMemberController {
         })
         public ResponseEntity<ApiResponse<MemberViewDto>> setActive(
                         @PathVariable("id") Long id,
-                        @RequestParam(name = "active") boolean active) {
+                        @RequestParam(name = "active") boolean active,
+                        @RequestParam(name = "reason", required = false) String reason) {
 
                 log.info("Setting active={} for member ID={}", active, id);
-                MemberViewDto updated = unifiedMemberService.toggleActive(id, active);
+                MemberViewDto updated = unifiedMemberService.toggleActive(id, active, reason);
                 String message = active ? "تم تفعيل العضو بنجاح" : "تم إيقاف العضو بنجاح";
                 return ResponseEntity.ok(ApiResponse.success(message, updated));
+        }
+
+        /**
+         * TERMINATED -> ACTIVE. Exceptional action distinct from the ordinary
+         * restore endpoints above: requires SUPER_ADMIN and a mandatory reason.
+         */
+        @PutMapping("/{id}/reinstate")
+        @PreAuthorize("@permissionGuard.has('MEMBER_REINSTATE_TERMINATED')")
+        @Operation(summary = "Reinstate a terminated member", description = "Restores a TERMINATED member to ACTIVE. "
+                        + "Exceptional action requiring MEMBER_REINSTATE_TERMINATED and a mandatory reason -- unlike restoring a "
+                        + "SUSPENDED member, this does not happen through the ordinary restore/active endpoints.")
+        public ResponseEntity<ApiResponse<MemberViewDto>> reinstateTerminated(
+                        @PathVariable("id") Long id,
+                        @RequestParam(name = "reason") String reason) {
+                MemberViewDto updated = unifiedMemberService.reinstateTerminatedMember(id, reason);
+                return ResponseEntity.ok(ApiResponse.success("تمت إعادة العضوية المنتهية بنجاح", updated));
+        }
+
+        /**
+         * Restores exactly the dependents ONE specific family-cascade suspend/
+         * terminate operation affected -- an explicit, opt-in action. Restoring
+         * the principal never does this automatically.
+         */
+        @PutMapping("/family-restore/{transitionId}")
+        @PreAuthorize("@permissionGuard.has('MEMBER_CHANGE_STATUS')")
+        @Operation(summary = "Restore a family cascade", description = "Restores exactly the dependents affected by "
+                        + "one specific suspend/terminate cascade (identified by transitionId), skipping any "
+                        + "dependent whose status changed independently since, or who no longer qualifies for "
+                        + "activation (e.g. no active benefit policy).")
+        public ResponseEntity<ApiResponse<Map<String, Object>>> restoreFamily(
+                        @PathVariable("transitionId") String transitionId) {
+                var result = unifiedMemberService.restoreFamily(transitionId);
+                Map<String, Object> body = new java.util.LinkedHashMap<>();
+                body.put("restoredMemberIds", result.restoredMemberIds());
+                body.put("skipped", result.skippedWithReason());
+                return ResponseEntity.ok(ApiResponse.success("تمت معالجة الاستعادة العائلية", body));
         }
 
         /**
@@ -869,7 +982,7 @@ public class UnifiedMemberController {
          * real "pause without terminating" workflow.
          */
         @PatchMapping("/{id}/status")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN')")
+        @PreAuthorize("@permissionGuard.has('MEMBER_CHANGE_STATUS')")
         @Operation(summary = "Change member membership status", description = "Transitions a member to ACTIVE, SUSPENDED, PENDING, or TERMINATED.", parameters = {
                         @Parameter(name = "id", description = "Member ID", required = true)
         })
@@ -918,60 +1031,67 @@ public class UnifiedMemberController {
          * @return ResponseEntity with 204 No Content on success
          * @throws NotFoundException if Member not found
          */
-        @DeleteMapping("/{id}")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN')")
-        @Operation(summary = "Delete Member (CASCADE for Principals)", description = "Deletes a Member. BEHAVIOR VARIES BY TYPE: "
-                        +
-                        "PRINCIPAL deletion: CASCADE deletes ALL Dependents (entire family removed). " +
-                        "DEPENDENT deletion: Removes only that Dependent (Principal and other Dependents remain). " +
-                        "Deletion is SOFT DELETE (member marked TERMINATED, not physically removed). " +
-                        "Audit trail maintained for compliance. " +
-                        "WARNING: Principal deletion is irreversible and affects entire family. " +
-                        "Consider SUSPENDING members for temporary deactivation instead.", parameters = {
-                                        @Parameter(name = "id", description = "Member ID to delete", required = true)
+        /**
+         * The proper name for what this endpoint does: nothing is deleted, a
+         * membership is ended. Prefer POST /{id}/terminate in new code --
+         * this stays only so existing callers of DELETE /{id} keep working.
+         */
+        @PostMapping("/{id}/terminate")
+        @PreAuthorize("@permissionGuard.has('MEMBER_CHANGE_STATUS')")
+        @Operation(summary = "Terminate membership (CASCADE for Principals)", description = "Ends a Member's "
+                        + "membership. BEHAVIOR VARIES BY TYPE: PRINCIPAL termination cascades to every currently-"
+                        + "ACTIVE dependent (a dependent already suspended/terminated for their own reason keeps "
+                        + "that history). DEPENDENT termination affects only that dependent. Nothing is physically "
+                        + "removed -- status becomes TERMINATED, recorded in the append-only status history. "
+                        + "Existing financial and medical history remains intact.", parameters = {
+                                        @Parameter(name = "id", description = "Member ID", required = true)
                         })
         @ApiResponses(value = {
-                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "204", description = "Member deleted successfully (CASCADE applied if Principal)", content = @Content(mediaType = "application/json")),
-                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Member not found", content = @Content(mediaType = "application/json")),
-                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden: Insufficient permissions (requires ADMIN or EMPLOYER role)", content = @Content(mediaType = "application/json"))
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Membership terminated (CASCADE applied if Principal)"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Member not found"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Blocked: financial/medical history exists")
         })
-        public ResponseEntity<ApiResponse<Void>> deleteMember(
-                        @PathVariable("id") Long id) {
+        public ResponseEntity<ApiResponse<Void>> terminateMembership(
+                        @PathVariable("id") Long id,
+                        @RequestParam(name = "reason") String reason) {
 
-                log.info("Deleting Member: id={}", id);
+                log.info("Terminating membership: id={}", id);
 
                 try {
-                        unifiedMemberService.deleteMember(id);
-                        log.info("Member deleted successfully: id={}", id);
-                        return ResponseEntity.ok(ApiResponse.success("تم حذف المستفيد بنجاح", null));
-                } catch (IllegalStateException e) {
-                        log.warn("Delete blocked for member id={}: {}", id, e.getMessage());
+                        unifiedMemberService.terminateMembership(id, reason);
+                        log.info("Membership terminated successfully: id={}", id);
+                        return ResponseEntity.ok(ApiResponse.success("تم إنهاء العضوية بنجاح", null));
+                } catch (BusinessRuleException | IllegalStateException e) {
+                        log.warn("Termination blocked for member id={}: {}", id, e.getMessage());
                         return ResponseEntity.status(org.springframework.http.HttpStatus.CONFLICT)
                                         .body(ApiResponse.error(e.getMessage()));
                 }
         }
 
+        /**
+         * @deprecated use POST /{id}/terminate. Kept as a thin compatibility
+         *             alias -- same behavior, same response message.
+         */
+        @Deprecated
+        @DeleteMapping("/{id}")
+        @PreAuthorize("@permissionGuard.has('MEMBER_CHANGE_STATUS')")
+        @Operation(summary = "[Deprecated] Terminate membership -- use POST /{id}/terminate", description = "Deprecated alias for POST /{id}/terminate. Nothing is deleted; this ends membership (status=TERMINATED).")
+        public ResponseEntity<ApiResponse<Void>> deleteMember(
+                        @PathVariable("id") Long id) {
+                unifiedMemberService.deleteMember(id);
+                return ResponseEntity.ok(ApiResponse.success("تم إنهاء العضوية عبر واجهة التوافق القديمة", null));
+        }
+
         @PostMapping("/bulk-delete")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN')")
-        @Operation(summary = "Bulk Delete Members", description = "Deletes a list of members by IDs")
-        public ResponseEntity<ApiResponse<Void>> bulkDeleteMembers(@RequestBody List<Long> ids) {
-                log.info("Bulk deleting {} members", ids.size());
-                int successCount = 0;
-                int failCount = 0;
-                for (Long id : ids) {
-                        try {
-                                unifiedMemberService.deleteMember(id);
-                                successCount++;
-                        } catch (Exception e) {
-                                log.warn("Bulk delete: skipped member id={}: {}", id, e.getMessage());
-                                failCount++;
-                        }
-                }
-                String msg = "تم حذف " + successCount + " مستفيد بنجاح";
-                if (failCount > 0) {
-                        msg += " (فشل حذف " + failCount + " مستفيد لارتباطهم بمعاملات)";
-                }
-                return ResponseEntity.ok(ApiResponse.success(msg, null));
+        @PreAuthorize("@permissionGuard.has('MEMBER_CHANGE_STATUS')")
+        @Operation(summary = "Bulk Terminate Members", description = "Ends membership for a list of members by IDs. Nothing is deleted -- status becomes TERMINATED for each, recorded in the append-only status history with the given reason.")
+        public ResponseEntity<ApiResponse<Void>> bulkDeleteMembers(
+                        @RequestBody com.waad.tba.modules.member.dto.BulkTerminateRequestDto request) {
+                log.info("Bulk terminating {} members", request.getIds() == null ? 0 : request.getIds().size());
+                unifiedMemberService.bulkTerminateMemberships(request.getIds(), request.getReason());
+                return ResponseEntity.ok(ApiResponse.success(
+                                "تم إنهاء عضوية " + request.getIds().stream().distinct().count() + " مستفيد بنجاح",
+                                null));
         }
 
         // ==================== UTILITY OPERATIONS ====================
@@ -985,7 +1105,7 @@ public class UnifiedMemberController {
          * @throws BusinessException if member is not a Principal
          */
         @GetMapping("/{principalId}/dependents")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
+        @PreAuthorize("@permissionGuard.has('MEMBER_VIEW')")
         @Operation(summary = "Get all Dependents of a Principal", description = "Retrieves all Dependents associated with a specific Principal member. "
                         +
                         "Returns empty list if Principal has no Dependents. " +
@@ -1017,7 +1137,7 @@ public class UnifiedMemberController {
          * @return ResponseEntity with count
          */
         @GetMapping("/{principalId}/dependents/count")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN')")
+        @PreAuthorize("@permissionGuard.has('MEMBER_VIEW')")
         @Operation(summary = "Count Dependents of a Principal", description = "Returns the total count of Dependents for a specific Principal member. "
                         +
                         "Useful for validation and UI display without fetching full Dependent details.", parameters = {
@@ -1056,20 +1176,23 @@ public class UnifiedMemberController {
          * @return Remaining limit data
          */
         @GetMapping("/{memberId}/remaining-limit")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
+        @PreAuthorize("@permissionGuard.has('MEMBER_LIMIT_VIEW')")
         @Operation(summary = "Get Member Remaining Limit", description = "Returns the remaining coverage limit for a member. Used in Provider Portal during claim creation.")
         public ResponseEntity<java.util.Map<String, Object>> getRemainingLimit(
                         @PathVariable("memberId") Long memberId) {
 
                 log.info("📊 Retrieving remaining limit for member: memberId={}", memberId);
 
-                MemberFinancialSummaryDto summary = financialSummaryService.getFinancialSummary(memberId);
+                MemberFinancialSummaryDto summary = financialSummaryService.getAuthorizedFinancialSummary(
+                                memberId, MemberOperation.VIEW_COVERAGE_BALANCE);
 
                 java.util.Map<String, Object> result = new java.util.HashMap<>();
                 result.put("memberId", memberId);
                 result.put("memberName", summary.getFullName());
                 result.put("annualLimit", summary.getAnnualLimit());
-                result.put("usedAmount", summary.getTotalApproved());
+                // WAAD-FIN-1.0 S4: "used against the limit" is limitConsumedAmount, never
+                // totalApproved -- see MemberFinancialSummaryDto's field docs.
+                result.put("usedAmount", summary.getLimitConsumedAmount());
                 result.put("remainingLimit", summary.getRemainingCoverage());
                 result.put("usagePercentage", summary.getUtilizationPercent());
                 result.put("policyName", summary.getPolicyName());
@@ -1129,7 +1252,7 @@ public class UnifiedMemberController {
          * @return Comprehensive financial summary
          */
         @GetMapping("/{memberId}/financial-summary")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY', 'EMPLOYER_ADMIN', 'MEDICAL_REVIEWER')")
+        @PreAuthorize("@permissionGuard.has('MEMBER_FINANCIAL_VIEW')")
         @Operation(summary = "Get Member Financial Summary", description = "Returns comprehensive financial overview including policy info, utilization metrics, "
                         +
                         "claim statistics, and alerts. **PHASE 1 Critical Endpoint** for financial visibility.", parameters = {
@@ -1173,7 +1296,8 @@ public class UnifiedMemberController {
 
                 log.info("📊 Retrieving financial summary for member: memberId={}", memberId);
 
-                MemberFinancialSummaryDto summary = financialSummaryService.getFinancialSummary(memberId);
+                MemberFinancialSummaryDto summary = financialSummaryService.getAuthorizedFinancialSummary(
+                                memberId, MemberOperation.VIEW_FINANCIALS);
 
                 log.info("✅ Financial summary retrieved: memberId={}, utilization={}%",
                                 memberId, summary.getUtilizationPercent());
@@ -1191,7 +1315,7 @@ public class UnifiedMemberController {
          * @return Updated member with photo URL
          */
         @PostMapping(value = "/{id}/photo", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY', 'EMPLOYER_ADMIN')")
+        @PreAuthorize("@permissionGuard.has('MEMBER_EDIT_IDENTITY')")
         @Operation(summary = "Upload Member Photo", description = "Upload profile photo for a member. Accepts JPEG or PNG images.")
         public ResponseEntity<ApiResponse<MemberViewDto>> uploadPhoto(
                         @PathVariable("id") Long id,
@@ -1229,7 +1353,11 @@ public class UnifiedMemberController {
 
                         return ResponseEntity.ok(ApiResponse.success("تم رفع الصورة بنجاح", updated));
 
-                } catch (AccessDeniedException e) {
+                } catch (AccessDeniedException | com.waad.tba.modules.member.security.MemberAccessDeniedException e) {
+                        throw e;
+                } catch (RuntimeException e) {
+                        // Access refusal and business limits must retain their 403/422
+                        // semantics in GlobalExceptionHandler, never become a false 500.
                         throw e;
                 } catch (Exception e) {
                         log.error("❌ Photo upload failed: memberId={}, error={}", id, e.getMessage(), e);
@@ -1245,7 +1373,7 @@ public class UnifiedMemberController {
          * @return Photo binary content
          */
         @GetMapping(value = "/{id}/photo", produces = { MediaType.IMAGE_JPEG_VALUE, MediaType.IMAGE_PNG_VALUE })
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
+        @PreAuthorize("@permissionGuard.has('MEMBER_VIEW')")
         @Operation(summary = "Get Member Photo", description = "Retrieve member profile photo as image binary")
         public ResponseEntity<byte[]> getPhoto(@PathVariable("id") Long id) {
                 log.debug("📸 Photo request: memberId={}", id);
@@ -1267,7 +1395,7 @@ public class UnifiedMemberController {
                                         .contentType(MediaType.parseMediaType(contentType))
                                         .body(photoData);
 
-                } catch (AccessDeniedException e) {
+                } catch (AccessDeniedException | com.waad.tba.modules.member.security.MemberAccessDeniedException e) {
                         throw e;
                 } catch (Exception e) {
                         log.error("❌ Photo retrieval failed: memberId={}, error={}", id, e.getMessage());
@@ -1282,7 +1410,7 @@ public class UnifiedMemberController {
          * @return Success response
          */
         @DeleteMapping("/{id}/photo")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY', 'EMPLOYER_ADMIN')")
+        @PreAuthorize("@permissionGuard.has('MEMBER_EDIT_IDENTITY')")
         @Operation(summary = "Delete Member Photo", description = "Remove profile photo from a member")
         public ResponseEntity<ApiResponse<Void>> deletePhoto(@PathVariable("id") Long id) {
                 log.info("🗑️ Photo delete request: memberId={}", id);
@@ -1318,23 +1446,16 @@ public class UnifiedMemberController {
          * @return Restored member
          */
         @PutMapping("/{id}/restore")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY', 'EMPLOYER_ADMIN')")
-        @Operation(summary = "Restore Deleted Member", description = "Restore a soft-deleted member (unset deleted flag)")
-        public ResponseEntity<ApiResponse<MemberViewDto>> restoreMember(@PathVariable("id") Long id) {
+        @PreAuthorize("@permissionGuard.has('MEMBER_CHANGE_STATUS')")
+        @Operation(summary = "Reinstate Member", description = "Performs an audited status transition back to ACTIVE; a reason is mandatory")
+        public ResponseEntity<ApiResponse<MemberViewDto>> restoreMember(
+                        @PathVariable("id") Long id,
+                        @RequestParam(name = "reason") String reason) {
                 log.info("♻️ Restore request: memberId={}", id);
 
-                try {
-                        MemberViewDto restored = unifiedMemberService.restoreMember(id);
-
-                        log.info("✅ Member restored: memberId={}", id);
-
-                        return ResponseEntity.ok(ApiResponse.success("تم استعادة العضو بنجاح", restored));
-
-                } catch (Exception e) {
-                        log.error("❌ Restore failed: memberId={}, error={}", id, e.getMessage(), e);
-                        return ResponseEntity.badRequest()
-                                        .body(ApiResponse.error("فشل استعادة العضو: " + e.getMessage()));
-                }
+                MemberViewDto restored = unifiedMemberService.restoreMember(id, reason);
+                log.info("✅ Member restored: memberId={}", id);
+                return ResponseEntity.ok(ApiResponse.success("تم استعادة العضو بنجاح", restored));
         }
 
         /**
@@ -1344,23 +1465,18 @@ public class UnifiedMemberController {
          * @return Success response
          */
         @DeleteMapping("/{id}/hard")
-        @PreAuthorize("hasRole('SUPER_ADMIN')")
-        @Operation(summary = "Hard Delete Member", description = "Permanently delete a member from the database (SUPER_ADMIN only)")
-        public ResponseEntity<ApiResponse<Void>> hardDeleteMember(@PathVariable("id") Long id) {
+        @PreAuthorize("@permissionGuard.has('MEMBER_HARD_DELETE')")
+        @Operation(summary = "Hard Delete Member", description = "Permanently delete a member from the database (SUPER_ADMIN only). "
+                        + "Requires a reason, blocked entirely if any financial/medical/audit footprint exists, "
+                        + "and writes an independent (non-FK'd) audit record before deleting.")
+        public ResponseEntity<ApiResponse<Void>> hardDeleteMember(
+                        @PathVariable("id") Long id,
+                        @RequestParam(name = "reason") String reason) {
                 log.warn("⚠️ HARD DELETE request: memberId={}", id);
 
-                try {
-                        unifiedMemberService.hardDeleteMember(id);
-
-                        log.info("✅ Member hard deleted: memberId={}", id);
-
-                        return ResponseEntity.ok(ApiResponse.success("تم حذف العضو نهائياً", null));
-
-                } catch (Exception e) {
-                        log.error("❌ Hard delete failed: memberId={}, error={}", id, e.getMessage(), e);
-                        return ResponseEntity.badRequest()
-                                        .body(ApiResponse.error("فشل الحذف النهائي: " + e.getMessage()));
-                }
+                unifiedMemberService.hardDeleteMember(id, reason);
+                log.info("✅ Member hard deleted: memberId={}", id);
+                return ResponseEntity.ok(ApiResponse.success("تم حذف العضو نهائياً", null));
         }
 
         // ==================== EXCEL EXPORT ====================
@@ -1375,12 +1491,14 @@ public class UnifiedMemberController {
          * @return Excel file as byte array
          */
         @GetMapping("/export/excel")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY', 'EMPLOYER_ADMIN')")
+        @PreAuthorize("@permissionGuard.has('MEMBER_EXPORT')")
         @Operation(summary = "Export Members to Excel", description = "Export members list to Excel file with optional filters")
         public ResponseEntity<byte[]> exportMembersToExcel(
                         @RequestParam(name = "searchQuery", required = false) String searchQuery,
                         @RequestParam(name = "employerId", required = false) Long employerId,
                         @RequestParam(name = "benefitPolicyId", required = false) Long benefitPolicyId,
+                        @RequestParam(name = "status", required = false) String status,
+                        @RequestParam(name = "type", required = false) String type,
                         @RequestParam(name = "includeDeleted", required = false, defaultValue = "false") Boolean includeDeleted) {
 
                 log.info("📊 Excel export request: query={}, employer={}, policy={}, deleted={}",
@@ -1388,7 +1506,7 @@ public class UnifiedMemberController {
 
                 try {
                         byte[] excelData = excelExportService.exportToExcel(
-                                        searchQuery, employerId, benefitPolicyId, includeDeleted);
+                                        searchQuery, employerId, benefitPolicyId, status, type, includeDeleted);
 
                         String filename = "Members_Export_" +
                                         LocalDate.now().format(
@@ -1407,10 +1525,35 @@ public class UnifiedMemberController {
                                         .headers(headers)
                                         .body(excelData);
 
+                } catch (RuntimeException e) {
+                        // Preserve access/business error semantics in the global handler.
+                        throw e;
                 } catch (Exception e) {
                         log.error("❌ Excel export failed: error={}", e.getMessage(), e);
                         return ResponseEntity.internalServerError().build();
                 }
+        }
+
+        @GetMapping("/export/reimportable-excel")
+        @PreAuthorize("@permissionGuard.has('MEMBER_EXPORT')")
+        @Operation(summary = "Export re-importable member workbook",
+                        description = "Exports the canonical member-import schema. Unlike /export/excel, this file is intended for preview and re-import.")
+        public ResponseEntity<byte[]> exportReimportableMembers(
+                        @RequestParam(name = "searchQuery", required = false) String searchQuery,
+                        @RequestParam(name = "employerId", required = false) Long employerId,
+                        @RequestParam(name = "benefitPolicyId", required = false) Long benefitPolicyId,
+                        @RequestParam(name = "status", required = false) String status,
+                        @RequestParam(name = "type", required = false) String type,
+                        @RequestParam(name = "includeDeleted", required = false, defaultValue = "false") Boolean includeDeleted)
+                        throws IOException {
+                byte[] data = excelExportService.exportReimportableExcel(
+                                searchQuery, employerId, benefitPolicyId, status, type, includeDeleted);
+                String filename = "Members_Reimportable_" + LocalDate.now() + ".xlsx";
+                HttpHeaders headers = new HttpHeaders();
+                headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
+                headers.setContentDispositionFormData("attachment", filename);
+                headers.setContentLength(data.length);
+                return ResponseEntity.ok().headers(headers).body(data);
         }
 
         /**
@@ -1420,7 +1563,7 @@ public class UnifiedMemberController {
          * @return List of matching members
          */
         @GetMapping("/unified-search")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
+        @PreAuthorize("@permissionGuard.has('MEMBER_VIEW')")
         @Operation(summary = "Unified member search (Auto-detect type)", description = "Search members by card number, name (fuzzy), or barcode/QR.")
         public ResponseEntity<ApiResponse<List<MemberSearchDto>>> unifiedSearch(
                         @RequestParam(name = "query") String query,
@@ -1434,7 +1577,7 @@ public class UnifiedMemberController {
          * Get member details by ID - for detailed view after search
          */
         @GetMapping("/{id}/details")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
+        @PreAuthorize("@permissionGuard.has('MEMBER_VIEW')")
         @Operation(summary = "Get member details by ID", description = "Retrieve complete member info after search selection")
         public ResponseEntity<ApiResponse<MemberSearchDto>> getMemberDetails(
                         @PathVariable("id") Long id) {

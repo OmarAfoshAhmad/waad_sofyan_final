@@ -17,14 +17,14 @@ import java.util.List;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/reviewers")
-@PreAuthorize("isAuthenticated()")
+@PreAuthorize("@permissionGuard.has('CLAIM_REVIEW')")
 public class ReviewerScopeController {
 
     private final AuthorizationService authorizationService;
     private final ReviewerProviderIsolationService reviewerIsolationService;
 
     @GetMapping("/my-providers")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@permissionGuard.has('CLAIM_REVIEW')")
     public ResponseEntity<ApiResponse<List<ReviewerProviderOptionDto>>> getMyProviders() {
         User currentUser = authorizationService.getCurrentUser();
 
