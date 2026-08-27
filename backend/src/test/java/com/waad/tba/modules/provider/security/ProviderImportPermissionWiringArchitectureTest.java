@@ -21,6 +21,20 @@ class ProviderImportPermissionWiringArchitectureTest {
     }
 
     @Test
+    void providerApiSeparatesReadManageAndDangerZoneWithoutRoleFallback() throws Exception {
+        String source = Files.readString(SOURCE_ROOT.resolve(
+                "provider/controller/ProviderController.java"));
+
+        assertThat(source).doesNotContain("hasRole(", "hasAnyRole(");
+        assertThat(source).contains("@permissionGuard.has('PROVIDER_VIEW')");
+        assertThat(source).contains("@permissionGuard.has('PROVIDER_MANAGE')");
+        assertThat(count(source,
+                "@permissionGuard.has('PROVIDER_MANAGE') and @permissionGuard.has('DANGER_ZONE_EXECUTE')"))
+                .as("single and bulk permanent deletion require the danger-zone capability")
+                .isEqualTo(2);
+    }
+
+    @Test
     void contractImportUsesEffectiveContractManagePermissionOnEveryOperation() throws Exception {
         String source = Files.readString(SOURCE_ROOT.resolve(
                 "providercontract/controller/ProviderContractImportController.java"));
