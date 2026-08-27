@@ -3,18 +3,21 @@ package com.waad.tba.modules.settlement.controller;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.UUID;
 
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.waad.tba.TbaWaadApplication;
@@ -22,6 +25,7 @@ import com.waad.tba.common.guard.FeatureGuard;
 import com.waad.tba.modules.provider.entity.Provider;
 import com.waad.tba.modules.provider.entity.Provider.ProviderType;
 import com.waad.tba.modules.provider.repository.ProviderRepository;
+import com.waad.tba.modules.rbac.permission.PermissionGuard;
 import com.waad.tba.modules.settlement.dto.AdjustProviderAccountRequest;
 import com.waad.tba.modules.settlement.dto.CreateProviderPaymentRequest;
 import com.waad.tba.modules.settlement.dto.PostProviderPaymentRequest;
@@ -45,6 +49,13 @@ class ProviderPaymentWriteGateIntegrationTest extends PostgresIntegrationTestBas
     @Autowired ProviderAccountReconciliationController reconciliationController;
     @Autowired FeatureFlagService featureFlagService;
     @Autowired ProviderRepository providers;
+    @MockitoBean PermissionGuard permissionGuard;
+
+    @BeforeEach
+    void allowSettlementCapabilitiesUnlessATestExplicitlyRevokesWrite() {
+        when(permissionGuard.has("SETTLEMENT_VIEW")).thenReturn(true);
+        when(permissionGuard.has("SETTLEMENT_MANAGE")).thenReturn(true);
+    }
 
     @AfterEach
     void resetFlag() {
@@ -57,7 +68,7 @@ class ProviderPaymentWriteGateIntegrationTest extends PostgresIntegrationTestBas
     }
 
     @Test
-    @WithMockUser(roles = "ACCOUNTANT")
+    @WithMockUser(authorities = "PERM_SETTLEMENT_MANAGE")
     void createDraftFailsClosedByDefault() {
         var request = new CreateProviderPaymentRequest();
         request.setProviderId(1L);
@@ -71,7 +82,7 @@ class ProviderPaymentWriteGateIntegrationTest extends PostgresIntegrationTestBas
     }
 
     @Test
-    @WithMockUser(roles = "ACCOUNTANT")
+    @WithMockUser(authorities = "PERM_SETTLEMENT_MANAGE")
     void createDraftSucceedsOnceTheFlagIsExplicitlyEnabled() {
         String suffix = UUID.randomUUID().toString().substring(0, 8);
         Long providerId = providers.save(Provider.builder().name("Gate Hospital " + suffix)
@@ -98,7 +109,7 @@ class ProviderPaymentWriteGateIntegrationTest extends PostgresIntegrationTestBas
      * moment a session began.
      */
     @Test
-    @WithMockUser(roles = "ACCOUNTANT")
+    @WithMockUser(authorities = "PERM_SETTLEMENT_MANAGE")
     void aDraftOpenedWhileEnabledCannotBePostedAfterTheFlagIsDisabledMidSession() {
         String suffix = UUID.randomUUID().toString().substring(0, 8);
         Long providerId = providers.save(Provider.builder().name("MidSession Hospital " + suffix)
@@ -131,8 +142,9 @@ class ProviderPaymentWriteGateIntegrationTest extends PostgresIntegrationTestBas
     // ── صلاحيات المستخدمين المختلفة ──────────────────────────────────────────
 
     @Test
-    @WithMockUser(roles = "EMPLOYER_ADMIN")
-    void aRoleWithoutAccountantOrSuperAdminIsDeniedOnEveryWriteEndpoint() {
+    @WithMockUser(authorities = "PERM_SETTLEMENT_VIEW")
+    void aUserWithViewButWithoutManageCapabilityIsDeniedOnEveryWriteEndpoint() {
+        when(permissionGuard.has("SETTLEMENT_MANAGE")).thenReturn(false);
         featureFlagService.toggleFeatureFlag(FeatureGuard.FLAG_PROVIDER_PAYMENT_POSTING, true, "test");
 
         var createRequest = new CreateProviderPaymentRequest();
@@ -154,8 +166,9 @@ class ProviderPaymentWriteGateIntegrationTest extends PostgresIntegrationTestBas
     }
 
     @Test
-    @WithMockUser(roles = "EMPLOYER_ADMIN")
-    void aRoleWithoutWritePermissionCanStillReadEverything() {
+    @WithMockUser(authorities = "PERM_SETTLEMENT_VIEW")
+    void aUserWithViewButWithoutManageCapabilityCanStillReadEverything() {
+        when(permissionGuard.has("SETTLEMENT_MANAGE")).thenReturn(false);
         assertThatCode(() -> controller.listByProvider(1L)).doesNotThrowAnyException();
         assertThatCode(() -> reconciliationController.reconcileAll()).doesNotThrowAnyException();
     }

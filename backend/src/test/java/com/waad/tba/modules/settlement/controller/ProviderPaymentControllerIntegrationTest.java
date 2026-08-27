@@ -2,16 +2,19 @@ package com.waad.tba.modules.settlement.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import com.waad.tba.TbaWaadApplication;
 import com.waad.tba.common.dto.ApiResponse;
@@ -20,6 +23,7 @@ import com.waad.tba.modules.employer.repository.EmployerRepository;
 import com.waad.tba.modules.provider.entity.Provider;
 import com.waad.tba.modules.provider.entity.Provider.ProviderType;
 import com.waad.tba.modules.provider.repository.ProviderRepository;
+import com.waad.tba.modules.rbac.permission.PermissionGuard;
 import com.waad.tba.modules.settlement.dto.CreateProviderPaymentRequest;
 import com.waad.tba.modules.settlement.dto.CreateProviderPaymentRequest.AllocationInput;
 import com.waad.tba.modules.settlement.dto.ProviderPaymentDto;
@@ -48,9 +52,15 @@ class ProviderPaymentControllerIntegrationTest extends PostgresIntegrationTestBa
     @Autowired ProviderPaymentDraftService draftService;
     @Autowired ProviderRepository providers;
     @Autowired EmployerRepository employers;
+    @MockitoBean PermissionGuard permissionGuard;
+
+    @BeforeEach
+    void allowSettlementViewForThisLazyLoadingRegressionTest() {
+        when(permissionGuard.has("SETTLEMENT_VIEW")).thenReturn(true);
+    }
 
     @Test
-    @WithMockUser(roles = "ACCOUNTANT")
+    @WithMockUser(authorities = "PERM_SETTLEMENT_VIEW")
     void listByProviderReadsAllocationsWithoutLazyInitializationException() {
         String suffix = UUID.randomUUID().toString().substring(0, 8);
         Long providerId = providers.save(Provider.builder().name("Regression Hospital " + suffix)
