@@ -25,7 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "Claim Draft API", description = "Autosave draft APIs")
-@PreAuthorize("isAuthenticated()")
+@PreAuthorize("@permissionGuard.has('CLAIM_CREATE')")
 public class ClaimDraftController {
 
     private final ClaimDraftService claimDraftService;
