@@ -239,5 +239,17 @@ public interface BenefitPolicyRepository extends JpaRepository<BenefitPolicy, Lo
 
     @Query(value = "SELECT pg_advisory_xact_lock(:lockKey)", nativeQuery = true)
     void acquireTransactionLock(@Param("lockKey") Long lockKey);
+
+    /**
+     * The annual ceilings of several policies in one query.
+     *
+     * Deliberately a projection rather than findAllById: BenefitPolicy has an
+     * EAGER element collection, so loading the entities costs one extra select
+     * per policy. On a members page that is a per-row cost wearing the shape of
+     * a bulk read.
+     */
+    @Query("SELECT new com.waad.tba.modules.benefitpolicy.repository.PolicyAnnualLimit("
+         + "bp.id, bp.annualLimit) FROM BenefitPolicy bp WHERE bp.id IN :policyIds")
+    List<PolicyAnnualLimit> findAnnualLimits(@Param("policyIds") java.util.Collection<Long> policyIds);
 }
 
