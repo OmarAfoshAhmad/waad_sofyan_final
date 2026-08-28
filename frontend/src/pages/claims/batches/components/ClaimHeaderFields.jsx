@@ -47,7 +47,12 @@ export const ClaimHeaderFields = ({
   // reservableAvailable, not the remaining-consumption figure: this badge sits
   // on a screen where a NEW commitment is being entered, and money already
   // held by an approved pre-authorization is not available to commit again.
-  const persistedAvailable = Number(financialSummary?.reservableAvailable ?? 0);
+  // Null, not zero, whenever there is no ceiling to report -- unlimited, not
+  // configured, or a failed read. The badges below are hidden in that case
+  // rather than showing a fabricated 0 د.ل to someone entering a claim.
+  const hasCeiling =
+    financialSummary?.reservableAvailable !== null && financialSummary?.reservableAvailable !== undefined;
+  const persistedAvailable = hasCeiling ? Number(financialSummary.reservableAvailable) : 0;
   // The persisted summary includes an existing claim being edited, while the
   // coverage engine excludes that claim before recalculation. Add its old
   // approved amount back, then subtract the current draft commitment so the
@@ -223,7 +228,7 @@ export const ClaimHeaderFields = ({
               <MenuItem value="FULL_COVERAGE">تغطية كاملة</MenuItem>
             </Select>
           )}
-          {amountLimit > 0 && (
+          {hasCeiling && amountLimit > 0 && (
             <Stack
               direction="column"
               spacing={0.35}
