@@ -814,6 +814,21 @@ export const getLimitsOverview = async (memberIds) => {
 };
 
 /**
+ * One member's general ceiling and every bucket under it.
+ *
+ * Called only when the drawer opens, never as part of rendering a list. The
+ * general figures come from the same read the column used, so the two agree by
+ * construction; readAt says how far apart the two reads were.
+ *
+ * @param {number} memberId
+ * @returns {Promise<Object>} general summary plus bucket balances
+ */
+export const getLimitDetail = async (memberId) => {
+  const response = await api.get(`${UNIFIED_MEMBERS_BASE_URL}/${memberId}/limits/detail`);
+  return response.data;
+};
+
+/**
  * Get financial summary for a member
  *
  * @param {number} memberId - Member ID
@@ -855,6 +870,7 @@ export default {
   deletePhoto,
   getFinancialSummary,
   getLimitsOverview,
+  getLimitDetail,
   RELATIONSHIPS,
   GENDERS,
   MEMBER_STATUSES,

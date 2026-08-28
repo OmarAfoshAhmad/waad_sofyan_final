@@ -9,6 +9,7 @@ import com.waad.tba.modules.member.dto.FamilyEligibilityResponseDto;
 import com.waad.tba.modules.member.dto.MemberCreateDto;
 import com.waad.tba.modules.member.dto.CurrentGeneralLimitSummary;
 import com.waad.tba.modules.member.dto.MemberFinancialSummaryDto;
+import com.waad.tba.modules.member.dto.MemberLimitDetail;
 import com.waad.tba.modules.member.dto.MemberLimitOverviewRequest;
 import com.waad.tba.modules.member.dto.MemberUpdateDto;
 import com.waad.tba.modules.member.dto.MemberViewDto;
@@ -134,6 +135,7 @@ public class UnifiedMemberController {
         private final UnifiedSearchService unifiedSearchService;
         private final MemberFinancialSummaryService financialSummaryService;
         private final com.waad.tba.modules.member.service.MemberLimitOverviewService limitOverviewService;
+        private final com.waad.tba.modules.member.service.MemberLimitDetailService limitDetailService;
         private final PdfTemplateService pdfTemplateService;
         private final HtmlToPdfService htmlToPdfService;
         private final FileStorageService fileStorageService;
@@ -1206,6 +1208,20 @@ public class UnifiedMemberController {
 
                 return ResponseEntity.ok(
                                 limitOverviewService.authorizedSummariesFor(request.getMemberIds()));
+        }
+
+        /**
+         * One member's ceiling in full: the general limit and every bucket
+         * under it, kept apart and never summed.
+         *
+         * Opened on demand from the list drawer. The general figures come from
+         * the same read the column uses, so the two cannot disagree.
+         */
+        @GetMapping("/{memberId}/limits/detail")
+        @PreAuthorize("@permissionGuard.has('MEMBER_LIMIT_VIEW')")
+        @Operation(summary = "One member's general ceiling and bucket balances")
+        public ResponseEntity<MemberLimitDetail> getLimitDetail(@PathVariable("memberId") Long memberId) {
+                return ResponseEntity.ok(limitDetailService.authorizedDetailFor(memberId));
         }
 
         @GetMapping("/{memberId}/remaining-limit")

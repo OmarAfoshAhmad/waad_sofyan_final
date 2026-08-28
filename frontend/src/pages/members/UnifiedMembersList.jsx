@@ -74,6 +74,7 @@ import { ModernPageHeader, MemberAvatar, SoftDeleteToggle, ActionConfirmDialog }
 import { UnifiedMedicalTable } from 'components/common';
 import MembersBulkUploadDialog from 'components/members/MembersBulkUploadDialog';
 import MemberCeilingCell from 'components/members/MemberCeilingCell';
+import MemberCeilingDrawer from 'components/members/MemberCeilingDrawer';
 import DataExportWizard from 'components/tba/DataExportWizard';
 import {
   searchMembers,
@@ -115,6 +116,7 @@ const UnifiedMembersList = () => {
   // Keyed by member id. Filled by ONE call per page, never one per row.
   const [ceilings, setCeilings] = useState({});
   const [ceilingsLoading, setCeilingsLoading] = useState(false);
+  const [ceilingDrawerMember, setCeilingDrawerMember] = useState(null);
   const [loading, setLoading] = useState(false);
   const [totalCount, setTotalCount] = useState(0);
   const [loadError, setLoadError] = useState('');
@@ -488,7 +490,19 @@ const UnifiedMembersList = () => {
         );
 
       case 'ceiling':
-        return <MemberCeilingCell summary={ceilings[member.id]} loading={ceilingsLoading} />;
+        return (
+          <Box
+            role="button"
+            tabIndex={0}
+            onClick={() => setCeilingDrawerMember(member)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') setCeilingDrawerMember(member);
+            }}
+            sx={{ cursor: 'pointer', '&:hover': { opacity: 0.8 } }}
+          >
+            <MemberCeilingCell summary={ceilings[member.id]} loading={ceilingsLoading} />
+          </Box>
+        );
 
       case 'cardNumber':
         return (
@@ -892,6 +906,15 @@ const UnifiedMembersList = () => {
         onSelectRow={handleSelectRow}
         sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minHeight: 0, mb: 1 }}
         tableContainerSx={{ flexGrow: 1, minHeight: 0 }}
+      />
+
+      {/* Ceiling drawer: opened from the column, seeded with the figures that
+          column already holds so it is readable before its own request lands. */}
+      <MemberCeilingDrawer
+        open={Boolean(ceilingDrawerMember)}
+        member={ceilingDrawerMember}
+        initialSummary={ceilingDrawerMember ? ceilings[ceilingDrawerMember.id] : null}
+        onClose={() => setCeilingDrawerMember(null)}
       />
 
       {/* Import Dialog */}
