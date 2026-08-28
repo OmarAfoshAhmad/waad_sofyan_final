@@ -176,6 +176,17 @@ describe('members list ceiling requests', () => {
     expect(screen.getAllByText('غير متاح').length).toBeGreaterThan(0);
   });
 
+  it('offers the page size the request-count check is run at', async () => {
+    renderList();
+    await waitFor(() => expect(getLimitsOverview).toHaveBeenCalledTimes(1));
+
+    // The browser cycle counts requests on a page of thirty. A selector that
+    // cannot reach thirty makes that check unrunnable by hand, however well
+    // the invariant is pinned here.
+    await userEvent.click(screen.getByRole('combobox', { name: /صفوف لكل صفحة/ }));
+    expect(screen.getByRole('option', { name: '30' })).toBeInTheDocument();
+  });
+
   it('hides the column entirely without the limit permission', async () => {
     useAuth.mockReturnValue({ user: { permissions: ['MEMBER_VIEW'] } });
 

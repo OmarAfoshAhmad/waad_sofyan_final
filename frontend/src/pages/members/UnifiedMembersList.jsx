@@ -102,6 +102,15 @@ import { getMemberCapabilities } from './memberCapabilities';
 const MIN_MEMBER_SEARCH_LENGTH = 3;
 
 /**
+ * Page sizes for the members list only, not the shared table default.
+ *
+ * The ceiling column reads a page in one request whatever its size, so these
+ * are a reading preference rather than a performance ceiling. 30 is here
+ * because it is the size the browser cycle checks the request count at.
+ */
+const MEMBER_PAGE_SIZES = [6, 12, 24, 30];
+
+/**
  * Unified Members List Component
  */
 const UnifiedMembersList = () => {
@@ -131,7 +140,9 @@ const UnifiedMembersList = () => {
 
   // Pagination
   const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
+  // Must be one of MEMBER_PAGE_SIZES: MUI's pagination shows a blank selector
+  // when the current value is not among the options it was given.
+  const [rowsPerPage, setRowsPerPage] = useState(12);
 
   // Sorting
   const [sortBy, setSortBy] = useState('createdAt');
@@ -925,6 +936,7 @@ const UnifiedMembersList = () => {
         totalCount={totalCount}
         page={page}
         rowsPerPage={rowsPerPage}
+        rowsPerPageOptions={MEMBER_PAGE_SIZES}
         onPageChange={(newPage) => setPage(newPage)}
         onRowsPerPageChange={(newSize) => setRowsPerPage(newSize)}
         sortBy={sortBy}
