@@ -107,13 +107,17 @@ class MemberExcelImportServiceTest {
         MemberImportMapper mapper = new MemberImportMapper(parser);
         MemberPolicyResolver policyResolverForStatus = new MemberPolicyResolver(
                 policyAssignmentRepository, benefitPolicyRepository, memberRepository,
-                org.mockito.Mockito.mock(MemberEmployerResolver.class));
+                org.mockito.Mockito.mock(MemberEmployerResolver.class),
+                org.mockito.Mockito.mock(
+                        com.waad.tba.modules.member.repository.MemberEmployerAssignmentRepository.class));
         MemberStatusTransitionService statusTransitionService = new MemberStatusTransitionService(
                 memberRepository, statusHistoryRepository, hardDeleteAuditRepository, benefitPolicyRepository,
                 statusTransitionJdbcTemplate, policyResolverForStatus);
         MemberPolicyResolver memberPolicyResolver = new MemberPolicyResolver(
                 policyAssignmentRepository, benefitPolicyRepository, memberRepository,
-                org.mockito.Mockito.mock(MemberEmployerResolver.class));
+                org.mockito.Mockito.mock(MemberEmployerResolver.class),
+                org.mockito.Mockito.mock(
+                        com.waad.tba.modules.member.repository.MemberEmployerAssignmentRepository.class));
         MemberImportRowProcessor rowProcessor = new MemberImportRowProcessor(
                 parser, employerRepository, benefitPolicyRepository, barcodeGeneratorService,
                 cardNumberGeneratorService, statusTransitionService);

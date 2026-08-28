@@ -251,5 +251,18 @@ public interface BenefitPolicyRepository extends JpaRepository<BenefitPolicy, Lo
     @Query("SELECT new com.waad.tba.modules.benefitpolicy.repository.PolicyAnnualLimit("
          + "bp.id, bp.annualLimit) FROM BenefitPolicy bp WHERE bp.id IN :policyIds")
     List<PolicyAnnualLimit> findAnnualLimits(@Param("policyIds") java.util.Collection<Long> policyIds);
+
+    /**
+     * The facts needed to decide whether a policy was in force for a member on
+     * a date, for several policies at once.
+     *
+     * Deliberately carries no money: this feeds dated resolution, and a
+     * resolver that can see the ceiling is a resolver that can be tempted to
+     * decide with it.
+     */
+    @Query("SELECT new com.waad.tba.modules.benefitpolicy.repository.PolicyInForceRow("
+         + "bp.id, bp.status, bp.startDate, bp.endDate, bp.employer.id) "
+         + "FROM BenefitPolicy bp WHERE bp.id IN :policyIds")
+    List<PolicyInForceRow> findInForceRows(@Param("policyIds") java.util.Collection<Long> policyIds);
 }
 

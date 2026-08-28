@@ -3,7 +3,7 @@ package com.waad.tba.modules.member.service;
 /**
  * What the dated policy resolution found for one member, said out loud.
  *
- * The reason this is not simply a nullable policy id: the four outcomes below
+ * The reason this is not simply a nullable policy id: the outcomes below
  * are different facts with different consequences, and collapsing them loses
  * the one thing a reader of a financial screen needs to know -- whether a
  * missing number means "nothing applies here" or "we could not find out".
@@ -27,6 +27,25 @@ public record ResolvedMemberPolicy(Outcome outcome, Long policyId, Long assignme
          * person's care.
          */
         AMBIGUOUS,
+        /**
+         * An assignment covers the date, but the policy itself was not in
+         * force then -- expired, suspended, or outside its own window.
+         *
+         * A real answer, like NOT_ASSIGNED: no ceiling applied. Assignments
+         * are normally left open-ended, closed only when a new one starts, so
+         * without this check an assignment would keep answering with a policy
+         * that expired years ago and silently extend coverage nobody granted.
+         */
+        POLICY_NOT_IN_FORCE,
+        /**
+         * The assigned policy belongs to a different employer than the one
+         * that owned the member on that date.
+         *
+         * Not a real answer -- a data-integrity alarm. Reported as unknown
+         * rather than as "no coverage", because the two demand different
+         * responses from whoever reads the screen.
+         */
+        EMPLOYER_MISMATCH,
         /** The read itself failed. Never to be shown as a balance. */
         UNAVAILABLE
     }
@@ -41,6 +60,14 @@ public record ResolvedMemberPolicy(Outcome outcome, Long policyId, Long assignme
 
     public static ResolvedMemberPolicy ambiguous(String detail) {
         return new ResolvedMemberPolicy(Outcome.AMBIGUOUS, null, null, detail);
+    }
+
+    public static ResolvedMemberPolicy policyNotInForce(String detail) {
+        return new ResolvedMemberPolicy(Outcome.POLICY_NOT_IN_FORCE, null, null, detail);
+    }
+
+    public static ResolvedMemberPolicy employerMismatch(String detail) {
+        return new ResolvedMemberPolicy(Outcome.EMPLOYER_MISMATCH, null, null, detail);
     }
 
     public static ResolvedMemberPolicy unavailable(String detail) {

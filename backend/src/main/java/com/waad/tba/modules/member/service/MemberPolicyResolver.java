@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.waad.tba.common.exception.BusinessRuleException;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository;
+import com.waad.tba.modules.benefitpolicy.repository.PolicyInForceRow;
 import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.modules.member.entity.MemberPolicyAssignment;
 import com.waad.tba.modules.member.entity.PolicyAssignmentSource;
@@ -48,6 +49,8 @@ public class MemberPolicyResolver {
     private final BenefitPolicyRepository policyRepository;
     private final com.waad.tba.modules.member.repository.MemberRepository memberRepository;
     private final MemberEmployerResolver memberEmployerResolver;
+    private final com.waad.tba.modules.member.repository.MemberEmployerAssignmentRepository
+            employerAssignmentRepository;
 
     /**
      * Walks the cause chain looking for the constraint name. Postgres reports
@@ -219,19 +222,79 @@ public class MemberPolicyResolver {
             return result;
         }
 
+        // The same two checks resolveFor applies after finding an assignment,
+        // in bulk. Leaving them out here would have made the list a laxer
+        // authority than the single-member path it must agree with: an
+        // assignment left open -- the normal state -- would keep answering
+        // with a policy that expired years ago, and a policy belonging to an
+        // employer the member has since left would price their care.
+        java.util.Set<Long> policyIds = new java.util.LinkedHashSet<>();
+        for (var matches : covering.values()) {
+            if (matches.size() == 1) {
+                policyIds.add(matches.get(0).getPolicyId());
+            }
+        }
+        java.util.Map<Long, PolicyInForceRow> policyRows = new java.util.HashMap<>();
+        java.util.Map<Long, Long> employerByMember = new java.util.HashMap<>();
+        try {
+            if (!policyIds.isEmpty()) {
+                for (PolicyInForceRow row : policyRepository.findInForceRows(policyIds)) {
+                    policyRows.put(row.policyId(), row);
+                }
+            }
+            for (var assignment : employerAssignmentRepository
+                    .findCoveringForMembers(requested, asOfDate)) {
+                // A second covering employer assignment is impossible under
+                // V183's exclusion constraint; if one ever appears, the
+                // mismatch branch below refuses rather than picks.
+                employerByMember.merge(assignment.getMemberId(), assignment.getEmployerId(),
+                        (first, second) -> first.equals(second) ? first : null);
+            }
+        } catch (RuntimeException ex) {
+            log.error("Bulk policy validation failed for {} members asOf {}", requested.size(), asOfDate, ex);
+            for (Long memberId : requested) {
+                result.put(memberId, ResolvedMemberPolicy.unavailable("تعذّرت قراءة تعيينات الوثائق"));
+            }
+            return result;
+        }
+
         for (Long memberId : requested) {
             java.util.List<MemberPolicyAssignment> matches =
                     covering.getOrDefault(memberId, java.util.List.of());
             if (matches.isEmpty()) {
                 result.put(memberId, ResolvedMemberPolicy.notAssigned());
-            } else if (matches.size() > 1) {
+                continue;
+            }
+            if (matches.size() > 1) {
                 result.put(memberId, ResolvedMemberPolicy.ambiguous(
                         "أكثر من تعيين وثيقة يغطي التاريخ " + asOfDate));
-            } else {
-                MemberPolicyAssignment assignment = matches.get(0);
-                result.put(memberId,
-                        ResolvedMemberPolicy.found(assignment.getPolicyId(), assignment.getId()));
+                continue;
             }
+            MemberPolicyAssignment assignment = matches.get(0);
+            PolicyInForceRow policy = policyRows.get(assignment.getPolicyId());
+            if (policy == null) {
+                // The assignment names a policy that no longer exists. Unknown,
+                // not "no coverage": something deleted a row a decision points at.
+                result.put(memberId, ResolvedMemberPolicy.unavailable(
+                        "الوثيقة المعيّنة غير موجودة"));
+                continue;
+            }
+            if (!policy.isInForceOn(asOfDate)) {
+                result.put(memberId, ResolvedMemberPolicy.policyNotInForce(
+                        "الوثيقة غير سارية بتاريخ " + asOfDate));
+                continue;
+            }
+            Long memberEmployerId = employerByMember.get(memberId);
+            if (memberEmployerId == null || !memberEmployerId.equals(policy.employerId())) {
+                log.warn("[MemberPolicy][EMPLOYER_MISMATCH] memberId={} employer={} but assigned policy {} "
+                        + "belongs to employer {} on {}", memberId, memberEmployerId,
+                        policy.policyId(), policy.employerId(), asOfDate);
+                result.put(memberId, ResolvedMemberPolicy.employerMismatch(
+                        "الوثيقة المعيّنة تتبع جهة عمل أخرى"));
+                continue;
+            }
+            result.put(memberId,
+                    ResolvedMemberPolicy.found(assignment.getPolicyId(), assignment.getId()));
         }
         return result;
     }

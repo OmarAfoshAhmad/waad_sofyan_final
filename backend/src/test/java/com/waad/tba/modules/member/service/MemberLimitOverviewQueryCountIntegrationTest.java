@@ -25,6 +25,7 @@ import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository;
 import com.waad.tba.modules.employer.entity.Employer;
 import com.waad.tba.modules.employer.repository.EmployerRepository;
 import com.waad.tba.modules.member.entity.Member;
+import com.waad.tba.modules.member.entity.EmployerAssignmentSource;
 import com.waad.tba.modules.member.entity.PolicyAssignmentSource;
 import com.waad.tba.modules.member.repository.MemberPolicyAssignmentRepository;
 import com.waad.tba.modules.member.repository.MemberRepository;
@@ -58,6 +59,7 @@ class MemberLimitOverviewQueryCountIntegrationTest extends PostgresIntegrationTe
     @Autowired private BenefitPolicyRepository policies;
     @Autowired private MemberPolicyAssignmentRepository policyAssignments;
     @Autowired private MemberPolicyResolver policyResolver;
+    @Autowired private MemberEmployerResolver employerResolver;
     @Autowired private EntityManager entityManager;
     @Autowired private EntityManagerFactory entityManagerFactory;
 
@@ -68,7 +70,7 @@ class MemberLimitOverviewQueryCountIntegrationTest extends PostgresIntegrationTe
     void resolvingCurrentPolicyForAPageCostsTheSameWhateverThePageHolds() {
         String suffix = UUID.randomUUID().toString().substring(0, 8);
         Employer employer = employers.save(Employer.builder()
-                .code("LIMIT-" + suffix).name("Limit Overview Employer").active(true).build());
+                .code("LIMIT-" + suffix).name("Limit Overview Employer " + suffix).active(true).build());
         BenefitPolicy policy = policies.save(BenefitPolicy.builder()
                 .name("Limit Overview Policy").policyCode("LIM-" + suffix).employer(employer)
                 .startDate(LocalDate.of(2026, 1, 1)).endDate(LocalDate.of(2026, 12, 31))
@@ -85,6 +87,8 @@ class MemberLimitOverviewQueryCountIntegrationTest extends PostgresIntegrationTe
                     .build());
             policyResolver.assignPolicy(member, policy, LocalDate.of(2026, 1, 1),
                     "fixture", PolicyAssignmentSource.SYSTEM, null);
+            employerResolver.assignEmployer(member, employer, LocalDate.of(2026, 1, 1),
+                    "fixture", EmployerAssignmentSource.SYSTEM, null);
             memberIds.add(member.getId());
         }
         entityManager.flush();
@@ -113,28 +117,43 @@ class MemberLimitOverviewQueryCountIntegrationTest extends PostgresIntegrationTe
         assertThat(resolved)
                 .as("every member in the page must get an answer, even if that answer is 'none'")
                 .hasSize(memberIds.size());
+        assertThat(resolved.values())
+                .as("and the answer must be a resolution: a file that only ever counts "
+                        + "queries would pass just as happily while resolving nobody")
+                .allMatch(ResolvedMemberPolicy::isFound);
 
         return statistics.getPrepareStatementCount();
     }
 
     /**
-     * Constant is the claim, so state the constant. Left as an upper bound
-     * only, this would keep passing at ten queries per page as easily as one.
+     * Constant is the claim, so state the constant AND vary the page. An upper
+     * bound alone would keep passing at ten queries per page as easily as
+     * three; a single page size would not notice a per-row read at all.
      */
     @Test
     @Transactional
-    void resolvingCurrentPolicyForAPageCostsASingleQuery() {
-        Fixture fixture = seed(12);
+    void resolvingCurrentPolicyForAPageCostsThreeQueriesWhateverThePageSize() {
+        long forTwelve = statementsResolving(seed(12).memberIds());
+        long forThirtySix = statementsResolving(seed(36).memberIds());
 
+        assertThat(forTwelve)
+                .as("covering assignments, whether those policies were in force, "
+                        + "and the employer each member sat with on the date")
+                .isEqualTo(3L);
+        assertThat(forThirtySix)
+                .as("three times the rows, the same three queries")
+                .isEqualTo(forTwelve);
+    }
+
+    private long statementsResolving(List<Long> memberIds) {
         Statistics statistics = entityManagerFactory.unwrap(SessionFactory.class).getStatistics();
         statistics.setStatisticsEnabled(true);
         statistics.clear();
 
-        policyResolver.resolveForMembers(fixture.memberIds(), AS_OF);
+        Map<Long, ResolvedMemberPolicy> resolved = policyResolver.resolveForMembers(memberIds, AS_OF);
 
-        assertThat(statistics.getPrepareStatementCount())
-                .as("one query for the whole page, not one per row")
-                .isEqualTo(1L);
+        assertThat(resolved.values()).allMatch(ResolvedMemberPolicy::isFound);
+        return statistics.getPrepareStatementCount();
     }
 
     @Test
@@ -198,7 +217,7 @@ class MemberLimitOverviewQueryCountIntegrationTest extends PostgresIntegrationTe
     private Fixture seed(int count) {
         String suffix = UUID.randomUUID().toString().substring(0, 8);
         Employer employer = employers.save(Employer.builder()
-                .code("LIMIT-" + suffix).name("Limit Overview Employer").active(true).build());
+                .code("LIMIT-" + suffix).name("Limit Overview Employer " + suffix).active(true).build());
         BenefitPolicy policy = policies.save(BenefitPolicy.builder()
                 .name("Limit Overview Policy").policyCode("LIM-" + suffix).employer(employer)
                 .startDate(LocalDate.of(2026, 1, 1)).endDate(LocalDate.of(2026, 12, 31))
@@ -215,6 +234,8 @@ class MemberLimitOverviewQueryCountIntegrationTest extends PostgresIntegrationTe
                     .build());
             policyResolver.assignPolicy(member, policy, LocalDate.of(2026, 1, 1),
                     "fixture", PolicyAssignmentSource.SYSTEM, null);
+            employerResolver.assignEmployer(member, employer, LocalDate.of(2026, 1, 1),
+                    "fixture", EmployerAssignmentSource.SYSTEM, null);
             ids.add(member.getId());
         }
         entityManager.flush();

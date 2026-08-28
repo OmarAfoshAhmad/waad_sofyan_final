@@ -76,14 +76,24 @@ class MemberLimitOverviewServiceIntegrationTest extends PostgresIntegrationTestB
 
     /** A policy under an employer of its own, so policies never collide. */
     private long newPolicy(BigDecimal annualLimit) {
+        return newPolicy(annualLimit, "ACTIVE");
+    }
+
+    private long newPolicy(BigDecimal annualLimit, String status) {
         String s = suffix();
         Long employerId = jdbc.queryForObject("INSERT INTO employers (name, code, active) VALUES "
                 + "('Overview Employer " + s + "', 'OVW-" + s + "', true) RETURNING id", Long.class);
         return jdbc.queryForObject("INSERT INTO benefit_policies (name, policy_code, employer_id, "
                 + "start_date, end_date, annual_limit, default_coverage_percent, status, active) VALUES "
                 + "('Overview Policy', ?, ?, " + YEAR_START + ", " + YEAR_END
-                + ", ?, 80, 'ACTIVE', true) RETURNING id",
-                Long.class, "OVW-" + s, employerId, annualLimit);
+                + ", ?, 80, ?, true) RETURNING id",
+                Long.class, "OVW-" + s, employerId, annualLimit, status);
+    }
+
+    private long newEmployer() {
+        String s = suffix();
+        return jdbc.queryForObject("INSERT INTO employers (name, code, active) VALUES "
+                + "('Other Employer " + s + "', 'OTH-" + s + "', true) RETURNING id", Long.class);
     }
 
     private long employerOf(long ofPolicyId) {
@@ -100,8 +110,20 @@ class MemberLimitOverviewServiceIntegrationTest extends PostgresIntegrationTestB
                 "INSERT INTO member_policy_assignments (member_id, policy_id, assignment_start_date, "
                         + "assignment_source) VALUES (?, ?, CURRENT_DATE - 60, 'MANUAL') RETURNING id",
                 Long.class, memberId, onPolicyId);
+        assignEmployer(memberId, employerOf(onPolicyId));
         assignmentByMember.put(memberId, assignmentId);
         return memberId;
+    }
+
+    /**
+     * The dated employer the policy assignment is checked against. Without it
+     * a member resolves as EMPLOYER_MISMATCH -- which is the point: a policy
+     * belonging to an employer the member is not on may not price their care.
+     */
+    private void assignEmployer(long memberId, long employerId) {
+        jdbc.update("INSERT INTO member_employer_assignments (member_id, employer_id, "
+                + "assignment_start_date, assignment_reason, assignment_source) "
+                + "VALUES (?, ?, CURRENT_DATE - 60, 'fixture', 'MANUAL')", memberId, employerId);
     }
 
     private long member() {
@@ -114,9 +136,12 @@ class MemberLimitOverviewServiceIntegrationTest extends PostgresIntegrationTestB
      * fallback-to-the-pointer implementation would silently paper over.
      */
     private long memberWithPointerButNoAssignment() {
-        return jdbc.queryForObject("INSERT INTO members (full_name, card_number, employer_id, "
+        long employerId = employerOf(policyId);
+        Long memberId = jdbc.queryForObject("INSERT INTO members (full_name, card_number, employer_id, "
                 + "benefit_policy_id, status, active) VALUES ('Unassigned Member', ?, ?, ?, 'ACTIVE', true) "
-                + "RETURNING id", Long.class, "OVW-NA-" + suffix(), employerOf(policyId), policyId);
+                + "RETURNING id", Long.class, "OVW-NA-" + suffix(), employerId, policyId);
+        assignEmployer(memberId, employerId);
+        return memberId;
     }
 
     private void spend(long memberId, long underPolicyId, String amount) {
@@ -283,6 +308,44 @@ class MemberLimitOverviewServiceIntegrationTest extends PostgresIntegrationTestB
     }
 
     @Test
+    void anAssignmentToAPolicyNoLongerInForceReportsNoCeilingRatherThanAStaleOne() {
+        long suspendedPolicyId = newPolicy(CEILING, "SUSPENDED");
+        long memberId = memberOn(suspendedPolicyId);
+        spend(memberId, suspendedPolicyId, "10000.00");
+
+        CurrentGeneralLimitSummary summary = summaryOf(memberId);
+
+        assertThat(summary.mode())
+                .as("assignments are left open-ended and closed only when a new one "
+                        + "starts, so without this check one would keep answering with "
+                        + "a policy that stopped applying")
+                .isEqualTo(Mode.NOT_CONFIGURED);
+        assertThat(summary.limit()).isNull();
+    }
+
+    @Test
+    void aPolicyBelongingToAnotherEmployerIsRefusedRatherThanUsedToPriceCare() {
+        Long memberId = jdbc.queryForObject("INSERT INTO members (full_name, card_number, "
+                + "employer_id, benefit_policy_id, status, active) VALUES ('Moved Member', ?, ?, ?, "
+                + "'ACTIVE', true) RETURNING id",
+                Long.class, "OVW-MM-" + suffix(), employerOf(policyId), policyId);
+        jdbc.update("INSERT INTO member_policy_assignments (member_id, policy_id, "
+                + "assignment_start_date, assignment_source) VALUES (?, ?, CURRENT_DATE - 60, 'MANUAL')",
+                memberId, policyId);
+        // The member sits with a different employer on this date than the one
+        // whose policy they are assigned to.
+        assignEmployer(memberId, newEmployer());
+
+        CurrentGeneralLimitSummary summary = summaryOf(memberId);
+
+        assertThat(summary.mode())
+                .as("a mismatch says the data is wrong, not that the member has no cover; "
+                        + "the two demand different responses from whoever reads the screen")
+                .isEqualTo(Mode.UNAVAILABLE);
+        assertThat(summary.reservableAvailable()).isNull();
+    }
+
+    @Test
     void theDateIsTheServersAndTestsPinItOnlyThroughTheClock() {
         long memberId = member();
 
@@ -294,7 +357,7 @@ class MemberLimitOverviewServiceIntegrationTest extends PostgresIntegrationTestB
     }
 
     @Test
-    void aPageCostsFourQueriesWhateverItHoldsAndHoweverManyPoliciesItSpans() {
+    void aPageCostsAFixedNumberOfQueriesWhateverItHoldsAndHoweverManyPoliciesItSpans() {
         List<Long> five = membersOnDistinctPolicies(5);
         List<Long> thirty = membersOnDistinctPolicies(30);
 
@@ -302,10 +365,11 @@ class MemberLimitOverviewServiceIntegrationTest extends PostgresIntegrationTestB
         long forThirty = statementsFor(thirty);
 
         assertThat(forFive)
-                .as("policies, their limits, committed, reserved")
-                .isEqualTo(4L);
+                .as("policy assignments, policies in force, employer assignments, "
+                        + "annual limits, committed, reserved")
+                .isEqualTo(6L);
         assertThat(forThirty)
-                .as("six times the rows and six times the policies, the same four queries")
+                .as("six times the rows and six times the policies, the same six queries")
                 .isEqualTo(forFive);
     }
 

@@ -30,13 +30,19 @@ import lombok.RequiredArgsConstructor;
  * time.
  *
  * The single reason this class exists is to keep the number of queries a
- * function of the page rather than of its rows. It performs four, whatever the
+ * function of the page rather than of its rows. It performs six, whatever the
  * page holds:
  *
  *   1. the dated policy assignment for every member
- *   2. the annual limit of each distinct policy those resolve to
- *   3. committed against the general ceiling
- *   4. reserved against it
+ *   2. whether those policies were in force, and whose they are
+ *   3. the dated employer of every member, to check 2 against
+ *   4. the annual limit of each distinct policy that survived
+ *   5. committed against the general ceiling
+ *   6. reserved against it
+ *
+ * The first three belong to MemberPolicyResolver and are the same checks its
+ * single-member path makes; the split keeps dated resolution unable to see
+ * money, and this service unable to re-derive resolution.
  *
  * It computes nothing financial of its own. Every figure comes from
  * LimitBalanceReader, which is the same reader the approval engine consults,
@@ -142,10 +148,17 @@ public class MemberLimitOverviewService {
             ResolvedMemberPolicy policy, GeneralCeilingReading reading) {
 
         // A policy that could not be read is unavailable regardless of what
-        // the balance query then returned for it; an ambiguous assignment is
-        // the same, because there is no single ceiling to report.
+        // the balance query then returned for it. So is an ambiguous
+        // assignment -- there is no single ceiling to report -- and so is an
+        // employer mismatch, which says the data is wrong rather than that
+        // the member has no cover.
+        //
+        // NOT_ASSIGNED and POLICY_NOT_IN_FORCE deliberately fall through: both
+        // are real answers meaning no ceiling applied, and the reading below
+        // reports them as NOT_CONFIGURED.
         if (policy != null && (policy.outcome() == ResolvedMemberPolicy.Outcome.UNAVAILABLE
-                || policy.outcome() == ResolvedMemberPolicy.Outcome.AMBIGUOUS)) {
+                || policy.outcome() == ResolvedMemberPolicy.Outcome.AMBIGUOUS
+                || policy.outcome() == ResolvedMemberPolicy.Outcome.EMPLOYER_MISMATCH)) {
             return empty(asOfDate, readAt, Mode.UNAVAILABLE, AlertStatus.UNAVAILABLE);
         }
         if (reading == null) {
