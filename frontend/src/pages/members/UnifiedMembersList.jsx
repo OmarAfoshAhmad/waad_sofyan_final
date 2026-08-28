@@ -28,6 +28,7 @@ import {
   Alert,
   Box,
   Button,
+  ButtonBase,
   Chip,
   FormControl,
   Grid,
@@ -491,17 +492,13 @@ const UnifiedMembersList = () => {
 
       case 'ceiling':
         return (
-          <Box
-            role="button"
-            tabIndex={0}
+          <ButtonBase
+            aria-label={`عرض تفاصيل سقف ${member.fullName || member.cardNumber || ''}`}
             onClick={() => setCeilingDrawerMember(member)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') setCeilingDrawerMember(member);
-            }}
-            sx={{ cursor: 'pointer', '&:hover': { opacity: 0.8 } }}
+            sx={{ width: '100%', borderRadius: 1, textAlign: 'inherit', '&:hover': { opacity: 0.8 } }}
           >
             <MemberCeilingCell summary={ceilings[member.id]} loading={ceilingsLoading} />
-          </Box>
+          </ButtonBase>
         );
 
       case 'cardNumber':
