@@ -2,6 +2,7 @@ package com.waad.tba.modules.member.service;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Map;
 import java.util.Optional;
 
 import org.springframework.dao.DataIntegrityViolationException;
@@ -163,6 +164,78 @@ public class MemberPolicyResolver {
      * stop the operation with a clear reason, never flow onward as a null that
      * some downstream branch reads as "no limit applies". Fail closed.
      */
+    /**
+     * The dated policy for a whole set of members, in one query.
+     *
+     * Exists because the members list needs this for every row it renders, and
+     * resolveAssignmentFor once per row makes the cost of a page a function of
+     * its size. The list is the only reason this is bulk; the rule it applies
+     * is identical to the single-member path.
+     *
+     * Every requested id appears in the result. A member the query returned
+     * nothing for is NOT_ASSIGNED, not absent -- a caller iterating the map
+     * must not be able to skip someone by accident, and a missing key is far
+     * easier to overlook than a stated outcome.
+     *
+     * Two covering assignments produce AMBIGUOUS rather than a choice. V171's
+     * exclusion constraint should make that impossible; if it ever happens,
+     * deciding which policy priced someone's care by iteration order is worse
+     * than admitting we do not know.
+     *
+     * @param asOfDate mandatory, and never defaulted to today: the whole point
+     *                 is to answer for a stated date, and quietly substituting
+     *                 the current one prices a past or future question with
+     *                 today's configuration
+     */
+    @Transactional(readOnly = true)
+    public Map<Long, ResolvedMemberPolicy> resolveForMembers(
+            java.util.Collection<Long> memberIds, LocalDate asOfDate) {
+        requireServiceDate(asOfDate);
+
+        Map<Long, ResolvedMemberPolicy> result = new java.util.LinkedHashMap<>();
+        if (memberIds == null || memberIds.isEmpty()) {
+            return result;
+        }
+        java.util.Set<Long> requested = new java.util.LinkedHashSet<>(memberIds);
+        requested.remove(null);
+        if (requested.isEmpty()) {
+            return result;
+        }
+
+        java.util.Map<Long, java.util.List<MemberPolicyAssignment>> covering = new java.util.HashMap<>();
+        try {
+            for (MemberPolicyAssignment assignment
+                    : assignmentRepository.findCoveringForMembers(requested, asOfDate)) {
+                covering.computeIfAbsent(assignment.getMemberId(), ignored -> new java.util.ArrayList<>())
+                        .add(assignment);
+            }
+        } catch (RuntimeException ex) {
+            // One failed read must not become a page of zeroes. Every member
+            // is reported as unavailable so the screen can say so.
+            log.error("Bulk policy resolution failed for {} members asOf {}", requested.size(), asOfDate, ex);
+            for (Long memberId : requested) {
+                result.put(memberId, ResolvedMemberPolicy.unavailable("تعذّرت قراءة تعيينات الوثائق"));
+            }
+            return result;
+        }
+
+        for (Long memberId : requested) {
+            java.util.List<MemberPolicyAssignment> matches =
+                    covering.getOrDefault(memberId, java.util.List.of());
+            if (matches.isEmpty()) {
+                result.put(memberId, ResolvedMemberPolicy.notAssigned());
+            } else if (matches.size() > 1) {
+                result.put(memberId, ResolvedMemberPolicy.ambiguous(
+                        "أكثر من تعيين وثيقة يغطي التاريخ " + asOfDate));
+            } else {
+                MemberPolicyAssignment assignment = matches.get(0);
+                result.put(memberId,
+                        ResolvedMemberPolicy.found(assignment.getPolicyId(), assignment.getId()));
+            }
+        }
+        return result;
+    }
+
     @Transactional(readOnly = true)
     public BenefitPolicy resolveForOrFail(Member member, LocalDate serviceDate) {
         requireServiceDate(serviceDate);

@@ -27,6 +27,30 @@ public interface MemberPolicyAssignmentRepository extends JpaRepository<MemberPo
             """)
     Optional<MemberPolicyAssignment> findCovering(@Param("memberId") Long memberId, @Param("date") LocalDate date);
 
+    /**
+     * The covering assignments for a whole set of members in one query.
+     *
+     * The list screen needs the dated policy for every row it shows, and
+     * asking findCovering once per row makes the cost of the page a function
+     * of how many rows it holds. This asks once for all of them.
+     *
+     * Returns rows rather than a map: a member with no covering assignment
+     * simply has none here, and the caller has to decide what that means
+     * rather than being handed a silent absence. It also returns every match,
+     * so an overlap that V171's exclusion constraint should have prevented
+     * surfaces as two rows to be refused instead of one row picked
+     * arbitrarily.
+     */
+    @Query("""
+            SELECT a FROM MemberPolicyAssignment a
+            WHERE a.memberId IN :memberIds
+              AND a.assignmentStartDate <= :date
+              AND (a.assignmentEndDate IS NULL OR a.assignmentEndDate > :date)
+            """)
+    List<MemberPolicyAssignment> findCoveringForMembers(
+            @Param("memberIds") java.util.Collection<Long> memberIds,
+            @Param("date") LocalDate date);
+
     /** The currently open-ended assignment, if any. */
     Optional<MemberPolicyAssignment> findByMemberIdAndAssignmentEndDateIsNull(Long memberId);
 
