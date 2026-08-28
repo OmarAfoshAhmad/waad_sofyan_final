@@ -41,6 +41,14 @@ const formatAmount = (value) => {
   return `${Number(value).toLocaleString('en-US', { maximumFractionDigits: 0 })} د.ل`;
 };
 
+/** The same figure without the currency, for the line that sits under one. */
+const compact = (value) => {
+  if (value === null || value === undefined) {
+    return '—';
+  }
+  return Number(value).toLocaleString('en-US', { maximumFractionDigits: 0 });
+};
+
 /** A quiet line for every state that has no figures to draw. */
 function NoFigures({ text, hint }) {
   const body = (
@@ -88,16 +96,19 @@ export default function MemberCeilingCell({ summary, loading }) {
   const reservedShare = limit > 0 ? Math.min(100 - committedShare, (reserved / limit) * 100) : 0;
 
   return (
-    <Stack spacing={0.25} sx={{ minWidth: '9rem' }}>
+    <Stack spacing={0.25} sx={{ minWidth: '8.5rem' }}>
+      {/* One line, not two: the column header already says what the number
+          is, so repeating "المتاح لالتزام جديد" inside every cell only made
+          the column wider and the rows taller. */}
       <Typography
         variant="body2"
         fontWeight="bold"
         color={exceeded ? 'error.main' : ALERT_COLOURS[summary.alertStatus] || 'text.primary'}
       >
         {formatAmount(available)}
-      </Typography>
-      <Typography variant="caption" color="text.secondary">
-        المتاح لالتزام جديد من {formatAmount(limit)}
+        <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 0.5 }}>
+          من {formatAmount(limit)}
+        </Typography>
       </Typography>
 
       <Tooltip
@@ -126,8 +137,10 @@ export default function MemberCeilingCell({ summary, loading }) {
         </Box>
       </Tooltip>
 
-      <Typography variant="caption" color="text.secondary">
-        مستهلك {formatAmount(committed)} · محجوز {formatAmount(reserved)}
+      {/* The currency lives on the headline above; repeating it three times
+          in one cell wrapped this line onto two rows at ordinary widths. */}
+      <Typography variant="caption" color="text.secondary" noWrap>
+        مستهلك {compact(committed)} · محجوز {compact(reserved)}
       </Typography>
 
       {exceeded && (

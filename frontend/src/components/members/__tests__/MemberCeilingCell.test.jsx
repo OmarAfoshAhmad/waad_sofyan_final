@@ -31,21 +31,23 @@ describe('MemberCeilingCell', () => {
 
     // 45,000 and not 50,000: the held 5,000 is not available to commit again,
     // and committing it twice is what the hold exists to prevent.
-    expect(screen.getByText('45,000 د.ل')).toBeInTheDocument();
-    expect(screen.queryByText('50,000 د.ل')).not.toBeInTheDocument();
+    expect(screen.getByText(/45,000 د.ل/)).toBeInTheDocument();
+    expect(screen.queryByText(/50,000 د.ل/)).not.toBeInTheDocument();
+    // The ceiling rides on the same line rather than a caption of its own.
+    expect(screen.getByText(/من 60,000 د.ل/)).toBeInTheDocument();
   });
 
   it('names consumed and held separately rather than adding them', () => {
     renderCell(found());
 
-    expect(screen.getByText(/مستهلك\s*10,000 د.ل\s*·\s*محجوز\s*5,000 د.ل/)).toBeInTheDocument();
+    expect(screen.getByText(/مستهلك\s*10,000\s*·\s*محجوز\s*5,000/)).toBeInTheDocument();
   });
 
   it('shows an overspend as its own warning and never as a clamped zero', () => {
     renderCell(found({ committed: 65000, actualRemaining: -5000, reservableAvailable: -5000, alertStatus: 'EXCEEDED' }));
 
     expect(screen.getByText(/تجاوز\s*5,000 د.ل/)).toBeInTheDocument();
-    expect(screen.getByText('-5,000 د.ل')).toBeInTheDocument();
+    expect(screen.getByText(/-5,000 د.ل/)).toBeInTheDocument();
   });
 
   it.each([

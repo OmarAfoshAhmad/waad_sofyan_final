@@ -498,7 +498,7 @@ const UnifiedMembersList = () => {
     // Not sortable: the figure is read per page from the ledger, so the
     // database cannot order by it without computing it for every member.
     ...(capabilities.viewLimitsList && !ceilingsForbidden
-      ? [{ id: 'ceiling', label: 'المتاح لالتزام جديد', minWidth: '10.5rem', sortable: false, align: 'center' }]
+      ? [{ id: 'ceiling', label: 'المتاح لالتزام جديد', minWidth: '9rem', sortable: false, align: 'center' }]
       : []),
     { id: 'actions', label: 'إجراءات', minWidth: '11.25rem', sortable: false, align: 'center' }
   ];
