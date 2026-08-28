@@ -5,7 +5,7 @@ describe('member action capabilities', () => {
   const allPermissions = [
     'MEMBER_CREATE', 'MEMBER_EDIT_IDENTITY', 'MEMBER_CHANGE_STATUS',
     'MEMBER_TRANSFER_EMPLOYER', 'MEMBER_REINSTATE_TERMINATED', 'MEMBER_HARD_DELETE',
-    'MEMBER_IMPORT', 'MEMBER_EXPORT'
+    'MEMBER_IMPORT', 'MEMBER_EXPORT', 'MEMBER_LIMIT_VIEW'
   ];
 
   it('derives every operation from the effective permission snapshot', () => {

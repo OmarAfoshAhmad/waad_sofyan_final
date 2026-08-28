@@ -75,9 +75,11 @@ describe('EligibilityCheck financial-data-failure handling', () => {
     expect(screen.getByText('تعذر جلب بيانات السقف المالي، يرجى إعادة المحاولة')).toBeInTheDocument();
 
     // Limit figures must read as unavailable, never as a fabricated zero.
-    const unavailableValues = screen.getAllByText('غير متاح');
-    // annualLimit, usedAmount, reservedAmount, remainingLimit, actualRemaining
-    expect(unavailableValues.length).toBeGreaterThanOrEqual(5);
+    // Four figures stand alone -- annualLimit, usedAmount, reservedAmount and
+    // remainingLimit -- while actualRemaining sits inside its own sentence, so
+    // it is asserted by pattern rather than by exact text.
+    expect(screen.getAllByText('غير متاح').length).toBeGreaterThanOrEqual(4);
+    expect(screen.getByText(/المتبقي محاسبياً\s*غير متاح/)).toBeInTheDocument();
 
     // Member identity and eligibility succeeded independently and must still render.
     expect(screen.getByText('أحمد علي')).toBeInTheDocument();
@@ -138,7 +140,8 @@ describe('EligibilityCheck financial-data-failure handling', () => {
 
     await screen.findByText('أحمد علي');
     expect(screen.queryByText('0 د.ل')).not.toBeInTheDocument();
-    expect(screen.getAllByText('غير متاح').length).toBeGreaterThanOrEqual(5);
+    expect(screen.getAllByText('غير متاح').length).toBeGreaterThanOrEqual(4);
+    expect(screen.getByText(/المتبقي محاسبياً\s*غير متاح/)).toBeInTheDocument();
   });
 
   it('retry button re-invokes the eligibility check with the same barcode', async () => {
