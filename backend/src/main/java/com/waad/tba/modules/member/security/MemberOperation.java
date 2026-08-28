@@ -19,6 +19,16 @@ public enum MemberOperation {
     VIEW_COVERAGE_BALANCE,
     /** Balances, limits and consumption -- a narrower grant than VIEW_DETAILS. */
     VIEW_FINANCIALS,
+    /**
+     * The general ceiling and its buckets, for a page of members or for one.
+     *
+     * Separate from VIEW_FINANCIALS because it answers to a different grant:
+     * a ceiling is what may still be committed, which the people entering
+     * claims need, while VIEW_FINANCIALS opens claim history and the
+     * insurer's wider position. Folding them together forced one permission
+     * to stand for two decisions and made the role the tie-breaker.
+     */
+    VIEW_LIMITS,
     /** Bulk extraction: the whole result set leaves the system as a file. */
     EXPORT,
 

@@ -123,14 +123,29 @@ class MemberLimitOverviewScopeIntegrationTest extends PostgresIntegrationTestBas
                 .isInstanceOf(MemberAccessDeniedException.class);
     }
 
+    /**
+     * Records a consequence rather than a rule, and is here so it cannot pass
+     * unnoticed.
+     *
+     * The ceiling read now answers to MEMBER_LIMIT_VIEW alone. PROVIDER_STAFF
+     * holds that permission by default, because the provider portal reads one
+     * member's remaining limit while a claim is being entered -- so the same
+     * grant that serves the single read now also serves the bulk one.
+     *
+     * The old rule refused providers by name, which is what made it
+     * unreachable by an administrator and is why it was replaced. Expressing
+     * "single yes, bulk no" needs two permissions, not a role check smuggled
+     * back in; adding one is a decision about the catalogue, not a fix. Until
+     * then this is the behaviour, and it is written down.
+     */
     @Test
-    void aProviderMayNotBulkReadCeilings() {
+    void aProviderHoldingTheLimitPermissionCanAlsoReadItInBulk() {
         signInAs("PROVIDER_STAFF", null, providerId);
 
-        assertThatThrownBy(() -> service.authorizedSummariesFor(List.of(ownMemberId)))
-                .as("a provider treats patients; paging through the members list pulling "
-                        + "ceilings is the bulk extraction the privileged set exists to stop")
-                .isInstanceOf(MemberAccessDeniedException.class);
+        assertThat(service.authorizedSummariesFor(List.of(ownMemberId)))
+                .as("the permission decides, and PROVIDER_STAFF holds it by default for "
+                        + "the single read the provider portal needs")
+                .containsKey(ownMemberId);
     }
 
     @Test

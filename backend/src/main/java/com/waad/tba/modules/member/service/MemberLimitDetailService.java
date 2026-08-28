@@ -52,7 +52,7 @@ public class MemberLimitDetailService {
         Member member = memberRepository.findById(memberId)
                 .orElseThrow(() -> new ResourceNotFoundException("Member", "id", memberId));
         Long employerId = member.getEmployer() == null ? null : member.getEmployer().getId();
-        queryAccessPolicy.requireMember(MemberOperation.VIEW_FINANCIALS, employerId);
+        queryAccessPolicy.requireMember(MemberOperation.VIEW_LIMITS, employerId);
 
         CurrentGeneralLimitSummary general = limitOverviewService
                 .summariesFor(List.of(memberId))

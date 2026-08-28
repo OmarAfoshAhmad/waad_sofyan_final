@@ -129,10 +129,11 @@ const UnifiedMembersList = () => {
   const [ceilings, setCeilings] = useState({});
   const [ceilingsLoading, setCeilingsLoading] = useState(false);
   const [ceilingDrawerMember, setCeilingDrawerMember] = useState(null);
-  // Set once the server says this account may never read ceilings. The
-  // permission bit alone is not enough to decide: MEMBER_LIMIT_VIEW is held by
-  // roles the backend's scope rule still refuses for a bulk read, so a column
-  // gated on the bit alone renders permanently broken for them.
+  // Set if the server ever answers 403. The permission bit is now the single
+  // thing that decides on both sides, so this should not fire on a page load
+  // -- it is here for the permission being revoked while someone is looking at
+  // the screen, which must take the column away rather than leave it reading
+  // "unavailable" for the rest of the session.
   const [ceilingsForbidden, setCeilingsForbidden] = useState(false);
   const [loading, setLoading] = useState(false);
   const [totalCount, setTotalCount] = useState(0);
@@ -260,10 +261,9 @@ const UnifiedMembersList = () => {
       console.error('Error fetching member ceilings:', error);
       setCeilings({});
       // 403 is not a failed read, it is an answer: this account may not see
-      // ceilings at all. Leaving the column in place would show every row as
-      // "unavailable" forever, which reads as a system fault rather than as a
-      // permission, and is the disabled-control pattern the access rules exist
-      // to avoid. Any other failure is transient and keeps the column.
+      // ceilings. Leaving the column in place would show every row as
+      // "unavailable", which reads as a system fault rather than as a
+      // permission. Any other failure is transient and keeps the column.
       if (error?.response?.status === 403) {
         setCeilingsForbidden(true);
       }
