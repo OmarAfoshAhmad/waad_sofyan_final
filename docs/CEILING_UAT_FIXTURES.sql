@@ -116,16 +116,28 @@ WHERE m.card_number = 'UAT-CEIL-EXCEEDED' AND b.batch_reference = 'UAT-CEIL-BATC
 COMMIT;
 
 -- ============================================================================
--- حساب EMPLOYER_ADMIN على «جهة ب»، لاختبار رفض الطلب كاملاً
+-- حسابا الاختبار: EMPLOYER_ADMIN على «جهة ب» لاختبار الرفض الكامل، وDATA_ENTRY
+-- لاختبار اختفاء العمود.
 --
--- كلمة المرور غير مضبوطة هنا عمداً: اضبطها من شاشة إدارة المستخدمين، أو
--- انسخ hash حساب تجريبي قائم. وضع hash ثابت في ملف داخل المستودع يجعله
--- بيانات اعتماد معروفة تنتقل مع الكود.
+-- كلمة المرور منسوخة من hash حساب superadmin القائم في نفس القاعدة، فلا يدخل
+-- المستودعَ أي hash ثابت يصير بيانات اعتماد معروفة تنتقل مع الكود. أي أن
+-- كلمة مرورهما هي كلمة مرور المشرف في تلك البيئة.
 -- ============================================================================
--- INSERT INTO users (username, email, password, full_name, user_type, employer_id, active)
--- SELECT 'uat-ceil-admin-b', 'uat-ceil-admin-b@waad.ly', '<ضع hash هنا>',
---        'UAT-CEIL مدير جهة ب', 'EMPLOYER_ADMIN', id, true
--- FROM employers WHERE code = 'UAT-CEIL-B';
+INSERT INTO users (username, email, password, full_name, user_type, employer_id,
+                   created_at, updated_at, authorization_version)
+SELECT 'uat-ceil-admin-b', 'uat-ceil-admin-b@waad.ly', u.password,
+       'UAT-CEIL Admin B', 'EMPLOYER_ADMIN', e.id, now(), now(), 1
+FROM users u, employers e
+WHERE u.username = 'superadmin' AND e.code = 'UAT-CEIL-B'
+ON CONFLICT (username) DO NOTHING;
+
+INSERT INTO users (username, email, password, full_name, user_type, employer_id,
+                   created_at, updated_at, authorization_version)
+SELECT 'uat-ceil-entry', 'uat-ceil-entry@waad.ly', u.password,
+       'UAT-CEIL Data Entry', 'DATA_ENTRY', e.id, now(), now(), 1
+FROM users u, employers e
+WHERE u.username = 'superadmin' AND e.code = 'UAT-CEIL-A'
+ON CONFLICT (username) DO NOTHING;
 
 -- ============================================================================
 -- التنظيف — يحذف ما زرعه هذا السكربت فقط
