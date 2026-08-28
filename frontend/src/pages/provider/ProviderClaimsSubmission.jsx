@@ -121,7 +121,7 @@ const LABELS = {
   cancel: 'إلغاء',
   back: 'رجوع',
   totalClaimAmount: 'إجمالي المطالبة',
-  remainingLimit: 'الحد المتبقي',
+  remainingLimit: 'المتاح لالتزام جديد',
   annualLimit: 'الحد السنوي',
   usedAmount: 'المستخدم',
   attachments: 'المرفقات والمستندات',

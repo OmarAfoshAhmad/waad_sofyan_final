@@ -23,6 +23,8 @@ public record CurrentGeneralLimitSummary(
         LocalDate asOfDate,
         LocalDateTime readAt,
         Mode mode,
+        /** The policy these figures belong to, null unless mode is FOUND or UNLIMITED. */
+        Long policyId,
         BigDecimal limit,
         BigDecimal committed,
         BigDecimal reserved,

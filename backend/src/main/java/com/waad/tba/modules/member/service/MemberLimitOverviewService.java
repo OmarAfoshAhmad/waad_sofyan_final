@@ -16,7 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository;
-import com.waad.tba.modules.benefitpolicy.repository.PolicyAnnualLimit;
+import com.waad.tba.modules.benefitpolicy.repository.PolicySummaryRow;
 import com.waad.tba.modules.benefitpolicy.service.GeneralCeilingReading;
 import com.waad.tba.modules.benefitpolicy.service.LimitBalanceReader;
 import com.waad.tba.modules.member.dto.CurrentGeneralLimitSummary;
@@ -108,7 +108,8 @@ public class MemberLimitOverviewService {
         for (Long memberId : policyIdByMemberId.keySet()) {
             ResolvedMemberPolicy policy = resolved.get(memberId);
             GeneralCeilingReading reading = readings.get(memberId);
-            result.put(memberId, toSummary(asOfDate, readAt, policy, reading));
+            result.put(memberId, toSummary(asOfDate, readAt, policyIdByMemberId.get(memberId),
+                    policy, reading));
         }
         return result;
     }
@@ -135,7 +136,7 @@ public class MemberLimitOverviewService {
         if (policyIds.isEmpty()) {
             return limits;
         }
-        for (PolicyAnnualLimit policy : policyRepository.findAnnualLimits(policyIds)) {
+        for (PolicySummaryRow policy : policyRepository.findSummaryRows(policyIds)) {
             BigDecimal annualLimit = policy.annualLimit();
             if (annualLimit != null && annualLimit.compareTo(BigDecimal.ZERO) > 0) {
                 limits.put(policy.policyId(), annualLimit);
@@ -145,7 +146,7 @@ public class MemberLimitOverviewService {
     }
 
     private CurrentGeneralLimitSummary toSummary(LocalDate asOfDate, LocalDateTime readAt,
-            ResolvedMemberPolicy policy, GeneralCeilingReading reading) {
+            Long policyId, ResolvedMemberPolicy policy, GeneralCeilingReading reading) {
 
         // A policy that could not be read is unavailable regardless of what
         // the balance query then returned for it. So is an ambiguous
@@ -169,20 +170,20 @@ public class MemberLimitOverviewService {
             case UNAVAILABLE -> empty(asOfDate, readAt, Mode.UNAVAILABLE, AlertStatus.UNAVAILABLE);
             case NOT_CONFIGURED -> empty(asOfDate, readAt, Mode.NOT_CONFIGURED, AlertStatus.UNAVAILABLE);
             case UNLIMITED -> new CurrentGeneralLimitSummary(asOfDate, readAt, Mode.UNLIMITED,
-                    null, reading.committed(), reading.reserved(), null, null, null,
+                    policyId, null, reading.committed(), reading.reserved(), null, null, null,
                     AlertStatus.UNLIMITED);
-            case FOUND -> found(asOfDate, readAt, reading);
+            case FOUND -> found(asOfDate, readAt, policyId, reading);
         };
     }
 
     private CurrentGeneralLimitSummary found(LocalDate asOfDate, LocalDateTime readAt,
-            GeneralCeilingReading reading) {
+            Long policyId, GeneralCeilingReading reading) {
         BigDecimal limit = reading.limit();
         BigDecimal utilization = reading.committed()
                 .multiply(BigDecimal.valueOf(100))
                 .divide(limit, 1, RoundingMode.HALF_UP);
 
-        return new CurrentGeneralLimitSummary(asOfDate, readAt, Mode.FOUND,
+        return new CurrentGeneralLimitSummary(asOfDate, readAt, Mode.FOUND, policyId,
                 limit, reading.committed(), reading.reserved(),
                 reading.actualRemaining(), reading.reservableAvailable(),
                 utilization, alertFor(reading));
@@ -220,6 +221,6 @@ public class MemberLimitOverviewService {
     private CurrentGeneralLimitSummary empty(LocalDate asOfDate, LocalDateTime readAt,
             Mode mode, AlertStatus alertStatus) {
         return new CurrentGeneralLimitSummary(asOfDate, readAt, mode,
-                null, null, null, null, null, null, alertStatus);
+                null, null, null, null, null, null, null, alertStatus);
     }
 }

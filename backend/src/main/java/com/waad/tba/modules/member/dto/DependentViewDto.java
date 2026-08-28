@@ -95,7 +95,25 @@ public class DependentViewDto {
     private java.math.BigDecimal usedAmount;
 
     @Schema(description = "Remaining limit", example = "8500.00")
+    /**
+     * What may still be committed: {@code annualLimit - used - reserved},
+     * signed. This is the figure an eligibility or claim screen must show,
+     * because money already held by an approved pre-authorization is not
+     * available to commit again.
+     */
     private java.math.BigDecimal remainingLimit;
+
+    /** Money held by approved pre-authorizations, not yet spent. Shown beside
+     *  remainingLimit rather than folded into it: the difference between held
+     *  and spent is the whole point of the distinction. */
+    private java.math.BigDecimal reservedAmount;
+
+    /**
+     * The accounting view: {@code annualLimit - usedAmount}, signed. An
+     * overspend stays negative here.
+     */
+    private java.math.BigDecimal actualRemaining;
+
 
     @Schema(description = "Utilization percentage", example = "15.0")
     private Double usagePercentage;
