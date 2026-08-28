@@ -7,7 +7,9 @@ import com.waad.tba.common.exception.BusinessRuleException;
 import com.waad.tba.modules.member.dto.DependentMemberDto;
 import com.waad.tba.modules.member.dto.FamilyEligibilityResponseDto;
 import com.waad.tba.modules.member.dto.MemberCreateDto;
+import com.waad.tba.modules.member.dto.CurrentGeneralLimitSummary;
 import com.waad.tba.modules.member.dto.MemberFinancialSummaryDto;
+import com.waad.tba.modules.member.dto.MemberLimitOverviewRequest;
 import com.waad.tba.modules.member.dto.MemberUpdateDto;
 import com.waad.tba.modules.member.dto.MemberViewDto;
 import com.waad.tba.modules.member.dto.MemberFamilyTransferRequest;
@@ -131,6 +133,7 @@ public class UnifiedMemberController {
         private final UnifiedMemberService unifiedMemberService;
         private final UnifiedSearchService unifiedSearchService;
         private final MemberFinancialSummaryService financialSummaryService;
+        private final com.waad.tba.modules.member.service.MemberLimitOverviewService limitOverviewService;
         private final PdfTemplateService pdfTemplateService;
         private final HtmlToPdfService htmlToPdfService;
         private final FileStorageService fileStorageService;
@@ -1180,6 +1183,31 @@ public class UnifiedMemberController {
          * @param memberId Member ID
          * @return Remaining limit data
          */
+        /**
+         * Every ceiling on one page, in one call.
+         *
+         * POST because the ids are a body, not a query string: a page of them
+         * is long, and ids in a URL reach access logs, APM and browser
+         * history. It is a read and does nothing else.
+         *
+         * The list must call this once per page. A hook per row would put the
+         * request count on the rows, which is the cost this whole path was
+         * built to remove.
+         */
+        @PostMapping("/limits/overview")
+        @PreAuthorize("@permissionGuard.has('MEMBER_LIMIT_VIEW')")
+        @Operation(summary = "Current general ceiling for a page of members", description = "Returns each member's current general-limit summary: consumed, reserved, "
+                        + "actualRemaining and reservableAvailable, with the server date and read instant. "
+                        + "Members outside the caller's scope refuse the whole request.")
+        public ResponseEntity<java.util.Map<Long, CurrentGeneralLimitSummary>> getLimitOverview(
+                        @Valid @RequestBody MemberLimitOverviewRequest request) {
+
+                log.info("📊 Retrieving ceiling overview for {} member(s)", request.getMemberIds().size());
+
+                return ResponseEntity.ok(
+                                limitOverviewService.authorizedSummariesFor(request.getMemberIds()));
+        }
+
         @GetMapping("/{memberId}/remaining-limit")
         @PreAuthorize("@permissionGuard.has('MEMBER_LIMIT_VIEW')")
         @Operation(summary = "Get Member Remaining Limit", description = "Returns the remaining coverage limit for a member. Used in Provider Portal during claim creation.")

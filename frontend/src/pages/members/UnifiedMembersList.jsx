@@ -73,6 +73,7 @@ import MainCard from 'components/MainCard';
 import { ModernPageHeader, MemberAvatar, SoftDeleteToggle, ActionConfirmDialog } from 'components/tba';
 import { UnifiedMedicalTable } from 'components/common';
 import MembersBulkUploadDialog from 'components/members/MembersBulkUploadDialog';
+import MemberCeilingCell from 'components/members/MemberCeilingCell';
 import DataExportWizard from 'components/tba/DataExportWizard';
 import {
   searchMembers,
@@ -83,6 +84,7 @@ import {
   reinstateTerminatedMember,
   hardDeleteMember,
   toggleMemberActive,
+  getLimitsOverview,
   MEMBER_TYPES,
   MEMBER_STATUSES
 } from 'services/api/unified-members.service';
@@ -110,6 +112,9 @@ const UnifiedMembersList = () => {
   // STATE
   // ════════════════════════════════════════════════════════════════════════
   const [members, setMembers] = useState([]);
+  // Keyed by member id. Filled by ONE call per page, never one per row.
+  const [ceilings, setCeilings] = useState({});
+  const [ceilingsLoading, setCeilingsLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [totalCount, setTotalCount] = useState(0);
   const [loadError, setLoadError] = useState('');
@@ -189,9 +194,11 @@ const UnifiedMembersList = () => {
       const pageData = response?.data || response;
 
       setLoadError('');
-      setMembers(pageData?.content || []);
+      const pageMembers = pageData?.content || [];
+      setMembers(pageMembers);
       setTotalCount(pageData?.totalElements || 0);
       setSelectedMembers([]); // Clear selection on page change or fetch
+      fetchCeilings(pageMembers);
     } catch (error) {
       console.error('Error fetching members:', error);
       const message = error?.response?.data?.messageAr
@@ -202,10 +209,37 @@ const UnifiedMembersList = () => {
       setMembers([]);
       setTotalCount(0);
       setSelectedMembers([]);
+      setCeilings({});
       setLoadError(message);
       enqueueSnackbar(message, { variant: 'error' });
     } finally {
       setLoading(false);
+    }
+  };
+
+  /**
+   * One request for the whole page.
+   *
+   * A failure here leaves the column reading "غير متاح" rather than zero, and
+   * deliberately does not fail the list: the member rows themselves loaded
+   * fine, and hiding them because a balance read failed would be a worse
+   * answer than showing them without balances.
+   */
+  const fetchCeilings = async (pageMembers) => {
+    const ids = (pageMembers || []).map((m) => m.id).filter(Boolean);
+    if (!capabilities.viewLimits || ids.length === 0) {
+      setCeilings({});
+      return;
+    }
+    setCeilingsLoading(true);
+    try {
+      const data = await getLimitsOverview(ids);
+      setCeilings(data || {});
+    } catch (error) {
+      console.error('Error fetching member ceilings:', error);
+      setCeilings({});
+    } finally {
+      setCeilingsLoading(false);
     }
   };
 
@@ -433,6 +467,11 @@ const UnifiedMembersList = () => {
       sortable: true
     },
     { id: 'dependentsCount', label: 'التبعية / التابعون', minWidth: '7.5rem', sortable: false, align: 'center' },
+    // Not sortable: the figure is read per page from the ledger, so the
+    // database cannot order by it without computing it for every member.
+    ...(capabilities.viewLimits
+      ? [{ id: 'ceiling', label: 'المتاح لالتزام جديد', minWidth: '10.5rem', sortable: false, align: 'center' }]
+      : []),
     { id: 'actions', label: 'إجراءات', minWidth: '9.375rem', sortable: false, align: 'center' }
   ];
 
@@ -447,6 +486,9 @@ const UnifiedMembersList = () => {
             {page * rowsPerPage + rowIndex + 1}
           </Typography>
         );
+
+      case 'ceiling':
+        return <MemberCeilingCell summary={ceilings[member.id]} loading={ceilingsLoading} />;
 
       case 'cardNumber':
         return (

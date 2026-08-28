@@ -19,7 +19,13 @@ import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository;
 import com.waad.tba.modules.benefitpolicy.repository.PolicySummaryRow;
 import com.waad.tba.modules.benefitpolicy.service.GeneralCeilingReading;
 import com.waad.tba.modules.benefitpolicy.service.LimitBalanceReader;
+import com.waad.tba.common.exception.BusinessRuleException;
 import com.waad.tba.modules.member.dto.CurrentGeneralLimitSummary;
+import com.waad.tba.modules.member.entity.Member;
+import com.waad.tba.modules.member.security.AuthorizedMemberScope;
+import com.waad.tba.modules.member.security.MemberAccessDeniedException;
+import com.waad.tba.modules.member.security.MemberOperation;
+import com.waad.tba.modules.member.security.MemberQueryAccessPolicy;
 import com.waad.tba.modules.member.dto.CurrentGeneralLimitSummary.AlertStatus;
 import com.waad.tba.modules.member.dto.CurrentGeneralLimitSummary.Mode;
 
@@ -53,16 +59,59 @@ import lombok.RequiredArgsConstructor;
 public class MemberLimitOverviewService {
 
     private final MemberPolicyResolver policyResolver;
+    private final com.waad.tba.modules.member.repository.MemberRepository memberRepository;
+    private final MemberQueryAccessPolicy queryAccessPolicy;
     private final BenefitPolicyRepository policyRepository;
     private final LimitBalanceReader limitBalanceReader;
+
+    /**
+     * Matches the list's own maximum page size. A page is the only legitimate
+     * caller, so anything larger is either a mistake or an extraction.
+     */
+    private static final int MAX_BATCH_SIZE = 200;
 
     private static final BigDecimal WARNING_THRESHOLD = new BigDecimal("0.20");
     private static final BigDecimal CRITICAL_THRESHOLD = new BigDecimal("0.10");
 
     /**
+     * The entry point an HTTP caller must use: authorises the ids first, then
+     * reads.
+     *
+     * Fails the whole request if any id falls outside the caller's scope
+     * rather than dropping it from the result. A legitimate page never
+     * contains one, and silently returning fewer rows than were asked for is
+     * how an id-probing loop learns which members exist -- the caller cannot
+     * tell "outside your scope" from "no ceiling configured" if both come back
+     * as an absent key.
+     */
+    @Transactional(readOnly = true)
+    public Map<Long, CurrentGeneralLimitSummary> authorizedSummariesFor(Collection<Long> memberIds) {
+        if (memberIds == null || memberIds.isEmpty()) {
+            return new LinkedHashMap<>();
+        }
+        if (memberIds.size() > MAX_BATCH_SIZE) {
+            throw new BusinessRuleException(
+                    "عدد المستفيدين في الطلب يتجاوز الحد المسموح (" + MAX_BATCH_SIZE + ")");
+        }
+
+        AuthorizedMemberScope scope = queryAccessPolicy.requireListing(
+                MemberOperation.VIEW_FINANCIALS, null);
+
+        for (Member member : memberRepository.findAllById(memberIds)) {
+            Long employerId = member.getEmployer() == null ? null : member.getEmployer().getId();
+            if (!scope.covers(employerId)) {
+                throw new MemberAccessDeniedException(MemberOperation.VIEW_FINANCIALS,
+                        "أحد المستفيدين المطلوبين خارج نطاق المستخدم");
+            }
+        }
+        return summariesFor(memberIds);
+    }
+
+    /**
      * @param memberIds the page being rendered; the caller has already applied
      *                  whatever access scope governs which members it may see,
-     *                  and this method adds none of its own
+     *                  and this method adds none of its own. HTTP callers must
+     *                  use {@link #authorizedSummariesFor(Collection)}.
      */
     @Transactional(readOnly = true)
     public Map<Long, CurrentGeneralLimitSummary> summariesFor(Collection<Long> memberIds) {

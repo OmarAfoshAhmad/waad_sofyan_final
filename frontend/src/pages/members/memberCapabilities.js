@@ -10,6 +10,10 @@ export const getMemberCapabilities = (user) => {
     hardDelete: permissions.has('MEMBER_HARD_DELETE'),
     bulkTerminate: permissions.has('MEMBER_CHANGE_STATUS'),
     import: permissions.has('MEMBER_IMPORT'),
-    export: permissions.has('MEMBER_EXPORT')
+    export: permissions.has('MEMBER_EXPORT'),
+    // Gates the ceiling column. The backend refuses the bulk read without
+    // this permission anyway; hiding the column keeps a user who lacks it
+    // from meeting a request that can only fail.
+    viewLimits: permissions.has('MEMBER_LIMIT_VIEW')
   });
 };
