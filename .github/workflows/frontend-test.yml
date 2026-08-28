@@ -6,10 +6,15 @@ on:
     paths:
       - 'frontend/**'
       - '.github/workflows/frontend-test.yml'
+      # memberCapabilityPermissions.test.js reads the server's permission map
+      # as text. A backend-only change that renames or removes a permission
+      # would otherwise not run the test that exists to catch exactly that.
+      - 'backend/src/main/java/com/waad/tba/modules/member/security/**'
   pull_request:
     branches: [ main, develop ]
     paths:
       - 'frontend/**'
+      - 'backend/src/main/java/com/waad/tba/modules/member/security/**'
 
 jobs:
   quality:
@@ -46,6 +51,17 @@ jobs:
           cd frontend
           npm run lint
         continue-on-error: true
+
+      # No continue-on-error, unlike the two steps above: these assert
+      # behaviour rather than style. Among them are the checks that a page of
+      # members costs one ceiling request rather than one per row, and that
+      # the buttons this app draws are gated on the permissions the server
+      # actually requires. A test that guards an invariant and never runs in
+      # the gate is documentation with a green tick next to it.
+      - name: Test
+        run: |
+          cd frontend
+          npm test
 
       - name: Build
         run: |
