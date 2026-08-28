@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -25,13 +26,18 @@ import com.waad.tba.common.dto.ApiResponse;
 import com.waad.tba.modules.member.dto.ExcelColumnDetectionDto;
 import com.waad.tba.modules.member.dto.MemberImportPreviewDto;
 import com.waad.tba.modules.member.dto.MemberImportResultDto;
+import com.waad.tba.modules.member.dto.MemberImportRollbackPreviewDto;
+import com.waad.tba.modules.member.dto.MemberImportRollbackResultDto;
 import com.waad.tba.modules.member.entity.MemberImportLog;
 import com.waad.tba.modules.member.repository.MemberImportErrorRepository;
 import com.waad.tba.modules.member.repository.MemberImportLogRepository;
+import com.waad.tba.modules.member.repository.MemberImportBatchRowRepository;
+import com.waad.tba.modules.member.security.MemberImportAccessPolicy;
 import com.waad.tba.modules.member.service.ExcelColumnMappingService;
 import com.waad.tba.modules.member.service.MemberExcelImportService;
 import com.waad.tba.modules.member.service.MemberExcelTemplateService;
 import com.waad.tba.modules.member.service.MemberImportPreviewTicketService;
+import com.waad.tba.modules.member.service.MemberImportRollbackService;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -59,8 +65,11 @@ public class MemberExcelTemplateController {
     private final MemberExcelImportService importService;
     private final ExcelColumnMappingService columnMappingService;
     private final MemberImportLogRepository importLogRepository;
+    private final MemberImportBatchRowRepository importBatchRowRepository;
+    private final MemberImportAccessPolicy importAccessPolicy;
     private final MemberImportErrorRepository importErrorRepository;
     private final MemberImportPreviewTicketService previewTicketService;
+    private final MemberImportRollbackService rollbackService;
     private final ObjectMapper objectMapper;
     
     /**
@@ -278,10 +287,11 @@ public class MemberExcelTemplateController {
     @PreAuthorize("@permissionGuard.has('MEMBER_IMPORT')")
     @Operation(summary = "Get import status by batch ID")
     public ResponseEntity<ApiResponse<MemberImportLog>> getImportStatus(
-            @PathVariable("batchId") String batchId) {
-        
-        return importLogRepository.findByImportBatchId(batchId)
-                .map(log -> ResponseEntity.ok(ApiResponse.success("Import status found", log)))
+              @PathVariable("batchId") String batchId) {
+          var importLog = importLogRepository.findByImportBatchId(batchId);
+          importLog.ifPresent(this::authorizeHistory);
+          return importLog
+                .map(foundLog -> ResponseEntity.ok(ApiResponse.success("Import status found", foundLog)))
                 .orElse(ResponseEntity.notFound().build());
     }
 
@@ -294,8 +304,9 @@ public class MemberExcelTemplateController {
     @PreAuthorize("@permissionGuard.has('MEMBER_IMPORT')")
     @Operation(summary = "Get errors for import batch")
     public ResponseEntity<ApiResponse<?>> getImportErrors(
-            @PathVariable("batchId") String batchId) {
-        
+              @PathVariable("batchId") String batchId) {
+        authorizeHistory(importLogRepository.findByImportBatchId(batchId)
+                .orElseThrow(() -> new com.waad.tba.common.exception.BusinessRuleException("سجل الاستيراد غير موجود")));
         var errors = importErrorRepository.findByImportBatchId(batchId);
         return ResponseEntity.ok(ApiResponse.success("Import errors retrieved", errors));
     }
@@ -312,10 +323,55 @@ public class MemberExcelTemplateController {
             @RequestParam(name = "page", defaultValue = "1") int page,
             @RequestParam(name = "size", defaultValue = "20") int size) {
         
-        Page<MemberImportLog> logs = importLogRepository.findAll(
-                PageRequest.of(Math.max(0, page - 1), size, Sort.by(Sort.Direction.DESC, "createdAt")));
+        var authorised = importAccessPolicy.requireHistoryScope();
+        var pageable = PageRequest.of(Math.max(0, page - 1), size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Page<MemberImportLog> logs = authorised.isGlobal()
+                ? importLogRepository.findAll(pageable)
+                : importLogRepository.findVisibleToEmployers(authorised.employerIds(), pageable);
         
         return ResponseEntity.ok(ApiResponse.success("Import logs retrieved", logs));
+    }
+
+    @GetMapping("/{batchId}/rollback/preview")
+    @PreAuthorize("@permissionGuard.has('MEMBER_IMPORT') and @permissionGuard.has('DANGER_ZONE_EXECUTE')")
+    @Operation(summary = "معاينة التراجع الآمن عن دفعة استيراد")
+    public ResponseEntity<ApiResponse<MemberImportRollbackPreviewDto>> previewRollback(
+            @PathVariable String batchId) {
+        Long logId = importLogRepository.findByImportBatchId(batchId)
+                .orElseThrow(() -> new com.waad.tba.common.exception.BusinessRuleException(
+                        "سجل الاستيراد غير موجود"))
+                .getId();
+        return ResponseEntity.ok(ApiResponse.success("تم حساب أثر التراجع", rollbackService.preview(logId)));
+    }
+
+    @PostMapping("/{batchId}/rollback")
+    @PreAuthorize("@permissionGuard.has('MEMBER_IMPORT') and @permissionGuard.has('DANGER_ZONE_EXECUTE')")
+    @Operation(summary = "تنفيذ التراجع الآمن عن دفعة استيراد")
+    public ResponseEntity<ApiResponse<MemberImportRollbackResultDto>> executeRollback(
+            @PathVariable String batchId, @RequestBody RollbackRequest request) {
+        Long logId = importLogRepository.findByImportBatchId(batchId)
+                .orElseThrow(() -> new com.waad.tba.common.exception.BusinessRuleException(
+                        "سجل الاستيراد غير موجود"))
+                .getId();
+        var result = rollbackService.execute(logId, request.reason());
+        return ResponseEntity.ok(ApiResponse.success(result.getMessage(), result));
+    }
+
+    public record RollbackRequest(String reason) {}
+
+    private void authorizeHistory(MemberImportLog log) {
+        var employerIds = importBatchRowRepository.findByImportLogId(log.getId()).stream()
+                .map(row -> {
+                    try {
+                        return objectMapper.readTree(row.getImportedSnapshot()).path("employerId").longValue();
+                    } catch (IOException ex) {
+                        throw new com.waad.tba.common.exception.BusinessRuleException(
+                                "تعذر التحقق من نطاق دفعة الاستيراد");
+                    }
+                })
+                .filter(id -> id != 0L)
+                .collect(java.util.stream.Collectors.toSet());
+        importAccessPolicy.requireHistory(employerIds);
     }
 
     private Map<String, String> parseCustomMappings(String json) {

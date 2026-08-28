@@ -47,6 +47,8 @@ public enum MemberOperation {
 
     IMPORT_PREVIEW,
     IMPORT_EXECUTE,
+    IMPORT_HISTORY,
+    IMPORT_ROLLBACK,
 
     /** An audited eligibility decision, which writes. */
     EVALUATE_ELIGIBILITY

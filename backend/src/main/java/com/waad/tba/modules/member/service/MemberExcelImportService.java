@@ -42,6 +42,7 @@ import com.waad.tba.modules.member.entity.StatusSource;
 import com.waad.tba.modules.member.repository.MemberAttributeRepository;
 import com.waad.tba.modules.member.repository.MemberImportErrorRepository;
 import com.waad.tba.modules.member.repository.MemberImportLogRepository;
+import com.waad.tba.modules.member.repository.MemberImportBatchRowRepository;
 import com.waad.tba.modules.member.repository.MemberRepository;
 import com.waad.tba.modules.member.security.AuthorizedImportScope;
 import com.waad.tba.modules.member.security.MemberImportAccessPolicy;
@@ -66,6 +67,7 @@ public class MemberExcelImportService {
     private final MemberRepository memberRepository;
     private final MemberAttributeRepository memberAttributeRepository;
     private final MemberImportLogRepository importLogRepository;
+    private final MemberImportBatchRowRepository importBatchRowRepository;
     private final MemberImportErrorRepository importErrorRepository;
     private final EmployerRepository employerRepository;
     private final BenefitPolicyRepository benefitPolicyRepository;
@@ -366,7 +368,8 @@ public class MemberExcelImportService {
         // assignments can be recorded once at the end -- in ONE bulk lookup
         // rather than a per-row query.
         List<Member> processedMembers = new ArrayList<>();
-        int totalProcessed = 0, createdCount = 0, skippedCount = 0, errorCount = 0;
+        List<PendingBatchRow> pendingBatchRows = new ArrayList<>();
+        int totalProcessed = 0, createdCount = 0, updatedCount = 0, skippedCount = 0, errorCount = 0;
 
         try (InputStream is = new java.io.ByteArrayInputStream(fileBytes); Workbook workbook = new XSSFWorkbook(is)) {
             Sheet sheet = workbook.getSheetAt(0);
@@ -418,6 +421,8 @@ public class MemberExcelImportService {
 
                 Member member;
                 Member parent;
+                Member existingMember;
+                String previousSnapshotJson;
                 try {
                     String cardNumber = parser.getFieldValue(row, fieldToColumnIndex, "cardNumber");
                     CardInfo cardInfo = resolveFamilyLink(row, rowNum, fieldToColumnIndex, cardNumber);
@@ -438,7 +443,7 @@ public class MemberExcelImportService {
                         }
                     }
 
-                    Member existingMember = null;
+                    existingMember = null;
                     if (cardNumber != null && !cardNumber.isBlank()) {
                         String cardKey = cardNumber.trim().toUpperCase();
                         existingMember = memberCache.get(cardKey);
@@ -452,7 +457,28 @@ public class MemberExcelImportService {
                                 "الصف " + rowNum + ": لا يمكن نقل عضو قائم إلى جهة أخرى عبر الاستيراد");
                     }
 
+                    var previousSnapshot = existingMember == null ? null
+                            : com.waad.tba.modules.member.dto.MemberImportFieldSnapshot.of(existingMember);
+                    previousSnapshotJson = previousSnapshot == null ? null : toJson(previousSnapshot);
+
                     member = rowProcessor.processRowForImport(row, rowNum, fieldToColumnIndex, defaultEmployer, benefitPolicy, parent, relationship, existingMember);
+                    if (previousSnapshot != null) {
+                        Long resultingPolicyId = member.getBenefitPolicy() == null
+                                ? null : member.getBenefitPolicy().getId();
+                        if (previousSnapshot.getBenefitPolicyId() != null
+                                && !java.util.Objects.equals(previousSnapshot.getBenefitPolicyId(), resultingPolicyId)) {
+                            throw new BusinessRuleException(
+                                    "الصف " + rowNum + ": لا يمكن تغيير وثيقة عضو قائم عبر الاستيراد؛ استخدم عملية تغيير الوثيقة المؤرخة");
+                        }
+                        Long resultingParentId = member.getParent() == null ? null : member.getParent().getId();
+                        String resultingRelationship = member.getRelationship() == null
+                                ? null : member.getRelationship().name();
+                        if (!java.util.Objects.equals(previousSnapshot.getParentId(), resultingParentId)
+                                || !java.util.Objects.equals(previousSnapshot.getRelationship(), resultingRelationship)) {
+                            throw new BusinessRuleException(
+                                    "الصف " + rowNum + ": لا يمكن نقل تابع أو تغيير صلة قرابته عبر الاستيراد؛ استخدم عملية الأسرة المخصصة");
+                        }
+                    }
                 } catch (MemberImportRowValidationException parseFailure) {
                     // Expected/business-level row failure ONLY -- this exact
                     // type is thrown exclusively by rowProcessor/parser
@@ -491,8 +517,8 @@ public class MemberExcelImportService {
                     }
                 }
                 processedMembers.add(member);
-
-                createdCount++;
+                pendingBatchRows.add(new PendingBatchRow(member, existingMember != null, previousSnapshotJson));
+                if (existingMember == null) createdCount++; else updatedCount++;
                 if (memberBuffer.size() >= BATCH_SIZE) {
                     memberRepository.saveAll(memberBuffer);
                     memberBuffer.clear();
@@ -508,10 +534,24 @@ public class MemberExcelImportService {
             recordEmployerAssignmentsForImport(processedMembers);
             recordPolicyAssignmentsForImport(processedMembers);
 
+            if (!pendingBatchRows.isEmpty()) {
+                importBatchRowRepository.saveAll(pendingBatchRows.stream()
+                        .map(pending -> com.waad.tba.modules.member.entity.MemberImportBatchRow.builder()
+                                .importLogId(importLogId).memberId(pending.member().getId())
+                                .action(pending.updated()
+                                        ? com.waad.tba.modules.member.entity.MemberImportBatchRow.Action.UPDATED
+                                        : com.waad.tba.modules.member.entity.MemberImportBatchRow.Action.CREATED)
+                                .previousSnapshot(pending.previousSnapshotJson())
+                                .importedSnapshot(toJson(com.waad.tba.modules.member.dto.MemberImportFieldSnapshot.of(
+                                        pending.member())))
+                                .build()).toList());
+            }
+
             MemberImportLog importLog = importLogRepository.findById(importLogId)
                     .orElseThrow(() -> new IllegalStateException("Import log vanished mid-import: " + importLogId));
             importLog.setTotalRows(totalRows);
             importLog.setCreatedCount(createdCount);
+            importLog.setUpdatedCount(updatedCount);
             importLog.setErrorCount(errorCount);
             importLog.setEmployerId(employerId);
             importLog.setFileHash(fileHash);
@@ -525,10 +565,11 @@ public class MemberExcelImportService {
 
             return MemberImportResultDto.builder()
                     .batchId(batchId).status(importLog.getStatus().name()).totalProcessed(totalProcessed)
-                    .createdCount(createdCount).updatedCount(0).skippedCount(skippedCount).errorCount(errorCount)
+                    .createdCount(createdCount).updatedCount(updatedCount).skippedCount(skippedCount).errorCount(errorCount)
                     .processingTimeMs(importLog.getProcessingTimeMs()).completedAt(importLog.getCompletedAt())
                     .successRate(totalProcessed > 0 ? (double) createdCount / totalProcessed * 100 : 0)
-                    .errors(errors).message(String.format("تم استيراد %d عضو بنجاح، %d أخطاء", createdCount, errorCount))
+                    .errors(errors).message(String.format("تم استيراد %d عضو جديد وتحديث %d، %d أخطاء",
+                            createdCount, updatedCount, errorCount))
                     .build();
         } catch (Exception e) {
             log.error("[MemberImport] فشل الحفظ، تراجع كامل عن الدفعة: {}", e.getMessage(), e);
@@ -632,6 +673,15 @@ public class MemberExcelImportService {
             if (value != null) data.put(entry.getValue(), value);
         }
         try { return objectMapper.writeValueAsString(data); } catch (JsonProcessingException e) { return "{}"; }
+    }
+
+    private record PendingBatchRow(Member member, boolean updated, String previousSnapshotJson) {}
+
+    private String toJson(com.waad.tba.modules.member.dto.MemberImportFieldSnapshot snapshot) {
+        try { return objectMapper.writeValueAsString(snapshot); }
+        catch (JsonProcessingException error) {
+            throw new IllegalStateException("تعذر حفظ لقطة الاستيراد", error);
+        }
     }
 
     private Map<Long, Set<String>> collectPresentCardsByEmployer(Sheet sheet, int headerRowNumber,

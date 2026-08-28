@@ -726,6 +726,13 @@ const UnifiedMembersList = () => {
             >
               استيراد من إكسل
             </Button>}
+            {capabilities.import && <Button
+              variant="outlined"
+              onClick={() => navigate('/members/import-history')}
+              sx={{ minWidth: '9.6875rem' }}
+            >
+              سجل الاستيراد
+            </Button>}
             {capabilities.export && <Button
               variant="outlined"
               onClick={() => setExportWizardOpen(true)}

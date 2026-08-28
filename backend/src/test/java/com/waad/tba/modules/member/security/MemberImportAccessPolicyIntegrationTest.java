@@ -14,9 +14,14 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.data.domain.PageRequest;
 
 import com.waad.tba.TbaWaadApplication;
 import com.waad.tba.modules.rbac.entity.User;
+import com.waad.tba.modules.member.entity.MemberImportBatchRow;
+import com.waad.tba.modules.member.entity.MemberImportLog;
+import com.waad.tba.modules.member.repository.MemberImportBatchRowRepository;
+import com.waad.tba.modules.member.repository.MemberImportLogRepository;
 import com.waad.tba.support.PostgresIntegrationTestBase;
 
 /**
@@ -35,6 +40,8 @@ class MemberImportAccessPolicyIntegrationTest extends PostgresIntegrationTestBas
     @Autowired private MemberImportAccessPolicy policy;
     @Autowired private JdbcTemplate jdbc;
     @Autowired private com.waad.tba.modules.rbac.repository.UserRepository userRepository;
+    @Autowired private MemberImportLogRepository importLogRepository;
+    @Autowired private MemberImportBatchRowRepository importBatchRowRepository;
 
     private static String suffix() {
         return UUID.randomUUID().toString().substring(0, 8);
@@ -213,6 +220,80 @@ class MemberImportAccessPolicyIntegrationTest extends PostgresIntegrationTestBas
 
         assertThatThrownBy(() -> policy.require(List.of(1L), false))
                 .isInstanceOf(MemberAccessDeniedException.class);
+    }
+
+    @Test
+    void importHistoryIsRestrictedToTheUsersEmployer() {
+        long a = employer("A");
+        long b = employer("B");
+        actingAs("DATA_ENTRY", a);
+
+        assertThat(policy.requireHistory(List.of(a)).covers(a)).isTrue();
+        assertThatThrownBy(() -> policy.requireHistory(List.of(b)))
+                .isInstanceOf(MemberAccessDeniedException.class)
+                .hasMessageContaining("خارج نطاق المستخدم");
+    }
+
+    @Test
+    void mixedEmployerHistoryIsNotPartiallyDisclosed() {
+        long a = employer("A");
+        long b = employer("B");
+        actingAs("DATA_ENTRY", a);
+
+        assertThatThrownBy(() -> policy.requireHistory(List.of(a, b)))
+                .isInstanceOf(MemberAccessDeniedException.class);
+    }
+
+    @Test
+    void legacyHistoryWithoutProvableScopeFailsClosedForScopedUsers() {
+        long a = employer("A");
+        actingAs("DATA_ENTRY", a);
+
+        assertThatThrownBy(() -> policy.requireHistory(List.of()))
+                .isInstanceOf(MemberAccessDeniedException.class)
+                .hasMessageContaining("إثبات نطاق");
+    }
+
+    @Test
+    void globalImporterMayReadLegacyAndCrossEmployerHistory() {
+        long a = employer("A");
+        long b = employer("B");
+        actingAs("SUPER_ADMIN", null);
+
+        assertThat(policy.requireHistory(List.of()).isGlobal()).isTrue();
+        assertThat(policy.requireHistory(List.of(a, b)).isGlobal()).isTrue();
+    }
+
+    @Test
+    void historyRepositoryReturnsOnlyBatchesWhollyInsideTheAuthorisedScope() {
+        long a = employer("A");
+        long b = employer("B");
+        MemberImportLog own = importLogRepository.save(MemberImportLog.builder()
+                .importBatchId("history-own-" + suffix()).fileName("own.xlsx").build());
+        MemberImportLog foreign = importLogRepository.save(MemberImportLog.builder()
+                .importBatchId("history-foreign-" + suffix()).fileName("foreign.xlsx").build());
+        MemberImportLog mixed = importLogRepository.save(MemberImportLog.builder()
+                .importBatchId("history-mixed-" + suffix()).fileName("mixed.xlsx").build());
+
+        importBatchRowRepository.save(row(own.getId(), 900001L, a));
+        importBatchRowRepository.save(row(foreign.getId(), 900002L, b));
+        importBatchRowRepository.save(row(mixed.getId(), 900003L, a));
+        importBatchRowRepository.save(row(mixed.getId(), 900004L, b));
+
+        var ids = importLogRepository.findVisibleToEmployers(List.of(a), PageRequest.of(0, 200))
+                .map(MemberImportLog::getId).toSet();
+
+        assertThat(ids).contains(own.getId());
+        assertThat(ids).doesNotContain(foreign.getId(), mixed.getId());
+    }
+
+    private MemberImportBatchRow row(Long logId, Long memberId, long employerId) {
+        return MemberImportBatchRow.builder()
+                .importLogId(logId)
+                .memberId(memberId)
+                .action(MemberImportBatchRow.Action.CREATED)
+                .importedSnapshot("{\"employerId\":" + employerId + "}")
+                .build();
     }
 
     @Test

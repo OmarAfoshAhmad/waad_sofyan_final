@@ -125,6 +125,17 @@ public class MemberEmployerResolver {
         }
     }
 
+    /**
+     * Restores only the denormalized current pointer after an import rollback.
+     * The importer never rewrites dated employer assignments for an existing
+     * member, so rollback must not manufacture a new historical assignment.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void restoreCurrentPointerAfterImport(Member member, Employer employer) {
+        member.setEmployer(employer);
+        memberRepository.save(member);
+    }
+
     private static boolean mentionsConstraint(Throwable error, String constraintName) {
         for (Throwable current = error; current != null; current = current.getCause()) {
             if (current.getMessage() != null && current.getMessage().contains(constraintName)) {

@@ -98,4 +98,49 @@ public class MemberImportAccessPolicy {
 
         return new AuthorizedImportScope(scope, mayClearAbsent);
     }
+
+    /** Rollback combines import access with destructive-operation authority. */
+    @Transactional(readOnly = true)
+    public AuthorizedImportScope requireRollback(Collection<Long> employerIds) {
+        AuthorizedImportScope authorised = require(MemberOperation.IMPORT_ROLLBACK, employerIds, false);
+        User user = authorizationService.getCurrentUser();
+        if (!effectivePermissionService.resolve(user).contains(SystemPermission.DANGER_ZONE_EXECUTE)) {
+            throw new MemberAccessDeniedException(MemberOperation.IMPORT_ROLLBACK,
+                    "التراجع عن الاستيراد يتطلب صلاحية العمليات الخطرة");
+        }
+        return authorised;
+    }
+
+    /** Import audit metadata is tenant data too; MEMBER_IMPORT is not global reach. */
+    @Transactional(readOnly = true)
+    public AuthorizedImportScope requireHistoryScope() {
+        User user = authorizationService.getCurrentUser();
+        MemberAccessScope scope = scopeResolver.resolveFor(user);
+        if (scope.isDenied()) {
+            throw new MemberAccessDeniedException(MemberOperation.IMPORT_HISTORY, scope.reason());
+        }
+        if (!effectivePermissionService.resolve(user).contains(SystemPermission.MEMBER_IMPORT)) {
+            throw new MemberAccessDeniedException(MemberOperation.IMPORT_HISTORY,
+                    "عرض سجل الاستيراد يتطلب صلاحية MEMBER_IMPORT");
+        }
+        return new AuthorizedImportScope(scope, false);
+    }
+
+    @Transactional(readOnly = true)
+    public AuthorizedImportScope requireHistory(Collection<Long> employerIds) {
+        AuthorizedImportScope authorised = requireHistoryScope();
+        if (!authorised.isGlobal() && (employerIds == null || employerIds.isEmpty())) {
+            throw new MemberAccessDeniedException(MemberOperation.IMPORT_HISTORY,
+                    "لا يمكن إثبات نطاق هذه الدفعة القديمة");
+        }
+        if (employerIds != null) {
+            employerIds.forEach(id -> {
+                if (id == null || !authorised.covers(id)) {
+                    throw new MemberAccessDeniedException(MemberOperation.IMPORT_HISTORY,
+                            "دفعة الاستيراد خارج نطاق المستخدم");
+                }
+            });
+        }
+        return authorised;
+    }
 }

@@ -20,6 +20,7 @@ const Dashboard = Loadable(lazy(() => import('pages/dashboard')));
 // Replaces legacy Member + FamilyMember anti-pattern
 
 const UnifiedMembersList = Loadable(lazy(() => import('pages/members/UnifiedMembersList')));
+const MemberImportHistory = Loadable(lazy(() => import('pages/members/MemberImportHistory')));
 const UnifiedMemberCreate = Loadable(lazy(() => import('pages/members/UnifiedMemberCreate')));
 const UnifiedMemberView = Loadable(lazy(() => import('pages/members/UnifiedMemberView')));
 const UnifiedMemberEdit = Loadable(lazy(() => import('pages/members/UnifiedMemberEdit')));
@@ -217,6 +218,14 @@ const MainRoutes = {
           element: (
             <PermissionGuard requiredPermission="MEMBER_CREATE" isRouteGuard>
               <UnifiedMemberCreate />
+            </PermissionGuard>
+          )
+        },
+        {
+          path: 'import-history',
+          element: (
+            <PermissionGuard requiredPermission="MEMBER_IMPORT" isRouteGuard>
+              <MemberImportHistory />
             </PermissionGuard>
           )
         },

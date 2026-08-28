@@ -419,6 +419,13 @@ public class MemberPolicyResolver {
         }
     }
 
+    /** See MemberEmployerResolver.restoreCurrentPointerAfterImport. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void restoreCurrentPointerAfterImport(Member member, BenefitPolicy policy) {
+        member.setBenefitPolicy(policy);
+        memberRepository.save(member);
+    }
+
     private static void requireServiceDate(LocalDate serviceDate) {
         if (serviceDate == null) {
             throw new BusinessRuleException(

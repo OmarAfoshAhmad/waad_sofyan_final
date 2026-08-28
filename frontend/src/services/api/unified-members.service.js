@@ -632,6 +632,26 @@ export const executeImport = async (file, params) => {
   }
 };
 
+export const getImportLogs = async (page = 1, size = 20) => {
+  const response = await api.get(`${UNIFIED_MEMBERS_BASE_URL}/import/logs`, { params: { page, size } });
+  return response.data;
+};
+
+export const getImportErrors = async (batchId) => {
+  const response = await api.get(`${UNIFIED_MEMBERS_BASE_URL}/import/errors/${batchId}`);
+  return response.data;
+};
+
+export const previewImportRollback = async (batchId) => {
+  const response = await api.get(`${UNIFIED_MEMBERS_BASE_URL}/import/${batchId}/rollback/preview`);
+  return response.data;
+};
+
+export const executeImportRollback = async (batchId, reason) => {
+  const response = await api.post(`${UNIFIED_MEMBERS_BASE_URL}/import/${batchId}/rollback`, { reason });
+  return response.data;
+};
+
 /**
  * Get import status (for polling)
  *
@@ -863,6 +883,10 @@ export default {
   detectColumns,
   previewImport,
   executeImport,
+  getImportLogs,
+  getImportErrors,
+  previewImportRollback,
+  executeImportRollback,
   exportMembers,
   exportReimportableMembers,
   downloadTemplate,

@@ -86,6 +86,17 @@ public class MemberStatusTransitionService {
         initializeStatus(member, newStatus, StatusSource.IMPORT, reason);
     }
 
+    /** Restores an import-owned status through the canonical audited writer. */
+    @Transactional
+    public Member restoreStatusAfterImport(Member member, Member.MemberStatus previousStatus,
+            String reason, Long actingUserId) {
+        if (previousStatus == null || member.getStatus() == previousStatus) {
+            return member;
+        }
+        return transitionTo(member, previousStatus, reason, StatusSource.SYSTEM,
+                UUID.randomUUID().toString(), actingUserId);
+    }
+
     /**
      * The core primitive every real (persisted) transition goes through.
      * saveAndFlush deliberately, not save: forces the @Version optimistic
@@ -305,6 +316,20 @@ public class MemberStatusTransitionService {
         if (!callerIsSuperAdmin) {
             throw new AccessDeniedException("الحذف النهائي يتطلب صلاحية مدير النظام");
         }
+        hardDeleteAuthorized(memberId, reason, actingUserId, actingUsername);
+    }
+
+    /**
+     * Package-private trusted path for the already-authorized import rollback
+     * coordinator. Keeping this method non-public prevents other modules from
+     * turning a boolean into an ersatz SUPER_ADMIN credential.
+     */
+    void hardDeleteAfterAuthorizedImportRollback(Long memberId, String reason,
+            Long actingUserId, String actingUsername) {
+        hardDeleteAuthorized(memberId, reason, actingUserId, actingUsername);
+    }
+
+    private void hardDeleteAuthorized(Long memberId, String reason, Long actingUserId, String actingUsername) {
         if (reason == null || reason.trim().isEmpty()) {
             throw new BusinessRuleException("سبب الحذف النهائي إلزامي");
         }

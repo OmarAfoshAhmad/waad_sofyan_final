@@ -376,15 +376,10 @@ class MemberExcelImportAtomicityIntegrationTest extends PostgresIntegrationTestB
         assertThat(memberRepository.findByCardNumber(sharedCard).stream().count()).isEqualTo(1);
     }
 
-    /**
-     * The identical file re-submitted with a DIFFERENT benefit policy is a
-     * genuinely different operation and must actually re-execute (applying
-     * the new policy), never be short-circuited as "already imported" --
-     * proves the idempotency key covers benefitPolicyId, not just file
-     * bytes + employer.
-     */
+    /** A different policy remains a distinct idempotency scope, but an import
+     * is not a back door around the dated policy-change workflow. */
     @Test
-    void sameFileDifferentBenefitPolicy_isNotTreatedAsDuplicateAndAppliesTheNewPolicy() throws Exception {
+    void sameFileDifferentBenefitPolicy_reexecutesThenFailsClosedWithoutChangingExistingPolicy() throws Exception {
         String s = randomSuffix();
         Employer employer = newEmployer(s);
         BenefitPolicy policyA = newPolicy(employer, s + "-a");
@@ -400,20 +395,17 @@ class MemberExcelImportAtomicityIntegrationTest extends PostgresIntegrationTestB
         Member afterFirst = memberRepository.findByCardNumber("CARDS" + s).orElseThrow();
         assertThat(afterFirst.getBenefitPolicy().getId()).isEqualTo(policyA.getId());
 
-        // Same file bytes, same employer, DIFFERENT policy -- must NOT be
-        // recognized as the same import.
-        MemberImportResultDto second = importService.executeImport(file, "batch-scope-b-" + s, employer.getId(), policyB.getId(), 0, false);
+        assertThatThrownBy(() -> importService.executeImport(file, "batch-scope-b-" + s,
+                employer.getId(), policyB.getId(), 0, false))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("لا يمكن تغيير وثيقة عضو قائم عبر الاستيراد");
 
-        assertThat(second.getMessage()).doesNotContain("batch-scope-a-" + s);
-        // A genuinely different scope resolves the existing card number and
-        // updates it in place (same pipeline behavior as any other re-import
-        // of a known card number) -- the important assertion is that policy B
-        // was actually applied, proving this run really executed rather than
-        // being echoed from the first run's stale result.
         Member afterSecond = memberRepository.findByCardNumber("CARDS" + s).orElseThrow();
-        assertThat(afterSecond.getBenefitPolicy().getId()).isEqualTo(policyB.getId());
+        assertThat(afterSecond.getBenefitPolicy().getId()).isEqualTo(policyA.getId());
 
-        assertThat(importLogRepository.findByImportBatchId("batch-scope-b-" + s)).isPresent();
+        assertThat(importLogRepository.findByImportBatchId("batch-scope-b-" + s))
+                .get().extracting(MemberImportLog::getStatus)
+                .isEqualTo(MemberImportLog.ImportStatus.FAILED);
     }
 
     @Test
@@ -664,4 +656,5 @@ class MemberExcelImportAtomicityIntegrationTest extends PostgresIntegrationTestB
         assertThat(unchanged.getEmployer().getId()).isEqualTo(originalEmployer.getId());
         assertThat(unchanged.getFullName()).isEqualTo("Existing " + s);
     }
+
 }

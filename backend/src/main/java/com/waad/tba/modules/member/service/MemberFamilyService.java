@@ -304,6 +304,23 @@ public class MemberFamilyService {
         return locked.stream().map(mapper::toViewDto).toList();
     }
 
+    /** Canonical family writer used only by the atomic import rollback. */
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public void restoreFamilyLinkAfterImport(Member member, Member previousParent,
+            Member.Relationship previousRelationship, String reason, Long actorId) {
+        Long oldParentId = member.getParent() != null ? member.getParent().getId() : null;
+        Member.Relationship oldRelationship = member.getRelationship();
+        Long newParentId = previousParent != null ? previousParent.getId() : null;
+        if (Objects.equals(oldParentId, newParentId) && oldRelationship == previousRelationship) {
+            return;
+        }
+        member.setParent(previousParent);
+        member.setRelationship(previousRelationship);
+        memberRepository.save(member);
+        appendHistory(member, oldParentId, newParentId, oldRelationship, previousRelationship,
+                LocalDate.now(), reason, "IMPORT_ROLLBACK", actorId);
+    }
+
     private void appendHistory(Member member, Long oldParent, Long newParent,
             Member.Relationship oldRelationship, Member.Relationship newRelationship,
             LocalDate effectiveDate, String reason, String type, Long actorId) {

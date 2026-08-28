@@ -40,6 +40,7 @@ import com.waad.tba.modules.member.entity.MemberImportLog;
 import com.waad.tba.modules.member.repository.MemberAttributeRepository;
 import com.waad.tba.modules.member.repository.MemberImportErrorRepository;
 import com.waad.tba.modules.member.repository.MemberImportLogRepository;
+import com.waad.tba.modules.member.repository.MemberImportBatchRowRepository;
 import com.waad.tba.modules.member.repository.MemberRepository;
 import com.waad.tba.modules.rbac.entity.User;
 import com.waad.tba.security.AuthorizationService;
@@ -57,6 +58,8 @@ class MemberExcelImportServiceTest {
     private MemberAttributeRepository attributeRepository;
     @Mock
     private MemberImportLogRepository importLogRepository;
+    @Mock
+    private MemberImportBatchRowRepository importBatchRowRepository;
     @Mock
     private MemberImportErrorRepository importErrorRepository;
     @Mock
@@ -126,11 +129,12 @@ class MemberExcelImportServiceTest {
                 memberRepository,
                 attributeRepository,
                 importLogRepository,
+                importBatchRowRepository,
                 importErrorRepository,
                 employerRepository,
                 benefitPolicyRepository,
                 authorizationService,
-                new ObjectMapper(),
+                new ObjectMapper().findAndRegisterModules(),
                 parser,
                 mapper,
                 rowProcessor,

@@ -1,6 +1,7 @@
 package com.waad.tba.modules.member.repository;
 
 import java.util.List;
+import java.util.Collection;
 import java.util.Optional;
 
 import org.springframework.data.domain.Page;
@@ -25,7 +26,11 @@ public interface MemberRepository extends JpaRepository<Member, Long>, JpaSpecif
         */
        @org.springframework.data.jpa.repository.Lock(LockModeType.PESSIMISTIC_WRITE)
        @Query("SELECT m FROM Member m WHERE m.id = :id")
-       Optional<Member> findByIdWithLock(@Param("id") Long id);
+        Optional<Member> findByIdWithLock(@Param("id") Long id);
+
+        @org.springframework.data.jpa.repository.Lock(LockModeType.PESSIMISTIC_WRITE)
+        @Query("SELECT m FROM Member m WHERE m.id IN :ids ORDER BY m.id")
+        List<Member> findAllByIdWithLock(@Param("ids") Collection<Long> ids);
 
        @Query("SELECT DISTINCT m.employer.id FROM Member m")
        List<Long> findDistinctEmployerIds();
