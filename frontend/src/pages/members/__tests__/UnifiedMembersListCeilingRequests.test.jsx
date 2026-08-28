@@ -91,7 +91,9 @@ function renderList() {
 describe('members list ceiling requests', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    useAuth.mockReturnValue({ user: { permissions: ['MEMBER_VIEW', 'MEMBER_LIMIT_VIEW'] } });
+    useAuth.mockReturnValue({
+      user: { permissions: ['MEMBER_VIEW', 'MEMBER_LIMIT_VIEW', 'MEMBER_LIMIT_LIST_VIEW'] }
+    });
 
     const members = Array.from({ length: PAGE_SIZE }, (_, i) => member(i + 1));
     searchMembers.mockResolvedValue({
@@ -189,6 +191,18 @@ describe('members list ceiling requests', () => {
 
   it('hides the column entirely without the limit permission', async () => {
     useAuth.mockReturnValue({ user: { permissions: ['MEMBER_VIEW'] } });
+
+    renderList();
+
+    await waitFor(() => expect(searchMembers).toHaveBeenCalled());
+    expect(screen.queryByText('المتاح لالتزام جديد')).not.toBeInTheDocument();
+    expect(getLimitsOverview).not.toHaveBeenCalled();
+  });
+
+  it('the single-member permission alone does not open the list', async () => {
+    // What a provider holds: they may check the patient in front of them, and
+    // that grant must not carry a page of the insurer's book with it.
+    useAuth.mockReturnValue({ user: { permissions: ['MEMBER_VIEW', 'MEMBER_LIMIT_VIEW'] } });
 
     renderList();
 

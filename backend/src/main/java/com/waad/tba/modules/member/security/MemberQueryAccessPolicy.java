@@ -22,28 +22,6 @@ public class MemberQueryAccessPolicy {
     private final com.waad.tba.modules.rbac.permission.EffectivePermissionService effectivePermissions;
 
     /**
-     * Operations that hand over data in bulk or expose the insurer's money,
-     * and the permission each one answers to. Reaching a member is not enough
-     * for these; they need a grant of their own.
-     *
-     * A permission rather than a role, which is the whole point of this map.
-     * The rule used to be "SUPER_ADMIN or EMPLOYER_ADMIN", and that made the
-     * permission catalogue lie: a user could hold MEMBER_LIMIT_VIEW, see the
-     * ceiling column offered in the UI that reads the same bit, and be refused
-     * by a rule the UI could not see. An administrator granting or revoking
-     * the permission for one user is now the single thing that decides, which
-     * is also what makes an exceptional grant possible at all.
-     */
-    private static final java.util.Map<MemberOperation,
-            com.waad.tba.modules.rbac.permission.SystemPermission> PRIVILEGED = java.util.Map.of(
-            MemberOperation.EXPORT,
-            com.waad.tba.modules.rbac.permission.SystemPermission.MEMBER_EXPORT,
-            MemberOperation.VIEW_FINANCIALS,
-            com.waad.tba.modules.rbac.permission.SystemPermission.MEMBER_FINANCIAL_VIEW,
-            MemberOperation.VIEW_LIMITS,
-            com.waad.tba.modules.rbac.permission.SystemPermission.MEMBER_LIMIT_VIEW);
-
-    /**
      * Authorises a listing, search or export and returns the scope it must be
      * constrained to. Throws on refusal, so there is no value to ignore.
      */
@@ -155,17 +133,17 @@ public class MemberQueryAccessPolicy {
      * a permission away must close the door the same day.
      */
     private boolean holdsGrantFor(com.waad.tba.modules.rbac.entity.User user, MemberOperation operation) {
-        var required = PRIVILEGED.get(operation);
-        if (required == null) {
+        var required = MemberOperationPermissions.requiredFor(operation);
+        if (required.isEmpty()) {
             return true;
         }
-        return effectivePermissions.resolve(user).contains(required);
+        return effectivePermissions.resolve(user).contains(required.get());
     }
 
     private String privilegedRefusal(MemberOperation operation) {
         return switch (operation) {
             case EXPORT -> "تصدير بيانات المستفيدين غير مسموح لهذا الحساب";
-            case VIEW_LIMITS -> "الاطلاع على سقوف المستفيدين غير مسموح لهذا الحساب";
+            case VIEW_LIMITS, LIST_LIMITS -> "الاطلاع على سقوف المستفيدين غير مسموح لهذا الحساب";
             default -> "الاطلاع على التفاصيل المالية غير مسموح لهذا الحساب";
         };
     }

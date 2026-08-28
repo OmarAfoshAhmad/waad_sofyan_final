@@ -11,7 +11,7 @@ public final class RolePermissionDefaults {
 
     private static final Set<SystemPermission> REVIEWER = EnumSet.of(
             SystemPermission.MEMBER_VIEW, SystemPermission.MEMBER_FINANCIAL_VIEW,
-            SystemPermission.MEMBER_LIMIT_VIEW,
+            SystemPermission.MEMBER_LIMIT_VIEW, SystemPermission.MEMBER_LIMIT_LIST_VIEW,
             SystemPermission.EMPLOYER_VIEW,
             SystemPermission.CLAIM_VIEW, SystemPermission.CLAIM_REVIEW,
             SystemPermission.PREAUTH_VIEW, SystemPermission.PREAUTH_REVIEW,
@@ -36,10 +36,16 @@ public final class RolePermissionDefaults {
                     SystemPermission.MEMBER_CREATE, SystemPermission.MEMBER_EDIT_IDENTITY,
                     SystemPermission.MEMBER_CHANGE_STATUS, SystemPermission.MEMBER_TRANSFER_EMPLOYER,
                     SystemPermission.MEMBER_EXPORT, SystemPermission.MEMBER_LIMIT_VIEW,
+                    // The list view as well: an employer administrator reads
+                    // their own book, which is what the column is for.
+                    SystemPermission.MEMBER_LIMIT_LIST_VIEW,
                     SystemPermission.EMPLOYER_VIEW,
                     SystemPermission.CLAIM_VIEW, SystemPermission.PREAUTH_VIEW,
                     SystemPermission.OPERATIONAL_REPORT_VIEW,
                     SystemPermission.BENEFIT_POLICY_VIEW);
+            // MEMBER_LIMIT_LIST_VIEW is deliberately absent: a provider checks
+            // the patient in front of them, which is the single read. Pulling a
+            // page of balances is a view of the insurer's book.
             case PROVIDER_STAFF -> EnumSet.of(SystemPermission.MEMBER_VIEW,
                     SystemPermission.MEMBER_LIMIT_VIEW, SystemPermission.EMPLOYER_VIEW,
                     SystemPermission.CLAIM_VIEW, SystemPermission.CLAIM_CREATE,

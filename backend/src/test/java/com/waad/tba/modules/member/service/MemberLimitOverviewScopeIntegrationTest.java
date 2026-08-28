@@ -113,42 +113,6 @@ class MemberLimitOverviewScopeIntegrationTest extends PostgresIntegrationTestBas
     }
 
     @Test
-    void aDataEntryUserMayNotBulkReadCeilings() {
-        signInAs("DATA_ENTRY", ownEmployerId, null);
-
-        assertThatThrownBy(() -> service.authorizedSummariesFor(List.of(ownMemberId)))
-                .as("the role enters identity, employer and policy; consumed and remaining "
-                        + "limits are not part of that, and MemberQueryAccessPolicy has "
-                        + "always said so")
-                .isInstanceOf(MemberAccessDeniedException.class);
-    }
-
-    /**
-     * Records a consequence rather than a rule, and is here so it cannot pass
-     * unnoticed.
-     *
-     * The ceiling read now answers to MEMBER_LIMIT_VIEW alone. PROVIDER_STAFF
-     * holds that permission by default, because the provider portal reads one
-     * member's remaining limit while a claim is being entered -- so the same
-     * grant that serves the single read now also serves the bulk one.
-     *
-     * The old rule refused providers by name, which is what made it
-     * unreachable by an administrator and is why it was replaced. Expressing
-     * "single yes, bulk no" needs two permissions, not a role check smuggled
-     * back in; adding one is a decision about the catalogue, not a fix. Until
-     * then this is the behaviour, and it is written down.
-     */
-    @Test
-    void aProviderHoldingTheLimitPermissionCanAlsoReadItInBulk() {
-        signInAs("PROVIDER_STAFF", null, providerId);
-
-        assertThat(service.authorizedSummariesFor(List.of(ownMemberId)))
-                .as("the permission decides, and PROVIDER_STAFF holds it by default for "
-                        + "the single read the provider portal needs")
-                .containsKey(ownMemberId);
-    }
-
-    @Test
     void aPageWithinTheCallersEmployerIsServed() {
         signInAsEmployerAdminOf(ownEmployerId);
 
@@ -172,6 +136,28 @@ class MemberLimitOverviewScopeIntegrationTest extends PostgresIntegrationTestBas
         signInAsEmployerAdminOf(ownEmployerId);
 
         assertThatThrownBy(() -> service.authorizedSummariesFor(List.of(otherMemberId)))
+                .isInstanceOf(MemberAccessDeniedException.class);
+    }
+
+    @Test
+    void aDataEntryUserMayNotBulkReadCeilings() {
+        signInAs("DATA_ENTRY", ownEmployerId, null);
+
+        assertThatThrownBy(() -> service.authorizedSummariesFor(List.of(ownMemberId)))
+                .as("the role enters identity, employer and policy; consumed and remaining "
+                        + "limits are not part of that, and MemberQueryAccessPolicy has "
+                        + "always said so")
+                .isInstanceOf(MemberAccessDeniedException.class);
+    }
+
+    @Test
+    void aProviderMayNotBulkReadCeilings() {
+        signInAs("PROVIDER_STAFF", null, providerId);
+
+        assertThatThrownBy(() -> service.authorizedSummariesFor(List.of(ownMemberId)))
+                .as("a provider holds MEMBER_LIMIT_VIEW for the patient in front of them "
+                        + "and not MEMBER_LIMIT_LIST_VIEW, so the single read they need "
+                        + "no longer carries a page of the insurer's book with it")
                 .isInstanceOf(MemberAccessDeniedException.class);
     }
 

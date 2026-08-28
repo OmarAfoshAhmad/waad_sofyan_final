@@ -24,8 +24,8 @@ import com.waad.tba.modules.member.service.MemberLimitOverviewService;
 import com.waad.tba.support.PostgresIntegrationTestBase;
 
 /**
- * Who may read a member's ceiling is decided by MEMBER_LIMIT_VIEW, and by
- * nothing else.
+ * Who may read a page of members' ceilings is decided by
+ * MEMBER_LIMIT_LIST_VIEW, and by nothing else.
  *
  * It used to be decided twice. The permission catalogue granted
  * MEMBER_LIMIT_VIEW to DATA_ENTRY, and a separate rule in the access policy
@@ -136,10 +136,10 @@ class CeilingAccessFollowsThePermissionNotTheRoleIntegrationTest extends Postgre
     }
 
     @Test
-    @DisplayName("the same user, granted MEMBER_LIMIT_VIEW by an administrator, is served")
+    @DisplayName("the same user, granted MEMBER_LIMIT_LIST_VIEW by an administrator, is served")
     void dataEntryWithAnExplicitGrantIsServed() {
         Long userId = signInAs("DATA_ENTRY", employerId);
-        grant(userId, "MEMBER_LIMIT_VIEW");
+        grant(userId, "MEMBER_LIMIT_LIST_VIEW");
 
         assertThat(service.authorizedSummariesFor(List.of(memberId)))
                 .as("a rule written as a role cannot be granted to one person; this is "
@@ -151,10 +151,10 @@ class CeilingAccessFollowsThePermissionNotTheRoleIntegrationTest extends Postgre
     @DisplayName("revoking it closes the door again, without waiting for anything")
     void revokingTheGrantRefusesAgain() {
         Long userId = signInAs("DATA_ENTRY", employerId);
-        grant(userId, "MEMBER_LIMIT_VIEW");
+        grant(userId, "MEMBER_LIMIT_LIST_VIEW");
         assertThat(service.authorizedSummariesFor(List.of(memberId))).containsKey(memberId);
 
-        revoke(userId, "MEMBER_LIMIT_VIEW");
+        revoke(userId, "MEMBER_LIMIT_LIST_VIEW");
 
         assertThatThrownBy(() -> service.authorizedSummariesFor(List.of(memberId)))
                 .as("an administrator taking a permission away must close the door the "
@@ -176,6 +176,20 @@ class CeilingAccessFollowsThePermissionNotTheRoleIntegrationTest extends Postgre
     }
 
     @Test
+    @DisplayName("the single-member grant alone does not open the list")
+    void theSingleMemberGrantDoesNotOpenTheList() {
+        Long userId = signInAs("DATA_ENTRY", employerId);
+        grant(userId, "MEMBER_LIMIT_VIEW");
+
+        assertThatThrownBy(() -> service.authorizedSummariesFor(List.of(memberId)))
+                .as("checking the patient in front of you and pulling a page of the "
+                        + "insurer's book are different acts, so they answer to different "
+                        + "grants -- which is the only way a provider can keep the first "
+                        + "without gaining the second")
+                .isInstanceOf(MemberAccessDeniedException.class);
+    }
+
+    @Test
     @DisplayName("a super administrator reads across employers")
     void aSuperAdminReadsEverything() {
         signInAs("SUPER_ADMIN", null);
@@ -192,7 +206,7 @@ class CeilingAccessFollowsThePermissionNotTheRoleIntegrationTest extends Postgre
         Long userId = signInAs("EMPLOYER_ADMIN", employerId);
         assertThat(service.authorizedSummariesFor(List.of(memberId))).containsKey(memberId);
 
-        revoke(userId, "MEMBER_LIMIT_VIEW");
+        revoke(userId, "MEMBER_LIMIT_LIST_VIEW");
 
         assertThatThrownBy(() -> service.authorizedSummariesFor(List.of(memberId)))
                 .as("the old rule let EMPLOYER_ADMIN through by name, so a revocation "

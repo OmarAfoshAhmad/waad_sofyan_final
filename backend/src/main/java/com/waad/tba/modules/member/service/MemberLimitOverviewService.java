@@ -95,12 +95,12 @@ public class MemberLimitOverviewService {
         }
 
         AuthorizedMemberScope scope = queryAccessPolicy.requireListing(
-                MemberOperation.VIEW_LIMITS, null);
+                MemberOperation.LIST_LIMITS, null);
 
         for (Member member : memberRepository.findAllById(memberIds)) {
             Long employerId = member.getEmployer() == null ? null : member.getEmployer().getId();
             if (!scope.covers(employerId)) {
-                throw new MemberAccessDeniedException(MemberOperation.VIEW_LIMITS,
+                throw new MemberAccessDeniedException(MemberOperation.LIST_LIMITS,
                         "أحد المستفيدين المطلوبين خارج نطاق المستخدم");
             }
         }

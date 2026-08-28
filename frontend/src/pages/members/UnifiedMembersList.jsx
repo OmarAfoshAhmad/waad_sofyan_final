@@ -249,7 +249,7 @@ const UnifiedMembersList = () => {
    */
   const fetchCeilings = async (pageMembers) => {
     const ids = (pageMembers || []).map((m) => m.id).filter(Boolean);
-    if (!capabilities.viewLimits || ceilingsForbidden || ids.length === 0) {
+    if (!capabilities.viewLimitsList || ceilingsForbidden || ids.length === 0) {
       setCeilings({});
       return;
     }
@@ -497,7 +497,7 @@ const UnifiedMembersList = () => {
     },
     // Not sortable: the figure is read per page from the ledger, so the
     // database cannot order by it without computing it for every member.
-    ...(capabilities.viewLimits && !ceilingsForbidden
+    ...(capabilities.viewLimitsList && !ceilingsForbidden
       ? [{ id: 'ceiling', label: 'المتاح لالتزام جديد', minWidth: '10.5rem', sortable: false, align: 'center' }]
       : []),
     { id: 'actions', label: 'إجراءات', minWidth: '11.25rem', sortable: false, align: 'center' }
