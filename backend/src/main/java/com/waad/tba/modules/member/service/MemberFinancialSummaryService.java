@@ -2,11 +2,12 @@ package com.waad.tba.modules.member.service;
 
 import com.waad.tba.common.exception.ResourceNotFoundException;
 import com.waad.tba.common.exception.BusinessRuleException;
-import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy;
+import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository;
+import com.waad.tba.modules.benefitpolicy.repository.PolicySummaryRow;
 import com.waad.tba.modules.benefitpolicy.service.BenefitPolicyCoverageService;
-import com.waad.tba.modules.benefitpolicy.service.LimitBalanceReader;
 import com.waad.tba.modules.claim.projection.MemberFinancialAggregateProjection;
 import com.waad.tba.modules.claim.repository.ClaimRepository;
+import com.waad.tba.modules.member.dto.CurrentGeneralLimitSummary;
 import com.waad.tba.modules.member.dto.MemberFinancialSummaryDto;
 import com.waad.tba.modules.member.dto.CoverageLimitsDto;
 import com.waad.tba.modules.member.entity.Member;
@@ -28,6 +29,7 @@ import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -64,8 +66,16 @@ public class MemberFinancialSummaryService {
     private final ClaimRepository claimRepository;
     private final MedicalServiceRepository medicalServiceRepository;
     private final MemberQueryAccessPolicy queryAccessPolicy;
-    private final MemberPolicyResolver memberPolicyResolver;
-    private final LimitBalanceReader limitBalanceReader;
+    private final MemberLimitOverviewService limitOverviewService;
+    private final BenefitPolicyRepository policyRepository;
+
+    private static final String UNAVAILABLE_MESSAGE = "تعذّر عرض الرصيد حالياً";
+    private static final String NO_POLICY_MESSAGE = "لا توجد وثيقة تغطية سارية للمستفيد";
+    private static final String EXCEEDED_MESSAGE = "تم تجاوز حد التغطية السنوي";
+    private static final String EXHAUSTED_MESSAGE = "لا يوجد رصيد متاح لالتزام جديد";
+    private static final String NEARING_MESSAGE = "اقترب المستفيد من حد التغطية السنوي";
+    private static final String POLICY_EXPIRED_MESSAGE = "الوثيقة منتهية";
+    private static final String POLICY_EXPIRING_MESSAGE = "الوثيقة ستنتهي خلال %d يوم";
 
     /**
      * HTTP/read-model entry point. Internal eligibility batching deliberately uses
@@ -126,49 +136,34 @@ public class MemberFinancialSummaryService {
             return Map.of();
         }
 
-        LocalDate today = LocalDate.now();
-        Map<Long, BenefitPolicy> policyByMember = resolvePolicies(members, today);
+        // One reader, one axis, one transaction snapshot. The ceiling block
+        // comes from MemberLimitOverviewService rather than being recomputed
+        // here, so this screen and the members list cannot disagree about the
+        // same member on the same date -- which they did, on two counts: this
+        // service read committed only, and it clamped the result at zero.
+        Map<Long, CurrentGeneralLimitSummary> ceilings = limitOverviewService.summariesFor(memberIds);
+
+        Set<Long> policyIds = ceilings.values().stream()
+                .map(CurrentGeneralLimitSummary::policyId)
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.toCollection(java.util.LinkedHashSet::new));
+        Map<Long, PolicySummaryRow> policyById = policyIds.isEmpty() ? Map.of()
+                : policyRepository.findSummaryRows(policyIds).stream()
+                        .collect(Collectors.toMap(PolicySummaryRow::policyId, row -> row));
 
         Map<Long, MemberFinancialAggregateProjection> claimStatsByMember = claimRepository
                 .findFinancialAggregatesByMemberIds(memberIds).stream()
                 .collect(Collectors.toMap(MemberFinancialAggregateProjection::getMemberId, row -> row));
 
-        // WAAD-FIN-1.0 S4 + finance-08: the ceiling's own axis, read once for the
-        // whole batch and filtered to each member's OWN policy id -- never
-        // BenefitPolicyCoverageService.getLimitConsumedForYear's unfiltered
-        // total, which sums a member's consumption across every policy they
-        // held that calendar year. A member who changed policies mid-year has
-        // two distinct ceilings; summing both into one figure understated (or
-        // overstated) whichever policy's remaining balance this screen shows.
-        Map<Long, Long> policyIdByMember = policyByMember.entrySet().stream()
-                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().getId()));
-        Map<Long, BigDecimal> consumedByMember = limitBalanceReader.readGeneralCeilingCommittedBulk(
-                policyIdByMember, LocalDate.of(today.getYear(), 1, 1), LocalDate.of(today.getYear(), 12, 31), null);
-
         Map<Long, MemberFinancialSummaryDto> result = new LinkedHashMap<>();
         for (Member member : members) {
+            CurrentGeneralLimitSummary ceiling = ceilings.get(member.getId());
+            PolicySummaryRow policy = ceiling == null || ceiling.policyId() == null
+                    ? null : policyById.get(ceiling.policyId());
             result.put(member.getId(), buildSummary(
-                    member, policyByMember.get(member.getId()),
-                    claimStatsByMember.get(member.getId()),
-                    consumedByMember.getOrDefault(member.getId(), BigDecimal.ZERO)));
+                    member, policy, ceiling, claimStatsByMember.get(member.getId())));
         }
         return result;
-    }
-
-    /**
-     * Direct policy first, employer-level effective policy as fallback --
-     * resolved once per member up front so the per-member build step never
-     * touches the database.
-     */
-    private Map<Long, BenefitPolicy> resolvePolicies(List<Member> members, LocalDate asOfDate) {
-        Map<Long, BenefitPolicy> byMember = new LinkedHashMap<>();
-        for (Member member : members) {
-            BenefitPolicy policy = memberPolicyResolver.resolveFor(member, asOfDate).orElse(null);
-            if (policy != null) {
-                byMember.put(member.getId(), policy);
-            }
-        }
-        return byMember;
     }
 
     /**
@@ -177,8 +172,8 @@ public class MemberFinancialSummaryService {
      * single- and bulk-read paths.
      */
     private MemberFinancialSummaryDto buildSummary(
-            Member member, BenefitPolicy policy,
-            MemberFinancialAggregateProjection stats, BigDecimal limitConsumed) {
+            Member member, PolicySummaryRow policy, CurrentGeneralLimitSummary ceiling,
+            MemberFinancialAggregateProjection stats) {
 
         MemberFinancialSummaryDto.MemberFinancialSummaryDtoBuilder builder = MemberFinancialSummaryDto.builder();
 
@@ -188,39 +183,40 @@ public class MemberFinancialSummaryService {
                 .barcode(member.getBarcode())
                 .isDependent(member.getParent() != null);
 
+        LocalDate asOfDate = ceiling == null ? LocalDate.now() : ceiling.asOfDate();
+        builder.asOfDate(asOfDate)
+                .readAt(ceiling == null ? null : ceiling.readAt())
+                .ceilingMode(ceiling == null ? CurrentGeneralLimitSummary.Mode.UNAVAILABLE : ceiling.mode());
+
         if (policy != null) {
-            builder.policyId(policy.getId())
-                    .policyName(policy.getName())
-                    .annualLimit(policy.getAnnualLimit())
-                    .policyStartDate(policy.getStartDate())
-                    .policyEndDate(policy.getEndDate())
-                    .policyActive(policy.isActive() && policy.isEffectiveOn(LocalDate.now()));
+            builder.policyId(policy.policyId())
+                    .policyName(policy.name())
+                    .annualLimit(policy.annualLimit())
+                    .policyStartDate(policy.startDate())
+                    .policyEndDate(policy.endDate())
+                    .policyActive(policy.active() && policy.isInForceOn(asOfDate));
         } else {
             builder.policyActive(false);
         }
 
-        BigDecimal totalClaimed = stats == null ? BigDecimal.ZERO : nz(stats.getTotalClaimed());
-        BigDecimal totalApproved = stats == null ? BigDecimal.ZERO : nz(stats.getTotalApproved());
-        BigDecimal totalPaid = stats == null ? BigDecimal.ZERO : nz(stats.getTotalPaid());
-        BigDecimal totalPatientCoPay = stats == null ? BigDecimal.ZERO : nz(stats.getTotalPatientCoPay());
-        BigDecimal totalDeductible = stats == null ? BigDecimal.ZERO : nz(stats.getTotalDeductibleApplied());
+        // Signed on purpose, both of them. A member who has overspent shows a
+        // negative figure rather than a zero, because zero is the one answer a
+        // reconciler cannot tell apart from "exactly spent".
+        builder.limitConsumedAmount(ceiling == null ? null : ceiling.committed())
+                .reservedAmount(ceiling == null ? null : ceiling.reserved())
+                .actualRemaining(ceiling == null ? null : ceiling.actualRemaining())
+                .reservableAvailable(ceiling == null ? null : ceiling.reservableAvailable())
+                .remainingCoverage(ceiling == null ? null : ceiling.actualRemaining())
+                .utilizationPercent(ceiling == null ? null : ceiling.utilizationPercent());
 
-        builder.totalClaimed(totalClaimed)
-                .totalApproved(totalApproved)
-                .totalPaid(totalPaid)
-                .totalPatientCoPay(totalPatientCoPay)
-                .totalDeductibleApplied(totalDeductible)
-                .limitConsumedAmount(limitConsumed);
+        // Nulled, never zeroed: see the field docs. A zero here reads as
+        // "nothing has been paid", which is a claim this system cannot make.
+        builder.totalClaimed(null).totalApproved(null).totalPaid(null)
+                .claimPaymentAttribution(
+                        MemberFinancialSummaryDto.ClaimPaymentAttribution.NOT_SUPPORTED);
 
-        BigDecimal remainingCoverage = null;
-        BigDecimal utilizationPercent = BigDecimal.ZERO;
-        if (policy != null && policy.getAnnualLimit() != null && policy.getAnnualLimit().compareTo(BigDecimal.ZERO) > 0) {
-            remainingCoverage = policy.getAnnualLimit().subtract(limitConsumed).max(BigDecimal.ZERO);
-            utilizationPercent = limitConsumed
-                    .multiply(BigDecimal.valueOf(100))
-                    .divide(policy.getAnnualLimit(), 2, RoundingMode.HALF_UP);
-            builder.remainingCoverage(remainingCoverage).utilizationPercent(utilizationPercent);
-        }
+        builder.totalPatientCoPay(stats == null ? BigDecimal.ZERO : nz(stats.getTotalPatientCoPay()))
+                .totalDeductibleApplied(stats == null ? BigDecimal.ZERO : nz(stats.getTotalDeductibleApplied()));
 
         int totalCount = stats == null ? 0 : stats.getClaimsCount().intValue();
         int pendingCount = stats == null ? 0 : stats.getPendingClaimsCount().intValue();
@@ -235,39 +231,68 @@ public class MemberFinancialSummaryService {
                 .rejectedClaimsCount(rejectedCount)
                 .lastClaimDate(lastClaimDate);
 
-        String warning = null;
-        boolean nearingLimit = false;
-        boolean expiringSoon = false;
+        builder.warningMessage(warningFor(policy, ceiling, asOfDate))
+                .nearingLimit(nearingLimit(ceiling))
+                .policyExpiringSoon(expiringSoon(policy, asOfDate));
 
-        if (policy != null) {
-            if (utilizationPercent.compareTo(BigDecimal.valueOf(80)) >= 0) {
-                nearingLimit = true;
-                warning = "⚠️ تنبيه: اقتربت من حد التغطية السنوي (" + utilizationPercent.intValue() + "% مستهلك)";
-            }
+        return builder.build();
+    }
 
-            if (policy.getEndDate() != null) {
-                long daysUntilExpiry = ChronoUnit.DAYS.between(LocalDate.now(), policy.getEndDate());
-                if (daysUntilExpiry > 0 && daysUntilExpiry <= 30) {
-                    expiringSoon = true;
-                    if (warning == null) {
-                        warning = "⚠️ تنبيه: الوثيقة ستنتهي خلال " + daysUntilExpiry + " يوم";
-                    }
-                } else if (daysUntilExpiry <= 0) {
-                    warning = "❌ الوثيقة منتهية";
-                }
-            }
-        } else {
-            warning = "❌ لا توجد وثيقة تغطية مربوطة بالعضو";
+    /**
+     * Judged on what may still be committed, not on what has been spent: a
+     * member holding a large approved pre-authorization is near their ceiling
+     * for every decision that matters, before any of it is spent.
+     */
+    private boolean nearingLimit(CurrentGeneralLimitSummary ceiling) {
+        if (ceiling == null) {
+            return false;
         }
+        return switch (ceiling.alertStatus()) {
+            case WARNING, CRITICAL, EXHAUSTED, EXCEEDED -> true;
+            default -> false;
+        };
+    }
 
-        builder.warningMessage(warning)
-                .nearingLimit(nearingLimit)
-                .policyExpiringSoon(expiringSoon);
+    private boolean expiringSoon(PolicySummaryRow policy, LocalDate asOfDate) {
+        if (policy == null || policy.endDate() == null) {
+            return false;
+        }
+        long days = ChronoUnit.DAYS.between(asOfDate, policy.endDate());
+        return days > 0 && days <= 30;
+    }
 
-        MemberFinancialSummaryDto summary = builder.build();
-        log.debug("✅ Financial summary built: member={}, claimed={}, approved={}, consumed={}, remaining={}",
-                member.getId(), totalClaimed, totalApproved, limitConsumed, remainingCoverage);
-        return summary;
+    private String warningFor(PolicySummaryRow policy, CurrentGeneralLimitSummary ceiling,
+            LocalDate asOfDate) {
+        if (ceiling != null && ceiling.mode() == CurrentGeneralLimitSummary.Mode.UNAVAILABLE) {
+            return UNAVAILABLE_MESSAGE;
+        }
+        if (policy == null) {
+            return NO_POLICY_MESSAGE;
+        }
+        if (ceiling != null) {
+            switch (ceiling.alertStatus()) {
+                case EXCEEDED -> {
+                    return EXCEEDED_MESSAGE;
+                }
+                case EXHAUSTED -> {
+                    return EXHAUSTED_MESSAGE;
+                }
+                case CRITICAL, WARNING -> {
+                    return NEARING_MESSAGE;
+                }
+                default -> { }
+            }
+        }
+        if (policy.endDate() != null) {
+            long days = ChronoUnit.DAYS.between(asOfDate, policy.endDate());
+            if (days <= 0) {
+                return POLICY_EXPIRED_MESSAGE;
+            }
+            if (days <= 30) {
+                return String.format(POLICY_EXPIRING_MESSAGE, days);
+            }
+        }
+        return null;
     }
 
     private static BigDecimal nz(BigDecimal value) {

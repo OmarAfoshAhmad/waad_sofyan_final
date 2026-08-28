@@ -873,43 +873,56 @@ public class BenefitPolicyCoverageService {
     }
 
     /**
-     * Get remaining coverage for a member (for UI display).
-     * Uses member's direct benefit policy only. For employer-fallback scenarios,
-     * use getRemainingCoverage(BenefitPolicy, Long, LocalDate) instead.
+     * The member's general ceiling on a date, resolving the policy first.
+     * Callers that already hold the resolved policy should use the overload
+     * that takes it, to avoid resolving twice.
      */
-    public BigDecimal getRemainingCoverage(Member member, LocalDate asOfDate) {
+    public GeneralCeilingReading readGeneralCeiling(Member member, LocalDate asOfDate) {
         // "Remaining as of a date" must be measured against the policy that
         // applied on that date -- reading the current pointer would restate a
         // past balance using today's annual limit.
         BenefitPolicy policy = memberPolicyResolver.resolveFor(member, asOfDate).orElse(null);
-        return getRemainingCoverage(policy, member.getId(), asOfDate);
+        return readGeneralCeiling(policy, member.getId(), asOfDate);
     }
 
     /**
-     * Get remaining coverage given an already-resolved policy (supports
-     * employer-level fallback). WAAD-FIN-1.0 S4 + finance-08: "remaining" is
-     * {@code annualLimit - consumed}, read from the ledger and filtered to
-     * THIS policy's own rows via {@link LimitBalanceReader#readGeneralCeiling}
-     * -- never {@link #getLimitConsumedForYear(Long, int, Long)}'s
-     * unfiltered-by-policy total, which sums a member's consumption across
-     * every policy they held that calendar year. A member who changed
-     * policies mid-year has two distinct ceilings; the old, unfiltered read
-     * let one policy's remaining balance be understated by spending under a
-     * DIFFERENT policy the member no longer has.
+     * The general ceiling given an already-resolved policy, read from the
+     * ledger and filtered to THIS policy's own rows via
+     * {@link LimitBalanceReader#readGeneralCeiling} -- never
+     * {@link #getLimitConsumedForYear(Long, int, Long)}'s unfiltered total,
+     * which sums a member's consumption across every policy they held that
+     * calendar year. A member who changed policies mid-year has two distinct
+     * ceilings; the old, unfiltered read let one policy's remaining balance be
+     * understated by spending under a DIFFERENT policy the member no longer has.
+     *
+     * Returns the whole reading rather than one number. It used to return
+     * {@code actualRemaining} clamped at zero, which was wrong twice over: it
+     * hid an overspend behind the same value an exactly-spent member shows,
+     * and it offered a figure that includes money already held by an approved
+     * pre-authorization to callers about to decide on a NEW commitment.
+     * Callers now say which of the two figures they mean.
      */
-    public BigDecimal getRemainingCoverage(BenefitPolicy policy, Long memberId, LocalDate asOfDate) {
+    public GeneralCeilingReading readGeneralCeiling(BenefitPolicy policy, Long memberId, LocalDate asOfDate) {
         if (policy == null) {
-            return null;
+            return GeneralCeilingReading.notConfigured("لا توجد وثيقة سارية");
         }
 
+        // Delegates to the bulk reader with a single member rather than
+        // keeping a second implementation beside it. The modes, the
+        // unlimited-means-zero-limit convention, and the failure behaviour all
+        // come from one place, so this path and the members list cannot come
+        // to differ about the same member.
+        Map<Long, BigDecimal> limitByPolicy = new HashMap<>();
         BigDecimal annualLimit = policy.getAnnualLimit();
-        if (annualLimit == null || annualLimit.compareTo(BigDecimal.ZERO) <= 0) {
-            return null; // Unlimited or not configured
+        if (annualLimit != null && annualLimit.compareTo(BigDecimal.ZERO) > 0) {
+            limitByPolicy.put(policy.getId(), annualLimit);
         }
+        Map<Long, Long> policyByMember = new HashMap<>();
+        policyByMember.put(memberId, policy.getId());
 
-        var ceiling = limitBalanceReader.readGeneralCeiling(memberId, policy.getId(), annualLimit,
-                LocalDate.of(asOfDate.getYear(), 1, 1), LocalDate.of(asOfDate.getYear(), 12, 31), null);
-        return ceiling.actualRemaining().max(BigDecimal.ZERO);
+        return limitBalanceReader.readGeneralCeilingBulk(policyByMember, limitByPolicy,
+                        LocalDate.of(asOfDate.getYear(), 1, 1), LocalDate.of(asOfDate.getYear(), 12, 31))
+                .getOrDefault(memberId, GeneralCeilingReading.unavailable("تعذّرت قراءة الرصيد"));
     }
 
     // ═══════════════════════════════════════════════════════════════════════════

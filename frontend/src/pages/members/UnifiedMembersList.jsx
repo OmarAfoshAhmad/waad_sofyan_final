@@ -26,8 +26,10 @@ import { useNavigate } from 'react-router-dom';
 import {
   Autocomplete,
   Alert,
+  Badge,
   Box,
   Button,
+  ButtonBase,
   Chip,
   FormControl,
   Grid,
@@ -72,7 +74,10 @@ import { useSnackbar } from 'notistack';
 import MainCard from 'components/MainCard';
 import { ModernPageHeader, MemberAvatar, SoftDeleteToggle, ActionConfirmDialog } from 'components/tba';
 import { UnifiedMedicalTable } from 'components/common';
+import FamilyRestroomIcon from '@mui/icons-material/FamilyRestroom';
 import MembersBulkUploadDialog from 'components/members/MembersBulkUploadDialog';
+import MemberCeilingCell from 'components/members/MemberCeilingCell';
+import MemberCeilingDrawer from 'components/members/MemberCeilingDrawer';
 import DataExportWizard from 'components/tba/DataExportWizard';
 import {
   searchMembers,
@@ -83,6 +88,7 @@ import {
   reinstateTerminatedMember,
   hardDeleteMember,
   toggleMemberActive,
+  getLimitsOverview,
   MEMBER_TYPES,
   MEMBER_STATUSES
 } from 'services/api/unified-members.service';
@@ -94,6 +100,15 @@ import useAuth from 'hooks/useAuth';
 import { getMemberCapabilities } from './memberCapabilities';
 
 const MIN_MEMBER_SEARCH_LENGTH = 3;
+
+/**
+ * Page sizes for the members list only, not the shared table default.
+ *
+ * The ceiling column reads a page in one request whatever its size, so these
+ * are a reading preference rather than a performance ceiling. 30 is here
+ * because it is the size the browser cycle checks the request count at.
+ */
+const MEMBER_PAGE_SIZES = [6, 12, 24, 30];
 
 /**
  * Unified Members List Component
@@ -110,13 +125,25 @@ const UnifiedMembersList = () => {
   // STATE
   // ════════════════════════════════════════════════════════════════════════
   const [members, setMembers] = useState([]);
+  // Keyed by member id. Filled by ONE call per page, never one per row.
+  const [ceilings, setCeilings] = useState({});
+  const [ceilingsLoading, setCeilingsLoading] = useState(false);
+  const [ceilingDrawerMember, setCeilingDrawerMember] = useState(null);
+  // Set if the server ever answers 403. The permission bit is now the single
+  // thing that decides on both sides, so this should not fire on a page load
+  // -- it is here for the permission being revoked while someone is looking at
+  // the screen, which must take the column away rather than leave it reading
+  // "unavailable" for the rest of the session.
+  const [ceilingsForbidden, setCeilingsForbidden] = useState(false);
   const [loading, setLoading] = useState(false);
   const [totalCount, setTotalCount] = useState(0);
   const [loadError, setLoadError] = useState('');
 
   // Pagination
   const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
+  // Must be one of MEMBER_PAGE_SIZES: MUI's pagination shows a blank selector
+  // when the current value is not among the options it was given.
+  const [rowsPerPage, setRowsPerPage] = useState(12);
 
   // Sorting
   const [sortBy, setSortBy] = useState('createdAt');
@@ -189,9 +216,11 @@ const UnifiedMembersList = () => {
       const pageData = response?.data || response;
 
       setLoadError('');
-      setMembers(pageData?.content || []);
+      const pageMembers = pageData?.content || [];
+      setMembers(pageMembers);
       setTotalCount(pageData?.totalElements || 0);
       setSelectedMembers([]); // Clear selection on page change or fetch
+      fetchCeilings(pageMembers);
     } catch (error) {
       console.error('Error fetching members:', error);
       const message = error?.response?.data?.messageAr
@@ -202,10 +231,44 @@ const UnifiedMembersList = () => {
       setMembers([]);
       setTotalCount(0);
       setSelectedMembers([]);
+      setCeilings({});
       setLoadError(message);
       enqueueSnackbar(message, { variant: 'error' });
     } finally {
       setLoading(false);
+    }
+  };
+
+  /**
+   * One request for the whole page.
+   *
+   * A failure here leaves the column reading "غير متاح" rather than zero, and
+   * deliberately does not fail the list: the member rows themselves loaded
+   * fine, and hiding them because a balance read failed would be a worse
+   * answer than showing them without balances.
+   */
+  const fetchCeilings = async (pageMembers) => {
+    const ids = (pageMembers || []).map((m) => m.id).filter(Boolean);
+    if (!capabilities.viewLimitsList || ceilingsForbidden || ids.length === 0) {
+      setCeilings({});
+      return;
+    }
+    setCeilingsLoading(true);
+    try {
+      const data = await getLimitsOverview(ids);
+      setCeilings(data || {});
+    } catch (error) {
+      console.error('Error fetching member ceilings:', error);
+      setCeilings({});
+      // 403 is not a failed read, it is an answer: this account may not see
+      // ceilings. Leaving the column in place would show every row as
+      // "unavailable", which reads as a system fault rather than as a
+      // permission. Any other failure is transient and keeps the column.
+      if (error?.response?.status === 403) {
+        setCeilingsForbidden(true);
+      }
+    } finally {
+      setCeilingsLoading(false);
     }
   };
 
@@ -432,9 +495,66 @@ const UnifiedMembersList = () => {
       align: 'center',
       sortable: true
     },
-    { id: 'dependentsCount', label: 'التبعية / التابعون', minWidth: '7.5rem', sortable: false, align: 'center' },
-    { id: 'actions', label: 'إجراءات', minWidth: '9.375rem', sortable: false, align: 'center' }
+    // Not sortable: the figure is read per page from the ledger, so the
+    // database cannot order by it without computing it for every member.
+    ...(capabilities.viewLimitsList && !ceilingsForbidden
+      ? [{ id: 'ceiling', label: 'المتاح لالتزام جديد', minWidth: '9rem', sortable: false, align: 'center' }]
+      : []),
+    { id: 'actions', label: 'إجراءات', minWidth: '11.25rem', sortable: false, align: 'center' }
   ];
+
+  /**
+   * Family, as one control in the actions row.
+   *
+   * A principal shows how many dependents they carry; a dependent gets a way
+   * back to the principal they hang off. Both are navigation about the family,
+   * so they belong beside the other actions rather than in a column of their
+   * own that is blank for half the rows.
+   */
+  const renderFamilyAction = (member) => {
+    if (member.type === MEMBER_TYPES.DEPENDENT) {
+      return (
+        <Tooltip title={`عرض الموظف (${member.parentFullName || 'غير محدد'})`}>
+          <span>
+            <IconButton
+              size="small"
+              color="info"
+              disabled={!member.parentId}
+              aria-label="عرض الموظف الرئيسي"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (member.parentId) navigate(`/members/${member.parentId}`);
+              }}
+            >
+              <FamilyRestroomIcon fontSize="small" />
+            </IconButton>
+          </span>
+        </Tooltip>
+      );
+    }
+
+    const count = member.dependentsCount || 0;
+    return (
+      <Tooltip title={count > 0 ? `يملك ${count} تابعين` : 'لا يوجد تابعون'}>
+        <span>
+          <IconButton
+            size="small"
+            color={count > 0 ? 'secondary' : 'default'}
+            disabled={count === 0}
+            aria-label={count > 0 ? `عرض ${count} تابعين` : 'لا يوجد تابعون'}
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(`/members/${member.id}`);
+            }}
+          >
+            <Badge badgeContent={count} color="secondary" overlap="circular">
+              <FamilyRestroomIcon fontSize="small" />
+            </Badge>
+          </IconButton>
+        </span>
+      </Tooltip>
+    );
+  };
 
   // ════════════════════════════════════════════════════════════════════════
   // TABLE CELL RENDERER
@@ -446,6 +566,17 @@ const UnifiedMembersList = () => {
           <Typography variant="body2" color="textSecondary" fontWeight="bold">
             {page * rowsPerPage + rowIndex + 1}
           </Typography>
+        );
+
+      case 'ceiling':
+        return (
+          <ButtonBase
+            aria-label={`عرض تفاصيل سقف ${member.fullName || member.cardNumber || ''}`}
+            onClick={() => setCeilingDrawerMember(member)}
+            sx={{ width: '100%', borderRadius: 1, textAlign: 'inherit', '&:hover': { opacity: 0.8 } }}
+          >
+            <MemberCeilingCell summary={ceilings[member.id]} loading={ceilingsLoading} />
+          </ButtonBase>
         );
 
       case 'cardNumber':
@@ -530,50 +661,12 @@ const UnifiedMembersList = () => {
       case 'employerName':
         return <Typography variant="body2">{member.employerName || '-'}</Typography>;
 
-      case 'dependentsCount':
-        if (member.type === MEMBER_TYPES.DEPENDENT) {
-          return (
-            <Tooltip title={`عرض الموظف (${member.parentFullName || 'غير محدد'})`}>
-              <IconButton
-                size="small"
-                color="info"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (member.parentId) navigate(`/members/${member.parentId}`);
-                }}
-                sx={{ border: '1px solid', borderColor: 'info.main', borderRadius: 1 }}
-              >
-                <VisibilityIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-          );
-        }
-
-        // PRINCIPAL member dependents badge
-        return (
-          <Tooltip title={member.dependentsCount > 0 ? 'يملك تابعين (اضغط عرض لمعرفتهم)' : 'لا يوجد تابعين'}>
-            <Chip
-              label={member.dependentsCount || 0}
-              size="small"
-              variant="outlined"
-              sx={{
-                minWidth: '1.75rem',
-                height: '1.25rem',
-                borderRadius: '0.375rem',
-                bgcolor: member.dependentsCount > 0 ? 'secondary.lighter' : 'transparent',
-                borderColor: member.dependentsCount > 0 ? 'secondary.light' : 'divider',
-                color: member.dependentsCount > 0 ? 'secondary.main' : 'text.disabled',
-                fontWeight: member.dependentsCount > 0 ? 600 : 400
-              }}
-            />
-          </Tooltip>
-        );
-
       case 'actions':
         if (showDeleted) {
           // Actions for deleted members
           return (
-            <Stack direction="row" spacing={0.5}>
+            <Stack direction="row" spacing={0.5} alignItems="center">
+              {renderFamilyAction(member)}
               {capabilities.reinstateTerminated && <Tooltip title="إعادة عضوية استثنائية">
                 <IconButton size="small" color="success" onClick={() =>
                   setLifecycleDialog({ open: true, action: 'REINSTATE', member })}>
@@ -591,7 +684,8 @@ const UnifiedMembersList = () => {
 
         // Actions for active members
         return (
-          <Stack direction="row" spacing={0.5}>
+          <Stack direction="row" spacing={0.5} alignItems="center">
+            {renderFamilyAction(member)}
             <Tooltip title="عرض التفاصيل">
               <IconButton size="small" color="info" onClick={() => navigate(`/members/${member.id}`)}>
                 <VisibilityIcon fontSize="small" />
@@ -842,6 +936,7 @@ const UnifiedMembersList = () => {
         totalCount={totalCount}
         page={page}
         rowsPerPage={rowsPerPage}
+        rowsPerPageOptions={MEMBER_PAGE_SIZES}
         onPageChange={(newPage) => setPage(newPage)}
         onRowsPerPageChange={(newSize) => setRowsPerPage(newSize)}
         sortBy={sortBy}
@@ -857,6 +952,15 @@ const UnifiedMembersList = () => {
         onSelectRow={handleSelectRow}
         sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minHeight: 0, mb: 1 }}
         tableContainerSx={{ flexGrow: 1, minHeight: 0 }}
+      />
+
+      {/* Ceiling drawer: opened from the column, seeded with the figures that
+          column already holds so it is readable before its own request lands. */}
+      <MemberCeilingDrawer
+        open={Boolean(ceilingDrawerMember)}
+        member={ceilingDrawerMember}
+        initialSummary={ceilingDrawerMember ? ceilings[ceilingDrawerMember.id] : null}
+        onClose={() => setCeilingDrawerMember(null)}
       />
 
       {/* Import Dialog */}

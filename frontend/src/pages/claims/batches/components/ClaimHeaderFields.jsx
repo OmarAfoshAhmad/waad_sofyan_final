@@ -44,13 +44,21 @@ export const ClaimHeaderFields = ({
   // Header badges are policy-wide totals. Service/category ceilings belong only
   // in the corresponding claim-line column.
   const amountLimit = Number(financialSummary?.annualLimit || 0);
-  const persistedRemaining = Number(financialSummary?.remainingCoverage || 0);
+  // reservableAvailable, not the remaining-consumption figure: this badge sits
+  // on a screen where a NEW commitment is being entered, and money already
+  // held by an approved pre-authorization is not available to commit again.
+  // Null, not zero, whenever there is no ceiling to report -- unlimited, not
+  // configured, or a failed read. The badges below are hidden in that case
+  // rather than showing a fabricated 0 د.ل to someone entering a claim.
+  const hasCeiling =
+    financialSummary?.reservableAvailable !== null && financialSummary?.reservableAvailable !== undefined;
+  const persistedAvailable = hasCeiling ? Number(financialSummary.reservableAvailable) : 0;
   // The persisted summary includes an existing claim being edited, while the
   // coverage engine excludes that claim before recalculation. Add its old
   // approved amount back, then subtract the current draft commitment so the
   // badge and engine describe the same state.
-  const availableBeforeDraft = Math.min(amountLimit, persistedRemaining + Number(editingApprovedAmount || 0));
-  const remainingAmount = Math.max(0, availableBeforeDraft - Number(currentCompanyCommitment || 0));
+  const availableBeforeDraft = Math.min(amountLimit, persistedAvailable + Number(editingApprovedAmount || 0));
+  const remainingAmount = availableBeforeDraft - Number(currentCompanyCommitment || 0);
   return (
     <Box
       sx={{
@@ -220,7 +228,7 @@ export const ClaimHeaderFields = ({
               <MenuItem value="FULL_COVERAGE">تغطية كاملة</MenuItem>
             </Select>
           )}
-          {amountLimit > 0 && (
+          {hasCeiling && amountLimit > 0 && (
             <Stack
               direction="column"
               spacing={0.35}
@@ -238,7 +246,7 @@ export const ClaimHeaderFields = ({
                 size="small"
                 color={remainingAmount <= 0 ? 'error' : 'success'}
                 variant="outlined"
-                label={`المتبقي: ${remainingAmount.toFixed(2)} د.ل`}
+                label={`المتاح لالتزام جديد: ${remainingAmount.toFixed(2)} د.ل`}
                 sx={{ height: 24, '& .MuiChip-label': { px: 0.7, fontSize: '0.68rem' } }}
               />
             </Stack>

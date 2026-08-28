@@ -817,6 +817,38 @@ export const deletePhoto = async (id) => {
 };
 
 /**
+ * Current general ceiling for a whole page of members, in one request.
+ *
+ * POST because the ids are a body: a page of them is long, and ids in a URL
+ * reach access logs, APM and browser history. It is a read.
+ *
+ * Call this once per page. A call per row puts the request count on the rows,
+ * which is the cost the bulk backend path exists to remove.
+ *
+ * @param {number[]} memberIds - the members on the current page
+ * @returns {Promise<Object>} map of member id to ceiling summary
+ */
+export const getLimitsOverview = async (memberIds) => {
+  const response = await api.post(`${UNIFIED_MEMBERS_BASE_URL}/limits/overview`, { memberIds });
+  return response.data;
+};
+
+/**
+ * One member's general ceiling and every bucket under it.
+ *
+ * Called only when the drawer opens, never as part of rendering a list. The
+ * general figures come from the same read the column used, so the two agree by
+ * construction; readAt says how far apart the two reads were.
+ *
+ * @param {number} memberId
+ * @returns {Promise<Object>} general summary plus bucket balances
+ */
+export const getLimitDetail = async (memberId) => {
+  const response = await api.get(`${UNIFIED_MEMBERS_BASE_URL}/${memberId}/limits/detail`);
+  return response.data;
+};
+
+/**
  * Get financial summary for a member
  *
  * @param {number} memberId - Member ID
@@ -861,6 +893,8 @@ export default {
   uploadPhoto,
   deletePhoto,
   getFinancialSummary,
+  getLimitsOverview,
+  getLimitDetail,
   RELATIONSHIPS,
   GENDERS,
   MEMBER_STATUSES,

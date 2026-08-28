@@ -329,19 +329,32 @@ class BenefitPolicyCoverageServiceTest {
     }
 
     @Test
-    @DisplayName("getRemainingCoverage reads the ledger filtered to THIS policy, not the unfiltered claim_lines total -- "
+    @DisplayName("readGeneralCeiling reads the ledger filtered to THIS policy, not the unfiltered claim_lines total -- "
             + "a member who switched policies mid-year must not have a former policy's spending count against this one")
-    void getRemainingCoverage_ReadsPolicyFilteredLedger_NotUnfilteredClaimLinesTotal() {
-        when(limitBalanceReader.readGeneralCeiling(eq(1L), eq(1L), eq(new BigDecimal("10000.00")), any(), any(), isNull()))
-                .thenReturn(new LimitBalanceReader.GeneralCeilingBalance(
-                        new BigDecimal("10000.00"), new BigDecimal("3000.00"), BigDecimal.ZERO,
-                        new BigDecimal("7000.00"), new BigDecimal("7000.00")));
+    void readGeneralCeiling_ReadsPolicyFilteredLedger_NotUnfilteredClaimLinesTotal() {
+        when(limitBalanceReader.readGeneralCeilingBulk(anyMap(), anyMap(), any(), any()))
+                .thenReturn(java.util.Map.of(1L, GeneralCeilingReading.found(
+                        new BigDecimal("10000.00"), new BigDecimal("3000.00"), new BigDecimal("500.00"))));
 
-        BigDecimal remaining = coverageService.getRemainingCoverage(testPolicy, 1L, LocalDate.now());
+        GeneralCeilingReading ceiling = coverageService.readGeneralCeiling(testPolicy, 1L, LocalDate.now());
 
-        assertEquals(0, new BigDecimal("7000.00").compareTo(remaining));
+        assertEquals(0, new BigDecimal("7000.00").compareTo(ceiling.actualRemaining()));
+        assertEquals(0, new BigDecimal("6500.00").compareTo(ceiling.reservableAvailable()));
         verify(claimRepository, never())
                 .sumLimitConsumptionByMemberAndPeriodExcludingClaim(anyLong(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("readGeneralCeiling keeps an overspend negative -- clamping it at zero made an "
+            + "overspent member indistinguishable from an exactly-spent one")
+    void readGeneralCeiling_KeepsOverspendNegative() {
+        when(limitBalanceReader.readGeneralCeilingBulk(anyMap(), anyMap(), any(), any()))
+                .thenReturn(java.util.Map.of(1L, GeneralCeilingReading.found(
+                        new BigDecimal("10000.00"), new BigDecimal("12000.00"), BigDecimal.ZERO)));
+
+        GeneralCeilingReading ceiling = coverageService.readGeneralCeiling(testPolicy, 1L, LocalDate.now());
+
+        assertEquals(0, new BigDecimal("-2000.00").compareTo(ceiling.actualRemaining()));
     }
 
     @Test

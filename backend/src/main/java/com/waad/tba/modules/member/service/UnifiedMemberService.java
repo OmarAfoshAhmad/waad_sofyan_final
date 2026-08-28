@@ -705,13 +705,19 @@ public class UnifiedMemberService {
 
             var principalSummary = summariesByMember.get(principal.getId());
             if (principalSummary != null) {
+                // reservableAvailable, not actualRemaining: this is an
+                // eligibility surface, read by someone about to authorise
+                // treatment. A hold placed by an approved pre-authorization is
+                // not money they may commit again.
                 response.setAnnualLimit(principalSummary.getAnnualLimit());
-                response.setRemainingFamilyLimit(principalSummary.getRemainingCoverage());
+                response.setRemainingFamilyLimit(principalSummary.getReservableAvailable());
 
                 if (response.getPrincipal() != null) {
                     response.getPrincipal().setAnnualLimit(principalSummary.getAnnualLimit());
                     response.getPrincipal().setUsedAmount(principalSummary.getLimitConsumedAmount());
-                    response.getPrincipal().setRemainingLimit(principalSummary.getRemainingCoverage());
+                    response.getPrincipal().setReservedAmount(principalSummary.getReservedAmount());
+                    response.getPrincipal().setRemainingLimit(principalSummary.getReservableAvailable());
+                    response.getPrincipal().setActualRemaining(principalSummary.getActualRemaining());
                     response.getPrincipal().setUsagePercentage(toDouble(principalSummary.getUtilizationPercent()));
                 }
             }
@@ -725,7 +731,9 @@ public class UnifiedMemberService {
                     }
                     depDto.setAnnualLimit(depSummary.getAnnualLimit());
                     depDto.setUsedAmount(depSummary.getLimitConsumedAmount());
-                    depDto.setRemainingLimit(depSummary.getRemainingCoverage());
+                    depDto.setReservedAmount(depSummary.getReservedAmount());
+                    depDto.setRemainingLimit(depSummary.getReservableAvailable());
+                    depDto.setActualRemaining(depSummary.getActualRemaining());
                     depDto.setUsagePercentage(toDouble(depSummary.getUtilizationPercent()));
                 }
             }

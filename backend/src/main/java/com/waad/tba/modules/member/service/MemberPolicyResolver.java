@@ -2,6 +2,7 @@ package com.waad.tba.modules.member.service;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Map;
 import java.util.Optional;
 
 import org.springframework.dao.DataIntegrityViolationException;
@@ -12,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.waad.tba.common.exception.BusinessRuleException;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository;
+import com.waad.tba.modules.benefitpolicy.repository.PolicyInForceRow;
 import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.modules.member.entity.MemberPolicyAssignment;
 import com.waad.tba.modules.member.entity.PolicyAssignmentSource;
@@ -47,6 +49,8 @@ public class MemberPolicyResolver {
     private final BenefitPolicyRepository policyRepository;
     private final com.waad.tba.modules.member.repository.MemberRepository memberRepository;
     private final MemberEmployerResolver memberEmployerResolver;
+    private final com.waad.tba.modules.member.repository.MemberEmployerAssignmentRepository
+            employerAssignmentRepository;
 
     /**
      * Walks the cause chain looking for the constraint name. Postgres reports
@@ -163,6 +167,138 @@ public class MemberPolicyResolver {
      * stop the operation with a clear reason, never flow onward as a null that
      * some downstream branch reads as "no limit applies". Fail closed.
      */
+    /**
+     * The dated policy for a whole set of members, in one query.
+     *
+     * Exists because the members list needs this for every row it renders, and
+     * resolveAssignmentFor once per row makes the cost of a page a function of
+     * its size. The list is the only reason this is bulk; the rule it applies
+     * is identical to the single-member path.
+     *
+     * Every requested id appears in the result. A member the query returned
+     * nothing for is NOT_ASSIGNED, not absent -- a caller iterating the map
+     * must not be able to skip someone by accident, and a missing key is far
+     * easier to overlook than a stated outcome.
+     *
+     * Two covering assignments produce AMBIGUOUS rather than a choice. V171's
+     * exclusion constraint should make that impossible; if it ever happens,
+     * deciding which policy priced someone's care by iteration order is worse
+     * than admitting we do not know.
+     *
+     * @param asOfDate mandatory, and never defaulted to today: the whole point
+     *                 is to answer for a stated date, and quietly substituting
+     *                 the current one prices a past or future question with
+     *                 today's configuration
+     */
+    @Transactional(readOnly = true)
+    public Map<Long, ResolvedMemberPolicy> resolveForMembers(
+            java.util.Collection<Long> memberIds, LocalDate asOfDate) {
+        requireServiceDate(asOfDate);
+
+        Map<Long, ResolvedMemberPolicy> result = new java.util.LinkedHashMap<>();
+        if (memberIds == null || memberIds.isEmpty()) {
+            return result;
+        }
+        java.util.Set<Long> requested = new java.util.LinkedHashSet<>(memberIds);
+        requested.remove(null);
+        if (requested.isEmpty()) {
+            return result;
+        }
+
+        java.util.Map<Long, java.util.List<MemberPolicyAssignment>> covering = new java.util.HashMap<>();
+        try {
+            for (MemberPolicyAssignment assignment
+                    : assignmentRepository.findCoveringForMembers(requested, asOfDate)) {
+                covering.computeIfAbsent(assignment.getMemberId(), ignored -> new java.util.ArrayList<>())
+                        .add(assignment);
+            }
+        } catch (RuntimeException ex) {
+            // One failed read must not become a page of zeroes. Every member
+            // is reported as unavailable so the screen can say so.
+            log.error("Bulk policy resolution failed for {} members asOf {}", requested.size(), asOfDate, ex);
+            for (Long memberId : requested) {
+                result.put(memberId, ResolvedMemberPolicy.unavailable("تعذّرت قراءة تعيينات الوثائق"));
+            }
+            return result;
+        }
+
+        // The same two checks resolveFor applies after finding an assignment,
+        // in bulk. Leaving them out here would have made the list a laxer
+        // authority than the single-member path it must agree with: an
+        // assignment left open -- the normal state -- would keep answering
+        // with a policy that expired years ago, and a policy belonging to an
+        // employer the member has since left would price their care.
+        java.util.Set<Long> policyIds = new java.util.LinkedHashSet<>();
+        for (var matches : covering.values()) {
+            if (matches.size() == 1) {
+                policyIds.add(matches.get(0).getPolicyId());
+            }
+        }
+        java.util.Map<Long, PolicyInForceRow> policyRows = new java.util.HashMap<>();
+        java.util.Map<Long, Long> employerByMember = new java.util.HashMap<>();
+        try {
+            if (!policyIds.isEmpty()) {
+                for (PolicyInForceRow row : policyRepository.findInForceRows(policyIds)) {
+                    policyRows.put(row.policyId(), row);
+                }
+            }
+            for (var assignment : employerAssignmentRepository
+                    .findCoveringForMembers(requested, asOfDate)) {
+                // A second covering employer assignment is impossible under
+                // V183's exclusion constraint; if one ever appears, the
+                // mismatch branch below refuses rather than picks.
+                employerByMember.merge(assignment.getMemberId(), assignment.getEmployerId(),
+                        (first, second) -> first.equals(second) ? first : null);
+            }
+        } catch (RuntimeException ex) {
+            log.error("Bulk policy validation failed for {} members asOf {}", requested.size(), asOfDate, ex);
+            for (Long memberId : requested) {
+                result.put(memberId, ResolvedMemberPolicy.unavailable("تعذّرت قراءة تعيينات الوثائق"));
+            }
+            return result;
+        }
+
+        for (Long memberId : requested) {
+            java.util.List<MemberPolicyAssignment> matches =
+                    covering.getOrDefault(memberId, java.util.List.of());
+            if (matches.isEmpty()) {
+                result.put(memberId, ResolvedMemberPolicy.notAssigned());
+                continue;
+            }
+            if (matches.size() > 1) {
+                result.put(memberId, ResolvedMemberPolicy.ambiguous(
+                        "أكثر من تعيين وثيقة يغطي التاريخ " + asOfDate));
+                continue;
+            }
+            MemberPolicyAssignment assignment = matches.get(0);
+            PolicyInForceRow policy = policyRows.get(assignment.getPolicyId());
+            if (policy == null) {
+                // The assignment names a policy that no longer exists. Unknown,
+                // not "no coverage": something deleted a row a decision points at.
+                result.put(memberId, ResolvedMemberPolicy.unavailable(
+                        "الوثيقة المعيّنة غير موجودة"));
+                continue;
+            }
+            if (!policy.isInForceOn(asOfDate)) {
+                result.put(memberId, ResolvedMemberPolicy.policyNotInForce(
+                        "الوثيقة غير سارية بتاريخ " + asOfDate));
+                continue;
+            }
+            Long memberEmployerId = employerByMember.get(memberId);
+            if (memberEmployerId == null || !memberEmployerId.equals(policy.employerId())) {
+                log.warn("[MemberPolicy][EMPLOYER_MISMATCH] memberId={} employer={} but assigned policy {} "
+                        + "belongs to employer {} on {}", memberId, memberEmployerId,
+                        policy.policyId(), policy.employerId(), asOfDate);
+                result.put(memberId, ResolvedMemberPolicy.employerMismatch(
+                        "الوثيقة المعيّنة تتبع جهة عمل أخرى"));
+                continue;
+            }
+            result.put(memberId,
+                    ResolvedMemberPolicy.found(assignment.getPolicyId(), assignment.getId()));
+        }
+        return result;
+    }
+
     @Transactional(readOnly = true)
     public BenefitPolicy resolveForOrFail(Member member, LocalDate serviceDate) {
         requireServiceDate(serviceDate);

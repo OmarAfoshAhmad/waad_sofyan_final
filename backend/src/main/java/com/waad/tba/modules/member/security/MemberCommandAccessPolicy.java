@@ -26,6 +26,7 @@ public class MemberCommandAccessPolicy {
 
     private final MemberAccessScopeResolver scopeResolver;
     private final com.waad.tba.security.AuthorizationService authorizationService;
+    private final com.waad.tba.modules.rbac.permission.EffectivePermissionService effectivePermissions;
 
     /**
      * Commands that reach across every tenant by definition, so they belong
@@ -33,15 +34,6 @@ public class MemberCommandAccessPolicy {
      */
     private static final java.util.Set<MemberOperation> SYSTEM_WIDE = java.util.Set.of(
             MemberOperation.RESET_KINSHIP, MemberOperation.RESOLVE_DUPLICATES);
-
-    /**
-     * Entering a record and deciding its fate are different acts. Data entry
-     * creates and corrects; ending, restoring or destroying someone's
-     * coverage is an administrative decision with financial consequences.
-     */
-    private static final java.util.Set<MemberOperation> DATA_ENTRY_MAY = java.util.Set.of(
-            MemberOperation.CREATE_MEMBER, MemberOperation.EDIT_DEMOGRAPHICS,
-            MemberOperation.ADD_DEPENDENT);
 
     /** Authorises one command against the employer that OWNS the record. */
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
@@ -98,35 +90,46 @@ public class MemberCommandAccessPolicy {
                     "المستفيد المطلوب خارج نطاق المستخدم");
         }
 
-        if (authorizationService.isSuperAdmin(user)) {
+        // The permission decides, and only the permission. A role is a default
+        // set of them: granting MEMBER_CHANGE_STATUS to one data-entry user
+        // must let them change status inside their own employer, and revoking
+        // it from an employer administrator must stop them, whatever either
+        // account is called.
+        //
+        // This used to be a ladder of role names, which made the permission
+        // catalogue a decoration: the UI drew its buttons from the bits, the
+        // endpoints checked the bits, and then this method ignored them and
+        // asked what the account was called. A granted permission produced a
+        // visible button and a 403.
+        var required = MemberOperationPermissions.requiredFor(operation);
+        if (required.isEmpty()) {
             return MemberAccessDecision.allow(operation, scope);
         }
+        if (!effectivePermissions.resolve(user).contains(required.get())) {
+            return MemberAccessDecision.deny(operation, scope, refusalFor(operation));
+        }
+        return MemberAccessDecision.allow(operation, scope);
+    }
 
-        if (SYSTEM_WIDE.contains(operation)) {
-            return MemberAccessDecision.deny(operation, scope,
-                    "عملية على مستوى النظام تتطلب صلاحية مدير النظام");
-        }
-        if (operation == MemberOperation.HARD_DELETE) {
-            // Physical removal destroys the record and everything explaining
-            // it. Deactivation is the answer for everyone else.
-            return MemberAccessDecision.deny(operation, scope,
-                    "الحذف النهائي يتطلب صلاحية مدير النظام");
-        }
-
-        if (authorizationService.isEmployerAdmin(user)) {
-            return MemberAccessDecision.allow(operation, scope);
-        }
-        if (authorizationService.isDataEntry(user)) {
-            return DATA_ENTRY_MAY.contains(operation)
-                    ? MemberAccessDecision.allow(operation, scope)
-                    : MemberAccessDecision.deny(operation, scope,
-                            "هذه العملية خارج صلاحيات إدخال البيانات");
-        }
-
-        // Providers and reviewers read; the member record is not theirs to
-        // change. Anything unrecognised lands here too, which is the safe
-        // direction for a role this policy has never heard of.
-        return MemberAccessDecision.deny(operation, scope,
-                "هذا الدور لا يملك صلاحية الكتابة على سجل المستفيد");
+    /**
+     * Says which grant is missing rather than which role the account is not.
+     * The old wording named the role, which told an administrator to change
+     * someone's job title when the answer was to grant a permission.
+     */
+    private String refusalFor(MemberOperation operation) {
+        return switch (operation) {
+            case HARD_DELETE -> "الحذف النهائي يتطلب صلاحية الحذف النهائي";
+            case RESET_KINSHIP, RESOLVE_DUPLICATES ->
+                    "عملية على مستوى النظام تتطلب صلاحية العمليات الخطرة";
+            case CHANGE_STATUS, TERMINATE, REINSTATE, BULK_OPERATION ->
+                    "تغيير حالة المستفيد يتطلب صلاحية تغيير الحالة";
+            case REINSTATE_TERMINATED -> "إعادة عضوية منتهية تتطلب صلاحية خاصة";
+            case TRANSFER_EMPLOYER, TRANSFER_DEPENDENT ->
+                    "النقل بين جهات العمل يتطلب صلاحية النقل";
+            case CREATE_MEMBER, ADD_DEPENDENT -> "إنشاء مستفيد يتطلب صلاحية الإنشاء";
+            case IMPORT_PREVIEW, IMPORT_EXECUTE, IMPORT_HISTORY, IMPORT_ROLLBACK ->
+                    "استيراد المستفيدين يتطلب صلاحية الاستيراد";
+            default -> "تعديل سجل المستفيد يتطلب صلاحية التعديل";
+        };
     }
 }

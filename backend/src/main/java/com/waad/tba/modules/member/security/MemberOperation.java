@@ -19,6 +19,26 @@ public enum MemberOperation {
     VIEW_COVERAGE_BALANCE,
     /** Balances, limits and consumption -- a narrower grant than VIEW_DETAILS. */
     VIEW_FINANCIALS,
+    /**
+     * The general ceiling and its buckets, for a page of members or for one.
+     *
+     * Separate from VIEW_FINANCIALS because it answers to a different grant:
+     * a ceiling is what may still be committed, which the people entering
+     * claims need, while VIEW_FINANCIALS opens claim history and the
+     * insurer's wider position. Folding them together forced one permission
+     * to stand for two decisions and made the role the tie-breaker.
+     */
+    VIEW_LIMITS,
+    /**
+     * The same ceilings for a page of members at once.
+     *
+     * A different act from reading one. Checking the patient in front of you
+     * is care; pulling a page of balances is a view of the book, with a
+     * different blast radius and a different data volume. Giving them one
+     * permission forced a provider's legitimate single read to carry the bulk
+     * one with it.
+     */
+    LIST_LIMITS,
     /** Bulk extraction: the whole result set leaves the system as a file. */
     EXPORT,
 
@@ -37,6 +57,11 @@ public enum MemberOperation {
     CHANGE_STATUS,
     TERMINATE,
     REINSTATE,
+    /**
+     * Reviving a membership that was deliberately ended -- a different act
+     * from lifting a suspension, and carrying its own grant.
+     */
+    REINSTATE_TERMINATED,
     /** Physical removal, allowed only where no trace exists at all. */
     HARD_DELETE,
     BULK_OPERATION,

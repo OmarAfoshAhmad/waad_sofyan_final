@@ -16,6 +16,7 @@ import com.waad.tba.modules.member.repository.MemberRepository;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicyRule;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRuleRepository;
 import com.waad.tba.modules.benefitpolicy.service.BenefitPolicyCoverageService;
+import com.waad.tba.modules.benefitpolicy.service.GeneralCeilingReading;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -151,17 +152,26 @@ public class ProviderClaimsService {
                     BigDecimal.ZERO, 0, 0, false, new ArrayList<>());
         }
 
-        BigDecimal remainingLimit = benefitPolicyCoverageService.getRemainingCoverage(member, serviceDate);
-        if (remainingLimit == null) {
-            remainingLimit = annualLimit;
+        var ceiling = benefitPolicyCoverageService.readGeneralCeiling(member, serviceDate);
+        if (ceiling.mode() != GeneralCeilingReading.Mode.FOUND) {
+            // No fallback to the full annual limit. Treating an unreadable
+            // balance as a fresh one lets a claim through on the strength of a
+            // failed read, which is the opposite of what a failed read means.
+            throw new BusinessRuleException(
+                    "تعذّر التحقق من الحد السنوي للمستفيد. لا يمكن قبول المطالبة حالياً.");
         }
 
-        BigDecimal usedAmount = annualLimit.subtract(remainingLimit);
-        BigDecimal remainingBefore = remainingLimit;
+        // The decision is taken against what may still be committed. Money
+        // already held by an approved pre-authorization is not available to
+        // commit again, and committing it twice is exactly what the hold
+        // exists to prevent.
+        BigDecimal reservableAvailable = ceiling.reservableAvailable();
+        BigDecimal usedAmount = ceiling.committed();
+        BigDecimal remainingBefore = reservableAvailable;
         BigDecimal usedAfter = usedAmount.add(claimedAmount);
-        BigDecimal remainingAfter = remainingLimit.subtract(claimedAmount);
+        BigDecimal remainingAfter = reservableAvailable.subtract(claimedAmount);
 
-        boolean exceeded = claimedAmount.compareTo(remainingLimit) > 0;
+        boolean exceeded = claimedAmount.compareTo(reservableAvailable) > 0;
 
         double usagePercentageBefore = usedAmount.divide(annualLimit, 4, RoundingMode.HALF_UP)
                 .multiply(BigDecimal.valueOf(100)).doubleValue();
@@ -170,7 +180,8 @@ public class ProviderClaimsService {
 
         List<String> warnings = new ArrayList<>();
         if (exceeded) {
-            warnings.add(String.format("❌ تجاوز الحد السنوي المتبقي (المتبقي: %.2f د.ل)", remainingLimit));
+            warnings.add(String.format("❌ تجاوز الحد السنوي المتبقي (المتاح لالتزام جديد: %.2f د.ل)",
+                    reservableAvailable));
         } else if (usagePercentageAfter >= 90.0) {
             warnings.add("⚠️ اقتربت من استنفاذ الحد السنوي (تم استهلاك أكثر من 90%)");
         }
@@ -185,8 +196,8 @@ public class ProviderClaimsService {
         // Warning if exceeded
         if (exceeded) {
             warnings.add(String.format(
-                    "❌ المبلغ المطلوب (%.2f د.ل) يتجاوز الحد المتبقي (%.2f د.ل)",
-                    claimedAmount, remainingBefore.max(BigDecimal.ZERO)));
+                    "❌ المبلغ المطلوب (%.2f د.ل) يتجاوز المتاح لالتزام جديد (%.2f د.ل)",
+                    claimedAmount, remainingBefore));
         }
 
         log.info("💰 Annual limit check: limit={}, used={}, claimed={}, remaining={}, exceeded={}",

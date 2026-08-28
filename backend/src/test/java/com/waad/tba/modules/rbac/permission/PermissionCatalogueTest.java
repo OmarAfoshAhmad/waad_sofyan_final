@@ -60,16 +60,26 @@ class PermissionCatalogueTest {
                 .contains(SystemPermission.EMPLOYER_VIEW));
     }
 
+    /**
+     * Every migration, not three named ones.
+     *
+     * The list used to be hard-coded, so adding a permission in a new
+     * migration meant editing this test to keep it passing -- and a guard you
+     * have to edit to satisfy is a guard that gets edited rather than
+     * satisfied. Reading the whole folder means a permission the enum declares
+     * and no migration seeds fails on its own.
+     */
     @Test
     void migrationSeedsEveryVersionControlledPermission() throws Exception {
-        String sql = Files.readString(Path.of("src/main/resources/db/migration/"
-                + "V191__normalized_role_and_user_permissions.sql"))
-                + Files.readString(Path.of("src/main/resources/db/migration/"
-                        + "V192__align_operational_role_permission_templates.sql"))
-                + Files.readString(Path.of("src/main/resources/db/migration/"
-                        + "V193__preauth_command_permissions.sql"));
+        StringBuilder sql = new StringBuilder();
+        try (var migrations = Files.list(Path.of("src/main/resources/db/migration"))) {
+            for (Path migration : migrations.filter(f -> f.toString().endsWith(".sql")).toList()) {
+                sql.append(Files.readString(migration)).append('\n');
+            }
+        }
+        String allMigrations = sql.toString();
         Arrays.stream(SystemPermission.values())
-                .forEach(permission -> assertTrue(sql.contains("'" + permission.name() + "'"),
-                        () -> "Migration does not seed " + permission.name()));
+                .forEach(permission -> assertTrue(allMigrations.contains("'" + permission.name() + "'"),
+                        () -> "No migration seeds " + permission.name()));
     }
 }

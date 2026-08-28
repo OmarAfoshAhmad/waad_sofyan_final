@@ -19,14 +19,7 @@ public class MemberQueryAccessPolicy {
 
     private final MemberAccessScopeResolver scopeResolver;
     private final com.waad.tba.security.AuthorizationService authorizationService;
-
-    /**
-     * Operations that hand over data in bulk or expose the insurer's money.
-     * Reaching a member is not enough for these; they need a grant of their
-     * own, so a provider is excluded even under an open network.
-     */
-    private static final java.util.Set<MemberOperation> PRIVILEGED = java.util.Set.of(
-            MemberOperation.EXPORT, MemberOperation.VIEW_FINANCIALS);
+    private final com.waad.tba.modules.rbac.permission.EffectivePermissionService effectivePermissions;
 
     /**
      * Authorises a listing, search or export and returns the scope it must be
@@ -74,7 +67,7 @@ public class MemberQueryAccessPolicy {
         if (!featureAllowsReading(user)) {
             return MemberAccessDecision.deny(operation, scope, FEATURE_REFUSAL);
         }
-        if (PRIVILEGED.contains(operation) && !mayPerformPrivileged(user)) {
+        if (!holdsGrantFor(user, operation)) {
             return MemberAccessDecision.deny(operation, scope, privilegedRefusal(operation));
         }
         return MemberAccessDecision.allow(operation, scope);
@@ -104,7 +97,7 @@ public class MemberQueryAccessPolicy {
             return MemberAccessDecision.deny(operation, scope,
                     "المستفيد المطلوب خارج نطاق المستخدم");
         }
-        if (PRIVILEGED.contains(operation) && !mayPerformPrivileged(user)) {
+        if (!holdsGrantFor(user, operation)) {
             return MemberAccessDecision.deny(operation, scope, privilegedRefusal(operation));
         }
         return MemberAccessDecision.allow(operation, scope);
@@ -131,25 +124,27 @@ public class MemberQueryAccessPolicy {
     }
 
     /**
-     * A provider treats patients; it does not administer the insurer's book.
-     * Bulk extraction and detailed balances stay with the roles that own the
-     * commercial relationship.
+     * Whether this user holds the grant the operation answers to.
+     *
+     * Unprivileged operations need nothing beyond reach, so they pass here.
+     * For the rest the effective permission set decides, which means a
+     * role template AND any per-user grant or revocation on top of it -- the
+     * revocation matters as much as the grant, since an administrator taking
+     * a permission away must close the door the same day.
      */
-    private boolean mayPerformPrivileged(com.waad.tba.modules.rbac.entity.User user) {
-        // DATA_ENTRY is deliberately absent. The role enters identity,
-        // employer, policy and basic eligibility; it does not need consumed
-        // and remaining limits, claim history, or a bulk file of members.
-        // Granting them widens the role past its name, and with no
-        // fine-grained permissions to lean on, refusal is the safe default.
-        // A future MEMBER_FINANCIAL_VIEW / MEMBER_EXPORT grant can reopen it
-        // deliberately.
-        return authorizationService.isSuperAdmin(user)
-                || authorizationService.isEmployerAdmin(user);
+    private boolean holdsGrantFor(com.waad.tba.modules.rbac.entity.User user, MemberOperation operation) {
+        var required = MemberOperationPermissions.requiredFor(operation);
+        if (required.isEmpty()) {
+            return true;
+        }
+        return effectivePermissions.resolve(user).contains(required.get());
     }
 
     private String privilegedRefusal(MemberOperation operation) {
-        return operation == MemberOperation.EXPORT
-                ? "تصدير بيانات المستفيدين غير مسموح لهذا الدور"
-                : "الاطلاع على التفاصيل المالية غير مسموح لهذا الدور";
+        return switch (operation) {
+            case EXPORT -> "تصدير بيانات المستفيدين غير مسموح لهذا الحساب";
+            case VIEW_LIMITS, LIST_LIMITS -> "الاطلاع على سقوف المستفيدين غير مسموح لهذا الحساب";
+            default -> "الاطلاع على التفاصيل المالية غير مسموح لهذا الحساب";
+        };
     }
 }

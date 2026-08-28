@@ -27,7 +27,11 @@ const basePrincipal = {
   eligible: true,
   annualLimit: 50000,
   usedAmount: 8000,
-  remainingLimit: 42000
+  reservedAmount: 3000,
+  // remainingLimit is what may still be committed; actualRemaining is what
+  // has actually been consumed. They differ by the held 3,000 on purpose.
+  remainingLimit: 39000,
+  actualRemaining: 42000
 };
 
 async function searchByBarcode() {
@@ -71,8 +75,11 @@ describe('EligibilityCheck financial-data-failure handling', () => {
     expect(screen.getByText('تعذر جلب بيانات السقف المالي، يرجى إعادة المحاولة')).toBeInTheDocument();
 
     // Limit figures must read as unavailable, never as a fabricated zero.
-    const unavailableValues = screen.getAllByText('غير متاح');
-    expect(unavailableValues.length).toBeGreaterThanOrEqual(3); // annualLimit, usedAmount, remainingLimit
+    // Four figures stand alone -- annualLimit, usedAmount, reservedAmount and
+    // remainingLimit -- while actualRemaining sits inside its own sentence, so
+    // it is asserted by pattern rather than by exact text.
+    expect(screen.getAllByText('غير متاح').length).toBeGreaterThanOrEqual(4);
+    expect(screen.getByText(/المتبقي محاسبياً\s*غير متاح/)).toBeInTheDocument();
 
     // Member identity and eligibility succeeded independently and must still render.
     expect(screen.getByText('أحمد علي')).toBeInTheDocument();
@@ -100,7 +107,41 @@ describe('EligibilityCheck financial-data-failure handling', () => {
     expect(screen.queryByText('تعذر تحميل بيانات السقف المالي')).not.toBeInTheDocument();
     expect(screen.queryByText('غير متاح')).not.toBeInTheDocument();
     expect(screen.getByText('50,000 د.ل')).toBeInTheDocument();
-    expect(screen.getByText('42,000 د.ل')).toBeInTheDocument();
+    // The headline figure is what may still be committed, not what is left on
+    // the consumption axis -- the held 3,000 is unavailable to commit again.
+    expect(screen.getByText('39,000 د.ل')).toBeInTheDocument();
+    expect(screen.getByText('3,000 د.ل')).toBeInTheDocument();
+    expect(screen.getByText(/42,000 د.ل/)).toBeInTheDocument();
+  });
+
+  it('renders a missing ceiling figure as unavailable rather than as zero', async () => {
+    checkEligibility.mockResolvedValue({
+      data: {
+        principal: {
+          ...basePrincipal,
+          annualLimit: null,
+          usedAmount: null,
+          reservedAmount: null,
+          remainingLimit: null,
+          actualRemaining: null
+        },
+        dependents: [],
+        totalFamilyMembers: 1,
+        eligibleMembersCount: 1,
+        // The read succeeded; this member simply has no ceiling in force, so
+        // the backend sends nulls. Printing them as 0 د.ل would tell whoever
+        // is authorising treatment that the ceiling is spent.
+        financialDataAvailable: true
+      }
+    });
+
+    renderPage();
+    await searchByBarcode();
+
+    await screen.findByText('أحمد علي');
+    expect(screen.queryByText('0 د.ل')).not.toBeInTheDocument();
+    expect(screen.getAllByText('غير متاح').length).toBeGreaterThanOrEqual(4);
+    expect(screen.getByText(/المتبقي محاسبياً\s*غير متاح/)).toBeInTheDocument();
   });
 
   it('retry button re-invokes the eligibility check with the same barcode', async () => {

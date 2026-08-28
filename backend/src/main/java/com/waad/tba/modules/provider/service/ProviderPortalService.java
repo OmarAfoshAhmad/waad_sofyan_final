@@ -1,6 +1,7 @@
 package com.waad.tba.modules.provider.service;
 
 import com.waad.tba.modules.provider.dto.ProviderEligibilityRequest;
+import com.waad.tba.modules.benefitpolicy.service.GeneralCeilingReading;
 import com.waad.tba.modules.provider.dto.ProviderEligibilityResponse;
 import com.waad.tba.modules.member.dto.FamilyEligibilityResponseDto;
 import com.waad.tba.modules.member.dto.MemberViewDto;
@@ -283,7 +284,7 @@ public class ProviderPortalService {
             // Annual limit information (principal)
             .principalAnnualLimit(principalLimit.annualLimit())
             .principalUsedAmount(principalLimit.usedAmount())
-            .principalRemainingLimit(principalLimit.remainingLimit())
+            .principalRemainingLimit(principalLimit.reservableAvailable())
             .principalUsagePercentage(principalLimit.usagePercentage())
             
             // Additional information
@@ -334,7 +335,7 @@ public class ProviderPortalService {
             .eligibilityMessage(eligibilityMessage)
             .annualLimit(limit.annualLimit())
             .usedAmount(limit.usedAmount())
-            .remainingLimit(limit.remainingLimit())
+            .remainingLimit(limit.reservableAvailable())
             .usagePercentage(limit.usagePercentage())
             .active(memberDto.getActive())
                 .cardNumber(memberDto.getCardNumber())
@@ -387,7 +388,7 @@ public class ProviderPortalService {
             .eligibilityMessage(eligibilityMessage)
             .annualLimit(limit.annualLimit())
             .usedAmount(limit.usedAmount())
-            .remainingLimit(limit.remainingLimit())
+            .remainingLimit(limit.reservableAvailable())
             .usagePercentage(limit.usagePercentage())
             .active(dependent.getActive())
             .cardNumber(dependent.getCardNumber())
@@ -446,33 +447,50 @@ public class ProviderPortalService {
             return AnnualLimitView.noGeneralCeiling();
         }
 
-        BigDecimal annualLimit = policy.getAnnualLimit();
-        if (annualLimit == null || annualLimit.compareTo(BigDecimal.ZERO) <= 0) {
+        BigDecimal declaredLimit = policy.getAnnualLimit();
+        if (declaredLimit == null || declaredLimit.compareTo(BigDecimal.ZERO) <= 0) {
+            // No ceiling to display, and no reason to read balances for one.
             return AnnualLimitView.noGeneralCeiling();
         }
 
-        BigDecimal remainingLimit = benefitPolicyCoverageService.getRemainingCoverage(policy, member.getId(), asOfDate);
-        if (remainingLimit == null) {
+        var ceiling = benefitPolicyCoverageService.readGeneralCeiling(policy, member.getId(), asOfDate);
+        if (ceiling.mode() != GeneralCeilingReading.Mode.FOUND) {
             return AnnualLimitView.noGeneralCeiling();
         }
 
-        BigDecimal normalizedRemaining = remainingLimit.max(BigDecimal.ZERO);
-        BigDecimal usedAmount = annualLimit.subtract(normalizedRemaining).max(BigDecimal.ZERO);
+        BigDecimal annualLimit = ceiling.limit();
+        // Consumption is read, not inferred from what is left. Deriving it as
+        // limit - remaining meant an overspend came back as exactly the limit,
+        // which is the one figure a reader must not be given here.
+        BigDecimal usedAmount = ceiling.committed();
         Double usagePercentage = usedAmount
             .divide(annualLimit, 4, RoundingMode.HALF_UP)
             .multiply(BigDecimal.valueOf(100))
             .doubleValue();
-        return new AnnualLimitView(annualLimit, usedAmount, normalizedRemaining, usagePercentage);
+        return new AnnualLimitView(annualLimit, usedAmount, ceiling.reserved(),
+                ceiling.actualRemaining(), ceiling.reservableAvailable(), usagePercentage);
     }
 
+    /**
+     * Both remaining figures, both signed, both named for what they are.
+     *
+     * There is deliberately no field called "remaining": the old one was that,
+     * and being unnamed is how it came to be shown on a claim screen while
+     * meaning the accounting figure. actualRemaining is what has been
+     * consumed; reservableAvailable is what a NEW claim may draw on, and is
+     * the one a provider about to submit must see, because money already held
+     * by an approved pre-authorization is not available to commit again.
+     */
     record AnnualLimitView(
             BigDecimal annualLimit,
             BigDecimal usedAmount,
-            BigDecimal remainingLimit,
+            BigDecimal reservedAmount,
+            BigDecimal actualRemaining,
+            BigDecimal reservableAvailable,
             Double usagePercentage
     ) {
         static AnnualLimitView noGeneralCeiling() {
-            return new AnnualLimitView(null, null, null, null);
+            return new AnnualLimitView(null, null, null, null, null, null);
         }
     }
 

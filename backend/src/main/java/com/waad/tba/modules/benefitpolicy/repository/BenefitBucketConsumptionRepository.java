@@ -596,4 +596,45 @@ public interface BenefitBucketConsumptionRepository extends JpaRepository<Benefi
             @Param("periodStart") LocalDate periodStart,
             @Param("periodEnd") LocalDate periodEnd,
             @Param("excludeClaimId") Long excludeClaimId);
+
+    /**
+     * Bulk counterpart of {@link #sumGeneralScopeReserved}.
+     *
+     * Same shape and same caveat as the committed bulk read above: grouped by
+     * (member, policy) because a member who changed policies mid-period holds
+     * rows under both ids, and each policy's ceiling may only be measured
+     * against its own.
+     *
+     * "Net" means net of the reversals that point AT each hold through
+     * reversal_of_id -- not net of rows carrying a release-shaped
+     * ReversalReason. The linkage is what says which hold was released;
+     * matching on the reason instead would credit a release against holds it
+     * never belonged to, and would miss a release recorded under any reason
+     * this list forgot.
+     */
+    @Query(value = """
+        select c.member_id as memberId, c.policy_id as policyId,
+               coalesce(sum(c.approved_amount - coalesce(r.reversed_amount, 0)), 0) as amount
+          from benefit_bucket_consumptions c
+          left join (
+                select reversal_of_id, sum(approved_amount) as reversed_amount
+                  from benefit_bucket_consumptions
+                 where status = 'REVERSED' and reversal_of_id is not null
+                 group by reversal_of_id
+          ) r on r.reversal_of_id = c.id
+         where c.member_id in (:memberIds)
+           and c.limit_scope = 'POLICY_GENERAL'
+           and c.status = 'RESERVED'
+           and c.period_start = :periodStart
+           -- Null-safe EQUALITY, as in the single-member read: an open-ended
+           -- period matches an open-ended row, not every row. Treating a null
+           -- bound as "any period" would pull holds from other periods into
+           -- this one and understate what the member may still commit.
+           and c.period_end is not distinct from cast(:periodEnd as date)
+         group by c.member_id, c.policy_id
+        """, nativeQuery = true)
+    List<GeneralCeilingBulkProjection> sumGeneralScopeReservedBulk(
+            @Param("memberIds") java.util.Collection<Long> memberIds,
+            @Param("periodStart") java.time.LocalDate periodStart,
+            @Param("periodEnd") java.time.LocalDate periodEnd);
 }

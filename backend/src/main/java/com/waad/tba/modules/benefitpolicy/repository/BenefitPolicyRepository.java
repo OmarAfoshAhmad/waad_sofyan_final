@@ -239,5 +239,31 @@ public interface BenefitPolicyRepository extends JpaRepository<BenefitPolicy, Lo
 
     @Query(value = "SELECT pg_advisory_xact_lock(:lockKey)", nativeQuery = true)
     void acquireTransactionLock(@Param("lockKey") Long lockKey);
+
+    /**
+     * Several policies as a screen needs them, in one query.
+     *
+     * Deliberately a projection rather than findAllById: BenefitPolicy has an
+     * EAGER element collection, so loading the entities costs one extra select
+     * per policy. On a members page that is a per-row cost wearing the shape of
+     * a bulk read.
+     */
+    @Query("SELECT new com.waad.tba.modules.benefitpolicy.repository.PolicySummaryRow("
+         + "bp.id, bp.name, bp.annualLimit, bp.startDate, bp.endDate, bp.status, bp.active) "
+         + "FROM BenefitPolicy bp WHERE bp.id IN :policyIds")
+    List<PolicySummaryRow> findSummaryRows(@Param("policyIds") java.util.Collection<Long> policyIds);
+
+    /**
+     * The facts needed to decide whether a policy was in force for a member on
+     * a date, for several policies at once.
+     *
+     * Deliberately carries no money: this feeds dated resolution, and a
+     * resolver that can see the ceiling is a resolver that can be tempted to
+     * decide with it.
+     */
+    @Query("SELECT new com.waad.tba.modules.benefitpolicy.repository.PolicyInForceRow("
+         + "bp.id, bp.status, bp.startDate, bp.endDate, bp.employer.id) "
+         + "FROM BenefitPolicy bp WHERE bp.id IN :policyIds")
+    List<PolicyInForceRow> findInForceRows(@Param("policyIds") java.util.Collection<Long> policyIds);
 }
 

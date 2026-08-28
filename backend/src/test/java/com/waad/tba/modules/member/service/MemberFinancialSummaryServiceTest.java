@@ -4,11 +4,12 @@ import com.waad.tba.common.exception.ResourceNotFoundException;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy.BenefitPolicyStatus;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository;
+import com.waad.tba.modules.benefitpolicy.repository.PolicySummaryRow;
 import com.waad.tba.modules.benefitpolicy.service.BenefitPolicyCoverageService;
-import com.waad.tba.modules.benefitpolicy.service.LimitBalanceReader;
 import com.waad.tba.modules.claim.projection.MemberFinancialAggregateProjection;
 import com.waad.tba.modules.claim.repository.ClaimRepository;
 import com.waad.tba.modules.member.dto.CoverageLimitsDto;
+import com.waad.tba.modules.member.dto.CurrentGeneralLimitSummary;
 import com.waad.tba.modules.member.dto.MemberFinancialSummaryDto;
 import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.modules.member.repository.MemberRepository;
@@ -65,27 +66,42 @@ class MemberFinancialSummaryServiceTest {
     @Mock
     private MedicalServiceRepository medicalServiceRepository;
     @Mock
-    private MemberPolicyResolver memberPolicyResolver;
-    @Mock
-    private LimitBalanceReader limitBalanceReader;
+    private MemberLimitOverviewService limitOverviewService;
 
     @InjectMocks
     private MemberFinancialSummaryService service;
 
-    @BeforeEach
-    void resolveThePolicyOnTheSummaryDate() {
-        org.mockito.Mockito.lenient()
-                .when(memberPolicyResolver.resolveFor(any(Member.class), any(LocalDate.class)))
-                .thenAnswer(invocation -> Optional.ofNullable(
-                        invocation.<Member>getArgument(0).getBenefitPolicy()));
-    }
+    private static final Long POLICY_ID = 100L;
 
     private Member memberWithPolicy(Long id, BigDecimal annualLimit) {
         BenefitPolicy policy = BenefitPolicy.builder()
-                .id(100L).name("Gold").status(BenefitPolicyStatus.ACTIVE).active(true)
+                .id(POLICY_ID).name("Gold").status(BenefitPolicyStatus.ACTIVE).active(true)
                 .startDate(LocalDate.now().minusMonths(1)).endDate(LocalDate.now().plusMonths(11))
                 .annualLimit(annualLimit).build();
         return Member.builder().id(id).fullName("Member " + id).benefitPolicy(policy).build();
+    }
+
+    private PolicySummaryRow policyRow(BigDecimal annualLimit) {
+        return new PolicySummaryRow(POLICY_ID, "Gold", annualLimit,
+                LocalDate.now().minusMonths(1), LocalDate.now().plusMonths(11),
+                BenefitPolicyStatus.ACTIVE, true);
+    }
+
+    /** What the shared reader hands back for a member with a live ceiling. */
+    private CurrentGeneralLimitSummary ceiling(BigDecimal limit, BigDecimal committed, BigDecimal reserved) {
+        BigDecimal actualRemaining = limit.subtract(committed);
+        return new CurrentGeneralLimitSummary(
+                LocalDate.now(), LocalDateTime.now(), CurrentGeneralLimitSummary.Mode.FOUND,
+                POLICY_ID, limit, committed, reserved, actualRemaining,
+                actualRemaining.subtract(reserved),
+                committed.multiply(BigDecimal.valueOf(100)).divide(limit, 2, java.math.RoundingMode.HALF_UP),
+                CurrentGeneralLimitSummary.AlertStatus.NORMAL);
+    }
+
+    private CurrentGeneralLimitSummary noCeiling(CurrentGeneralLimitSummary.Mode mode) {
+        return new CurrentGeneralLimitSummary(LocalDate.now(), LocalDateTime.now(), mode,
+                null, null, null, null, null, null, null,
+                CurrentGeneralLimitSummary.AlertStatus.UNAVAILABLE);
     }
 
     private MemberFinancialAggregateProjection stats(Long memberId, BigDecimal totalApproved) {
@@ -115,27 +131,35 @@ class MemberFinancialSummaryServiceTest {
         // assertion catches it immediately.
         when(claimRepository.findFinancialAggregatesByMemberIds(anyCollection()))
                 .thenReturn(List.of(stats(1L, new BigDecimal("382.00"))));
-        when(limitBalanceReader.readGeneralCeilingCommittedBulk(any(), any(), any(), any()))
-                .thenReturn(Map.of(1L, new BigDecimal("600.00")));
+        when(limitOverviewService.summariesFor(anyCollection())).thenReturn(Map.of(1L,
+                ceiling(new BigDecimal("1000.00"), new BigDecimal("600.00"), BigDecimal.ZERO)));
+        when(benefitPolicyRepository.findSummaryRows(anyCollection()))
+                .thenReturn(List.of(policyRow(new BigDecimal("1000.00"))));
 
         MemberFinancialSummaryDto summary = service.getFinancialSummary(1L);
 
-        assertThat(summary.getTotalApproved()).isEqualByComparingTo("382.00");
         assertThat(summary.getLimitConsumedAmount()).isEqualByComparingTo("600.00");
-        assertThat(summary.getRemainingCoverage()).isEqualByComparingTo("400.00"); // 1000 - 600, not 1000 - 382
+        assertThat(summary.getActualRemaining()).isEqualByComparingTo("400.00"); // 1000 - 600, not 1000 - 382
         assertThat(summary.getUtilizationPercent()).isEqualByComparingTo("60.00"); // 600/1000, not 382/1000
+        assertThat(summary.getTotalApproved())
+                .as("the claim-approval axis is no longer served at all, so it cannot "
+                        + "be mistaken for the ceiling axis a second time")
+                .isNull();
     }
 
     @Test
-    @DisplayName("Bulk read for N members costs exactly one claim-stats query and one consumption query, not N")
+    @DisplayName("Bulk read for N members costs one claim-stats read and one ceiling read, not N")
     void financialSummaries_BulkRead_IsOneQueryPerAggregate() {
         Member principal = memberWithPolicy(1L, new BigDecimal("2000.00"));
         Member dependent = memberWithPolicy(2L, new BigDecimal("2000.00"));
         when(memberRepository.findAllById(anyCollection())).thenReturn(List.of(principal, dependent));
         when(claimRepository.findFinancialAggregatesByMemberIds(anyCollection()))
                 .thenReturn(List.of(stats(1L, new BigDecimal("100.00")), stats(2L, new BigDecimal("50.00"))));
-        when(limitBalanceReader.readGeneralCeilingCommittedBulk(any(), any(), any(), any()))
-                .thenReturn(Map.of(1L, new BigDecimal("150.00"), 2L, new BigDecimal("70.00")));
+        when(limitOverviewService.summariesFor(anyCollection())).thenReturn(Map.of(
+                1L, ceiling(new BigDecimal("2000.00"), new BigDecimal("150.00"), BigDecimal.ZERO),
+                2L, ceiling(new BigDecimal("2000.00"), new BigDecimal("70.00"), BigDecimal.ZERO)));
+        when(benefitPolicyRepository.findSummaryRows(anyCollection()))
+                .thenReturn(List.of(policyRow(new BigDecimal("2000.00"))));
 
         Map<Long, MemberFinancialSummaryDto> result = service.getFinancialSummaries(List.of(1L, 2L));
 
@@ -143,7 +167,8 @@ class MemberFinancialSummaryServiceTest {
         assertThat(result.get(1L).getLimitConsumedAmount()).isEqualByComparingTo("150.00");
         assertThat(result.get(2L).getLimitConsumedAmount()).isEqualByComparingTo("70.00");
         verify(claimRepository, times(1)).findFinancialAggregatesByMemberIds(anyCollection());
-        verify(limitBalanceReader, times(1)).readGeneralCeilingCommittedBulk(any(), any(), any(), any());
+        verify(limitOverviewService, times(1)).summariesFor(anyCollection());
+        verify(benefitPolicyRepository, times(1)).findSummaryRows(anyCollection());
     }
 
     @Test
@@ -152,15 +177,17 @@ class MemberFinancialSummaryServiceTest {
         Member member = memberWithPolicy(1L, new BigDecimal("1000.00"));
         when(memberRepository.findAllById(anyCollection())).thenReturn(List.of(member));
         when(claimRepository.findFinancialAggregatesByMemberIds(anyCollection())).thenReturn(List.of());
-        when(limitBalanceReader.readGeneralCeilingCommittedBulk(any(), any(), any(), any()))
-                .thenReturn(Map.of(1L, BigDecimal.ZERO));
+        when(limitOverviewService.summariesFor(anyCollection())).thenReturn(Map.of(1L,
+                ceiling(new BigDecimal("1000.00"), BigDecimal.ZERO, BigDecimal.ZERO)));
+        when(benefitPolicyRepository.findSummaryRows(anyCollection()))
+                .thenReturn(List.of(policyRow(new BigDecimal("1000.00"))));
 
         MemberFinancialSummaryDto summary = service.getFinancialSummary(1L);
 
         assertThat(summary.getClaimsCount()).isZero();
-        assertThat(summary.getTotalApproved()).isEqualByComparingTo("0.00");
         assertThat(summary.getLimitConsumedAmount()).isEqualByComparingTo("0.00");
-        assertThat(summary.getRemainingCoverage()).isEqualByComparingTo("1000.00");
+        assertThat(summary.getActualRemaining()).isEqualByComparingTo("1000.00");
+        assertThat(summary.getReservableAvailable()).isEqualByComparingTo("1000.00");
     }
 
     @Test
@@ -178,14 +205,17 @@ class MemberFinancialSummaryServiceTest {
         Member member = Member.builder().id(1L).fullName("No Policy").benefitPolicy(null).build();
         when(memberRepository.findAllById(anyCollection())).thenReturn(List.of(member));
         when(claimRepository.findFinancialAggregatesByMemberIds(anyCollection())).thenReturn(List.of());
-        when(limitBalanceReader.readGeneralCeilingCommittedBulk(any(), any(), any(), any()))
-                .thenReturn(Map.of());
+        when(limitOverviewService.summariesFor(anyCollection()))
+                .thenReturn(Map.of(1L, noCeiling(CurrentGeneralLimitSummary.Mode.NOT_CONFIGURED)));
 
         MemberFinancialSummaryDto summary = service.getFinancialSummary(1L);
 
         assertThat(summary.getPolicyActive()).isFalse();
         assertThat(summary.getAnnualLimit()).isNull();
-        assertThat(summary.getRemainingCoverage()).isNull();
+        assertThat(summary.getActualRemaining())
+                .as("null, never zero: a zero on a balance screen reads as a spent ceiling")
+                .isNull();
+        assertThat(summary.getReservableAvailable()).isNull();
         assertThat(summary.getWarningMessage()).contains("لا توجد وثيقة تغطية");
     }
 
@@ -195,7 +225,8 @@ class MemberFinancialSummaryServiceTest {
         Map<Long, MemberFinancialSummaryDto> result = service.getFinancialSummaries(List.of());
 
         assertThat(result).isEmpty();
-        org.mockito.Mockito.verifyNoInteractions(memberRepository, claimRepository, coverageService, limitBalanceReader);
+        org.mockito.Mockito.verifyNoInteractions(memberRepository, claimRepository, coverageService,
+                limitOverviewService);
     }
 
     // ==================== getServiceCoverageLimits (member-closure Phase 4) ====================

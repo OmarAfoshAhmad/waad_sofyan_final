@@ -28,4 +28,18 @@ public interface MemberEmployerAssignmentRepository extends JpaRepository<Member
 
     @Query("SELECT a.memberId FROM MemberEmployerAssignment a WHERE a.memberId IN :memberIds")
     List<Long> findMemberIdsWithAnyAssignment(@Param("memberIds") Collection<Long> memberIds);
+
+    /**
+     * The bulk counterpart of {@link #findCovering}, for a page of members.
+     * Same half-open window, so the two can never answer differently for the
+     * same member and date.
+     */
+    @Query("""
+            SELECT a FROM MemberEmployerAssignment a
+            WHERE a.memberId IN :memberIds
+              AND a.assignmentStartDate <= :date
+              AND (a.assignmentEndDate IS NULL OR a.assignmentEndDate > :date)
+            """)
+    List<MemberEmployerAssignment> findCoveringForMembers(
+            @Param("memberIds") Collection<Long> memberIds, @Param("date") LocalDate date);
 }

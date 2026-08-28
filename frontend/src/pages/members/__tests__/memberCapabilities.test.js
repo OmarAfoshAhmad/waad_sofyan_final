@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { getMemberCapabilities } from '../memberCapabilities';
+import { getMemberCapabilities, MEMBER_CAPABILITY_PERMISSIONS } from '../memberCapabilities';
 
 describe('member action capabilities', () => {
-  const allPermissions = [
-    'MEMBER_CREATE', 'MEMBER_EDIT_IDENTITY', 'MEMBER_CHANGE_STATUS',
-    'MEMBER_TRANSFER_EMPLOYER', 'MEMBER_REINSTATE_TERMINATED', 'MEMBER_HARD_DELETE',
-    'MEMBER_IMPORT', 'MEMBER_EXPORT'
-  ];
+  // Derived, not typed out. A hand-written list fell behind twice -- once for
+  // MEMBER_LIMIT_VIEW and once for MEMBER_LIMIT_LIST_VIEW -- and each time the
+  // failure looked like the new capability was broken rather than the fixture
+  // being stale.
+  const allPermissions = Object.values(MEMBER_CAPABILITY_PERMISSIONS);
 
   it('derives every operation from the effective permission snapshot', () => {
     expect(Object.values(getMemberCapabilities({ permissions: allPermissions }))).not.toContain(false);

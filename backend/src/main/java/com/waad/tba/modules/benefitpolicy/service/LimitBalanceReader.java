@@ -8,6 +8,7 @@ import com.waad.tba.modules.benefitpolicy.repository.BenefitBucketConsumptionRep
 import com.waad.tba.modules.benefitpolicy.repository.BenefitLimitBucketRepository;
 import com.waad.tba.modules.claim.repository.ClaimRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,6 +25,7 @@ import java.util.Optional;
 /** Reads committed/reserved balances without deciding which limits apply. */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class LimitBalanceReader {
 
     // Reads the occurrence limit a bucket declares, alongside its amount limit.
@@ -157,6 +159,99 @@ public class LimitBalanceReader {
         BigDecimal actualRemaining = annualLimit.subtract(committed);
         BigDecimal reservableAvailable = actualRemaining.subtract(reserved);
         return new GeneralCeilingBalance(annualLimit, committed, reserved, actualRemaining, reservableAvailable);
+    }
+
+    /**
+     * Both halves of the general ceiling for a whole page, in two queries.
+     *
+     * Committed and reserved are read inside one read-only transaction on
+     * purpose. Read separately they can straddle a claim approval, and the
+     * column would then show a remaining balance from one instant beside a
+     * hold from another -- a state that never existed, presented as though it
+     * did.
+     *
+     * The mode is per member and explicit. A policy with no annual limit is
+     * UNLIMITED, a member the caller could not resolve a policy for is
+     * NOT_CONFIGURED, and a failed read is UNAVAILABLE; none of them is zero,
+     * because zero is a balance and these are the absence of one.
+     *
+     * @param annualLimitByPolicyId the ceiling for each policy in play, looked
+     *                              up once by the caller rather than per
+     *                              member -- members share policies, and this
+     *                              keeps the query count on the page rather
+     *                              than on its rows
+     */
+    @Transactional(readOnly = true)
+    public java.util.Map<Long, GeneralCeilingReading> readGeneralCeilingBulk(
+            java.util.Map<Long, Long> policyIdByMemberId,
+            java.util.Map<Long, BigDecimal> annualLimitByPolicyId,
+            LocalDate periodStart, LocalDate periodEnd) {
+
+        java.util.Map<Long, GeneralCeilingReading> result = new java.util.LinkedHashMap<>();
+        if (policyIdByMemberId == null || policyIdByMemberId.isEmpty()) {
+            return result;
+        }
+
+        java.util.Map<Long, BigDecimal> committedByMember;
+        java.util.Map<Long, BigDecimal> reservedByMember;
+        try {
+            committedByMember = sumBulk(
+                    consumptionRepository.sumGeneralScopeCommittedBulk(
+                            policyIdByMemberId.keySet(), periodStart, periodEnd, null),
+                    policyIdByMemberId);
+            reservedByMember = sumBulk(
+                    consumptionRepository.sumGeneralScopeReservedBulk(
+                            policyIdByMemberId.keySet(), periodStart, periodEnd),
+                    policyIdByMemberId);
+        } catch (RuntimeException ex) {
+            log.error("Bulk general-ceiling read failed for {} members [{} .. {}]",
+                    policyIdByMemberId.size(), periodStart, periodEnd, ex);
+            for (Long memberId : policyIdByMemberId.keySet()) {
+                result.put(memberId, GeneralCeilingReading.unavailable("تعذّرت قراءة الرصيد"));
+            }
+            return result;
+        }
+
+        for (var entry : policyIdByMemberId.entrySet()) {
+            Long memberId = entry.getKey();
+            Long policyId = entry.getValue();
+            BigDecimal committed = committedByMember.getOrDefault(memberId, BigDecimal.ZERO);
+            BigDecimal reserved = reservedByMember.getOrDefault(memberId, BigDecimal.ZERO);
+
+            if (policyId == null) {
+                result.put(memberId, GeneralCeilingReading.notConfigured("لا توجد وثيقة سارية"));
+                continue;
+            }
+            BigDecimal annualLimit = annualLimitByPolicyId == null
+                    ? null
+                    : annualLimitByPolicyId.get(policyId);
+            if (annualLimit == null) {
+                // The policy exists but sets no monetary ceiling. Consumption
+                // is still real; there is simply nothing to measure it against.
+                result.put(memberId, GeneralCeilingReading.unlimited(committed, reserved));
+                continue;
+            }
+            result.put(memberId, GeneralCeilingReading.found(annualLimit, committed, reserved));
+        }
+        return result;
+    }
+
+    /** Keeps only the rows belonging to each member's own policy. */
+    private java.util.Map<Long, BigDecimal> sumBulk(
+            java.util.List<? extends BenefitBucketConsumptionRepository.GeneralCeilingBulkProjection> rows,
+            java.util.Map<Long, Long> policyIdByMemberId) {
+        java.util.Map<Long, BigDecimal> byMember = new HashMap<>();
+        for (var row : rows) {
+            Long currentPolicyId = policyIdByMemberId.get(row.getMemberId());
+            // A row under a policy the member has since left belongs to that
+            // policy's ceiling, never to this one.
+            if (currentPolicyId != null && currentPolicyId.equals(row.getPolicyId())) {
+                byMember.merge(row.getMemberId(),
+                        row.getAmount() == null ? BigDecimal.ZERO : row.getAmount(),
+                        BigDecimal::add);
+            }
+        }
+        return byMember;
     }
 
     /**

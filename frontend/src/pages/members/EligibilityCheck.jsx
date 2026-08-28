@@ -46,6 +46,7 @@ import BadgeIcon from '@mui/icons-material/Badge';
 import SavingsIcon from '@mui/icons-material/Savings';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
+import LockClockIcon from '@mui/icons-material/LockClock';
 import PaymentsIcon from '@mui/icons-material/Payments';
 import RefreshIcon from '@mui/icons-material/Refresh';
 
@@ -137,7 +138,14 @@ const EligibilityCheck = () => {
     if (financialDataAvailable === false) {
       return 'غير متاح';
     }
-    return `${value?.toLocaleString() || '0'} د.ل`;
+    // A missing figure is not a zero. The backend sends null for a member
+    // whose ceiling could not be read or does not apply, and rendering that
+    // as "0 د.ل" tells whoever is authorising treatment that the ceiling is
+    // spent. Zero itself still prints, because zero is an answer.
+    if (value === null || value === undefined) {
+      return 'غير متاح';
+    }
+    return `${value.toLocaleString()} د.ل`;
   };
 
   /**
@@ -208,7 +216,7 @@ const EligibilityCheck = () => {
                   />
                 </Grid>
 
-                <Grid size={{ xs: 12, md: 4 }}>
+                <Grid size={{ xs: 12, md: 3 }}>
                   <Stack direction="row" spacing={1}>
                     <Button
                       fullWidth
@@ -323,7 +331,7 @@ const EligibilityCheck = () => {
                       </Typography>
                     </Grid>
 
-                    <Grid size={{ xs: 12, md: 4 }}>
+                    <Grid size={{ xs: 12, md: 3 }}>
                       <Paper
                         elevation={0}
                         variant="outlined"
@@ -341,7 +349,7 @@ const EligibilityCheck = () => {
                       </Paper>
                     </Grid>
 
-                    <Grid size={{ xs: 12, md: 4 }}>
+                    <Grid size={{ xs: 12, md: 3 }}>
                       <Paper
                         elevation={0}
                         variant="outlined"
@@ -359,7 +367,27 @@ const EligibilityCheck = () => {
                       </Paper>
                     </Grid>
 
-                    <Grid size={{ xs: 12, md: 4 }}>
+                    <Grid size={{ xs: 12, md: 3 }}>
+                      <Paper
+                        elevation={0}
+                        variant="outlined"
+                        sx={{ p: '0.75rem', bgcolor: 'grey.100', borderLeft: '4px solid', borderLeftColor: 'grey.500' }}
+                      >
+                        <Stack direction="row" spacing={1.5} alignItems="center">
+                          <LockClockIcon sx={{ color: 'grey.700' }} />
+                          <Box>
+                            <Typography variant="caption" color="text.secondary" display="block">
+                              المحجوز بموافقات مسبقة
+                            </Typography>
+                            <Typography variant="h6">
+                              {formatLimit(familyData.principal?.reservedAmount, familyData.financialDataAvailable)}
+                            </Typography>
+                          </Box>
+                        </Stack>
+                      </Paper>
+                    </Grid>
+
+                    <Grid size={{ xs: 12, md: 3 }}>
                       <Paper
                         elevation={0}
                         variant="outlined"
@@ -368,18 +396,24 @@ const EligibilityCheck = () => {
                         <Stack direction="row" spacing={1.5} alignItems="center">
                           <TrendingUpIcon color="info" />
                           <Box>
+                            {/* The figure a decision is taken against: money held by an
+                                approved pre-authorization is not available to commit again. */}
                             <Typography variant="caption" color="text.secondary" display="block">
-                              المتبقي
+                              المتاح لالتزام جديد
                             </Typography>
                             <Typography variant="h6" color="info.dark" fontWeight="bold">
                               {formatLimit(familyData.principal?.remainingLimit, familyData.financialDataAvailable)}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary" display="block">
+                              المتبقي محاسبياً{' '}
+                              {formatLimit(familyData.principal?.actualRemaining, familyData.financialDataAvailable)}
                             </Typography>
                           </Box>
                         </Stack>
                       </Paper>
                     </Grid>
 
-                    <Grid size={{ xs: 12, md: 4 }}>
+                    <Grid size={{ xs: 12, md: 3 }}>
                       <Stack spacing={0.5}>
                         <Typography variant="caption" color="text.secondary">
                           تاريخ الميلاد
@@ -388,7 +422,7 @@ const EligibilityCheck = () => {
                       </Stack>
                     </Grid>
 
-                    <Grid size={{ xs: 12, md: 4 }}>
+                    <Grid size={{ xs: 12, md: 3 }}>
                       <Stack spacing={0.5}>
                         <Typography variant="caption" color="text.secondary">
                           الجنس
@@ -397,7 +431,7 @@ const EligibilityCheck = () => {
                       </Stack>
                     </Grid>
 
-                    <Grid size={{ xs: 12, md: 4 }}>
+                    <Grid size={{ xs: 12, md: 3 }}>
                       <Stack spacing={0.5}>
                         <Typography variant="caption" color="text.secondary">
                           جهة العمل
@@ -454,7 +488,8 @@ const EligibilityCheck = () => {
                           <TableCell>تاريخ الميلاد</TableCell>
                           <TableCell>الجنس</TableCell>
                           <TableCell>الحد السنوي</TableCell>
-                          <TableCell>المتبقي</TableCell>
+                          <TableCell>المحجوز</TableCell>
+                          <TableCell>المتاح لالتزام جديد</TableCell>
                           <TableCell>الحالة</TableCell>
                           <TableCell>الأهلية</TableCell>
                           <TableCell align="center">إجراءات</TableCell>
@@ -483,6 +518,11 @@ const EligibilityCheck = () => {
                             <TableCell dir="ltr">{formatDate(dep.birthDate)}</TableCell>
                             <TableCell>{dep.gender === GENDERS.MALE ? 'ذكر' : 'أنثى'}</TableCell>
                             <TableCell>{formatLimit(dep.annualLimit, familyData.financialDataAvailable)}</TableCell>
+                            <TableCell>
+                              <Typography variant="body2" color="text.secondary">
+                                {formatLimit(dep.reservedAmount, familyData.financialDataAvailable)}
+                              </Typography>
+                            </TableCell>
                             <TableCell>
                               <Typography variant="body2" color="info.main" fontWeight="bold">
                                 {formatLimit(dep.remainingLimit, familyData.financialDataAvailable)}
@@ -534,7 +574,7 @@ const EligibilityCheck = () => {
               <Card>
                 <CardContent>
                   <Grid container spacing={2}>
-                    <Grid size={{ xs: 12, md: 4 }}>
+                    <Grid size={{ xs: 12, md: 3 }}>
                       <Box textAlign="center">
                         <Typography variant="h3" color="primary.main">
                           {familyData.totalFamilyMembers || 0}
@@ -544,7 +584,7 @@ const EligibilityCheck = () => {
                         </Typography>
                       </Box>
                     </Grid>
-                    <Grid size={{ xs: 12, md: 4 }}>
+                    <Grid size={{ xs: 12, md: 3 }}>
                       <Box textAlign="center">
                         <Typography variant="h3" color="success.main">
                           {familyData.eligibleMembersCount || 0}
@@ -554,7 +594,7 @@ const EligibilityCheck = () => {
                         </Typography>
                       </Box>
                     </Grid>
-                    <Grid size={{ xs: 12, md: 4 }}>
+                    <Grid size={{ xs: 12, md: 3 }}>
                       <Box textAlign="center">
                         <Typography variant="h3" color="error.main">
                           {(familyData.totalFamilyMembers || 0) - (familyData.eligibleMembersCount || 0)}

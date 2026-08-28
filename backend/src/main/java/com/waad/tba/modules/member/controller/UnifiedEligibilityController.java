@@ -79,13 +79,20 @@ public class UnifiedEligibilityController {
             // WAAD-FIN-1.0 S4: "used against the limit" is limitConsumedAmount, never
             // totalApproved -- see MemberFinancialSummaryDto's field docs.
             result.put("usedAmount", summary.getLimitConsumedAmount());
-            result.put("remainingLimit", summary.getRemainingCoverage());
+            // The headline figure is what may still be committed. actualRemaining
+            // travels beside it for reconciliation, and reserved is named
+            // rather than folded into either.
+            result.put("remainingLimit", summary.getReservableAvailable());
+            result.put("reservedAmount", summary.getReservedAmount());
+            result.put("actualRemaining", summary.getActualRemaining());
+            result.put("asOfDate", summary.getAsOfDate());
+            result.put("readAt", summary.getReadAt());
             result.put("usagePercentage", summary.getUtilizationPercent());
             result.put("policyName", summary.getPolicyName());
             result.put("policyActive", summary.getPolicyActive());
             
             log.info("✅ Remaining limit retrieved: memberId={}, remaining={}", 
-                     memberId, summary.getRemainingCoverage());
+                     memberId, summary.getReservableAvailable());
             
             result.put("financialDataAvailable", true);
             return ResponseEntity.ok(ApiResponse.success(result));
