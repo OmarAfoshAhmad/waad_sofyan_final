@@ -127,13 +127,25 @@ class BenefitBucketConcurrencyIntegrationTest extends PostgresIntegrationTestBas
                     LocalDate.of(LocalDate.now().getYear(), 12, 31), null);
             assertThat(afterReversal).isZero();
 
+            // One compensating movement per committed movement, and the claim
+            // now commits against two ceilings (its bucket and the policy's
+            // general annual limit). What idempotency has to guarantee is that
+            // reversing twice adds nothing -- so the count is compared to the
+            // number of originals rather than to a literal, which would have
+            // to be edited every time a claim gains or loses a ceiling.
+            long committedRows = consumptionRepository.findAll().stream()
+                    .filter(c -> c.getClaim() != null && c.getClaim().getId().equals(acceptedClaim))
+                    .filter(c -> c.getReversalOf() == null)
+                    .count();
             long reversalRows = consumptionRepository.findAll().stream()
                     // Since V174 a movement need not have a claim (a PREAUTH
                     // hold has none), and findAll() sees the whole table.
                     .filter(c -> c.getClaim() != null && c.getClaim().getId().equals(acceptedClaim))
                     .filter(c -> c.getReversalOf() != null)
                     .count();
-            assertThat(reversalRows).isEqualTo(1);
+            assertThat(reversalRows)
+                    .as("exactly one compensating movement per original, however many ceilings")
+                    .isEqualTo(committedRows);
         } finally {
             pool.shutdownNow();
         }
@@ -227,6 +239,7 @@ class BenefitBucketConcurrencyIntegrationTest extends PostgresIntegrationTestBas
                 .nationalNumber("DEP-NAT-" + suffix).employer(principal.member().getEmployer())
                 .benefitPolicy(principal.policy()).parent(principal.member())
                 .relationship(Member.Relationship.SON).active(true).build());
+        initializeTemporalAssignments(dependentMember);
         Fixture dependent = new Fixture(dependentMember, principal.provider(), principal.service(),
                 principal.bucket(), principal.policy(), principal.rule());
 
@@ -251,10 +264,18 @@ class BenefitBucketConcurrencyIntegrationTest extends PostgresIntegrationTestBas
                         + "VALUES (?, 60.00) RETURNING id",
                 Long.class, dependentPreauthId);
 
+        // Which enrolment period the hold sits in. V187 requires every PREAUTH
+        // row to name one, so a hold without it is a row the approval service
+        // can no longer produce.
+        Long dependentAssignmentId = jdbcTemplate.queryForObject(
+                "SELECT id FROM member_policy_assignments WHERE member_id = ? ORDER BY id LIMIT 1",
+                Long.class, dependent.member().getId());
+
         new TransactionTemplate(transactionManager).executeWithoutResult(status ->
             consumptionRepository.save(BenefitBucketConsumption.builder()
                     .policy(principal.policy())
                     .memberId(dependent.member().getId()).bucket(principal.bucket())
+                    .memberPolicyAssignmentId(dependentAssignmentId)
                     .periodStart(LocalDate.of(LocalDate.now().getYear(), 1, 1))
                     .periodEnd(LocalDate.of(LocalDate.now().getYear(), 12, 31))
                     .approvedAmount(new BigDecimal("60.00")).timesConsumed(1)
@@ -405,6 +426,7 @@ class BenefitBucketConcurrencyIntegrationTest extends PostgresIntegrationTestBas
                 .fullName("Concurrent Member").barcode("BC-" + suffix)
                 .nationalNumber("NAT-" + suffix).employer(employer)
                 .benefitPolicy(policy).active(true).build());
+        initializeTemporalAssignments(member);
         Provider provider = providerRepository.save(Provider.builder()
                 .name("Concurrency Provider " + suffix).providerType(ProviderType.HOSPITAL)
                 .licenseNumber("LIC-" + suffix).allowAllEmployers(true).active(true).build());

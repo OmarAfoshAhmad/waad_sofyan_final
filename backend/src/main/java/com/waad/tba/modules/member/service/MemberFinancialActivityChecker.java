@@ -9,6 +9,7 @@ import java.util.Set;
 
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import com.waad.tba.modules.claim.repository.ClaimRepository;
 import com.waad.tba.modules.member.entity.Member;
@@ -45,6 +46,7 @@ public class MemberFinancialActivityChecker {
     private final ClaimRepository claimRepository;
     private final PreAuthorizationRepository preAuthorizationRepository;
     private final MemberRepository memberRepository;
+    private final JdbcTemplate jdbcTemplate;
 
     /**
      * @param memberIds the members to check
@@ -80,6 +82,8 @@ public class MemberFinancialActivityChecker {
         idsWithMovements.addAll(visitRepository.findMemberIdsWithVisits(idsToCheck));
         idsWithMovements.addAll(claimRepository.findMemberIdsWithClaims(idsToCheck));
         idsWithMovements.addAll(preAuthorizationRepository.findMemberIdsWithPreAuths(idsToCheck));
+        idsWithMovements.addAll(findIds("eligibility_checks", idsToCheck));
+        idsWithMovements.addAll(findIds("benefit_bucket_consumptions", idsToCheck));
 
         Set<Long> keepIds = new HashSet<>();
         for (Long id : idsWithMovements) {
@@ -92,5 +96,13 @@ public class MemberFinancialActivityChecker {
             }
         }
         return keepIds;
+    }
+
+    private Set<Long> findIds(String table, Set<Long> memberIds) {
+        if (memberIds.isEmpty()) return Set.of();
+        String placeholders = String.join(",", java.util.Collections.nCopies(memberIds.size(), "?"));
+        return new HashSet<>(jdbcTemplate.queryForList(
+                "select distinct member_id from " + table + " where member_id in (" + placeholders + ")",
+                Long.class, memberIds.toArray()));
     }
 }

@@ -26,6 +26,7 @@ import com.waad.tba.modules.provider.entity.Provider;
 import com.waad.tba.modules.provider.repository.ProviderRepository;
 import com.waad.tba.modules.rbac.entity.User;
 import com.waad.tba.modules.rbac.repository.UserRepository;
+import com.waad.tba.modules.rbac.permission.EffectivePermissionService;
 import com.waad.tba.security.JwtTokenProvider;
 import com.waad.tba.security.audit.SecurityAuditService;
 
@@ -47,6 +48,7 @@ public class AuthService {
         private final SystemSettingsService systemSettingsService;
         private final SessionManagementService sessionManagementService;
         private final SecurityAuditService auditService;
+        private final EffectivePermissionService effectivePermissionService;
         private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
         // ═══════════════════════════════════════════════════════════════════════════
@@ -95,7 +97,7 @@ public class AuthService {
 
                 // Permissions are now handled by backend @PreAuthorize — no dynamic permissions
                 // list needed
-                List<String> permissions = List.of();
+                List<String> permissions = permissionCodes(user);
 
                 // Generate JWT token
                 String token = jwtTokenProvider.generateToken(user);
@@ -217,7 +219,23 @@ public class AuthService {
                         throw new IllegalArgumentException("Email already exists");
                 }
 
+                // Validated, never defaulted. An unrecognised string would mint a
+                // Spring Security authority that matches no @PreAuthorize
+                // expression, locking the account out of everything with no
+                // error at creation time.
+                String requestedType = request.getUserType() == null
+                                ? ""
+                                : request.getUserType().trim().toUpperCase(java.util.Locale.ROOT);
+                boolean knownRole = java.util.Arrays
+                                .stream(com.waad.tba.security.rbac.SystemRole.values())
+                                .anyMatch(role -> role.name().equals(requestedType));
+                if (!knownRole) {
+                        throw new IllegalArgumentException(
+                                        "نوع مستخدم غير صالح: " + request.getUserType());
+                }
+
                 User user = User.builder()
+                                .userType(requestedType)
                                 .username(request.getUsername())
                                 .password(passwordEncoder.encode(request.getPassword()))
                                 .fullName(request.getFullName())
@@ -265,7 +283,7 @@ public class AuthService {
 
                 // Permissions handled by backend @PreAuthorize — no dynamic permissions list
                 // needed
-                List<String> permissions = List.of();
+                List<String> permissions = permissionCodes(user);
 
                 return LoginResponse.UserInfo.builder()
                                 .id(user.getId())
@@ -304,7 +322,7 @@ public class AuthService {
 
                 String userRole = user.getUserType() != null ? user.getUserType() : "DATA_ENTRY";
                 List<String> roles = List.of(userRole);
-                List<String> permissions = List.of();
+                List<String> permissions = permissionCodes(user);
 
                 // Fetch provider name if user is a PROVIDER
                 String providerName = null;
@@ -464,7 +482,7 @@ public class AuthService {
 
                 // Permissions handled by backend @PreAuthorize — no dynamic permissions list
                 // needed
-                List<String> permissions = List.of();
+                List<String> permissions = permissionCodes(user);
 
                 // Generate NEW JWT token with fresh permissions
                 String token = jwtTokenProvider.generateToken(user);
@@ -494,5 +512,12 @@ public class AuthService {
                                                 .providerName(providerName)
                                                 .build())
                                 .build();
+        }
+
+        private List<String> permissionCodes(User user) {
+                return effectivePermissionService.resolve(user).stream()
+                                .map(Enum::name)
+                                .sorted()
+                                .toList();
         }
 }

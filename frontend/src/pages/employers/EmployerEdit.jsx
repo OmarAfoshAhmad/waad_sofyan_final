@@ -19,6 +19,7 @@ import { ArrowBack as ArrowBackIcon, Save as SaveIcon, Edit as EditIcon } from '
 import { useSnackbar } from 'notistack';
 
 import MainCard from 'components/MainCard';
+import PermissionGuard from 'components/PermissionGuard';
 import ModernPageHeader from 'components/tba/ModernPageHeader';
 import { useEmployerDetails } from 'hooks/useEmployers';
 import { updateEmployer, checkEmployerField } from 'services/api/employers.service';
@@ -210,7 +211,7 @@ const EmployerEdit = () => {
   }
 
   return (
-    <>
+    <PermissionGuard requiredPermission="EMPLOYER_MANAGE" isRouteGuard>
       <ModernPageHeader
         title={LABELS.edit}
         subtitle={employer.name || employer.code}
@@ -363,7 +364,7 @@ const EmployerEdit = () => {
           </Stack>
         </Box>
       </MainCard>
-    </>
+    </PermissionGuard>
   );
 };
 

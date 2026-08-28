@@ -45,7 +45,6 @@ import org.springframework.beans.factory.annotation.Value;
 public class SecurityConfig {
 
     private final LogMdcFilter logMdcFilter;
-    private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final SessionAuthenticationFilter sessionAuthenticationFilter; // Phase B: Session support
     private final UserDetailsService userDetailsService;
     private final PasswordEncoder passwordEncoder; // Injected from PasswordEncoderConfig
@@ -73,8 +72,6 @@ public class SecurityConfig {
                         .csrfTokenRequestHandler(csrfRequestHandler)
                         .ignoringRequestMatchers(
                                 "/api/v1/auth/session/login",
-                                "/api/v1/auth/login",
-                                "/api/v1/auth/register",
                                 "/api/v1/auth/forgot-password",
                                 "/api/v1/auth/reset-password",
                                 "/api/v1/auth/token/forgot-password",
@@ -87,8 +84,27 @@ public class SecurityConfig {
 
                 // Authorization rules
                 .authorizeHttpRequests(auth -> auth
-                        // Public endpoints - Authentication
-                        .requestMatchers("/api/v1/auth/**").permitAll()
+                        // Public endpoints - Authentication.
+                        // Enumerated deliberately: a wildcard over /auth/** also
+                        // exposed /register, which minted an active internal-staff
+                        // account for any anonymous caller. Anything under /auth
+                        // that is not listed here falls through to
+                        // .anyRequest().authenticated() or its own @PreAuthorize.
+                        .requestMatchers(
+                                "/api/v1/auth/session/login",
+                                "/api/v1/auth/session/logout",
+                                // Public by design: returns 200 with a null payload
+                                // for first-time visitors; AuthContext calls it on
+                                // every page load to ask "is there a session yet?".
+                                "/api/v1/auth/session/me",
+                                "/api/v1/auth/forgot-password",
+                                "/api/v1/auth/reset-password",
+                                "/api/v1/auth/token/forgot-password",
+                                "/api/v1/auth/token/reset-password",
+                                "/api/v1/auth/password-reset-config",
+                                "/api/v1/auth/verify-email",
+                                "/api/v1/auth/resend-verification")
+                        .permitAll()
                         // Reports are NOT public — contain sensitive claim data
                         .requestMatchers("/api/reports/**").authenticated()
                         // Docker/load-balancer health check — must stay public
@@ -113,7 +129,43 @@ public class SecurityConfig {
                         .anyRequest().authenticated())
 
                 // Allow framing for report previews
-                .headers(headers -> headers.frameOptions(frameOptions -> frameOptions.sameOrigin()))
+                .headers(headers -> headers
+                        // Report previews are embedded by the app itself.
+                        .frameOptions(frameOptions -> frameOptions.sameOrigin())
+
+                        // The complement to keeping secrets out of the query
+                        // string: the paths that remain still carry member ids,
+                        // and search filters still carry identifiers. Without
+                        // this, the browser attaches the full URL to requests
+                        // leaving for any other origin.
+                        .referrerPolicy(referrer -> referrer.policy(
+                                org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter
+                                        .ReferrerPolicy.NO_REFERRER))
+
+                        // Stops a browser from second-guessing a declared
+                        // content type -- the step that turns an uploaded file
+                        // served back as JSON into executable script.
+                        .contentTypeOptions(contentType -> {})
+
+                        // Only meaningful over TLS, which is where production
+                        // runs; harmless on plain HTTP in development.
+                        .httpStrictTransportSecurity(hsts -> hsts
+                                .includeSubDomains(true)
+                                .maxAgeInSeconds(31536000))
+
+                        // This service answers with JSON and serves no
+                        // third-party assets. 'self' still covers the
+                        // SUPER_ADMIN-only Swagger UI, which loads its bundle
+                        // from this same origin.
+                        .contentSecurityPolicy(csp -> csp.policyDirectives(
+                                "default-src 'self'; object-src 'none'; base-uri 'self'; "
+                                        + "frame-ancestors 'self'"))
+
+                        // Hardware and location APIs have no part in this
+                        // application; denying them costs nothing and removes
+                        // a class of prompt entirely.
+                        .permissionsPolicyHeader(permissions -> permissions.policy(
+                                "camera=(), microphone=(), geolocation=(), payment=()")))
 
                 // Session management configuration
                 .sessionManagement(session -> session
@@ -125,18 +177,24 @@ public class SecurityConfig {
 
                 .authenticationProvider(authenticationProvider())
 
-                // Phase C.1: Filter Chain Order (CRITICAL for security)
-                // Order matters: SessionAuthenticationFilter → JwtAuthenticationFilter →
-                // UsernamePasswordAuthenticationFilter
-                // 1. SessionAuthenticationFilter checks for valid HTTP session first
-                // (preferred)
-                // 2. If no session, JwtAuthenticationFilter checks for Bearer token (legacy
-                // fallback)
-                // 3. UsernamePasswordAuthenticationFilter handles form-based login (not used in
-                // our API)
+                // One way in, and only one.
+                //
+                // A JWT filter used to sit alongside this as a "legacy fallback",
+                // which meant the application's security was whichever of the two
+                // paths was weaker. It also cut straight across the authorization
+                // model the rest of this codebase is built on: permission changes
+                // call sessionManagementService.revokeAll(), and a bearer token is
+                // not a row anyone can delete -- its holder keeps working until it
+                // expires. Nothing consumed it (the browser client calls only
+                // /auth/session/*, stores no token and sends no Authorization
+                // header), so it was carried purely for a mobile client that does
+                // not exist.
+                //
+                // When one is built, it gets a revocable server-side credential --
+                // a rotating refresh token stored in the database -- not a
+                // long-lived self-contained one.
                 .addFilterBefore(sessionAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(logMdcFilter, SessionAuthenticationFilter.class)
-                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
 
                 // Return 401 (not 403) for unauthenticated requests
                 .exceptionHandling(ex -> ex

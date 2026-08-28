@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -16,35 +16,14 @@ import {
   FormControlLabel,
   Checkbox
 } from '@mui/material';
-import {
-  CloudUpload as CloudUploadIcon,
-  Close as CloseIcon,
-  Download as DownloadIcon,
-  FileDownload as FileDownloadIcon,
-  InsertDriveFile as FileIcon
-} from '@mui/icons-material';
+import CloudUploadIcon from '@mui/icons-material/CloudUpload';
+import CloseIcon from '@mui/icons-material/Close';
+import DownloadIcon from '@mui/icons-material/Download';
+import FileIcon from '@mui/icons-material/InsertDriveFile';
 import { useSnackbar } from 'notistack';
 import { downloadTemplate, previewImport, executeImport } from 'services/api/unified-members.service';
 import EmployerFilterSelector from 'components/tba/EmployerFilterSelector';
-
-/** Client-side CSV export -- the data is already in hand, no backend round trip needed. */
-function downloadCsv(filename, headers, rows) {
-  const escape = (value) => {
-    const text = value === null || value === undefined ? '' : String(value);
-    return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
-  };
-  const lines = [headers.map(escape).join(','), ...rows.map((row) => row.map(escape).join(','))];
-  // BOM so Excel opens Arabic text as UTF-8 instead of guessing a legacy codepage.
-  const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
-  const url = window.URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.setAttribute('download', filename);
-  document.body.appendChild(link);
-  link.click();
-  link.parentNode.removeChild(link);
-  window.URL.revokeObjectURL(url);
-}
+import useAuth from 'hooks/useAuth';
 
 // Static Arabic labels
 const LABELS = {
@@ -66,13 +45,36 @@ const LABELS = {
 
 const MembersBulkUploadDialog = ({ open, onClose, onSuccess }) => {
   const { enqueueSnackbar } = useSnackbar();
+  const { user } = useAuth();
+  const canClearOldMembers = new Set(user?.permissions || []).has('DANGER_ZONE_EXECUTE');
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [result, setResult] = useState(null);
   const [preview, setPreview] = useState(null);
+  const [progress, setProgress] = useState(0);
   const [clearOldMembers, setClearOldMembers] = useState(false);
   const [selectedEmployerId, setSelectedEmployerId] = useState('');
+  const progressTimerRef = useRef(null);
+
+  const startProgressSimulation = () => {
+    setProgress(0);
+    progressTimerRef.current = setInterval(() => {
+      setProgress((prev) => {
+        if (prev >= 85) return prev;
+        const increment = prev < 40 ? 6 : prev < 65 ? 3 : 1;
+        return Math.min(prev + increment, 85);
+      });
+    }, 400);
+  };
+
+  const stopProgressSimulation = (finalValue = 100) => {
+    if (progressTimerRef.current) {
+      clearInterval(progressTimerRef.current);
+      progressTimerRef.current = null;
+    }
+    setProgress(finalValue);
+  };
 
   const handleFileChange = (event) => {
     const file = event.target.files?.[0];
@@ -115,12 +117,15 @@ const MembersBulkUploadDialog = ({ open, onClose, onSuccess }) => {
 
     setUploading(true);
     setResult(null);
+    startProgressSimulation();
     try {
       if (!preview) {
         const response = await previewImport(selectedFile, {
-          employerId: selectedEmployerId
+          employerId: selectedEmployerId,
+          clearOldMembers
         });
         const data = response?.data || response;
+        stopProgressSimulation(100);
         setPreview(data);
         if (!data?.canProceed) {
           enqueueSnackbar('لا توجد صفوف صالحة للتنفيذ. راجع أخطاء المعاينة.', { variant: 'warning' });
@@ -137,6 +142,7 @@ const MembersBulkUploadDialog = ({ open, onClose, onSuccess }) => {
         clearOldMembers
       });
       const data = response?.data || response;
+      stopProgressSimulation(100);
       setResult(data);
 
       if (data?.success) {
@@ -147,6 +153,7 @@ const MembersBulkUploadDialog = ({ open, onClose, onSuccess }) => {
 
       if (onSuccess) onSuccess(data);
     } catch (error) {
+      stopProgressSimulation(0);
       console.error('Upload failed:', error.response?.data || error.message);
       const errorMessage = error.response?.data?.message || error.message || LABELS.error;
       enqueueSnackbar(errorMessage, { variant: 'error' });
@@ -160,6 +167,7 @@ const MembersBulkUploadDialog = ({ open, onClose, onSuccess }) => {
       setSelectedFile(null);
       setPreview(null);
       setResult(null);
+      setProgress(0);
       setClearOldMembers(false);
       setSelectedEmployerId('');
       onClose();
@@ -171,17 +179,9 @@ const MembersBulkUploadDialog = ({ open, onClose, onSuccess }) => {
     setSelectedFile(null);
     setPreview(null);
     setResult(null);
+    setProgress(0);
     setClearOldMembers(false);
     setSelectedEmployerId('');
-  };
-
-  const exportErrorsCsv = () => {
-    if (!result?.errors?.length) return;
-    downloadCsv(
-      `تقرير_الاستيراد_${selectedFile?.name || 'errors'}.csv`,
-      ['الصف', 'المعرف/الاسم', 'السبب', 'القيمة'],
-      result.errors.map((err) => [err.rowNumber, err.rowIdentifier || '-', err.messageAr, err.value || '-'])
-    );
   };
 
   return (
@@ -273,25 +273,27 @@ const MembersBulkUploadDialog = ({ open, onClose, onSuccess }) => {
                   )}
                 </Stack>
               </Box>
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={clearOldMembers}
-                    onChange={(e) => {
-                      setClearOldMembers(e.target.checked);
-                      setPreview(null);
-                    }}
-                    color="primary"
-                    disabled={uploading}
-                  />
-                }
-                label={
-                  <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
-                    مسح المستفيدين القدامى قبل الاستيراد (سيتم الإبقاء على المستفيدين الذين لديهم حركات مالية)
-                  </Typography>
-                }
-                sx={{ alignSelf: 'flex-start', mt: 1 }}
-              />
+              {canClearOldMembers && (
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={clearOldMembers}
+                      onChange={(e) => {
+                        setClearOldMembers(e.target.checked);
+                        setPreview(null);
+                      }}
+                      color="primary"
+                      disabled={uploading}
+                    />
+                  }
+                  label={
+                    <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                      مسح المستفيدين القدامى قبل الاستيراد (سيتم الإبقاء على المستفيدين الذين لديهم حركات مالية)
+                    </Typography>
+                  }
+                  sx={{ alignSelf: 'flex-start', mt: 1 }}
+                />
+              )}
             </>
           )}
 
@@ -349,14 +351,9 @@ const MembersBulkUploadDialog = ({ open, onClose, onSuccess }) => {
 
               {result.errors && result.errors.length > 0 && (
                 <Box>
-                  <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
-                    <Typography variant="subtitle1" color="error" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      تفاصيل الأخطاء ({result.errors.length})
-                    </Typography>
-                    <Button size="small" startIcon={<FileDownloadIcon />} onClick={exportErrorsCsv}>
-                      تصدير التقرير
-                    </Button>
-                  </Stack>
+                  <Typography variant="subtitle1" color="error" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    تفاصيل الأخطاء ({result.errors.length})
+                  </Typography>
                   <Box sx={{ maxHeight: '18.75rem', overflow: 'auto', border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
                       <thead style={{ position: 'sticky', top: 0, backgroundColor: '#f5f5f5' }}>
@@ -386,15 +383,15 @@ const MembersBulkUploadDialog = ({ open, onClose, onSuccess }) => {
 
           {uploading && (
             <Box sx={{ width: '100%', py: '1.0rem' }}>
-              <Typography variant="body1" sx={{ mb: 1 }}>
-                {LABELS.uploading}
-              </Typography>
-              {/* Indeterminate on purpose: there is no real progress figure from
-                  the server to show, and a fake percentage that freezes near the
-                  end is worse than admitting the wait time is unknown. */}
-              <LinearProgress sx={{ height: '0.625rem', borderRadius: '0.3125rem', mb: 1 }} />
+              <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
+                <Typography variant="body1">{LABELS.uploading}</Typography>
+                <Typography variant="body2" color="primary" fontWeight="bold">
+                  {progress}%
+                </Typography>
+              </Stack>
+              <LinearProgress variant="determinate" value={progress} sx={{ height: '0.625rem', borderRadius: '0.3125rem', mb: 1 }} />
               <Typography variant="caption" color="textSecondary">
-                قد تستغرق معالجة الملفات الكبيرة عدة دقائق، خصوصاً للملفات التي تحتوي آلاف الصفوف...
+                قد تستغرق معالجة الملفات الكبيرة عدة دقائق...
               </Typography>
             </Box>
           )}

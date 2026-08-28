@@ -1,8 +1,11 @@
 package com.waad.tba.modules.member.dto;
 
 import java.time.LocalDate;
+import java.util.Comparator;
+import java.util.List;
 
 import com.waad.tba.modules.member.entity.Member;
+import com.waad.tba.modules.member.entity.MemberAttribute;
 
 import lombok.Builder;
 import lombok.Value;
@@ -35,6 +38,8 @@ public class MemberImportFieldSnapshot {
     String employeeNumber;
     String policyNumber;
     LocalDate startDate;
+    String status;
+    List<AttributeSnapshot> attributes;
 
     public static MemberImportFieldSnapshot of(Member m) {
         return MemberImportFieldSnapshot.builder()
@@ -54,6 +59,40 @@ public class MemberImportFieldSnapshot {
                 .employeeNumber(m.getEmployeeNumber())
                 .policyNumber(m.getPolicyNumber())
                 .startDate(m.getStartDate())
+                .status(m.getStatus() == null ? null : m.getStatus().name())
+                .attributes(m.getAttributes().stream()
+                        .map(AttributeSnapshot::of)
+                        .sorted(Comparator.comparing(AttributeSnapshot::getAttributeCode)
+                                .thenComparing(AttributeSnapshot::getAttributeValue,
+                                        Comparator.nullsFirst(String::compareTo)))
+                        .toList())
                 .build();
+    }
+
+    /** Exact comparison of fields the live importer is allowed to mutate. */
+    public boolean matches(Member member) {
+        return equals(of(member));
+    }
+
+    @Value
+    @Builder
+    public static class AttributeSnapshot {
+        String attributeCode;
+        String attributeValue;
+        String source;
+        String sourceReference;
+        String createdBy;
+        String updatedBy;
+
+        static AttributeSnapshot of(MemberAttribute attribute) {
+            return AttributeSnapshot.builder()
+                    .attributeCode(attribute.getAttributeCode())
+                    .attributeValue(attribute.getAttributeValue())
+                    .source(attribute.getSource() == null ? null : attribute.getSource().name())
+                    .sourceReference(attribute.getSourceReference())
+                    .createdBy(attribute.getCreatedBy())
+                    .updatedBy(attribute.getUpdatedBy())
+                    .build();
+        }
     }
 }

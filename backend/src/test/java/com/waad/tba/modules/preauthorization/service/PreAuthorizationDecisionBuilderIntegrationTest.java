@@ -66,6 +66,9 @@ class PreAuthorizationDecisionBuilderIntegrationTest extends PostgresIntegration
                 + policyId + ", 'DC" + s + "', 'DC" + s + "', 'ACTIVE', true) RETURNING id", Long.class);
         jdbc.update("INSERT INTO member_policy_assignments (member_id, policy_id, assignment_start_date, "
                 + "assignment_source) VALUES (?, ?, CURRENT_DATE - 60, 'MANUAL')", memberId, policyId);
+        jdbc.update("INSERT INTO member_employer_assignments (member_id, employer_id, assignment_start_date, "
+                + "assignment_reason, assignment_source) VALUES (?, ?, CURRENT_DATE - 60, "
+                + "'test enrollment', 'MANUAL')", memberId, employerId);
 
         // A rule is what maps a service to its buckets; without one no limit
         // applies at all, so the fixture mirrors the production shape:
@@ -120,10 +123,10 @@ class PreAuthorizationDecisionBuilderIntegrationTest extends PostgresIntegration
         if (alreadyCommitted != null) {
             jdbc.update("INSERT INTO benefit_bucket_consumptions (policy_id, member_id, bucket_id, "
                     + "period_start, period_end, approved_amount, times_consumed, calculation_version, "
-                    + "idempotency_key, status, source_type, limit_scope, created_at) VALUES (?, ?, ?, "
+                    + "idempotency_key, status, source_type, limit_scope, opening_batch_id, created_at) VALUES (?, ?, ?, "
                     + "DATE_TRUNC('year', CURRENT_DATE)::date, "
                     + "(DATE_TRUNC('year', CURRENT_DATE) + INTERVAL '1 year - 1 day')::date, "
-                    + alreadyCommitted + ", 1, 1, ?, 'COMMITTED', 'OPENING_IMPORT', 'BUCKET', now())",
+                    + alreadyCommitted + ", 1, 1, ?, 'COMMITTED', 'OPENING_IMPORT', 'BUCKET', " + openingBatch() + ", now())",
                     policyId, memberId, bucketId, "OPEN-" + s);
         }
 
@@ -254,10 +257,13 @@ class PreAuthorizationDecisionBuilderIntegrationTest extends PostgresIntegration
                 + "requested_amount) VALUES (" + preauthTwo + ", 600.00) RETURNING id", Long.class);
         jdbc.update("INSERT INTO benefit_bucket_consumptions (policy_id, member_id, bucket_id, preauth_id, "
                 + "preauth_line_id, period_start, period_end, approved_amount, times_consumed, "
-                + "calculation_version, idempotency_key, status, source_type, limit_scope, created_at) VALUES ("
+                + "calculation_version, idempotency_key, status, source_type, limit_scope, "
+                + "member_policy_assignment_id, created_at) VALUES ("
                 + "?, ?, ?, ?, ?, DATE_TRUNC('year', CURRENT_DATE)::date, "
                 + "(DATE_TRUNC('year', CURRENT_DATE) + INTERVAL '1 year - 1 day')::date, "
-                + "600.00, 0, 1, ?, 'RESERVED', 'PREAUTH', 'BUCKET', now())",
+                + "600.00, 0, 1, ?, 'RESERVED', 'PREAUTH', 'BUCKET', "
+                + "(SELECT id FROM member_policy_assignments WHERE member_id = " + sc.memberId()
+                + " ORDER BY id LIMIT 1), now())",
                 sc.policyId(), sc.memberId(), sc.bucketId(), preauthTwo, lineTwo, "HOLD-" + suffix());
 
         PreAuthorizationDecision decision = builder.build(sc.preauthId(), 1);
@@ -545,10 +551,10 @@ class PreAuthorizationDecisionBuilderIntegrationTest extends PostgresIntegration
     private void commitTimes(Scenario sc, int times) {
         jdbc.update("INSERT INTO benefit_bucket_consumptions (policy_id, member_id, bucket_id, period_start, "
                 + "period_end, approved_amount, times_consumed, calculation_version, idempotency_key, status, "
-                + "source_type, limit_scope, created_at) VALUES (?, ?, ?, "
+                + "source_type, limit_scope, opening_batch_id, created_at) VALUES (?, ?, ?, "
                 + "DATE_TRUNC('year', CURRENT_DATE)::date, "
                 + "(DATE_TRUNC('year', CURRENT_DATE) + INTERVAL '1 year - 1 day')::date, "
-                + "0.00, ?, 1, ?, 'COMMITTED', 'OPENING_IMPORT', 'BUCKET', now())",
+                + "0.00, ?, 1, ?, 'COMMITTED', 'OPENING_IMPORT', 'BUCKET', " + openingBatch() + ", now())",
                 sc.policyId(), sc.memberId(), sc.bucketId(), times, "T-" + suffix());
     }
 
@@ -631,10 +637,13 @@ class PreAuthorizationDecisionBuilderIntegrationTest extends PostgresIntegration
                 + "requested_amount) VALUES (" + otherPreauth + ", 100.00) RETURNING id", Long.class);
         jdbc.update("INSERT INTO benefit_bucket_consumptions (policy_id, member_id, bucket_id, preauth_id, "
                 + "preauth_line_id, period_start, period_end, approved_amount, times_consumed, "
-                + "calculation_version, idempotency_key, status, source_type, limit_scope, created_at) VALUES ("
+                + "calculation_version, idempotency_key, status, source_type, limit_scope, "
+                + "member_policy_assignment_id, created_at) VALUES ("
                 + "?, ?, ?, ?, ?, DATE_TRUNC('year', CURRENT_DATE)::date, "
                 + "(DATE_TRUNC('year', CURRENT_DATE) + INTERVAL '1 year - 1 day')::date, "
-                + "0.00, 1, 1, ?, 'RESERVED', 'PREAUTH', 'BUCKET', now())",
+                + "0.00, 1, 1, ?, 'RESERVED', 'PREAUTH', 'BUCKET', "
+                + "(SELECT id FROM member_policy_assignments WHERE member_id = " + sc.memberId()
+                + " ORDER BY id LIMIT 1), now())",
                 sc.policyId(), sc.memberId(), sc.bucketId(), otherPreauth, otherLine, "TH-" + suffix());
 
         PreAuthorizationDecision decision = builder.build(sc.preauthId(), 1);
@@ -680,4 +689,22 @@ class PreAuthorizationDecisionBuilderIntegrationTest extends PostgresIntegration
         assertThatThrownBy(() -> builder.build(sc.preauthId(), 1))
                 .hasMessageContaining("حد أيام");
     }
+
+    /**
+     * The import batch a seeded opening balance belongs to.
+     *
+     * These fixtures use OPENING_IMPORT to mean "already spent before this
+     * scenario starts", which is what the source type is for. Since V188 such
+     * a movement must name the batch that brought it in -- an opening balance
+     * nobody can attribute is the thing that column exists to prevent -- so
+     * the fixture creates one rather than writing a row production could not.
+     */
+    private Long openingBatch() {
+        return jdbc.queryForObject(
+                "INSERT INTO member_opening_balance_batches (batch_reference, reason, performed_by, "
+                        + "source_reference) VALUES (?, 'رصيد افتتاحي للاختبار', 'tester', "
+                        + "'prior system export') RETURNING id",
+                Long.class, "TEST-BATCH-" + java.util.UUID.randomUUID());
+    }
+
 }

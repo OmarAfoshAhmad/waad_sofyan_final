@@ -11,6 +11,7 @@ import com.waad.tba.modules.preauthorization.service.PreAuthorizationAttachmentS
 import com.waad.tba.common.file.FileResourceUtils;
 import com.waad.tba.common.guard.FeatureGuard;
 import com.waad.tba.common.dto.ApiResponse;
+import com.waad.tba.common.dto.ReasonRequest;
 import com.waad.tba.common.dto.PaginationResponse;
 import com.waad.tba.modules.rbac.entity.User;
 import com.waad.tba.security.AuthorizationService;
@@ -48,7 +49,6 @@ import java.util.Set;
 @RequestMapping("/api/v1/pre-authorizations")
 @RequiredArgsConstructor
 @Slf4j
-@PreAuthorize("isAuthenticated()")
 public class PreAuthorizationController {
 
     private final PreAuthorizationService preAuthorizationService;
@@ -76,7 +76,7 @@ public class PreAuthorizationController {
      * ✅ API v1: Uses CreatePreAuthorizationRequest (forbids approvedAmount, copayPercentage, contractPrice)
      */
     @PostMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF', 'DATA_ENTRY')")
+    @PreAuthorize("@permissionGuard.has('PREAUTH_CREATE')")
     public ResponseEntity<ApiResponse<PreAuthorizationResponse>> createPreAuthorization(
             @Valid @RequestBody CreatePreAuthorizationRequest request,
             Authentication authentication) {
@@ -123,7 +123,7 @@ public class PreAuthorizationController {
     @Deprecated
     @Hidden // Hide from Swagger/OpenAPI documentation
     @PutMapping("/{id:\\d+}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF', 'DATA_ENTRY')")
+    @PreAuthorize("@preAuthAccessGuard.canCreate(#id)")
     public ResponseEntity<ApiResponse<PreAuthorizationResponse>> updatePreAuthorization(
             @PathVariable("id") Long id,
             @Valid @RequestBody UpdatePreAuthorizationRequest request,
@@ -143,7 +143,7 @@ public class PreAuthorizationController {
      * @since Provider Portal Security Fix (Phase 3)
      */
     @PutMapping("/{id:\\d+}/data")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF', 'DATA_ENTRY')")
+    @PreAuthorize("@preAuthAccessGuard.canCreate(#id)")
     public ResponseEntity<ApiResponse<PreAuthorizationResponse>> updatePreAuthData(
             @PathVariable("id") Long id,
             @Valid @RequestBody UpdatePreAuthDataRequest request,
@@ -165,7 +165,7 @@ public class PreAuthorizationController {
      * @since Provider Portal Security Fix (Phase 3)
      */
     @PutMapping("/{id:\\d+}/review")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER')")
+    @PreAuthorize("@preAuthAccessGuard.canReview(#id)")
     public ResponseEntity<ApiResponse<PreAuthorizationResponse>> reviewPreAuth(
             @PathVariable("id") Long id,
             @Valid @RequestBody ReviewPreAuthRequest request,
@@ -187,7 +187,7 @@ public class PreAuthorizationController {
      * @since Provider Portal Draft-First Model (Phase 3)
      */
     @PostMapping("/{id:\\d+}/submit")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF', 'DATA_ENTRY')")
+    @PreAuthorize("@preAuthAccessGuard.canCreate(#id)")
     public ResponseEntity<ApiResponse<PreAuthorizationResponse>> submitPreAuth(
             @PathVariable("id") Long id,
             Authentication authentication) {
@@ -220,7 +220,7 @@ public class PreAuthorizationController {
      * Client should poll GET /api/v1/pre-authorizations/{id} to check for final status.
      */
     @PostMapping("/{id:\\d+}/approve")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER')")
+    @PreAuthorize("@preAuthAccessGuard.canApprove(#id)")
     public ResponseEntity<ApiResponse<PreAuthorizationResponse>> approvePreAuthorization(
             @PathVariable("id") Long id,
             @Valid @RequestBody ApprovePreAuthorizationRequest request,
@@ -251,7 +251,7 @@ public class PreAuthorizationController {
      * ✅ API v1: Uses RejectPreAuthorizationRequest (mandatory rejection reason)
      */
     @PostMapping("/{id:\\d+}/reject")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER')")
+    @PreAuthorize("@preAuthAccessGuard.canApprove(#id)")
     public ResponseEntity<ApiResponse<PreAuthorizationResponse>> rejectPreAuthorization(
             @PathVariable("id") Long id,
             @Valid @RequestBody RejectPreAuthorizationRequest request,
@@ -278,17 +278,17 @@ public class PreAuthorizationController {
      * POST /api/pre-authorizations/{id}/cancel
      */
     @PostMapping("/{id:\\d+}/cancel")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("@preAuthAccessGuard.canCancel(#id)")
     public ResponseEntity<ApiResponse<PreAuthorizationResponseDto>> cancelPreAuthorization(
             @PathVariable("id") Long id,
-            @RequestParam(name = "reason", required = false) String reason,
+            @RequestBody(required = false) ReasonRequest reasonRequest,
             Authentication authentication) {
+        String reason = ReasonRequest.reasonOf(reasonRequest);
         
         log.info("[API] Cancelling pre-authorization {}", id);
         
         String cancelledBy = authentication != null ? authentication.getName() : "system";
-        String cancelReason = reason != null ? reason : "Cancelled by user";
-        PreAuthorizationResponseDto response = preAuthorizationService.cancelPreAuthorization(id, cancelReason, cancelledBy);
+        PreAuthorizationResponseDto response = preAuthorizationService.cancelPreAuthorization(id, reason, cancelledBy);
         
         return ResponseEntity.ok(ApiResponse.success("Pre-authorization cancelled", response));
     }
@@ -303,7 +303,7 @@ public class PreAuthorizationController {
      * Permission: Providers can acknowledge their own pre-authorizations
      */
     @PostMapping("/{id:\\d+}/acknowledge")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF', 'DATA_ENTRY')")
+    @PreAuthorize("@preAuthAccessGuard.canCreate(#id)")
     public ResponseEntity<ApiResponse<PreAuthorizationResponse>> acknowledgePreAuthorization(
             @PathVariable("id") Long id,
             Authentication authentication) {
@@ -321,32 +321,6 @@ public class PreAuthorizationController {
 
     // ==================== MARK AS USED ====================
 
-    /**
-     * Mark pre-authorization as USED (typically called by ClaimService)
-     * POST /api/v1/pre-authorizations/{id}/mark-used
-     * 
-     * Lifecycle: APPROVED/ACKNOWLEDGED → USED
-     * Note: This is usually automatic when a claim is created, but exposed for manual use if needed
-     */
-    @PostMapping("/{id:\\d+}/mark-used")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER')")
-    public ResponseEntity<ApiResponse<PreAuthorizationResponse>> markPreAuthorizationAsUsed(
-            @PathVariable("id") Long id,
-            @RequestParam(name = "claimNumber", required = false) String claimNumber,
-            Authentication authentication) {
-        
-        log.info("[API v1] Marking pre-authorization {} as USED", id);
-        
-        String updatedBy = authentication != null ? authentication.getName() : "system";
-        String claim = claimNumber != null ? claimNumber : "Manual";
-        PreAuthorizationResponseDto internalResponse = preAuthorizationService.markAsUsed(id, claim, updatedBy);
-        
-        // Convert internal DTO to API response
-        PreAuthorizationResponse response = apiMapper.toResponse(internalResponse);
-        
-        return ResponseEntity.ok(ApiResponse.success("Pre-authorization marked as used", response));
-    }
-
     // ==================== DELETE ====================
 
     /**
@@ -354,7 +328,7 @@ public class PreAuthorizationController {
      * DELETE /api/pre-authorizations/{id}
      */
     @DeleteMapping("/{id:\\d+}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF')")
+    @PreAuthorize("@preAuthAccessGuard.canDelete(#id)")
     public ResponseEntity<ApiResponse<Void>> deletePreAuthorization(
             @PathVariable("id") Long id,
             Authentication authentication) {
@@ -374,7 +348,7 @@ public class PreAuthorizationController {
      * POST /api/pre-authorizations/{id}/attachments
      */
     @PostMapping(value = "/{id:\\d+}/attachments", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF', 'DATA_ENTRY')")
+    @PreAuthorize("@preAuthAccessGuard.canCreate(#id)")
     public ResponseEntity<ApiResponse<PreAuthorizationAttachment>> uploadAttachment(
             @PathVariable("id") Long id,
             @RequestParam("file") MultipartFile file,
@@ -398,7 +372,7 @@ public class PreAuthorizationController {
      * ✅ API v1: Returns PreAuthorizationListResponse with decision fields READ-ONLY
      */
     @GetMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
+    @PreAuthorize("@permissionGuard.has('PREAUTH_VIEW')")
     public ResponseEntity<ApiResponse<PreAuthorizationListResponse>> getAllPreAuthorizations(
             @RequestParam(name = "page", defaultValue = "0") int page,
             @RequestParam(name = "size", defaultValue = "20") int size,
@@ -451,7 +425,7 @@ public class PreAuthorizationController {
      * Ordered by createdAt ASC (FIFO - First In First Out) by default.
      */
     @GetMapping("/inbox/pending")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
+    @PreAuthorize("@permissionGuard.has('PREAUTH_REVIEW')")
     public ResponseEntity<ApiResponse<Page<PreAuthorizationResponseDto>>> getPendingInbox(
             @RequestParam(name = "page", defaultValue = "1") int page,
             @RequestParam(name = "size", defaultValue = "20") int size,
@@ -478,7 +452,7 @@ public class PreAuthorizationController {
      * ✅ API v1: Returns PreAuthorizationResponse with all decision fields READ-ONLY
      */
     @GetMapping("/{id:\\d+}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
+    @PreAuthorize("@preAuthAccessGuard.canView(#id)")
     public ResponseEntity<ApiResponse<PreAuthorizationResponse>> getPreAuthorizationById(@PathVariable("id") Long id) {
         log.info("[API v1] Fetching pre-authorization {}", id);
         
@@ -497,7 +471,7 @@ public class PreAuthorizationController {
      * GET /api/pre-authorizations/reference/{referenceNumber}
      */
     @GetMapping("/reference/{referenceNumber}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
+    @PreAuthorize("@preAuthAccessGuard.canViewReference(#referenceNumber)")
     public ResponseEntity<ApiResponse<PreAuthorizationResponseDto>> getPreAuthorizationByReference(
             @PathVariable("referenceNumber") String referenceNumber) {
         
@@ -515,7 +489,7 @@ public class PreAuthorizationController {
      * GET /api/pre-authorizations/member/{memberId}
      */
     @GetMapping("/member/{memberId}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
+    @PreAuthorize("@permissionGuard.has('PREAUTH_VIEW')")
     public ResponseEntity<PaginationResponse<PreAuthorizationResponseDto>> getPreAuthorizationsByMember(
             @PathVariable("memberId") Long memberId,
             @RequestParam(name = "page", defaultValue = "0") int page,
@@ -540,7 +514,7 @@ public class PreAuthorizationController {
      * GET /api/pre-authorizations/provider/{providerId}
      */
     @GetMapping("/provider/{providerId}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
+    @PreAuthorize("@permissionGuard.has('PREAUTH_VIEW')")
     public ResponseEntity<PaginationResponse<PreAuthorizationResponseDto>> getPreAuthorizationsByProvider(
             @PathVariable("providerId") Long providerId,
             @RequestParam(name = "page", defaultValue = "0") int page,
@@ -548,14 +522,12 @@ public class PreAuthorizationController {
             @RequestParam(name = "sortBy", defaultValue = "createdAt") String sortBy,
             @RequestParam(name = "sortDirection", defaultValue = "DESC") String sortDirection) {
         
-        User currentUser = authorizationService.getCurrentUser();
-        Long scopedProviderId = authorizationService.resolveProviderScope(currentUser, providerId);
-        log.info("[API] Fetching pre-authorizations for provider {}", scopedProviderId);
+        log.info("[API] Fetching pre-authorizations for provider {}", providerId);
 
         Sort.Direction direction = Sort.Direction.fromString(sortDirection);
         Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortBy));
 
-        Page<PreAuthorizationResponseDto> preAuthsPage = preAuthorizationService.getPreAuthorizationsByProvider(scopedProviderId, pageable);
+        Page<PreAuthorizationResponseDto> preAuthsPage = preAuthorizationService.getPreAuthorizationsByProvider(providerId, pageable);
         
         return ResponseEntity.ok(PaginationResponse.of(preAuthsPage));
     }
@@ -567,7 +539,7 @@ public class PreAuthorizationController {
      * GET /api/pre-authorizations/status/{status}
      */
     @GetMapping("/status/{status}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
+    @PreAuthorize("@permissionGuard.has('PREAUTH_VIEW')")
     public ResponseEntity<PaginationResponse<PreAuthorizationResponseDto>> getPreAuthorizationsByStatus(
             @PathVariable("status") String status,
             @RequestParam(name = "page", defaultValue = "0") int page,
@@ -593,7 +565,7 @@ public class PreAuthorizationController {
      * GET /api/pre-authorizations/valid
      */
     @GetMapping("/valid")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
+    @PreAuthorize("@permissionGuard.has('PREAUTH_VIEW')")
     public ResponseEntity<ApiResponse<PreAuthorizationResponseDto>> findValidPreAuthorization(
             @RequestParam(name = "memberId") Long memberId,
             @RequestParam(name = "providerId") Long providerId,
@@ -632,7 +604,7 @@ public class PreAuthorizationController {
      * POST /api/pre-authorizations/{id}/start-review
      */
     @PostMapping("/{id:\\d+}/start-review")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER')")
+    @PreAuthorize("@preAuthAccessGuard.canReview(#id)")
     public ResponseEntity<ApiResponse<PreAuthorizationResponseDto>> startReview(
             @PathVariable("id") Long id,
             Authentication authentication) {
@@ -652,7 +624,7 @@ public class PreAuthorizationController {
      * GET /api/pre-authorizations/check-validity
      */
     @GetMapping("/check-validity")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
+    @PreAuthorize("@permissionGuard.has('PREAUTH_VIEW')")
     public ResponseEntity<ApiResponse<PreAuthorizationResponseDto>> checkValidity(
             @RequestParam(name = "memberId") Long memberId,
             @RequestParam(name = "serviceCode") String serviceCode) {
@@ -681,7 +653,7 @@ public class PreAuthorizationController {
      * GET /api/pre-authorizations/{id}/attachments
      */
     @GetMapping("/{id:\\d+}/attachments")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
+    @PreAuthorize("@preAuthAccessGuard.canView(#id)")
     public ResponseEntity<ApiResponse<List<PreAuthorizationAttachment>>> getAttachments(@PathVariable("id") Long id) {
         log.info("[API] Getting attachments for pre-authorization {}", id);
         
@@ -694,7 +666,7 @@ public class PreAuthorizationController {
      * GET /api/pre-authorizations/{id}/attachments/{attachmentId}
      */
     @GetMapping("/{id:\\d+}/attachments/{attachmentId}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
+    @PreAuthorize("@preAuthAccessGuard.canView(#id)")
     public ResponseEntity<Resource> downloadAttachment(
             @PathVariable("id") Long id,
             @PathVariable("attachmentId") Long attachmentId) {
@@ -724,7 +696,7 @@ public class PreAuthorizationController {
      * DELETE /api/pre-authorizations/{id}/attachments/{attachmentId}
      */
     @DeleteMapping("/{id:\\d+}/attachments/{attachmentId}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF', 'DATA_ENTRY')")
+    @PreAuthorize("@preAuthAccessGuard.canCreate(#id)")
     public ResponseEntity<ApiResponse<Void>> deleteAttachment(
             @PathVariable("id") Long id,
             @PathVariable("attachmentId") Long attachmentId) {
@@ -747,7 +719,7 @@ public class PreAuthorizationController {
      * GET /api/v1/pre-authorizations/search
      */
     @GetMapping("/search")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
+    @PreAuthorize("@permissionGuard.has('PREAUTH_VIEW')")
     public ResponseEntity<ApiResponse<Page<PreAuthorizationResponseDto>>> searchPreAuthorizations(
             @RequestParam(name = "q", required = false) String query,
             @RequestParam(name = "page", defaultValue = "0") int page,

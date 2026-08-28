@@ -24,7 +24,7 @@ import java.util.Map;
 @RequestMapping("/api/v1/admin/claim-coverage-rules")
 @RequiredArgsConstructor
 @Tag(name = "Admin - Claim Coverage Rules", description = "Manage dynamic financial coverage rules")
-@PreAuthorize("isAuthenticated()")
+@PreAuthorize("@permissionGuard.has('BENEFIT_POLICY_VIEW')")
 public class ClaimCoverageRuleAdminController {
 
     private static final TypeReference<List<String>> STRING_LIST_TYPE = new TypeReference<>() {
@@ -36,7 +36,7 @@ public class ClaimCoverageRuleAdminController {
     private final ObjectMapper objectMapper;
 
     @GetMapping
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("@permissionGuard.has('BENEFIT_POLICY_VIEW')")
     @Operation(summary = "Get all claim coverage rules")
     public ResponseEntity<List<ClaimCoverageRuleDto>> getAll() {
         List<ClaimCoverageRuleDto> rows = ruleRepository.findAll().stream()
@@ -51,7 +51,7 @@ public class ClaimCoverageRuleAdminController {
     }
 
     @PostMapping
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("@permissionGuard.has('BENEFIT_POLICY_MANAGE')")
     @Operation(summary = "Create claim coverage rule")
     public ResponseEntity<ClaimCoverageRuleDto> create(@RequestBody UpsertClaimCoverageRuleRequest request) {
         ClaimCoverageRule entity = new ClaimCoverageRule();
@@ -61,7 +61,7 @@ public class ClaimCoverageRuleAdminController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("@permissionGuard.has('BENEFIT_POLICY_MANAGE')")
     @Operation(summary = "Update claim coverage rule")
     public ResponseEntity<ClaimCoverageRuleDto> update(
             @PathVariable("id") Long id,
@@ -77,7 +77,7 @@ public class ClaimCoverageRuleAdminController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("@permissionGuard.has('BENEFIT_POLICY_MANAGE')")
     @Operation(summary = "Delete claim coverage rule")
     public ResponseEntity<Void> delete(@PathVariable("id") Long id) {
         if (!ruleRepository.existsById(id)) {

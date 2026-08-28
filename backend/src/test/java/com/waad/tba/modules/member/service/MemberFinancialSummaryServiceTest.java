@@ -5,6 +5,7 @@ import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy.BenefitPolicyStatus;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository;
 import com.waad.tba.modules.benefitpolicy.service.BenefitPolicyCoverageService;
+import com.waad.tba.modules.benefitpolicy.service.LimitBalanceReader;
 import com.waad.tba.modules.claim.projection.MemberFinancialAggregateProjection;
 import com.waad.tba.modules.claim.repository.ClaimRepository;
 import com.waad.tba.modules.member.dto.CoverageLimitsDto;
@@ -14,6 +15,7 @@ import com.waad.tba.modules.member.repository.MemberRepository;
 import com.waad.tba.modules.medicaltaxonomy.entity.MedicalService;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalServiceRepository;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -25,6 +27,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -61,9 +64,21 @@ class MemberFinancialSummaryServiceTest {
     private ClaimRepository claimRepository;
     @Mock
     private MedicalServiceRepository medicalServiceRepository;
+    @Mock
+    private MemberPolicyResolver memberPolicyResolver;
+    @Mock
+    private LimitBalanceReader limitBalanceReader;
 
     @InjectMocks
     private MemberFinancialSummaryService service;
+
+    @BeforeEach
+    void resolveThePolicyOnTheSummaryDate() {
+        org.mockito.Mockito.lenient()
+                .when(memberPolicyResolver.resolveFor(any(Member.class), any(LocalDate.class)))
+                .thenAnswer(invocation -> Optional.ofNullable(
+                        invocation.<Member>getArgument(0).getBenefitPolicy()));
+    }
 
     private Member memberWithPolicy(Long id, BigDecimal annualLimit) {
         BenefitPolicy policy = BenefitPolicy.builder()
@@ -100,7 +115,7 @@ class MemberFinancialSummaryServiceTest {
         // assertion catches it immediately.
         when(claimRepository.findFinancialAggregatesByMemberIds(anyCollection()))
                 .thenReturn(List.of(stats(1L, new BigDecimal("382.00"))));
-        when(coverageService.getLimitConsumedForYear(anyCollection(), anyInt(), any()))
+        when(limitBalanceReader.readGeneralCeilingCommittedBulk(any(), any(), any(), any()))
                 .thenReturn(Map.of(1L, new BigDecimal("600.00")));
 
         MemberFinancialSummaryDto summary = service.getFinancialSummary(1L);
@@ -119,7 +134,7 @@ class MemberFinancialSummaryServiceTest {
         when(memberRepository.findAllById(anyCollection())).thenReturn(List.of(principal, dependent));
         when(claimRepository.findFinancialAggregatesByMemberIds(anyCollection()))
                 .thenReturn(List.of(stats(1L, new BigDecimal("100.00")), stats(2L, new BigDecimal("50.00"))));
-        when(coverageService.getLimitConsumedForYear(anyCollection(), anyInt(), any()))
+        when(limitBalanceReader.readGeneralCeilingCommittedBulk(any(), any(), any(), any()))
                 .thenReturn(Map.of(1L, new BigDecimal("150.00"), 2L, new BigDecimal("70.00")));
 
         Map<Long, MemberFinancialSummaryDto> result = service.getFinancialSummaries(List.of(1L, 2L));
@@ -128,7 +143,7 @@ class MemberFinancialSummaryServiceTest {
         assertThat(result.get(1L).getLimitConsumedAmount()).isEqualByComparingTo("150.00");
         assertThat(result.get(2L).getLimitConsumedAmount()).isEqualByComparingTo("70.00");
         verify(claimRepository, times(1)).findFinancialAggregatesByMemberIds(anyCollection());
-        verify(coverageService, times(1)).getLimitConsumedForYear(anyCollection(), anyInt(), any());
+        verify(limitBalanceReader, times(1)).readGeneralCeilingCommittedBulk(any(), any(), any(), any());
     }
 
     @Test
@@ -137,7 +152,7 @@ class MemberFinancialSummaryServiceTest {
         Member member = memberWithPolicy(1L, new BigDecimal("1000.00"));
         when(memberRepository.findAllById(anyCollection())).thenReturn(List.of(member));
         when(claimRepository.findFinancialAggregatesByMemberIds(anyCollection())).thenReturn(List.of());
-        when(coverageService.getLimitConsumedForYear(anyCollection(), anyInt(), any()))
+        when(limitBalanceReader.readGeneralCeilingCommittedBulk(any(), any(), any(), any()))
                 .thenReturn(Map.of(1L, BigDecimal.ZERO));
 
         MemberFinancialSummaryDto summary = service.getFinancialSummary(1L);
@@ -163,8 +178,8 @@ class MemberFinancialSummaryServiceTest {
         Member member = Member.builder().id(1L).fullName("No Policy").benefitPolicy(null).build();
         when(memberRepository.findAllById(anyCollection())).thenReturn(List.of(member));
         when(claimRepository.findFinancialAggregatesByMemberIds(anyCollection())).thenReturn(List.of());
-        when(coverageService.getLimitConsumedForYear(anyCollection(), anyInt(), any()))
-                .thenReturn(Map.of(1L, BigDecimal.ZERO));
+        when(limitBalanceReader.readGeneralCeilingCommittedBulk(any(), any(), any(), any()))
+                .thenReturn(Map.of());
 
         MemberFinancialSummaryDto summary = service.getFinancialSummary(1L);
 
@@ -180,7 +195,7 @@ class MemberFinancialSummaryServiceTest {
         Map<Long, MemberFinancialSummaryDto> result = service.getFinancialSummaries(List.of());
 
         assertThat(result).isEmpty();
-        org.mockito.Mockito.verifyNoInteractions(memberRepository, claimRepository, coverageService);
+        org.mockito.Mockito.verifyNoInteractions(memberRepository, claimRepository, coverageService, limitBalanceReader);
     }
 
     // ==================== getServiceCoverageLimits (member-closure Phase 4) ====================

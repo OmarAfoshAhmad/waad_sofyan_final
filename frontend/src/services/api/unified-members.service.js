@@ -297,7 +297,7 @@ export const deleteMember = async (id) => {
  */
 export const terminateMembership = async (id, reason) => {
   try {
-    await api.post(`${UNIFIED_MEMBERS_BASE_URL}/${id}/terminate`, null, { params: { reason } });
+    await api.post(`${UNIFIED_MEMBERS_BASE_URL}/${id}/terminate`, { reason });
   } catch (error) {
     console.error('Error terminating membership:', error);
     throw error;
@@ -310,9 +310,9 @@ export const terminateMembership = async (id, reason) => {
  * @param {Array<number>} ids - Array of Member IDs
  * @returns {Promise<Object>} Response
  */
-export const bulkDeleteMembers = async (ids) => {
+export const bulkDeleteMembers = async (ids, reason) => {
   try {
-    const response = await api.post(`${UNIFIED_MEMBERS_BASE_URL}/bulk-delete`, ids);
+    const response = await api.post(`${UNIFIED_MEMBERS_BASE_URL}/bulk-delete`, { ids, reason });
     return response.data;
   } catch (error) {
     console.error('Error bulk deleting members:', error);
@@ -328,7 +328,7 @@ export const bulkDeleteMembers = async (ids) => {
  */
 export const restoreMember = async (id, reason) => {
   try {
-    const response = await api.put(`${UNIFIED_MEMBERS_BASE_URL}/${id}/restore`, null, { params: { reason } });
+    const response = await api.put(`${UNIFIED_MEMBERS_BASE_URL}/${id}/restore`, { reason });
     return response.data;
   } catch (error) {
     console.error('Error restoring member:', error);
@@ -350,7 +350,7 @@ export const restoreMember = async (id, reason) => {
  */
 export const toggleMemberActive = async (id, active, reason) => {
   try {
-    const response = await api.patch(`${UNIFIED_MEMBERS_BASE_URL}/${id}/active`, null, { params: { active, reason } });
+    const response = await api.patch(`${UNIFIED_MEMBERS_BASE_URL}/${id}/active`, { reason }, { params: { active } });
     return response.data;
   } catch (error) {
     console.error('Error toggling member active status:', error);
@@ -369,7 +369,7 @@ export const toggleMemberActive = async (id, active, reason) => {
  */
 export const reinstateTerminatedMember = async (id, reason) => {
   try {
-    const response = await api.put(`${UNIFIED_MEMBERS_BASE_URL}/${id}/reinstate`, null, { params: { reason } });
+    const response = await api.put(`${UNIFIED_MEMBERS_BASE_URL}/${id}/reinstate`, { reason });
     return response.data;
   } catch (error) {
     console.error('Error reinstating terminated member:', error);
@@ -398,6 +398,82 @@ export const restoreFamily = async (transitionId) => {
 };
 
 /**
+ * Move a dependent to a different principal's family. Atomic, dated,
+ * requires the dependent's current row version to guard against a
+ * concurrent edit.
+ */
+export const transferDependent = async (dependentId, { newPrincipalId, relationship, effectiveDate, reason, expectedVersion }) => {
+  const response = await api.post(`${UNIFIED_MEMBERS_BASE_URL}/${dependentId}/family-transfer`, {
+    newPrincipalId,
+    relationship,
+    effectiveDate,
+    reason,
+    expectedVersion
+  });
+  return response.data;
+};
+
+/** Corrects a dependent's kinship/relationship value -- a dedicated, audited operation, not a field edit. */
+export const correctRelationship = async (dependentId, { relationship, reason, expectedVersion }) => {
+  const response = await api.post(`${UNIFIED_MEMBERS_BASE_URL}/${dependentId}/relationship-correction`, {
+    relationship,
+    reason,
+    expectedVersion
+  });
+  return response.data;
+};
+
+/**
+ * Changes the whole family's benefit policy as of an effective date. All or
+ * nothing: expectedVersions must name every affected member's current
+ * version or the whole call is rejected.
+ */
+export const changeFamilyPolicy = async (principalId, { policyId, effectiveDate, reason, expectedVersions }) => {
+  const response = await api.post(`${UNIFIED_MEMBERS_BASE_URL}/${principalId}/family-policy`, {
+    policyId,
+    effectiveDate,
+    reason,
+    expectedVersions
+  });
+  return response.data;
+};
+
+/** Reorders a family's dependents for display only -- never touches card number or barcode. */
+export const reorderFamily = async (principalId, { dependentIds, expectedVersions }) => {
+  const response = await api.post(`${UNIFIED_MEMBERS_BASE_URL}/${principalId}/family-order`, {
+    dependentIds,
+    expectedVersions
+  });
+  return response.data;
+};
+
+/** Read-only impact preview for transferring a principal and their whole family to another employer. */
+export const previewEmployerTransfer = async (principalId, newEmployerId) => {
+  const response = await api.get(`${UNIFIED_MEMBERS_BASE_URL}/${principalId}/employer-transfer/preview`, {
+    params: { newEmployerId }
+  });
+  return response.data;
+};
+
+/**
+ * Moves a principal and their whole family to another employer as of an
+ * effective date. All-or-nothing: expectedVersions must name every family
+ * member's current version. Pass noPolicy:true instead of newPolicyId only
+ * to explicitly confirm the family should carry no policy for now.
+ */
+export const transferEmployerFamily = async (principalId, { newEmployerId, newPolicyId, noPolicy, effectiveDate, reason, expectedVersions }) => {
+  const response = await api.post(`${UNIFIED_MEMBERS_BASE_URL}/${principalId}/employer-transfer`, {
+    newEmployerId,
+    newPolicyId: noPolicy ? null : newPolicyId,
+    noPolicy: Boolean(noPolicy),
+    effectiveDate,
+    reason,
+    expectedVersions
+  });
+  return response.data;
+};
+
+/**
  * Change a member's membership status (ACTIVE / SUSPENDED / PENDING / TERMINATED)
  *
  * @param {number} id - Member ID
@@ -407,7 +483,7 @@ export const restoreFamily = async (transitionId) => {
  */
 export const changeMemberStatus = async (id, status, reason) => {
   try {
-    const response = await api.patch(`${UNIFIED_MEMBERS_BASE_URL}/${id}/status`, null, { params: { status, reason } });
+    const response = await api.patch(`${UNIFIED_MEMBERS_BASE_URL}/${id}/status`, { reason }, { params: { status } });
     return response.data;
   } catch (error) {
     console.error('Error changing member status:', error);
@@ -427,7 +503,7 @@ export const changeMemberStatus = async (id, status, reason) => {
  */
 export const hardDeleteMember = async (id, reason) => {
   try {
-    await api.delete(`${UNIFIED_MEMBERS_BASE_URL}/${id}/hard`, { params: { reason } });
+    await api.delete(`${UNIFIED_MEMBERS_BASE_URL}/${id}/hard`, { data: { reason } });
   } catch (error) {
     console.error('Error physically deleting member:', error);
     throw error;
@@ -503,16 +579,13 @@ export const previewImport = async (file, params = {}) => {
     if (params.headerRowNumber !== null && params.headerRowNumber !== undefined) {
       formData.append('headerRowNumber', params.headerRowNumber);
     }
+    if (params.benefitPolicyId) formData.append('benefitPolicyId', params.benefitPolicyId);
+    if (params.clearOldMembers !== undefined) formData.append('clearOldMembers', params.clearOldMembers);
     if (params.customMappings) {
-      Object.entries(params.customMappings).forEach(([column, field]) => {
-        formData.append(`customMappings[${column}]`, field);
-      });
+      formData.append('customMappingsJson', JSON.stringify(params.customMappings));
     }
     const response = await api.post(`${UNIFIED_MEMBERS_BASE_URL}/import/preview`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-      // Same reasoning as executeImport's timeout: parsing a large file for
-      // preview is real work too, not just a quick round trip.
-      timeout: 1800000
+      headers: { 'Content-Type': 'multipart/form-data' }
     });
     return response.data;
   } catch (error) {
@@ -544,22 +617,39 @@ export const executeImport = async (file, params) => {
     if (params.clearOldMembers !== undefined) {
       formData.append('clearOldMembers', params.clearOldMembers);
     }
+    if (params.customMappings) {
+      formData.append('customMappingsJson', JSON.stringify(params.customMappings));
+    }
 
     const response = await api.post(`${UNIFIED_MEMBERS_BASE_URL}/import/execute`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
-      // A real import batch (tens of thousands of rows) can legitimately run
-      // for many minutes. 5 minutes was aborting a request the server was
-      // still correctly processing -- the browser gave up, not the backend.
-      // 30 minutes is a generous ceiling, not a claim about how long it
-      // SHOULD take; the real fix is surfacing genuine progress (see the
-      // upload dialog), not guessing a bigger constant.
-      timeout: 1800000
+      timeout: 300000
     });
     return response.data;
   } catch (error) {
     console.error('Error executing import:', error);
     throw error;
   }
+};
+
+export const getImportLogs = async (page = 1, size = 20) => {
+  const response = await api.get(`${UNIFIED_MEMBERS_BASE_URL}/import/logs`, { params: { page, size } });
+  return response.data;
+};
+
+export const getImportErrors = async (batchId) => {
+  const response = await api.get(`${UNIFIED_MEMBERS_BASE_URL}/import/errors/${batchId}`);
+  return response.data;
+};
+
+export const previewImportRollback = async (batchId) => {
+  const response = await api.get(`${UNIFIED_MEMBERS_BASE_URL}/import/${batchId}/rollback/preview`);
+  return response.data;
+};
+
+export const executeImportRollback = async (batchId, reason) => {
+  const response = await api.post(`${UNIFIED_MEMBERS_BASE_URL}/import/${batchId}/rollback`, { reason });
+  return response.data;
 };
 
 /**
@@ -574,72 +664,6 @@ export const getImportStatus = async (batchId) => {
     return response.data;
   } catch (error) {
     console.error('Error fetching import status:', error);
-    throw error;
-  }
-};
-
-/**
- * Get paginated import batch history ("سجل استيراد الأعضاء").
- *
- * @param {number} page - 1-based page number
- * @param {number} size - page size
- * @returns {Promise<any>} Paginated import logs
- */
-export const getImportLogs = async (page = 1, size = 20) => {
-  try {
-    const response = await api.get(`${UNIFIED_MEMBERS_BASE_URL}/import/logs`, { params: { page, size } });
-    return response.data;
-  } catch (error) {
-    console.error('Error fetching import logs:', error);
-    throw error;
-  }
-};
-
-/**
- * Get the row-level errors recorded for an import batch.
- *
- * @param {string} batchId
- * @returns {Promise<any>} Error rows
- */
-export const getImportErrors = async (batchId) => {
-  try {
-    const response = await api.get(`${UNIFIED_MEMBERS_BASE_URL}/import/errors/${batchId}`);
-    return response.data;
-  } catch (error) {
-    console.error('Error fetching import errors:', error);
-    throw error;
-  }
-};
-
-/**
- * Preview what rolling back this batch would do -- no writes.
- *
- * @param {string} batchId
- * @returns {Promise<any>} Preview counts + who would be skipped and why
- */
-export const previewImportRollback = async (batchId) => {
-  try {
-    const response = await api.get(`${UNIFIED_MEMBERS_BASE_URL}/import/${batchId}/rollback/preview`);
-    return response.data;
-  } catch (error) {
-    console.error('Error previewing import rollback:', error);
-    throw error;
-  }
-};
-
-/**
- * Actually roll back an import batch. SUPER_ADMIN only.
- *
- * @param {string} batchId
- * @param {string} reason - mandatory
- * @returns {Promise<any>} Rollback result
- */
-export const executeImportRollback = async (batchId, reason) => {
-  try {
-    const response = await api.post(`${UNIFIED_MEMBERS_BASE_URL}/import/${batchId}/rollback`, { reason });
-    return response.data;
-  } catch (error) {
-    console.error('Error executing import rollback:', error);
     throw error;
   }
 };
@@ -670,7 +694,14 @@ export const downloadTemplate = async () => {
 export const exportMembers = async (params = {}) => {
   try {
     const response = await api.get(`${UNIFIED_MEMBERS_BASE_URL}/export/excel`, {
-      params,
+      params: {
+        searchQuery: params.searchQuery ?? params.searchTerm,
+        employerId: params.employerId ?? params.organizationId,
+        benefitPolicyId: params.benefitPolicyId,
+        status: params.status,
+        type: params.type,
+        includeDeleted: params.includeDeleted ?? params.deleted ?? false
+      },
       responseType: 'blob'
     });
     return response.data;
@@ -678,6 +709,22 @@ export const exportMembers = async (params = {}) => {
     console.error('Error exporting members:', error);
     throw error;
   }
+};
+
+/** Canonical workbook that can be sent back through preview -> execute. */
+export const exportReimportableMembers = async (params = {}) => {
+  const response = await api.get(`${UNIFIED_MEMBERS_BASE_URL}/export/reimportable-excel`, {
+    params: {
+      searchQuery: params.searchQuery ?? params.searchTerm,
+      employerId: params.employerId ?? params.organizationId,
+      benefitPolicyId: params.benefitPolicyId,
+      status: params.status,
+      type: params.type,
+      includeDeleted: params.includeDeleted ?? params.deleted ?? false
+    },
+    responseType: 'blob'
+  });
+  return response.data;
 };
 
 /**
@@ -711,7 +758,17 @@ export const MEMBER_STATUSES = {
   ACTIVE: 'ACTIVE',
   SUSPENDED: 'SUSPENDED',
   TERMINATED: 'TERMINATED',
-  PENDING: 'PENDING'
+  PENDING: 'PENDING',
+  DUPLICATE_MERGED: 'DUPLICATE_MERGED'
+};
+
+/** Arabic display labels. TERMINATED reads as "ended membership", not "deleted" -- the record still exists. */
+export const MEMBER_STATUS_LABELS = {
+  ACTIVE: 'نشط',
+  SUSPENDED: 'معلّق',
+  PENDING: 'قيد المراجعة',
+  TERMINATED: 'منتهية العضوية',
+  DUPLICATE_MERGED: 'مدموج'
 };
 
 /**
@@ -794,11 +851,12 @@ export default {
   detectColumns,
   previewImport,
   executeImport,
-  exportMembers,
   getImportLogs,
   getImportErrors,
   previewImportRollback,
   executeImportRollback,
+  exportMembers,
+  exportReimportableMembers,
   downloadTemplate,
   uploadPhoto,
   deletePhoto,
@@ -806,5 +864,13 @@ export default {
   RELATIONSHIPS,
   GENDERS,
   MEMBER_STATUSES,
-  MEMBER_TYPES
+  MEMBER_STATUS_LABELS,
+  MEMBER_TYPES,
+  restoreFamily,
+  transferDependent,
+  correctRelationship,
+  changeFamilyPolicy,
+  reorderFamily,
+  previewEmployerTransfer,
+  transferEmployerFamily
 };

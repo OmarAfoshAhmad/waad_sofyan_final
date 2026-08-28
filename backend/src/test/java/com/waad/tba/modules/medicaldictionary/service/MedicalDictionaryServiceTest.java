@@ -43,7 +43,6 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -242,17 +241,22 @@ class MedicalDictionaryServiceTest {
     @Test
     void listPriceListSessions_readsStoredSummariesWithoutLoadingItemsOrContractPrices() {
         MedicalDictionaryService service = newService();
-        PriceListClassificationSession session = priceListSession();
-        session.setTotalRows(3000);
-        session.setPostedCount(475);
-        Pageable pageable = Pageable.ofSize(20);
+        List<PriceListClassificationSession> sessions = new ArrayList<>();
+        for (int index = 0; index < 100; index++) {
+            PriceListClassificationSession session = priceListSession();
+            session.setId((long) index + 1);
+            session.setTotalRows(3000);
+            session.setPostedCount(475);
+            sessions.add(session);
+        }
+        Pageable pageable = Pageable.ofSize(100);
 
-        when(priceListSessionRepository.searchSummaries(isNull(), isNull(), any(Pageable.class)))
-                .thenReturn(new PageImpl<>(List.of(session), pageable, 1));
+        when(priceListSessionRepository.findAll(any(Pageable.class)))
+                .thenReturn(new PageImpl<>(sessions, pageable, 100));
 
         Page<?> result = service.listPriceListSessions(null, null, pageable);
 
-        assertThat(result.getTotalElements()).isEqualTo(1);
+        assertThat(result.getNumberOfElements()).isEqualTo(100);
         verifyNoInteractions(priceListItemRepository, providerContractPricingItemRepository);
     }
 

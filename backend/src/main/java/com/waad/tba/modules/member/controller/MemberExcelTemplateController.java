@@ -2,7 +2,9 @@ package com.waad.tba.modules.member.controller;
 
 import java.io.IOException;
 import java.util.Map;
-import java.util.UUID;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -16,6 +18,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -23,16 +26,18 @@ import com.waad.tba.common.dto.ApiResponse;
 import com.waad.tba.modules.member.dto.ExcelColumnDetectionDto;
 import com.waad.tba.modules.member.dto.MemberImportPreviewDto;
 import com.waad.tba.modules.member.dto.MemberImportResultDto;
+import com.waad.tba.modules.member.dto.MemberImportRollbackPreviewDto;
+import com.waad.tba.modules.member.dto.MemberImportRollbackResultDto;
 import com.waad.tba.modules.member.entity.MemberImportLog;
 import com.waad.tba.modules.member.repository.MemberImportErrorRepository;
 import com.waad.tba.modules.member.repository.MemberImportLogRepository;
-import com.waad.tba.modules.member.dto.MemberImportRollbackPreviewDto;
-import com.waad.tba.modules.member.dto.MemberImportRollbackResultDto;
+import com.waad.tba.modules.member.repository.MemberImportBatchRowRepository;
+import com.waad.tba.modules.member.security.MemberImportAccessPolicy;
 import com.waad.tba.modules.member.service.ExcelColumnMappingService;
 import com.waad.tba.modules.member.service.MemberExcelImportService;
 import com.waad.tba.modules.member.service.MemberExcelTemplateService;
+import com.waad.tba.modules.member.service.MemberImportPreviewTicketService;
 import com.waad.tba.modules.member.service.MemberImportRollbackService;
-import com.waad.tba.security.AuthorizationService;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -53,16 +58,19 @@ import lombok.extern.slf4j.Slf4j;
 @RequestMapping("/api/v1/unified-members/import")
 @RequiredArgsConstructor
 @Tag(name = "Member Excel Import", description = "System-generated Excel template download and import")
-@PreAuthorize("isAuthenticated()")
+@PreAuthorize("@permissionGuard.has('MEMBER_IMPORT')")
 public class MemberExcelTemplateController {
     
     private final MemberExcelTemplateService templateService;
     private final MemberExcelImportService importService;
     private final ExcelColumnMappingService columnMappingService;
     private final MemberImportLogRepository importLogRepository;
+    private final MemberImportBatchRowRepository importBatchRowRepository;
+    private final MemberImportAccessPolicy importAccessPolicy;
     private final MemberImportErrorRepository importErrorRepository;
+    private final MemberImportPreviewTicketService previewTicketService;
     private final MemberImportRollbackService rollbackService;
-    private final AuthorizationService authorizationService;
+    private final ObjectMapper objectMapper;
     
     /**
      * Download Excel template for members import
@@ -70,7 +78,7 @@ public class MemberExcelTemplateController {
      * GET /api/members/import/template
      */
     @GetMapping("/template")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY')")
+    @PreAuthorize("@permissionGuard.has('MEMBER_IMPORT')")
     @Operation(
         summary = "Download Members Import Template",
         description = "Downloads a system-generated Excel template for importing members. " +
@@ -109,7 +117,7 @@ public class MemberExcelTemplateController {
      * POST /api/v1/unified-members/import/detect-columns
      */
     @PostMapping(value = "/detect-columns", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY')")
+    @PreAuthorize("@permissionGuard.has('MEMBER_IMPORT')")
     @Operation(
         summary = "Detect Excel columns and suggest mappings",
         description = "Analyzes Excel file structure and intelligently suggests column-to-field mappings"
@@ -153,7 +161,7 @@ public class MemberExcelTemplateController {
      * POST /api/v1/unified-members/import/preview
      */
     @PostMapping(value = "/preview", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY')")
+    @PreAuthorize("@permissionGuard.has('MEMBER_IMPORT')")
     @Operation(
         summary = "Preview Excel import",
         description = "Upload Excel file and preview data before import"
@@ -162,12 +170,15 @@ public class MemberExcelTemplateController {
             @Parameter(description = "Excel file (.xlsx)")
             @RequestParam("file") MultipartFile file,
             @Parameter(description = "Custom column mappings (optional)")
-            @RequestParam(value = "customMappings", required = false) Map<String, String> customMappings,
+            @RequestParam(value = "customMappingsJson", required = false) String customMappingsJson,
             @Parameter(description = "Selected Employer ID (optional fallback for empty/invalid employer values)")
             @RequestParam(value = "employerId", required = false) Long employerId,
+            @RequestParam(value = "benefitPolicyId", required = false) Long benefitPolicyId,
+            @RequestParam(value = "clearOldMembers", required = false, defaultValue = "false") Boolean clearOldMembers,
             @Parameter(description = "Header row number (optional, 0-indexed)")
             @RequestParam(value = "headerRowNumber", required = false) Integer headerRowNumber) {
         
+        Map<String, String> customMappings = parseCustomMappings(customMappingsJson);
         log.info("📊 Preview import request: {} (mappings: {}, headerRow: {})", 
                 file.getOriginalFilename(), 
                 customMappings != null ? "yes" : "auto",
@@ -186,6 +197,9 @@ public class MemberExcelTemplateController {
         
         try {
             MemberImportPreviewDto preview = importService.parseAndPreview(file, customMappings, headerRowNumber, employerId);
+            preview.setBatchId(previewTicketService.issue(file, employerId, benefitPolicyId,
+                    preview.getResolvedHeaderRowNumber(),
+                    clearOldMembers, customMappings, preview.getResolvedEmployerIds()));
             String message = preview.getValidRows() > 0
                     ? "تم تحليل الملف بنجاح"
                     : "تم تحليل الملف: لا توجد صفوف صالحة حاليًا، يمكن اختيار جهة عمل موحدة ثم التنفيذ";
@@ -205,7 +219,7 @@ public class MemberExcelTemplateController {
      * POST /api/v1/unified-members/import/execute
      */
     @PostMapping(value = "/execute", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY')")
+    @PreAuthorize("@permissionGuard.has('MEMBER_IMPORT')")
     @Operation(
         summary = "Execute Excel import",
         description = "Import members from Excel file with selected employer and benefit policy"
@@ -221,11 +235,13 @@ public class MemberExcelTemplateController {
             @RequestParam(value = "batchId", required = false) String batchId,
             @Parameter(description = "Header row number (0-indexed)")
             @RequestParam(value = "headerRowNumber", required = false) Integer headerRowNumber,
+            @RequestParam(value = "customMappingsJson", required = false) String customMappingsJson,
             @Parameter(description = "Import policy: CREATE_ONLY, UPDATE_ONLY, CREATE_OR_UPDATE")
             @RequestParam(value = "importPolicy", required = false) String importPolicy,
-            @Parameter(description = "Clear old members (only if they have no financial movements)")
+            @Parameter(description = "Replace the scoped member list: absent memberships are terminated logically; history is preserved")
             @RequestParam(value = "clearOldMembers", required = false, defaultValue = "false") Boolean clearOldMembers) {
         
+        Map<String, String> customMappings = parseCustomMappings(customMappingsJson);
         log.info("📥 Execute import: file={}, employer={}, policy={}, batch={}, clearOldMembers={}", 
                 file.getOriginalFilename(), employerId, benefitPolicyId, batchId, clearOldMembers);
         
@@ -235,12 +251,12 @@ public class MemberExcelTemplateController {
         }
         
         if (batchId == null || batchId.isBlank()) {
-            batchId = UUID.randomUUID().toString();
+            return ResponseEntity.badRequest().body(ApiResponse.error("يجب إجراء معاينة صالحة قبل التنفيذ"));
         }
         
         try {
-            MemberImportResultDto result = importService.executeImport(
-                file, batchId, employerId, benefitPolicyId, headerRowNumber, clearOldMembers);
+            MemberImportResultDto result = importService.executeConfirmedImport(
+                file, batchId, employerId, benefitPolicyId, headerRowNumber, clearOldMembers, customMappings);
             
             String status = result.getStatus();
             if ("COMPLETED".equals(status)) {
@@ -268,13 +284,14 @@ public class MemberExcelTemplateController {
      * GET /api/v1/unified-members/import/status/{batchId}
      */
     @GetMapping("/status/{batchId}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY')")
+    @PreAuthorize("@permissionGuard.has('MEMBER_IMPORT')")
     @Operation(summary = "Get import status by batch ID")
     public ResponseEntity<ApiResponse<MemberImportLog>> getImportStatus(
-            @PathVariable("batchId") String batchId) {
-        
-        return importLogRepository.findByImportBatchId(batchId)
-                .map(log -> ResponseEntity.ok(ApiResponse.success("Import status found", log)))
+              @PathVariable("batchId") String batchId) {
+          var importLog = importLogRepository.findByImportBatchId(batchId);
+          importLog.ifPresent(this::authorizeHistory);
+          return importLog
+                .map(foundLog -> ResponseEntity.ok(ApiResponse.success("Import status found", foundLog)))
                 .orElse(ResponseEntity.notFound().build());
     }
 
@@ -284,11 +301,12 @@ public class MemberExcelTemplateController {
      * GET /api/v1/unified-members/import/errors/{batchId}
      */
     @GetMapping("/errors/{batchId}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY')")
+    @PreAuthorize("@permissionGuard.has('MEMBER_IMPORT')")
     @Operation(summary = "Get errors for import batch")
     public ResponseEntity<ApiResponse<?>> getImportErrors(
-            @PathVariable("batchId") String batchId) {
-        
+              @PathVariable("batchId") String batchId) {
+        authorizeHistory(importLogRepository.findByImportBatchId(batchId)
+                .orElseThrow(() -> new com.waad.tba.common.exception.BusinessRuleException("سجل الاستيراد غير موجود")));
         var errors = importErrorRepository.findByImportBatchId(batchId);
         return ResponseEntity.ok(ApiResponse.success("Import errors retrieved", errors));
     }
@@ -299,62 +317,71 @@ public class MemberExcelTemplateController {
      * GET /api/v1/unified-members/import/logs
      */
     @GetMapping("/logs")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY')")
+    @PreAuthorize("@permissionGuard.has('MEMBER_IMPORT')")
     @Operation(summary = "Get import logs")
     public ResponseEntity<ApiResponse<Page<MemberImportLog>>> getImportLogs(
             @RequestParam(name = "page", defaultValue = "1") int page,
             @RequestParam(name = "size", defaultValue = "20") int size) {
         
-        Page<MemberImportLog> logs = importLogRepository.findAll(
-                PageRequest.of(Math.max(0, page - 1), size, Sort.by(Sort.Direction.DESC, "createdAt")));
+        var authorised = importAccessPolicy.requireHistoryScope();
+        var pageable = PageRequest.of(Math.max(0, page - 1), size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Page<MemberImportLog> logs = authorised.isGlobal()
+                ? importLogRepository.findAll(pageable)
+                : importLogRepository.findVisibleToEmployers(authorised.employerIds(), pageable);
         
         return ResponseEntity.ok(ApiResponse.success("Import logs retrieved", logs));
     }
 
-    // ==================== ROLLBACK ====================
+    @GetMapping("/{batchId}/rollback/preview")
+    @PreAuthorize("@permissionGuard.has('MEMBER_IMPORT') and @permissionGuard.has('DANGER_ZONE_EXECUTE')")
+    @Operation(summary = "معاينة التراجع الآمن عن دفعة استيراد")
+    public ResponseEntity<ApiResponse<MemberImportRollbackPreviewDto>> previewRollback(
+            @PathVariable String batchId) {
+        Long logId = importLogRepository.findByImportBatchId(batchId)
+                .orElseThrow(() -> new com.waad.tba.common.exception.BusinessRuleException(
+                        "سجل الاستيراد غير موجود"))
+                .getId();
+        return ResponseEntity.ok(ApiResponse.success("تم حساب أثر التراجع", rollbackService.preview(logId)));
+    }
+
+    @PostMapping("/{batchId}/rollback")
+    @PreAuthorize("@permissionGuard.has('MEMBER_IMPORT') and @permissionGuard.has('DANGER_ZONE_EXECUTE')")
+    @Operation(summary = "تنفيذ التراجع الآمن عن دفعة استيراد")
+    public ResponseEntity<ApiResponse<MemberImportRollbackResultDto>> executeRollback(
+            @PathVariable String batchId, @RequestBody RollbackRequest request) {
+        Long logId = importLogRepository.findByImportBatchId(batchId)
+                .orElseThrow(() -> new com.waad.tba.common.exception.BusinessRuleException(
+                        "سجل الاستيراد غير موجود"))
+                .getId();
+        var result = rollbackService.execute(logId, request.reason());
+        return ResponseEntity.ok(ApiResponse.success(result.getMessage(), result));
+    }
 
     public record RollbackRequest(String reason) {}
 
-    /**
-     * Preview what rolling back this batch would do -- no writes.
-     *
-     * GET /api/v1/unified-members/import/{batchId}/rollback/preview
-     */
-    @GetMapping("/{batchId}/rollback/preview")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
-    @Operation(summary = "Preview an import batch rollback")
-    public ResponseEntity<ApiResponse<MemberImportRollbackPreviewDto>> previewRollback(
-            @PathVariable("batchId") String batchId) {
-        Long importLogId = resolveImportLogId(batchId);
-        return ResponseEntity.ok(ApiResponse.success("Rollback preview computed", rollbackService.preview(importLogId)));
+    private void authorizeHistory(MemberImportLog log) {
+        var employerIds = importBatchRowRepository.findByImportLogId(log.getId()).stream()
+                .map(row -> {
+                    try {
+                        return objectMapper.readTree(row.getImportedSnapshot()).path("employerId").longValue();
+                    } catch (IOException ex) {
+                        throw new com.waad.tba.common.exception.BusinessRuleException(
+                                "تعذر التحقق من نطاق دفعة الاستيراد");
+                    }
+                })
+                .filter(id -> id != 0L)
+                .collect(java.util.stream.Collectors.toSet());
+        importAccessPolicy.requireHistory(employerIds);
     }
 
-    /**
-     * Actually rolls back the batch: created members with no financial
-     * activity are deleted, updated members are restored to their values
-     * before this import. SUPER_ADMIN only -- this is a direct write to
-     * member records outside the normal edit screens.
-     *
-     * POST /api/v1/unified-members/import/{batchId}/rollback
-     */
-    @PostMapping("/{batchId}/rollback")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
-    @Operation(summary = "Roll back an import batch")
-    public ResponseEntity<ApiResponse<MemberImportRollbackResultDto>> executeRollback(
-            @PathVariable("batchId") String batchId,
-            @org.springframework.web.bind.annotation.RequestBody RollbackRequest request) {
-        Long importLogId = resolveImportLogId(batchId);
-        var currentUser = authorizationService.getCurrentUser();
-        String performedBy = currentUser != null ? currentUser.getUsername() : "system";
-        var result = rollbackService.execute(importLogId, request.reason(), performedBy);
-        return ResponseEntity.ok(ApiResponse.success("Rollback executed", result));
-    }
-
-    private Long resolveImportLogId(String batchId) {
-        return importLogRepository.findByImportBatchId(batchId)
-                .orElseThrow(() -> new com.waad.tba.common.exception.ResourceNotFoundException(
-                        "MemberImportLog", "batchId", batchId))
-                .getId();
+    private Map<String, String> parseCustomMappings(String json) {
+        if (json == null || json.isBlank()) return Map.of();
+        try {
+            return objectMapper.readValue(json, new TypeReference<Map<String, String>>() {});
+        } catch (IOException ex) {
+            throw new com.waad.tba.common.exception.BusinessRuleException(
+                    "تنسيق مطابقة أعمدة الاستيراد غير صالح");
+        }
     }
 }
 

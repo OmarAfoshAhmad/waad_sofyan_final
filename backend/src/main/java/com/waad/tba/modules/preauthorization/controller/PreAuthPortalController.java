@@ -20,6 +20,12 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 import com.waad.tba.common.exception.BusinessRuleException;
+import com.waad.tba.common.guard.FeatureGuard;
+import com.waad.tba.security.AuthorizationService;
+import com.waad.tba.modules.preauthorization.security.PreAuthAccessScope;
+import com.waad.tba.modules.preauthorization.security.PreAuthAccessScopeResolver;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.access.prepost.PreAuthorize;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -29,6 +35,23 @@ import java.util.UUID;
 /**
  * Provider-facing API for the Pre-Authorization Portal.
  * Handles draft creation, submission, and attachment uploads.
+ *
+ * S-02. This controller carried no @PreAuthorize, no FeatureGuard and no
+ * access scope of any kind, while /bulk persists real pre-authorizations
+ * through saveAndFlush. Since SecurityConfig ends in
+ * .anyRequest().authenticated(), any account that could log in at all could
+ * write rows here -- bypassing PreAuthorizationService and every business
+ * rule, price validation, limit reservation and audit hook it applies.
+ *
+ * Not deleted despite having no frontend caller: PreAuthPortalIdentityFailsClosedTest
+ * exercises it directly and was written to stop this endpoint inventing member,
+ * provider and category identity, so the team treats it as a live surface.
+ * Denied first, per the hardening plan; rebuilding it properly is S-03/S-04.
+ *
+ * Still outstanding here: providerId and memberId arrive in the request body
+ * rather than from the authenticated principal, so a caller holding
+ * PREAUTH_CREATE can still name another provider. That is S-03, and it needs
+ * the scope resolver from S-04 to fix without guessing.
  */
 @RestController
 @RequestMapping("/api/v1/provider/preauths")
@@ -37,26 +60,33 @@ import java.util.UUID;
 public class PreAuthPortalController {
 
     private final PreAuthorizationRepository preAuthorizationRepository;
+    private final FeatureGuard featureGuard;
+    private final PreAuthAccessScopeResolver scopeResolver;
+    private final AuthorizationService authorizationService;
 
     @PostMapping
+    @PreAuthorize("@permissionGuard.has('PREAUTH_CREATE')")
     public ResponseEntity<String> createDraft() {
         // Create DRAFT pre-authorization
         return ResponseEntity.ok("Draft Created (Mock)");
     }
 
     @GetMapping
+    @PreAuthorize("@permissionGuard.has('PREAUTH_VIEW')")
     public ResponseEntity<List<PreAuthorization>> getProviderPreAuths() {
         // Fetch all pre-auths for the logged in provider
         return ResponseEntity.ok(List.of());
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("@permissionGuard.has('PREAUTH_VIEW')")
     public ResponseEntity<PreAuthorization> getPreAuth(@PathVariable Long id) {
         // Fetch details
         return ResponseEntity.ok(new PreAuthorization());
     }
 
     @PutMapping("/{id}/draft")
+    @PreAuthorize("@permissionGuard.has('PREAUTH_CREATE')")
     public ResponseEntity<String> updateDraft(@PathVariable Long id, @RequestBody Object updateDto) {
         // Update clinical data and lines
         // Calls PreAuthPricingValidator for each line to determine status
@@ -64,8 +94,16 @@ public class PreAuthPortalController {
     }
 
     @PostMapping("/bulk")
+    @PreAuthorize("@permissionGuard.has('PREAUTH_CREATE')")
     @Transactional
     public ResponseEntity<?> submitBulkRequest(@RequestBody Map<String, Object> payload) {
+        // Same gate PreAuthorizationController applies to its own create path.
+        // Without it, disabling the provider portal hid the screen while this
+        // endpoint kept accepting writes -- a portal that is "off" everywhere
+        // except where it matters.
+        featureGuard.requireProviderPortal();
+        featureGuard.requireDirectPreauthSubmission();
+
         log.info("[PORTAL] Received bulk pre-auth request from UI: {}", payload);
         
         // Extract data
@@ -87,10 +125,39 @@ public class PreAuthPortalController {
         }
         Long memberId = Long.valueOf(memberData.get("id").toString());
 
-        if (payload.get("providerId") == null) {
-            throw new BusinessRuleException("لا يمكن إنشاء طلب موافقة مسبقة دون تحديد مقدم الخدمة.");
+        // S-03. providerId used to be read straight from the body, so anyone
+        // holding PREAUTH_CREATE could file a request in another provider's
+        // name -- the request decided whose it was. The authenticated identity
+        // decides now.
+        //
+        // A provider account writes as itself and may not name anyone else,
+        // even correctly: accepting a matching id would still leave the
+        // endpoint trusting the body. A caller with wider reach (an
+        // administrator acting for a provider) has no single provider to
+        // infer, so it must say which one, and the resolver refuses any
+        // provider outside its scope.
+        Long claimedProviderId = payload.get("providerId") == null
+                ? null
+                : Long.valueOf(payload.get("providerId").toString());
+
+        PreAuthAccessScope scope = scopeResolver.resolve();
+        if (scope.isDenied()) {
+            throw new AccessDeniedException(scope.reason());
         }
-        Long providerId = Long.valueOf(payload.get("providerId").toString());
+
+        Long providerId = scope.singleProviderId().orElse(null);
+        if (providerId == null) {
+            if (claimedProviderId == null) {
+                throw new BusinessRuleException(
+                        "لا يمكن إنشاء طلب موافقة مسبقة دون تحديد مقدم الخدمة.");
+            }
+            PreAuthAccessScope narrowed = scopeResolver.resolveFor(
+                    authorizationService.getCurrentUser(), claimedProviderId);
+            if (narrowed.isDenied()) {
+                throw new AccessDeniedException(narrowed.reason());
+            }
+            providerId = claimedProviderId;
+        }
 
         if (lines == null || lines.isEmpty()) {
             throw new BusinessRuleException("لا يمكن إنشاء طلب موافقة مسبقة دون بنود.");
@@ -167,6 +234,7 @@ public class PreAuthPortalController {
     }
 
     @PostMapping("/{id}/attachments")
+    @PreAuthorize("@permissionGuard.has('PREAUTH_CREATE')")
     public ResponseEntity<String> uploadAttachment(
             @PathVariable Long id,
             @RequestParam("file") MultipartFile file,

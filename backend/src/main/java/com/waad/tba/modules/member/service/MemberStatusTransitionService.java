@@ -86,6 +86,17 @@ public class MemberStatusTransitionService {
         initializeStatus(member, newStatus, StatusSource.IMPORT, reason);
     }
 
+    /** Restores an import-owned status through the canonical audited writer. */
+    @Transactional
+    public Member restoreStatusAfterImport(Member member, Member.MemberStatus previousStatus,
+            String reason, Long actingUserId) {
+        if (previousStatus == null || member.getStatus() == previousStatus) {
+            return member;
+        }
+        return transitionTo(member, previousStatus, reason, StatusSource.SYSTEM,
+                UUID.randomUUID().toString(), actingUserId);
+    }
+
     /**
      * The core primitive every real (persisted) transition goes through.
      * saveAndFlush deliberately, not save: forces the @Version optimistic
@@ -98,6 +109,10 @@ public class MemberStatusTransitionService {
             String transitionId, Long actingUserId) {
         requireReason(reason, "سبب تغيير حالة المستفيد إلزامي");
         Member.MemberStatus previous = member.getStatus();
+        if (previous == Member.MemberStatus.DUPLICATE_MERGED) {
+            throw new BusinessRuleException(
+                    "لا يمكن تغيير حالة سجل مدموج؛ استخدم السجل الأساسي المرتبط به");
+        }
         if (previous == newStatus) {
             throw new BusinessRuleException("العضو بالفعل في هذه الحالة: " + newStatus);
         }
@@ -204,9 +219,10 @@ public class MemberStatusTransitionService {
      * same as reversing whatever happened while the member was terminated.
      */
     @Transactional
-    public Member reinstateTerminated(Long memberId, String reason, Long actingUserId, boolean callerIsSuperAdmin) {
-        if (!callerIsSuperAdmin) {
-            throw new AccessDeniedException("إعادة عضوية منتهية تتطلب صلاحية مدير النظام");
+    public Member reinstateTerminated(Long memberId, String reason, Long actingUserId,
+            boolean callerHasExceptionalPermission) {
+        if (!callerHasExceptionalPermission) {
+            throw new AccessDeniedException("إعادة عضوية منتهية تتطلب صلاحية الاستعادة الاستثنائية");
         }
         if (reason == null || reason.trim().isEmpty()) {
             throw new BusinessRuleException("سبب إعادة العضوية المنتهية إلزامي");
@@ -300,6 +316,20 @@ public class MemberStatusTransitionService {
         if (!callerIsSuperAdmin) {
             throw new AccessDeniedException("الحذف النهائي يتطلب صلاحية مدير النظام");
         }
+        hardDeleteAuthorized(memberId, reason, actingUserId, actingUsername);
+    }
+
+    /**
+     * Package-private trusted path for the already-authorized import rollback
+     * coordinator. Keeping this method non-public prevents other modules from
+     * turning a boolean into an ersatz SUPER_ADMIN credential.
+     */
+    void hardDeleteAfterAuthorizedImportRollback(Long memberId, String reason,
+            Long actingUserId, String actingUsername) {
+        hardDeleteAuthorized(memberId, reason, actingUserId, actingUsername);
+    }
+
+    private void hardDeleteAuthorized(Long memberId, String reason, Long actingUserId, String actingUsername) {
         if (reason == null || reason.trim().isEmpty()) {
             throw new BusinessRuleException("سبب الحذف النهائي إلزامي");
         }

@@ -34,21 +34,23 @@ public class MemberQueryAccessPolicy {
      */
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public AuthorizedMemberScope requireListing(MemberOperation operation, Long requestedEmployerId) {
-        MemberAccessDecision decision = forListing(operation, requestedEmployerId);
+        com.waad.tba.modules.rbac.entity.User user = authorizationService.getCurrentUser();
+        MemberAccessDecision decision = forListing(user, operation, requestedEmployerId);
         if (!decision.allowed()) {
             throw new MemberAccessDeniedException(decision.operation(), decision.reason());
         }
-        return new AuthorizedMemberScope(decision.operation(), decision.scope());
+        return new AuthorizedMemberScope(decision.operation(), decision.scope(), authorizationService.isProvider(user));
     }
 
     /** Authorises reading one member. Throws on refusal. */
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public AuthorizedMemberScope requireMember(MemberOperation operation, Long memberEmployerId) {
-        MemberAccessDecision decision = forMember(operation, memberEmployerId);
+        com.waad.tba.modules.rbac.entity.User user = authorizationService.getCurrentUser();
+        MemberAccessDecision decision = forMember(user, operation, memberEmployerId);
         if (!decision.allowed()) {
             throw new MemberAccessDeniedException(decision.operation(), decision.reason());
         }
-        return new AuthorizedMemberScope(decision.operation(), decision.scope());
+        return new AuthorizedMemberScope(decision.operation(), decision.scope(), authorizationService.isProvider(user));
     }
 
     /**
@@ -59,6 +61,11 @@ public class MemberQueryAccessPolicy {
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     MemberAccessDecision forListing(MemberOperation operation, Long requestedEmployerId) {
         com.waad.tba.modules.rbac.entity.User user = authorizationService.getCurrentUser();
+        return forListing(user, operation, requestedEmployerId);
+    }
+
+    private MemberAccessDecision forListing(com.waad.tba.modules.rbac.entity.User user,
+            MemberOperation operation, Long requestedEmployerId) {
         MemberAccessScope scope = scopeResolver.resolveFor(user, requestedEmployerId);
 
         if (scope.isDenied()) {
@@ -77,6 +84,11 @@ public class MemberQueryAccessPolicy {
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     MemberAccessDecision forMember(MemberOperation operation, Long memberEmployerId) {
         com.waad.tba.modules.rbac.entity.User user = authorizationService.getCurrentUser();
+        return forMember(user, operation, memberEmployerId);
+    }
+
+    private MemberAccessDecision forMember(com.waad.tba.modules.rbac.entity.User user,
+            MemberOperation operation, Long memberEmployerId) {
         MemberAccessScope scope = scopeResolver.resolveFor(user);
 
         if (scope.isDenied()) {

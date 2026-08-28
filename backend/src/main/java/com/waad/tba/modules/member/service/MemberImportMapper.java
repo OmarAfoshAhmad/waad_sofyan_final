@@ -75,6 +75,16 @@ public class MemberImportMapper {
             return;
         }
 
+        // Canonical family columns must be resolved before fuzzy matching:
+        // "principal_card_number" contains "card_number" and used to be
+        // captured as the dependent's own card, silently losing the family link.
+        String canonical = colName.trim().toLowerCase(java.util.Locale.ROOT);
+        if (canonical.equals("principal_card_number")) {
+            fieldToColumnIndex.put("principalCardNumber", index);
+            columnMappings.put(colName, "principalCardNumber");
+            return;
+        }
+
         for (int i = 0; i < MemberImportFieldConfig.MANDATORY_COLUMNS.size(); i++) {
             String[] variants = MemberImportFieldConfig.MANDATORY_COLUMNS.get(i);
             String fieldName = "fullName";

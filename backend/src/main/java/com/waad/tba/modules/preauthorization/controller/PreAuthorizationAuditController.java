@@ -21,7 +21,7 @@ import java.util.List;
 @RequestMapping("/api/v1/pre-authorizations")
 @RequiredArgsConstructor
 @Slf4j
-@PreAuthorize("isAuthenticated()")
+@PreAuthorize("@permissionGuard.has('PREAUTH_VIEW')")
 public class PreAuthorizationAuditController {
 
     private final PreAuthorizationAuditService auditService;
@@ -30,10 +30,10 @@ public class PreAuthorizationAuditController {
      * Get audit history for a specific PreAuthorization
      * GET /api/pre-authorizations/{id}/history
      * 
-     * OPEN ACCESS: Any authenticated user can view audit history
+     * Scoped access: the caller must be allowed to view this pre-authorization.
      */
     @GetMapping("/{id:\\d+}/history")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@preAuthAccessGuard.canView(#id)")
     public ResponseEntity<ApiResponse<Page<PreAuthorizationAuditDto>>> getAuditHistory(
             @PathVariable("id") Long id,
             @RequestParam(name = "page", defaultValue = "0") int page,
@@ -52,7 +52,7 @@ public class PreAuthorizationAuditController {
      * GET /api/pre-authorizations/{id}/history/full
      */
     @GetMapping("/{id:\\d+}/history/full")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
+    @PreAuthorize("@preAuthAccessGuard.canView(#id)")
     public ResponseEntity<ApiResponse<List<PreAuthorizationAuditDto>>> getFullAuditHistory(
             @PathVariable("id") Long id
     ) {
@@ -68,7 +68,6 @@ public class PreAuthorizationAuditController {
      * GET /api/pre-authorizations/audits/user/{username}
      */
     @GetMapping("/audits/user/{username}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
     public ResponseEntity<ApiResponse<Page<PreAuthorizationAuditDto>>> getAuditsByUser(
             @PathVariable("username") String username,
             @RequestParam(name = "page", defaultValue = "0") int page,
@@ -87,7 +86,6 @@ public class PreAuthorizationAuditController {
      * GET /api/pre-authorizations/audits/action/{action}
      */
     @GetMapping("/audits/action/{action}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
     public ResponseEntity<ApiResponse<Page<PreAuthorizationAuditDto>>> getAuditsByAction(
             @PathVariable("action") String action,
             @RequestParam(name = "page", defaultValue = "0") int page,
@@ -105,10 +103,9 @@ public class PreAuthorizationAuditController {
      * Get recent audit records (last N days)
      * GET /api/pre-authorizations/audits/recent
      * 
-     * OPEN ACCESS: Any authenticated user can view audit trail
+     * Scoped access: results are filtered to the caller's authorized provider/employer scope.
      */
     @GetMapping("/audits/recent")
-    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<Page<PreAuthorizationAuditDto>>> getRecentAudits(
             @RequestParam(name = "days", defaultValue = "7") int days,
             @RequestParam(name = "page", defaultValue = "0") int page,
@@ -126,10 +123,9 @@ public class PreAuthorizationAuditController {
      * Search audit records
      * GET /api/pre-authorizations/audits/search
      * 
-     * OPEN ACCESS: Any authenticated user can search audit trail
+     * Scoped access: search is executed inside the caller's authorized provider/employer scope.
      */
     @GetMapping("/audits/search")
-    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<Page<PreAuthorizationAuditDto>>> searchAudits(
             @RequestParam(name = "query") String query,
             @RequestParam(name = "page", defaultValue = "0") int page,
@@ -148,7 +144,6 @@ public class PreAuthorizationAuditController {
      * GET /api/pre-authorizations/audits/statistics
      */
     @GetMapping("/audits/statistics")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
     public ResponseEntity<ApiResponse<PreAuthorizationAuditService.AuditStatistics>> getAuditStatistics() {
         log.info("[AUDIT-API] Fetching audit statistics");
         

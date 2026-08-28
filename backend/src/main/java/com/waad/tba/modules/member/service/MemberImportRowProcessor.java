@@ -140,6 +140,34 @@ public class MemberImportRowProcessor {
             }
         }
 
+        String relationshipValue = parser.getFieldValue(row, fieldToColumnIndex, "relationship");
+        String principalCardNumber = parser.getFieldValue(row, fieldToColumnIndex, "principalCardNumber");
+        if (relationshipValue != null && !relationshipValue.isBlank()) {
+            try {
+                Relationship parsedRelationship = parser.parseRelationship(relationshipValue);
+                if (parsedRelationship != null && (principalCardNumber == null || principalCardNumber.isBlank())) {
+                    throw new MemberImportRowValidationException(
+                            "رقم بطاقة الموظف مطلوب عند تحديد صلة تابع");
+                }
+                if (parsedRelationship == null && principalCardNumber != null && !principalCardNumber.isBlank()) {
+                    throw new MemberImportRowValidationException(
+                            "لا يجوز تحديد رقم بطاقة موظف لصف رئيسي");
+                }
+            } catch (MemberImportRowValidationException ex) {
+                rowErrors.add(ex.getMessage());
+                validationErrors.add(ImportValidationErrorDto.builder()
+                        .rowNumber(rowNum).field("relationship").value(relationshipValue).severity("ERROR")
+                        .message(ex.getMessage()).build());
+                hasError = true;
+            }
+        } else if (principalCardNumber != null && !principalCardNumber.isBlank()) {
+            rowErrors.add("صلة القرابة مطلوبة عند تحديد رقم بطاقة الموظف");
+            validationErrors.add(ImportValidationErrorDto.builder()
+                    .rowNumber(rowNum).field("relationship").severity("ERROR")
+                    .message("صلة القرابة مطلوبة عند تحديد رقم بطاقة الموظف").build());
+            hasError = true;
+        }
+
         // Attributes
         for (Map.Entry<String, Integer> entry : fieldToColumnIndex.entrySet()) {
             if (entry.getKey().startsWith("attr:")) {
@@ -189,7 +217,7 @@ public class MemberImportRowProcessor {
         BenefitPolicy policyCandidate = parent != null && parent.getBenefitPolicy() != null
                 ? parent.getBenefitPolicy()
                 : benefitPolicy;
-        BenefitPolicy resolvedPolicy = resolveAndValidatePolicy(policyCandidate, finalEmployer, rowNum);
+        BenefitPolicy resolvedPolicy = resolveAndValidatePolicy(policyCandidate, policyNumber, finalEmployer, rowNum);
         BenefitPolicy finalPolicy = resolvedPolicy;
         String finalPolicyNumber = parent != null && parent.getPolicyNumber() != null
                 && !parent.getPolicyNumber().isBlank()
@@ -308,14 +336,18 @@ public class MemberImportRowProcessor {
         return member;
     }
 
-    BenefitPolicy resolveAndValidatePolicy(BenefitPolicy selectedPolicy, Employer employer, int rowNum) {
+    BenefitPolicy resolveAndValidatePolicy(BenefitPolicy selectedPolicy, String policyNumber,
+            Employer employer, int rowNum) {
         if (employer == null) {
             throw new MemberImportRowValidationException("الصف " + rowNum + ": تعذر تحديد جهة العمل لربط وثيقة المنافع");
         }
 
-        BenefitPolicy resolved = selectedPolicy != null
-                ? selectedPolicy
-                : benefitPolicyRepository
+        BenefitPolicy resolved = selectedPolicy != null ? selectedPolicy
+                : policyNumber != null && !policyNumber.isBlank()
+                        ? benefitPolicyRepository.findByPolicyCode(policyNumber.trim())
+                                .orElseThrow(() -> new MemberImportRowValidationException(
+                                        "الصف " + rowNum + ": وثيقة المنافع غير موجودة: " + policyNumber.trim()))
+                        : benefitPolicyRepository
                         .findActiveEffectivePolicyForEmployer(employer.getId(), LocalDate.now())
                         .orElseThrow(() -> new MemberImportRowValidationException(
                                 "الصف " + rowNum + ": لا توجد وثيقة منافع فعالة لجهة العمل " + employer.getName()));

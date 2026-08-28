@@ -1,7 +1,7 @@
 import PropTypes from 'prop-types';
 import { isValidElement } from 'react';
 import { Box, Typography, Breadcrumbs, Link, Stack, Chip } from '@mui/material';
-import { NavigateNext } from '@mui/icons-material';
+import NavigateNext from '@mui/icons-material/NavigateNext';
 import { Link as RouterLink } from 'react-router-dom';
 
 /**

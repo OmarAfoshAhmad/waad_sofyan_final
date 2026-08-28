@@ -72,6 +72,10 @@ public class Member {
     @Column(length = 20, name = "relationship")
     private Relationship relationship;
 
+    /** Visual order inside a family; never derived from or written into identity numbers. */
+    @Column(name = "family_order")
+    private Integer familyOrder;
+
     /** Auto-calculated: PRINCIPAL if parent==null, DEPENDENT if parent!=null */
     @Transient
     public MemberType getType() {
@@ -161,6 +165,8 @@ public class Member {
                 throw new IllegalStateException(
                         "Dependent Member must have a relationship type (e.g., SON, DAUGHTER, WIFE).");
             }
+        } else if (this.relationship != null) {
+            throw new IllegalStateException("Principal Member cannot have a relationship type.");
         }
 
     }
@@ -382,7 +388,7 @@ public class Member {
     }
 
     public enum MemberStatus {
-        ACTIVE, SUSPENDED, TERMINATED, PENDING
+        ACTIVE, SUSPENDED, TERMINATED, PENDING, DUPLICATE_MERGED
     }
 
     public enum CardStatus {

@@ -6,6 +6,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.waad.tba.modules.rbac.entity.User;
+import com.waad.tba.modules.rbac.permission.EffectivePermissionService;
+import com.waad.tba.modules.rbac.permission.SystemPermission;
 import com.waad.tba.security.AuthorizationService;
 
 import lombok.RequiredArgsConstructor;
@@ -30,6 +32,7 @@ public class MemberImportAccessPolicy {
 
     private final MemberAccessScopeResolver scopeResolver;
     private final AuthorizationService authorizationService;
+    private final EffectivePermissionService effectivePermissionService;
 
     /**
      * Authorises an import over the employers the file's rows belong to.
@@ -56,13 +59,12 @@ public class MemberImportAccessPolicy {
             throw new MemberAccessDeniedException(operation, scope.reason());
         }
 
-        boolean superAdmin = authorizationService.isSuperAdmin(user);
-        boolean dataEntry = authorizationService.isDataEntry(user);
-        if (!superAdmin && !dataEntry) {
-            // Matches the endpoint's own contract: importing is a data-entry
-            // function, not something every administrator does.
+        var effectivePermissions = effectivePermissionService.resolve(user);
+        boolean mayImport = effectivePermissions.contains(SystemPermission.MEMBER_IMPORT);
+        boolean mayClearAbsent = effectivePermissions.contains(SystemPermission.DANGER_ZONE_EXECUTE);
+        if (!mayImport) {
             throw new MemberAccessDeniedException(operation,
-                    "استيراد المستفيدين غير مسموح لهذا الدور");
+                    "استيراد المستفيدين غير مسموح دون صلاحية MEMBER_IMPORT");
         }
 
         if (rowEmployerIds == null || rowEmployerIds.isEmpty()) {
@@ -89,11 +91,56 @@ public class MemberImportAccessPolicy {
         // Ending the absentees is a mass status change. Data entry may create
         // and correct records; it may not end coverage, and doing it through
         // an import checkbox would be exactly the route around that rule.
-        if (clearAbsentMembers && !superAdmin) {
+        if (clearAbsentMembers && !mayClearAbsent) {
             throw new MemberAccessDeniedException(operation,
-                    "إنهاء المستفيدين الغائبين عن الملف يتطلب صلاحية مدير النظام");
+                    "إنهاء المستفيدين الغائبين عن الملف يتطلب صلاحية العمليات الخطرة");
         }
 
-        return new AuthorizedImportScope(scope, superAdmin);
+        return new AuthorizedImportScope(scope, mayClearAbsent);
+    }
+
+    /** Rollback combines import access with destructive-operation authority. */
+    @Transactional(readOnly = true)
+    public AuthorizedImportScope requireRollback(Collection<Long> employerIds) {
+        AuthorizedImportScope authorised = require(MemberOperation.IMPORT_ROLLBACK, employerIds, false);
+        User user = authorizationService.getCurrentUser();
+        if (!effectivePermissionService.resolve(user).contains(SystemPermission.DANGER_ZONE_EXECUTE)) {
+            throw new MemberAccessDeniedException(MemberOperation.IMPORT_ROLLBACK,
+                    "التراجع عن الاستيراد يتطلب صلاحية العمليات الخطرة");
+        }
+        return authorised;
+    }
+
+    /** Import audit metadata is tenant data too; MEMBER_IMPORT is not global reach. */
+    @Transactional(readOnly = true)
+    public AuthorizedImportScope requireHistoryScope() {
+        User user = authorizationService.getCurrentUser();
+        MemberAccessScope scope = scopeResolver.resolveFor(user);
+        if (scope.isDenied()) {
+            throw new MemberAccessDeniedException(MemberOperation.IMPORT_HISTORY, scope.reason());
+        }
+        if (!effectivePermissionService.resolve(user).contains(SystemPermission.MEMBER_IMPORT)) {
+            throw new MemberAccessDeniedException(MemberOperation.IMPORT_HISTORY,
+                    "عرض سجل الاستيراد يتطلب صلاحية MEMBER_IMPORT");
+        }
+        return new AuthorizedImportScope(scope, false);
+    }
+
+    @Transactional(readOnly = true)
+    public AuthorizedImportScope requireHistory(Collection<Long> employerIds) {
+        AuthorizedImportScope authorised = requireHistoryScope();
+        if (!authorised.isGlobal() && (employerIds == null || employerIds.isEmpty())) {
+            throw new MemberAccessDeniedException(MemberOperation.IMPORT_HISTORY,
+                    "لا يمكن إثبات نطاق هذه الدفعة القديمة");
+        }
+        if (employerIds != null) {
+            employerIds.forEach(id -> {
+                if (id == null || !authorised.covers(id)) {
+                    throw new MemberAccessDeniedException(MemberOperation.IMPORT_HISTORY,
+                            "دفعة الاستيراد خارج نطاق المستخدم");
+                }
+            });
+        }
+        return authorised;
     }
 }

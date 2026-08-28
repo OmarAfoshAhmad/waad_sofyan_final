@@ -24,7 +24,6 @@ import usersService from 'services/rbac/users.service';
 import { SystemRole, RoleDisplayNames, getRoleDisplayName } from 'constants/rbac';
 
 // Hooks
-import useAuth from 'hooks/useAuth';
 
 // ============================================================================
 // HELPER FUNCTIONS
@@ -158,9 +157,6 @@ const UserDetails = () => {
       })
       .filter(Boolean);
   }, [user, allRoles]);
-
-  // Check if current user is SUPER_ADMIN
-  const isSuperAdmin = currentUser?.roles?.includes('SUPER_ADMIN');
 
   // ========================================
   // DATA LOADING

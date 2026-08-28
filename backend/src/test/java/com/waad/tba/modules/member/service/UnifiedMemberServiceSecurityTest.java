@@ -80,7 +80,8 @@ class UnifiedMemberServiceSecurityTest {
                         new com.waad.tba.modules.member.service.MemberPolicyResolver(
                                 org.mockito.Mockito.mock(com.waad.tba.modules.member.repository.MemberPolicyAssignmentRepository.class),
                                 org.mockito.Mockito.mock(com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository.class),
-                                memberRepository));
+                                memberRepository,
+                                org.mockito.Mockito.mock(MemberEmployerResolver.class)));
 
         service = new UnifiedMemberService(
                 memberRepository,
@@ -90,6 +91,7 @@ class UnifiedMemberServiceSecurityTest {
                 org.mockito.Mockito.mock(CardNumberGeneratorService.class),
                 org.mockito.Mockito.mock(com.waad.tba.modules.member.mapper.UnifiedMemberMapper.class),
                 authorizationService,
+                org.mockito.Mockito.mock(com.waad.tba.modules.rbac.permission.EffectivePermissionService.class),
                 org.mockito.Mockito.mock(MemberFinancialSummaryService.class),
                 jdbcTemplate,
                 org.mockito.Mockito.mock(com.waad.tba.modules.systemadmin.service.AuditLogService.class),
@@ -98,7 +100,9 @@ class UnifiedMemberServiceSecurityTest {
                 new com.waad.tba.modules.member.service.MemberPolicyResolver(
                         org.mockito.Mockito.mock(com.waad.tba.modules.member.repository.MemberPolicyAssignmentRepository.class),
                         org.mockito.Mockito.mock(com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository.class),
-                        memberRepository),
+                        memberRepository,
+                        org.mockito.Mockito.mock(MemberEmployerResolver.class)),
+                org.mockito.Mockito.mock(MemberEmployerResolver.class),
                 queryAccessPolicy,
                 commandAccessPolicy);
     }

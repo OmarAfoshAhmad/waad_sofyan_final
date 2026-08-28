@@ -82,6 +82,7 @@ public class BenefitPolicyCoverageService {
     private final AuthorizationService authorizationService;
     private final CoverageDecisionService coverageDecisionService;
     private final com.waad.tba.modules.member.service.MemberPolicyResolver memberPolicyResolver;
+    private final LimitBalanceReader limitBalanceReader;
 
     // ═══════════════════════════════════════════════════════════════════════════
     // ARCHITECTURAL CONSTANTS
@@ -193,7 +194,7 @@ public class BenefitPolicyCoverageService {
 
     public Optional<CoverageInfo> getCoverageForCategory(Member member, Long categoryId,
             com.waad.tba.modules.providercontract.enums.EncounterType encounterType, LocalDate serviceDate) {
-        BenefitPolicy policy = member.getBenefitPolicy();
+        BenefitPolicy policy = memberPolicyResolver.resolveFor(member, serviceDate).orElse(null);
         if (policy == null || categoryId == null) {
             return Optional.empty();
         }
@@ -241,7 +242,7 @@ public class BenefitPolicyCoverageService {
 
     public Optional<CoverageInfo> getCoverageForService(Member member, Long serviceId, Long categoryOverrideId,
             com.waad.tba.modules.providercontract.enums.EncounterType encounterType, LocalDate serviceDate) {
-        BenefitPolicy policy = member.getBenefitPolicy();
+        BenefitPolicy policy = memberPolicyResolver.resolveFor(member, serviceDate).orElse(null);
         if (policy == null) {
             return Optional.empty();
         }
@@ -509,27 +510,22 @@ public class BenefitPolicyCoverageService {
             LocalDate serviceDate,
             Long excludeClaimId) {
 
-        if (benefitPolicy == null) {
-            throw new BusinessRuleException("Member has no BenefitPolicy assigned");
-        }
-
-        if (requestedAmount == null || requestedAmount.compareTo(BigDecimal.ZERO) <= 0) {
-            return; // No amount to validate
-        }
-
-        log.debug("🔍 Validating amount limits for member {} amount {} on {} (excludeClaimId={})",
-                member.getId(), requestedAmount, serviceDate, excludeClaimId);
+        if (!prepareValidation(member, benefitPolicy, requestedAmount, serviceDate, excludeClaimId)) return;
 
         // Check annual limit from BenefitPolicy
         BigDecimal annualLimit = benefitPolicy.getAnnualLimit();
         if (annualLimit != null && annualLimit.compareTo(BigDecimal.ZERO) > 0) {
-            // WAAD-FIN-1.0 S4: the ceiling tracks limit consumption
-            // (settlement value), not approvedAmount -- see getLimitConsumedForYear's
-            // javadoc. Callers must pass an amount on the same axis (see
-            // ClaimFinancialSnapshotService, which passes the claim's actual
-            // limitConsumption total, not its approvedAmount).
-            BigDecimal usedAmount = getLimitConsumedForYear(member.getId(), serviceDate.getYear(), excludeClaimId);
-            BigDecimal remainingLimit = annualLimit.subtract(usedAmount);
+            // WAAD-FIN-1.0 S4 + finance-08: what has ACTUALLY been consumed, read
+            // from the ledger (V189) -- never reduced by a reservation. A hold on
+            // this same ceiling belongs to some OTHER decision (a live
+            // pre-authorization); it is not this claim's own usage, and must not
+            // shrink what this claim is measured against.
+            var ceiling = limitBalanceReader.readGeneralCeiling(
+                    member.getId(), benefitPolicy.getId(), annualLimit,
+                    LocalDate.of(serviceDate.getYear(), 1, 1), LocalDate.of(serviceDate.getYear(), 12, 31),
+                    excludeClaimId);
+            BigDecimal usedAmount = ceiling.committed();
+            BigDecimal remainingLimit = ceiling.actualRemaining();
 
             if (requestedAmount.compareTo(remainingLimit) > 0) {
                 log.warn("❌ Annual limit exceeded: requested={}, remaining={}, annual={}",
@@ -540,6 +536,69 @@ public class BenefitPolicyCoverageService {
                                 requestedAmount, remainingLimit, annualLimit, usedAmount));
             }
         }
+
+        validateMemberAndFamilyLimits(member, benefitPolicy, requestedAmount, serviceDate, excludeClaimId);
+        log.debug("✅ Amount limits validation passed for member {}", member.getId());
+    }
+
+    /**
+     * The gate a NEW decision that places or extends a hold must pass -- a
+     * pre-authorization approval, never a claim. Unlike {@link #validateAmountLimits},
+     * this subtracts every reservation already promised elsewhere on the same
+     * ceiling: two pre-authorizations approved back to back must not both fit
+     * under a limit only one of them actually still fits.
+     *
+     * No {@code excludeClaimId}: an approval is not itself a claim row, so
+     * there is nothing of its own to exclude from the aggregation.
+     */
+    public void validateReservableAmountLimits(
+            Member member,
+            BenefitPolicy benefitPolicy,
+            BigDecimal requestedAmount,
+            LocalDate serviceDate) {
+
+        if (!prepareValidation(member, benefitPolicy, requestedAmount, serviceDate, null)) return;
+
+        BigDecimal annualLimit = benefitPolicy.getAnnualLimit();
+        if (annualLimit != null && annualLimit.compareTo(BigDecimal.ZERO) > 0) {
+            var ceiling = limitBalanceReader.readGeneralCeiling(
+                    member.getId(), benefitPolicy.getId(), annualLimit,
+                    LocalDate.of(serviceDate.getYear(), 1, 1), LocalDate.of(serviceDate.getYear(), 12, 31), null);
+            BigDecimal reservableAvailable = ceiling.reservableAvailable();
+
+            if (requestedAmount.compareTo(reservableAvailable) > 0) {
+                log.warn("❌ Annual limit's reservable balance exceeded: requested={}, reservableAvailable={}, annual={}",
+                        requestedAmount, reservableAvailable, annualLimit);
+                throw new BusinessRuleException(
+                        String.format(
+                                "المبلغ المطلوب (%.2f) يتجاوز ما هو متاح للحجز من الحد السنوي (%.2f). "
+                                + "الحد السنوي: %.2f، المستهلك والمحجوز: %.2f",
+                                requestedAmount, reservableAvailable, annualLimit,
+                                annualLimit.subtract(reservableAvailable)));
+            }
+        }
+
+        validateMemberAndFamilyLimits(member, benefitPolicy, requestedAmount, serviceDate, null);
+        log.debug("✅ Reservable amount limits validation passed for member {}", member.getId());
+    }
+
+    /** Shared guard clauses; returns false when there is nothing to validate. */
+    private boolean prepareValidation(Member member, BenefitPolicy benefitPolicy, BigDecimal requestedAmount,
+            LocalDate serviceDate, Long excludeClaimId) {
+        if (benefitPolicy == null) {
+            throw new BusinessRuleException("Member has no BenefitPolicy assigned");
+        }
+        if (requestedAmount == null || requestedAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            return false; // No amount to validate
+        }
+        log.debug("🔍 Validating amount limits for member {} amount {} on {} (excludeClaimId={})",
+                member.getId(), requestedAmount, serviceDate, excludeClaimId);
+        return true;
+    }
+
+    /** Per-member and per-family limits -- identical on both the claim and the reservation gate. */
+    private void validateMemberAndFamilyLimits(Member member, BenefitPolicy benefitPolicy,
+            BigDecimal requestedAmount, LocalDate serviceDate, Long excludeClaimId) {
 
         // Check per-member limit
         BigDecimal perMemberLimit = benefitPolicy.getPerMemberLimit();
@@ -573,8 +632,6 @@ public class BenefitPolicyCoverageService {
                                 requestedAmount, remainingFamily, perFamilyLimit, familyUsed));
             }
         }
-
-        log.debug("✅ Amount limits validation passed for member {}", member.getId());
     }
 
     /**
@@ -830,10 +887,15 @@ public class BenefitPolicyCoverageService {
 
     /**
      * Get remaining coverage given an already-resolved policy (supports
-     * employer-level fallback). WAAD-FIN-1.0 S4: "remaining" is
-     * {@code annualLimit - consumed}, where consumed is limit consumption
-     * (settlement value), never approvedAmount -- see
-     * {@link #getLimitConsumedForYear(Long, int, Long)}.
+     * employer-level fallback). WAAD-FIN-1.0 S4 + finance-08: "remaining" is
+     * {@code annualLimit - consumed}, read from the ledger and filtered to
+     * THIS policy's own rows via {@link LimitBalanceReader#readGeneralCeiling}
+     * -- never {@link #getLimitConsumedForYear(Long, int, Long)}'s
+     * unfiltered-by-policy total, which sums a member's consumption across
+     * every policy they held that calendar year. A member who changed
+     * policies mid-year has two distinct ceilings; the old, unfiltered read
+     * let one policy's remaining balance be understated by spending under a
+     * DIFFERENT policy the member no longer has.
      */
     public BigDecimal getRemainingCoverage(BenefitPolicy policy, Long memberId, LocalDate asOfDate) {
         if (policy == null) {
@@ -845,8 +907,9 @@ public class BenefitPolicyCoverageService {
             return null; // Unlimited or not configured
         }
 
-        BigDecimal used = getLimitConsumedForYear(memberId, asOfDate.getYear(), null);
-        return annualLimit.subtract(used).max(BigDecimal.ZERO);
+        var ceiling = limitBalanceReader.readGeneralCeiling(memberId, policy.getId(), annualLimit,
+                LocalDate.of(asOfDate.getYear(), 1, 1), LocalDate.of(asOfDate.getYear(), 12, 31), null);
+        return ceiling.actualRemaining().max(BigDecimal.ZERO);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -1003,7 +1066,8 @@ public class BenefitPolicyCoverageService {
      * @return true if PA is required
      */
     public boolean requiresPreApprovalFromPolicy(Member member, Long serviceId) {
-        BenefitPolicy policy = member.getBenefitPolicy();
+        LocalDate asOfDate = LocalDate.now();
+        BenefitPolicy policy = memberPolicyResolver.resolveFor(member, asOfDate).orElse(null);
         if (policy == null) {
             return DEFAULT_REQUIRES_PA;
         }
@@ -1014,7 +1078,7 @@ public class BenefitPolicyCoverageService {
         }
 
         ResolvedCoverage coverage = resolveCoverage(policy.getId(), serviceId, resolveCategoryIdForCoverage(service),
-                null, member.getId(), LocalDate.now(), null);
+                null, member.getId(), asOfDate, null);
         if (coverage == null) {
             return DEFAULT_REQUIRES_PA;
         }
@@ -1027,7 +1091,8 @@ public class BenefitPolicyCoverageService {
      * Uses the canonical resolution algorithm.
      */
     public int getEffectiveCoveragePercent(Member member, Long serviceId) {
-        BenefitPolicy policy = member.getBenefitPolicy();
+        LocalDate asOfDate = LocalDate.now();
+        BenefitPolicy policy = memberPolicyResolver.resolveFor(member, asOfDate).orElse(null);
         if (policy == null) {
             return 0;
         }
@@ -1038,7 +1103,7 @@ public class BenefitPolicyCoverageService {
         }
 
         ResolvedCoverage coverage = resolveCoverage(policy.getId(), serviceId, resolveCategoryIdForCoverage(service),
-                null, member.getId(), LocalDate.now(), null);
+                null, member.getId(), asOfDate, null);
         if (coverage == null || !coverage.isCovered()) {
             return 0;
         }
@@ -1058,7 +1123,8 @@ public class BenefitPolicyCoverageService {
     public java.util.Map<Long, Integer> batchGetCoveragePercents(Member member, java.util.List<Long> serviceIds) {
         java.util.Map<Long, Integer> result = new java.util.HashMap<>();
 
-        BenefitPolicy policy = member.getBenefitPolicy();
+        LocalDate asOfDate = LocalDate.now();
+        BenefitPolicy policy = memberPolicyResolver.resolveFor(member, asOfDate).orElse(null);
         if (policy == null || serviceIds == null || serviceIds.isEmpty()) {
             // Return all zeros
             for (Long id : serviceIds != null ? serviceIds : java.util.Collections.<Long>emptyList()) {
@@ -1075,7 +1141,7 @@ public class BenefitPolicyCoverageService {
             MedicalService service = serviceMap.get(serviceId);
             Long categoryId = service != null ? resolveCategoryIdForCoverage(service) : null;
             ResolvedCoverage resolved = resolveCoverage(policyId, serviceId, categoryId, null,
-                    member.getId(), LocalDate.now(), null, CategoryContext.OUTPATIENT, 1.0, null, true);
+                    member.getId(), asOfDate, null, CategoryContext.OUTPATIENT, 1.0, null, true);
             result.put(serviceId, resolved.isCovered() ? resolved.getCoveragePercent() : 0);
         }
 
@@ -1094,7 +1160,7 @@ public class BenefitPolicyCoverageService {
 
     public int getEffectiveCoveragePercentByCategory(Member member, Long categoryId,
             com.waad.tba.modules.providercontract.enums.EncounterType encounterType, LocalDate serviceDate) {
-        BenefitPolicy policy = member != null ? member.getBenefitPolicy() : null;
+        BenefitPolicy policy = memberPolicyResolver.resolveFor(member, serviceDate).orElse(null);
         if (policy == null || categoryId == null) {
             return 0;
         }
@@ -1124,7 +1190,7 @@ public class BenefitPolicyCoverageService {
             LocalDate serviceDate) {
         java.util.Map<Long, Integer> result = new java.util.HashMap<>();
 
-        BenefitPolicy policy = member != null ? member.getBenefitPolicy() : null;
+        BenefitPolicy policy = memberPolicyResolver.resolveFor(member, serviceDate).orElse(null);
         if (policy == null || categoryIds == null || categoryIds.isEmpty()) {
             if (categoryIds != null)
                 categoryIds.forEach(id -> result.put(id, 0));

@@ -33,7 +33,7 @@ import lombok.RequiredArgsConstructor;
 @RestController
 @RequestMapping("/api/v1/employers")
 @RequiredArgsConstructor
-@PreAuthorize("isAuthenticated()")
+@PreAuthorize("@permissionGuard.has('EMPLOYER_VIEW')")
 public class EmployerController {
 
     private static final Set<String> ALLOWED_SORT_FIELDS = Set.of("id", "code", "name", "email", "active", "createdAt", "updatedAt");
@@ -41,7 +41,7 @@ public class EmployerController {
     private final EmployerService service;
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'ACCOUNTANT', 'FINANCE_VIEWER')")
+    @PreAuthorize("@permissionGuard.has('EMPLOYER_VIEW')")
     public ResponseEntity<ApiResponse<Page<EmployerResponseDto>>> getAll(
             @RequestParam(name = "includeArchived", required = false, defaultValue = "false") boolean includeArchived,
             @RequestParam(name = "archivedOnly", required = false, defaultValue = "false") boolean archivedOnly,
@@ -64,28 +64,28 @@ public class EmployerController {
     }
 
     @GetMapping({ "selectors", "/selector" })
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'ACCOUNTANT', 'FINANCE_VIEWER', 'PROVIDER_STAFF')")
+    @PreAuthorize("@permissionGuard.has('EMPLOYER_VIEW')")
     public ResponseEntity<ApiResponse<List<EmployerSelectorDto>>> selectors() {
         List<EmployerSelectorDto> selectors = service.getSelectors();
         return ResponseEntity.ok(ApiResponse.success(selectors));
     }
 
     @GetMapping("selectors/with-members")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'ACCOUNTANT', 'FINANCE_VIEWER', 'PROVIDER_STAFF')")
+    @PreAuthorize("@permissionGuard.has('EMPLOYER_VIEW')")
     public ResponseEntity<ApiResponse<List<EmployerSelectorDto>>> selectorsWithMembers() {
         List<EmployerSelectorDto> selectors = service.getSelectorsWithMembers();
         return ResponseEntity.ok(ApiResponse.success(selectors));
     }
 
     @GetMapping("/{id:\\d+}")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("@permissionGuard.has('EMPLOYER_VIEW')")
     public ResponseEntity<ApiResponse<EmployerResponseDto>> getById(@PathVariable("id") Long id) {
         EmployerResponseDto employer = service.getById(id);
         return ResponseEntity.ok(ApiResponse.success("Employer retrieved successfully", employer));
     }
 
     @PostMapping
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("@permissionGuard.has('EMPLOYER_MANAGE')")
     public ResponseEntity<ApiResponse<EmployerResponseDto>> create(@Valid @RequestBody EmployerCreateDto dto) {
         try {
             EmployerResponseDto created = service.create(dto);
@@ -98,7 +98,7 @@ public class EmployerController {
     }
 
     @PutMapping("/{id:\\d+}")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("@permissionGuard.has('EMPLOYER_MANAGE')")
     public ResponseEntity<ApiResponse<EmployerResponseDto>> update(
             @PathVariable("id") Long id,
             @Valid @RequestBody EmployerUpdateDto dto) {
@@ -107,7 +107,7 @@ public class EmployerController {
     }
 
     @DeleteMapping("/{id:\\d+}")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("@permissionGuard.has('EMPLOYER_MANAGE')")
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable("id") Long id) {
         service.delete(id);
         return ResponseEntity.ok(ApiResponse.success("Employer deleted successfully", null));
@@ -118,7 +118,7 @@ public class EmployerController {
      * Sets archived=true, hiding from default lists while preserving all data
      */
     @PostMapping("/{id:\\d+}/archive")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("@permissionGuard.has('EMPLOYER_MANAGE')")
     public ResponseEntity<ApiResponse<EmployerResponseDto>> archive(@PathVariable("id") Long id) {
         EmployerResponseDto archived = service.archive(id);
         return ResponseEntity.ok(ApiResponse.success("Employer archived successfully", archived));
@@ -129,14 +129,14 @@ public class EmployerController {
      * Sets archived=false, making employer visible again
      */
     @PostMapping("/{id:\\d+}/restore")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("@permissionGuard.has('EMPLOYER_MANAGE')")
     public ResponseEntity<ApiResponse<EmployerResponseDto>> restore(@PathVariable("id") Long id) {
         EmployerResponseDto restored = service.restore(id);
         return ResponseEntity.ok(ApiResponse.success("Employer restored successfully", restored));
     }
 
     @PostMapping("/bulk-archive")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("@permissionGuard.has('EMPLOYER_MANAGE')")
     public ResponseEntity<ApiResponse<com.waad.tba.modules.employer.dto.BulkEmployerResultDto>> bulkArchive(
             @RequestBody List<Long> ids) {
         var result = service.bulkArchive(ids);
@@ -146,7 +146,7 @@ public class EmployerController {
     }
 
     @PostMapping("/bulk-restore")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("@permissionGuard.has('EMPLOYER_MANAGE')")
     public ResponseEntity<ApiResponse<com.waad.tba.modules.employer.dto.BulkEmployerResultDto>> bulkRestore(
             @RequestBody List<Long> ids) {
         var result = service.bulkRestore(ids);
@@ -156,7 +156,7 @@ public class EmployerController {
     }
 
     @GetMapping("/count")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("@permissionGuard.has('EMPLOYER_VIEW')")
     public ResponseEntity<ApiResponse<Long>> count() {
         long total = service.count();
         return ResponseEntity.ok(ApiResponse.success(total));
@@ -168,7 +168,7 @@ public class EmployerController {
      * excludeId is optional (omit on create, pass self-id on edit)
      */
     @GetMapping("/check")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("@permissionGuard.has('EMPLOYER_VIEW')")
     public ResponseEntity<ApiResponse<Boolean>> check(
             @RequestParam String field,
             @RequestParam String value,

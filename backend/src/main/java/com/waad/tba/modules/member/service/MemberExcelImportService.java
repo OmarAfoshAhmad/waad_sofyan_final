@@ -38,17 +38,16 @@ import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.modules.member.entity.Member.Relationship;
 import com.waad.tba.modules.member.entity.MemberImportError;
 import com.waad.tba.modules.member.entity.MemberImportLog;
+import com.waad.tba.modules.member.entity.StatusSource;
 import com.waad.tba.modules.member.repository.MemberAttributeRepository;
 import com.waad.tba.modules.member.repository.MemberImportErrorRepository;
 import com.waad.tba.modules.member.repository.MemberImportLogRepository;
+import com.waad.tba.modules.member.repository.MemberImportBatchRowRepository;
 import com.waad.tba.modules.member.repository.MemberRepository;
 import com.waad.tba.modules.member.security.AuthorizedImportScope;
 import com.waad.tba.modules.member.security.MemberImportAccessPolicy;
 import com.waad.tba.modules.member.security.MemberOperation;
 import com.waad.tba.modules.rbac.entity.User;
-import com.waad.tba.modules.visit.repository.VisitRepository;
-import com.waad.tba.modules.claim.repository.ClaimRepository;
-import com.waad.tba.modules.preauthorization.repository.PreAuthorizationRepository;
 import com.waad.tba.security.AuthorizationService;
 
 import lombok.RequiredArgsConstructor;
@@ -68,6 +67,7 @@ public class MemberExcelImportService {
     private final MemberRepository memberRepository;
     private final MemberAttributeRepository memberAttributeRepository;
     private final MemberImportLogRepository importLogRepository;
+    private final MemberImportBatchRowRepository importBatchRowRepository;
     private final MemberImportErrorRepository importErrorRepository;
     private final EmployerRepository employerRepository;
     private final BenefitPolicyRepository benefitPolicyRepository;
@@ -80,15 +80,13 @@ public class MemberExcelImportService {
     private final BarcodeGeneratorService barcodeGeneratorService;
     private final MemberImportAuditRecorder auditRecorder;
     private final MemberStatusTransitionService statusTransitionService;
+    private final MemberEmployerResolver memberEmployerResolver;
+    private final com.waad.tba.modules.member.repository.MemberEmployerAssignmentRepository employerAssignmentRepository;
     private final MemberPolicyResolver memberPolicyResolver;
     private final com.waad.tba.modules.member.repository.MemberPolicyAssignmentRepository policyAssignmentRepository;
     private final MemberImportAccessPolicy importAccessPolicy;
+    private final MemberImportPreviewTicketService previewTicketService;
 
-    private final VisitRepository visitRepository;
-    private final ClaimRepository claimRepository;
-    private final PreAuthorizationRepository preAuthorizationRepository;
-    private final MemberFinancialActivityChecker financialActivityChecker;
-    private final com.waad.tba.modules.member.repository.MemberImportBatchRowRepository importBatchRowRepository;
 
     public MemberImportPreviewDto parseAndPreview(MultipartFile file) throws Exception {
         return parseAndPreview(file, null, null, null);
@@ -223,6 +221,7 @@ public class MemberExcelImportService {
                     .availableEmployers(loadEmployerOptions())
                     .availableBenefitPolicies(loadPolicyOptions())
                     .resolvedEmployerIds(java.util.Set.copyOf(resolvedEmployerIds))
+                    .resolvedHeaderRowNumber(resolvedHeaderRowNumber)
                     .build();
         }
     }
@@ -233,47 +232,6 @@ public class MemberExcelImportService {
 
     public MemberImportResultDto executeImport(MultipartFile file, String batchId, Long employerId, Long benefitPolicyId, Integer headerRowNumber) throws Exception {
         return executeImport(file, batchId, employerId, benefitPolicyId, headerRowNumber, false);
-    }
-
-    @org.springframework.transaction.annotation.Transactional
-    public void clearOldMembersForFile(MultipartFile file, Long employerId, Integer headerRowNumber) {
-        assertCurrentUserCanClearOldMembers();
-
-        if (employerId != null) {
-            clearOldMembers(employerId);
-        } else {
-            Set<Long> detectedEmployerIds = new HashSet<>();
-            try (InputStream is = file.getInputStream(); Workbook workbook = new XSSFWorkbook(is)) {
-                Sheet sheet = workbook.getSheetAt(0);
-                int physicalLastRow = sheet.getLastRowNum();
-                int resolvedHeaderRowNumber = headerRowNumber != null ? Math.max(0, headerRowNumber) : mapper.detectHeaderRowNumber(sheet);
-                Row headerRow = sheet.getRow(resolvedHeaderRowNumber);
-                if (headerRow != null) {
-                    Map<String, Integer> fieldToColumnIndex = new HashMap<>();
-                    for (int i = 0; i < headerRow.getLastCellNum(); i++) {
-                        String colName = parser.cleanColumnName(parser.getCellStringValue(headerRow.getCell(i))).toLowerCase();
-                        mapper.mapColumnToField(colName, i, fieldToColumnIndex, new HashMap<>());
-                    }
-                    for (int rowIndex = resolvedHeaderRowNumber + 1; rowIndex <= physicalLastRow; rowIndex++) {
-                        Row row = sheet.getRow(rowIndex);
-                        if (row == null || parser.isEmptyRow(row)) continue;
-                        try {
-                            Employer rowEmployer = rowProcessor.resolveEmployerForRow(row, rowIndex - resolvedHeaderRowNumber, fieldToColumnIndex, null);
-                            if (rowEmployer != null) {
-                                detectedEmployerIds.add(rowEmployer.getId());
-                            }
-                        } catch (Exception e) {
-                            // Ignore row parsing errors during scan
-                        }
-                    }
-                }
-            } catch (Exception e) {
-                log.error("Error scanning file for employers to clear", e);
-            }
-            for (Long empId : detectedEmployerIds) {
-                clearOldMembers(empId);
-            }
-        }
     }
 
     /**
@@ -305,7 +263,26 @@ public class MemberExcelImportService {
      * specific write out would reopen a duplicate-import race.
      */
     @org.springframework.transaction.annotation.Transactional
+    public MemberImportResultDto executeConfirmedImport(MultipartFile file, String previewToken, Long employerId,
+            Long benefitPolicyId, Integer headerRowNumber, Boolean clearOldMembers,
+            Map<String, String> customMappings) throws Exception {
+        MemberImportPreviewDto guard = parseAndPreview(file, customMappings, headerRowNumber, employerId);
+        previewTicketService.consume(previewToken, file, employerId, benefitPolicyId,
+                guard.getResolvedHeaderRowNumber(),
+                clearOldMembers, customMappings, guard.getResolvedEmployerIds());
+        return executeImport(file, previewToken, employerId, benefitPolicyId,
+                guard.getResolvedHeaderRowNumber(),
+                clearOldMembers, customMappings);
+    }
+
+    @org.springframework.transaction.annotation.Transactional
     public MemberImportResultDto executeImport(MultipartFile file, String batchId, Long employerId, Long benefitPolicyId, Integer headerRowNumber, Boolean clearOldMembers) throws Exception {
+        return executeImport(file, batchId, employerId, benefitPolicyId, headerRowNumber, clearOldMembers, null);
+    }
+
+    private MemberImportResultDto executeImport(MultipartFile file, String batchId, Long employerId,
+            Long benefitPolicyId, Integer headerRowNumber, Boolean clearOldMembers,
+            Map<String, String> customMappings) throws Exception {
         log.info("📥 Executing member import: batchId={}, file={}, employer={}, policy={}, clearOldMembers={}", batchId, file.getOriginalFilename(), employerId, benefitPolicyId, clearOldMembers);
 
         // clearOldMembers is deliberately NOT run here, before the
@@ -319,8 +296,12 @@ public class MemberExcelImportService {
         // genuine clearOldMembers run rolls back together with the rest of
         // this transaction if anything downstream fails.
 
-        MemberImportPreviewDto previewGuard = parseAndPreview(file, null, headerRowNumber, employerId);
+        MemberImportPreviewDto previewGuard = parseAndPreview(file, customMappings, headerRowNumber, employerId);
         if (previewGuard.getValidRows() <= 0) throw new BusinessRuleException("لا يوجد صفوف صالحة للاستيراد");
+        if (Boolean.TRUE.equals(clearOldMembers) && previewGuard.getInvalidRows() > 0) {
+            throw new BusinessRuleException(
+                    "لا يمكن استبدال قائمة المستفيدين بملف يحتوي صفوفاً غير صالحة؛ صحح جميع الصفوف ثم أعد المعاينة");
+        }
         AuthorizedImportScope importScope = importAccessPolicy.require(
                 MemberOperation.IMPORT_EXECUTE,
                 previewGuard.getResolvedEmployerIds(), Boolean.TRUE.equals(clearOldMembers));
@@ -387,22 +368,10 @@ public class MemberExcelImportService {
         // assignments can be recorded once at the end -- in ONE bulk lookup
         // rather than a per-row query.
         List<Member> processedMembers = new ArrayList<>();
-        // One entry per successfully processed row, in the same order as
-        // processedMembers -- turned into member_import_batch_rows AFTER the
-        // flush below, once every member (including buffered dependents) has
-        // its real id. previousSnapshotJson is null for a CREATED row.
         List<PendingBatchRow> pendingBatchRows = new ArrayList<>();
         int totalProcessed = 0, createdCount = 0, updatedCount = 0, skippedCount = 0, errorCount = 0;
 
         try (InputStream is = new java.io.ByteArrayInputStream(fileBytes); Workbook workbook = new XSSFWorkbook(is)) {
-            // Runs INSIDE this transaction, after the idempotency
-            // short-circuit above -- a duplicate submission never reaches
-            // here, and a genuine clear+reimport rolls back together with
-            // everything below if any later row fails technically.
-            if (Boolean.TRUE.equals(clearOldMembers)) {
-                clearOldMembersForFile(file, employerId, headerRowNumber);
-            }
-
             Sheet sheet = workbook.getSheetAt(0);
             int physicalLastRow = sheet.getLastRowNum();
             int totalRows = Math.max(0, physicalLastRow - resolvedHeaderRowNumber);
@@ -413,7 +382,32 @@ public class MemberExcelImportService {
             for (int i = 0; i < headerRow.getLastCellNum(); i++) {
                 String colName = parser.cleanColumnName(parser.getCellStringValue(headerRow.getCell(i))).toLowerCase();
                 columnIndexToName.put(i, colName);
-                mapper.mapColumnToField(colName, i, fieldToColumnIndex, new HashMap<>());
+                if (customMappings == null || customMappings.isEmpty())
+                    mapper.mapColumnToField(colName, i, fieldToColumnIndex, new HashMap<>());
+            }
+            if (customMappings != null && !customMappings.isEmpty()) {
+                for (Map.Entry<String, String> entry : customMappings.entrySet()) {
+                    Integer index = mapper.findColumnIndexByName(entry.getKey().trim().toLowerCase(),
+                            columnIndexToName);
+                    if (index != null) fieldToColumnIndex.put(entry.getValue(), index);
+                }
+            }
+
+            // Replacement semantics are based on the exact identities in the
+            // validated file, not on whether an absent member happens to have
+            // historical claims. History prevents physical deletion; it must
+            // never keep an absent membership ACTIVE. This runs after the
+            // idempotency short-circuit and inside the import transaction.
+            if (Boolean.TRUE.equals(clearOldMembers)) {
+                if (!importScope.mayClearAbsentMembers()) {
+                    throw new AccessDeniedException(
+                            "إنهاء المستفيدين الغائبين عن الملف يتطلب صلاحية العمليات الخطرة");
+                }
+                Map<Long, Set<String>> presentCardsByEmployer = collectPresentCardsByEmployer(
+                        sheet, resolvedHeaderRowNumber, physicalLastRow, fieldToColumnIndex, defaultEmployer);
+                for (Map.Entry<Long, Set<String>> entry : presentCardsByEmployer.entrySet()) {
+                    terminateMembersAbsentFromReplacement(entry.getKey(), entry.getValue());
+                }
             }
 
             Map<String, Member> memberCache = loadExistingMembersForImport(sheet, resolvedHeaderRowNumber,
@@ -427,9 +421,11 @@ public class MemberExcelImportService {
 
                 Member member;
                 Member parent;
+                Member existingMember;
+                String previousSnapshotJson;
                 try {
                     String cardNumber = parser.getFieldValue(row, fieldToColumnIndex, "cardNumber");
-                    CardInfo cardInfo = parseCardNumber(cardNumber);
+                    CardInfo cardInfo = resolveFamilyLink(row, rowNum, fieldToColumnIndex, cardNumber);
                     Relationship relationship = cardInfo.relationship;
                     String parentCardNumber = cardInfo.parentCardNumber;
 
@@ -442,12 +438,12 @@ public class MemberExcelImportService {
                             memberCache.put(parentCardKey, parent);
                         }
                         if (!importScope.covers(parent.getEmployer() == null ? null : parent.getEmployer().getId())) {
-                            throw new MemberImportRowValidationException(
+                            throw new BusinessRuleException(
                                     "الصف " + rowNum + ": الموظف الرئيسي خارج نطاق المستخدم");
                         }
                     }
 
-                    Member existingMember = null;
+                    existingMember = null;
                     if (cardNumber != null && !cardNumber.isBlank()) {
                         String cardKey = cardNumber.trim().toUpperCase();
                         existingMember = memberCache.get(cardKey);
@@ -457,20 +453,32 @@ public class MemberExcelImportService {
                             row, rowNum, fieldToColumnIndex, defaultEmployer);
                     if (existingMember != null && existingMember.getEmployer() != null
                             && !existingMember.getEmployer().getId().equals(rowEmployer.getId())) {
-                        throw new MemberImportRowValidationException(
+                        throw new BusinessRuleException(
                                 "الصف " + rowNum + ": لا يمكن نقل عضو قائم إلى جهة أخرى عبر الاستيراد");
                     }
 
-                    // Captured BEFORE processRowForImport overwrites the
-                    // existing entity's fields -- this is the "before" a
-                    // rollback restores. Null for a brand-new member: there
-                    // is nothing to revert to.
-                    String previousSnapshotJson = existingMember == null ? null
-                            : toJsonOrNull(com.waad.tba.modules.member.dto.MemberImportFieldSnapshot.of(existingMember));
-                    boolean isUpdate = existingMember != null;
+                    var previousSnapshot = existingMember == null ? null
+                            : com.waad.tba.modules.member.dto.MemberImportFieldSnapshot.of(existingMember);
+                    previousSnapshotJson = previousSnapshot == null ? null : toJson(previousSnapshot);
 
                     member = rowProcessor.processRowForImport(row, rowNum, fieldToColumnIndex, defaultEmployer, benefitPolicy, parent, relationship, existingMember);
-                    pendingBatchRows.add(new PendingBatchRow(member, isUpdate, previousSnapshotJson));
+                    if (previousSnapshot != null) {
+                        Long resultingPolicyId = member.getBenefitPolicy() == null
+                                ? null : member.getBenefitPolicy().getId();
+                        if (previousSnapshot.getBenefitPolicyId() != null
+                                && !java.util.Objects.equals(previousSnapshot.getBenefitPolicyId(), resultingPolicyId)) {
+                            throw new BusinessRuleException(
+                                    "الصف " + rowNum + ": لا يمكن تغيير وثيقة عضو قائم عبر الاستيراد؛ استخدم عملية تغيير الوثيقة المؤرخة");
+                        }
+                        Long resultingParentId = member.getParent() == null ? null : member.getParent().getId();
+                        String resultingRelationship = member.getRelationship() == null
+                                ? null : member.getRelationship().name();
+                        if (!java.util.Objects.equals(previousSnapshot.getParentId(), resultingParentId)
+                                || !java.util.Objects.equals(previousSnapshot.getRelationship(), resultingRelationship)) {
+                            throw new BusinessRuleException(
+                                    "الصف " + rowNum + ": لا يمكن نقل تابع أو تغيير صلة قرابته عبر الاستيراد؛ استخدم عملية الأسرة المخصصة");
+                        }
+                    }
                 } catch (MemberImportRowValidationException parseFailure) {
                     // Expected/business-level row failure ONLY -- this exact
                     // type is thrown exclusively by rowProcessor/parser
@@ -509,12 +517,8 @@ public class MemberExcelImportService {
                     }
                 }
                 processedMembers.add(member);
-
-                if (pendingBatchRows.get(pendingBatchRows.size() - 1).isUpdate()) {
-                    updatedCount++;
-                } else {
-                    createdCount++;
-                }
+                pendingBatchRows.add(new PendingBatchRow(member, existingMember != null, previousSnapshotJson));
+                if (existingMember == null) createdCount++; else updatedCount++;
                 if (memberBuffer.size() >= BATCH_SIZE) {
                     memberRepository.saveAll(memberBuffer);
                     memberBuffer.clear();
@@ -527,7 +531,21 @@ public class MemberExcelImportService {
             // not after, at an implicit commit-time flush the caller never sees.
             memberRepository.flush();
 
+            recordEmployerAssignmentsForImport(processedMembers);
             recordPolicyAssignmentsForImport(processedMembers);
+
+            if (!pendingBatchRows.isEmpty()) {
+                importBatchRowRepository.saveAll(pendingBatchRows.stream()
+                        .map(pending -> com.waad.tba.modules.member.entity.MemberImportBatchRow.builder()
+                                .importLogId(importLogId).memberId(pending.member().getId())
+                                .action(pending.updated()
+                                        ? com.waad.tba.modules.member.entity.MemberImportBatchRow.Action.UPDATED
+                                        : com.waad.tba.modules.member.entity.MemberImportBatchRow.Action.CREATED)
+                                .previousSnapshot(pending.previousSnapshotJson())
+                                .importedSnapshot(toJson(com.waad.tba.modules.member.dto.MemberImportFieldSnapshot.of(
+                                        pending.member())))
+                                .build()).toList());
+            }
 
             MemberImportLog importLog = importLogRepository.findById(importLogId)
                     .orElseThrow(() -> new IllegalStateException("Import log vanished mid-import: " + importLogId));
@@ -545,30 +563,12 @@ public class MemberExcelImportService {
             // back every member this transaction just wrote, together with it.
             importLogRepository.saveAndFlush(importLog);
 
-            // Every member is guaranteed a real id by now (the flush above),
-            // whether it was saved directly or through memberBuffer -- safe
-            // to record which batch touched it.
-            if (!pendingBatchRows.isEmpty()) {
-                List<com.waad.tba.modules.member.entity.MemberImportBatchRow> batchRows = new ArrayList<>();
-                for (PendingBatchRow pending : pendingBatchRows) {
-                    batchRows.add(com.waad.tba.modules.member.entity.MemberImportBatchRow.builder()
-                            .importLogId(importLogId)
-                            .memberId(pending.member().getId())
-                            .action(pending.isUpdate()
-                                    ? com.waad.tba.modules.member.entity.MemberImportBatchRow.Action.UPDATED
-                                    : com.waad.tba.modules.member.entity.MemberImportBatchRow.Action.CREATED)
-                            .previousSnapshot(pending.previousSnapshotJson())
-                            .build());
-                }
-                importBatchRowRepository.saveAll(batchRows);
-            }
-
             return MemberImportResultDto.builder()
                     .batchId(batchId).status(importLog.getStatus().name()).totalProcessed(totalProcessed)
                     .createdCount(createdCount).updatedCount(updatedCount).skippedCount(skippedCount).errorCount(errorCount)
                     .processingTimeMs(importLog.getProcessingTimeMs()).completedAt(importLog.getCompletedAt())
-                    .successRate(totalProcessed > 0 ? (double) (createdCount + updatedCount) / totalProcessed * 100 : 0)
-                    .errors(errors).message(String.format("تم استيراد %d عضو جديد و%d تعديل بنجاح، %d أخطاء",
+                    .successRate(totalProcessed > 0 ? (double) createdCount / totalProcessed * 100 : 0)
+                    .errors(errors).message(String.format("تم استيراد %d عضو جديد وتحديث %d، %d أخطاء",
                             createdCount, updatedCount, errorCount))
                     .build();
         } catch (Exception e) {
@@ -614,6 +614,30 @@ public class MemberExcelImportService {
         }
     }
 
+    private void recordEmployerAssignmentsForImport(List<Member> processedMembers) {
+        List<Member> withEmployer = processedMembers.stream()
+                .filter(m -> m.getId() != null && m.getEmployer() != null)
+                .toList();
+        if (withEmployer.isEmpty()) {
+            return;
+        }
+        Set<Long> alreadyAssigned = new HashSet<>(employerAssignmentRepository.findMemberIdsWithAnyAssignment(
+                withEmployer.stream().map(Member::getId).toList()));
+
+        User currentUser = authorizationService.getCurrentUser();
+        Long actingUserId = currentUser != null ? currentUser.getId() : null;
+        for (Member member : withEmployer) {
+            if (alreadyAssigned.contains(member.getId())) {
+                continue;
+            }
+            memberEmployerResolver.assignEmployer(member, member.getEmployer(),
+                    member.getStartDate() != null ? member.getStartDate() : java.time.LocalDate.now(),
+                    "تعيين جهة العمل عبر استيراد Excel",
+                    com.waad.tba.modules.member.entity.EmployerAssignmentSource.IMPORT,
+                    actingUserId);
+        }
+    }
+
     private String sha256Hex(byte[] bytes) {
         try {
             java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
@@ -651,84 +675,79 @@ public class MemberExcelImportService {
         try { return objectMapper.writeValueAsString(data); } catch (JsonProcessingException e) { return "{}"; }
     }
 
-    /** A row processed successfully, awaiting a real member id before it can become a batch-row record. */
-    private record PendingBatchRow(Member member, boolean isUpdate, String previousSnapshotJson) {}
+    private record PendingBatchRow(Member member, boolean updated, String previousSnapshotJson) {}
 
-    private String toJsonOrNull(com.waad.tba.modules.member.dto.MemberImportFieldSnapshot snapshot) {
-        try {
-            return objectMapper.writeValueAsString(snapshot);
-        } catch (JsonProcessingException e) {
-            // A snapshot that cannot be serialized cannot be restored either --
-            // fail the row's rollback-tracking loudly rather than silently
-            // recording an update with no way back.
-            throw new IllegalStateException("تعذّر حفظ نسخة العضو قبل التعديل", e);
+    private String toJson(com.waad.tba.modules.member.dto.MemberImportFieldSnapshot snapshot) {
+        try { return objectMapper.writeValueAsString(snapshot); }
+        catch (JsonProcessingException error) {
+            throw new IllegalStateException("تعذر حفظ لقطة الاستيراد", error);
         }
     }
 
-    private void clearOldMembers(Long employerId) {
-        log.info("🧹 Clearing old members for employerId={} who do not have financial movements", employerId);
+    private Map<Long, Set<String>> collectPresentCardsByEmployer(Sheet sheet, int headerRowNumber,
+            int lastRow, Map<String, Integer> fieldToColumnIndex, Employer defaultEmployer) {
+        Map<Long, Set<String>> result = new HashMap<>();
+        for (int rowIndex = headerRowNumber + 1; rowIndex <= lastRow; rowIndex++) {
+            Row row = sheet.getRow(rowIndex);
+            if (row == null || parser.isEmptyRow(row)) continue;
+            int rowNumber = rowIndex - headerRowNumber;
+            Employer rowEmployer = rowProcessor.resolveEmployerForRow(
+                    row, rowNumber, fieldToColumnIndex, defaultEmployer);
+            String card = normalizeCardKey(parser.getFieldValue(row, fieldToColumnIndex, "cardNumber"));
+            if (card == null) {
+                throw new BusinessRuleException("الصف " + rowNumber + ": رقم بطاقة المستفيد إلزامي للاستبدال");
+            }
+            result.computeIfAbsent(rowEmployer.getId(), ignored -> new HashSet<>()).add(card);
+        }
+        return result;
+    }
+
+    private void terminateMembersAbsentFromReplacement(Long employerId, Set<String> presentCards) {
+        log.info("🧹 Terminating members absent from replacement file for employerId={}", employerId);
         List<Member> allMembers = memberRepository.findByEmployerId(employerId);
         if (allMembers.isEmpty()) {
             return;
         }
 
-        Set<Long> allMemberIds = new HashSet<>();
         Map<Long, Member> memberMap = new HashMap<>();
         for (Member m : allMembers) {
-            allMemberIds.add(m.getId());
             memberMap.put(m.getId(), m);
         }
 
-        // Single source of truth for "has this member ever moved money" --
-        // also used by the import-rollback feature, so both answer the
-        // exact same question the exact same way.
-        Set<Long> keepIds = financialActivityChecker.membersToKeep(allMemberIds);
+        // Members absent from the replacement file are ended logically. Their
+        // identity, attributes and history must remain available for audit and
+        // historical claims; clearOldMembers is never a physical-delete path.
+        Set<Long> memberIdsToTerminate = allMembers.stream()
+                .filter(member -> !presentCards.contains(normalizeCardKey(member.getCardNumber())))
+                .map(Member::getId)
+                .collect(java.util.stream.Collectors.toSet());
 
-        // Members to delete are those not in keepIds
-        Set<Long> memberIdsToDelete = new HashSet<>(allMemberIds);
-        memberIdsToDelete.removeAll(keepIds);
-
-        if (memberIdsToDelete.isEmpty()) {
+        if (memberIdsToTerminate.isEmpty()) {
             return;
         }
 
-
-        // Separate dependents and principals to delete
-        List<Long> dependentsToDelete = new ArrayList<>();
-        List<Long> principalsToDelete = new ArrayList<>();
-
-        for (Long id : memberIdsToDelete) {
-            Member m = memberMap.get(id);
-            if (m != null) {
-                if (m.isDependent()) {
-                    dependentsToDelete.add(id);
-                } else {
-                    principalsToDelete.add(id);
-                }
-            }
-        }
-
-        // Delete member attributes for all members to delete in bulk to prevent FK issues
-        memberAttributeRepository.deleteByMemberIdIn(memberIdsToDelete);
-
-        // Delete dependents first to avoid parent dependency constraints
-        if (!dependentsToDelete.isEmpty()) {
-            memberRepository.deleteMembersByIds(dependentsToDelete);
-            log.info("🧹 Deleted {} dependent members in bulk", dependentsToDelete.size());
-        }
-
-        // Delete principals in bulk
-        if (!principalsToDelete.isEmpty()) {
-            memberRepository.deleteMembersByIds(principalsToDelete);
-            log.info("🧹 Deleted {} principal members in bulk", principalsToDelete.size());
-        }
-    }
-
-    private void assertCurrentUserCanClearOldMembers() {
         User currentUser = authorizationService.getCurrentUser();
-        if (currentUser == null || !"SUPER_ADMIN".equalsIgnoreCase(currentUser.getUserType())) {
-            throw new AccessDeniedException("Only SUPER_ADMIN can clear old members during import");
+        Long actingUserId = currentUser != null ? currentUser.getId() : null;
+        List<Member> ordered = memberIdsToTerminate.stream()
+                .map(memberMap::get)
+                .filter(java.util.Objects::nonNull)
+                // Principals first: the central transition service performs the
+                // family cascade once and preserves independently stopped dependents.
+                .sorted(java.util.Comparator.comparing(Member::isDependent)
+                        .thenComparing(Member::getId))
+                .toList();
+        int terminated = 0;
+        for (Member member : ordered) {
+            if (member.getStatus() == Member.MemberStatus.TERMINATED
+                    || member.getStatus() == Member.MemberStatus.DUPLICATE_MERGED) {
+                continue;
+            }
+            statusTransitionService.terminateMembership(member.getId(),
+                    "غير موجود في ملف الاستبدال المعتمد", actingUserId,
+                    StatusSource.IMPORT);
+            terminated++;
         }
+        log.info("🧹 Logically terminated {} members absent from the replacement import", terminated);
     }
 
     private Map<String, Member> loadExistingMembersForImport(
@@ -755,6 +774,9 @@ public class MemberExcelImportService {
                     relevantCardNumbers.add(normalizedParentCard);
                 }
             }
+            String explicitParentCard = normalizeCardKey(
+                    parser.getFieldValue(row, fieldToColumnIndex, "principalCardNumber"));
+            if (explicitParentCard != null) relevantCardNumbers.add(explicitParentCard);
         }
 
         Map<String, Member> memberCache = new HashMap<>();
@@ -821,13 +843,48 @@ public class MemberExcelImportService {
         return new CardInfo(null, null);
     }
 
+    private CardInfo resolveFamilyLink(Row row, int rowNum, Map<String, Integer> fieldToColumnIndex,
+            String cardNumber) {
+        CardInfo legacy = parseCardNumber(cardNumber);
+        String explicitParent = normalizeCardKey(
+                parser.getFieldValue(row, fieldToColumnIndex, "principalCardNumber"));
+        String explicitRelationship = parser.getFieldValue(row, fieldToColumnIndex, "relationship");
+
+        if ((explicitParent == null) && (explicitRelationship == null || explicitRelationship.isBlank())) {
+            return legacy;
+        }
+
+        Relationship relationship = parser.parseRelationship(explicitRelationship);
+        if (relationship == null && explicitParent != null) {
+            throw new MemberImportRowValidationException(
+                    "الصف " + rowNum + ": صلة القرابة مطلوبة عند تحديد رقم بطاقة الموظف");
+        }
+        if (relationship != null && explicitParent == null) {
+            throw new MemberImportRowValidationException(
+                    "الصف " + rowNum + ": رقم بطاقة الموظف مطلوب للتابع");
+        }
+        if (relationship == null) return new CardInfo(null, null);
+
+        String legacyParent = normalizeCardKey(legacy.parentCardNumber);
+        if (legacyParent != null && !legacyParent.equals(explicitParent)) {
+            throw new MemberImportRowValidationException(
+                    "الصف " + rowNum + ": رقم بطاقة الموظف يتعارض مع رقم بطاقة التابع");
+        }
+        if (legacy.relationship != null && legacy.relationship != relationship) {
+            throw new MemberImportRowValidationException(
+                    "الصف " + rowNum + ": صلة القرابة تتعارض مع لاحقة رقم البطاقة");
+        }
+        return new CardInfo(relationship, explicitParent);
+    }
+
 
     private Member createDummyParent(String parentCardNumber, Row row, int rowNum,
                                      Map<String, Integer> fieldToColumnIndex, Employer defaultEmployer,
                                      BenefitPolicy benefitPolicy) {
         Employer rowEmployer = rowProcessor.resolveEmployerForRow(row, rowNum, fieldToColumnIndex, defaultEmployer);
-        BenefitPolicy resolvedPolicy = rowProcessor.resolveAndValidatePolicy(benefitPolicy, rowEmployer, rowNum);
         String policyNumber = parser.getFieldValue(row, fieldToColumnIndex, "policyNumber");
+        BenefitPolicy resolvedPolicy = rowProcessor.resolveAndValidatePolicy(
+                benefitPolicy, policyNumber, rowEmployer, rowNum);
         
         Member parent = Member.builder()
                 .cardNumber(parentCardNumber)

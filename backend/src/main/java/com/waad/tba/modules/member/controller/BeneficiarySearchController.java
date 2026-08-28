@@ -30,13 +30,13 @@ import static org.springframework.http.HttpStatus.BAD_REQUEST;
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "Beneficiary Search", description = "Deterministic beneficiary search using explicit search mode")
-@PreAuthorize("isAuthenticated()")
+@PreAuthorize("@permissionGuard.has('MEMBER_VIEW')")
 public class BeneficiarySearchController {
 
     private final BeneficiarySearchService beneficiarySearchService;
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
+    @PreAuthorize("@permissionGuard.has('MEMBER_VIEW')")
     @Operation(summary = "Search beneficiaries using explicit mode", description = "Deterministic search endpoint. Requires type and value, no guessing logic.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Search completed", content = @Content(schema = @Schema(implementation = ApiResponse.class))),

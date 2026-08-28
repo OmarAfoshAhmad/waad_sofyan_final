@@ -48,7 +48,8 @@ class MemberImportRowProcessorPolicyTest {
                 new MemberPolicyResolver(
                         mock(com.waad.tba.modules.member.repository.MemberPolicyAssignmentRepository.class),
                         policyRepository,
-                        mock(com.waad.tba.modules.member.repository.MemberRepository.class)));
+                        mock(com.waad.tba.modules.member.repository.MemberRepository.class),
+                        mock(MemberEmployerResolver.class)));
         processor = new MemberImportRowProcessor(
                 new MemberImportParser(), mock(EmployerRepository.class), policyRepository,
                 barcodeGenerator, cardGenerator, statusTransitionService);

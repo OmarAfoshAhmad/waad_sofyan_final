@@ -26,6 +26,14 @@ public enum MemberOperation {
     /** Name, phone, descriptive fields. NOT employer or policy. */
     EDIT_DEMOGRAPHICS,
     ADD_DEPENDENT,
+    /** Move an existing dependent to another principal with dated context. */
+    TRANSFER_DEPENDENT,
+    /** Move a principal and their whole family to another employer, dated, all-or-nothing. */
+    TRANSFER_EMPLOYER,
+    /** Correct the declared kinship without changing family ownership. */
+    CORRECT_RELATIONSHIP,
+    CHANGE_POLICY,
+    REORDER_FAMILY,
     CHANGE_STATUS,
     TERMINATE,
     REINSTATE,
@@ -39,6 +47,8 @@ public enum MemberOperation {
 
     IMPORT_PREVIEW,
     IMPORT_EXECUTE,
+    IMPORT_HISTORY,
+    IMPORT_ROLLBACK,
 
     /** An audited eligibility decision, which writes. */
     EVALUATE_ELIGIBILITY

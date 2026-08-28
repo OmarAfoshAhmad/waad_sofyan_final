@@ -16,6 +16,8 @@ public class MemberImportRollbackPreviewDto {
     int updatedCount;
     /** Created members that would be deleted (no financial activity found). */
     int wouldRevertCreatedCount;
+    /** Updated members still unchanged since import and safe to restore. */
+    int wouldRevertUpdatedCount;
     /** Created members kept because they (or a dependent) have financial activity. */
     int wouldSkipCount;
     List<SkipPreview> skips;

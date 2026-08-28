@@ -1,6 +1,7 @@
 package com.waad.tba.modules.member.repository;
 
 import java.util.List;
+import java.util.Collection;
 import java.util.Optional;
 
 import org.springframework.data.domain.Page;
@@ -25,7 +26,11 @@ public interface MemberRepository extends JpaRepository<Member, Long>, JpaSpecif
         */
        @org.springframework.data.jpa.repository.Lock(LockModeType.PESSIMISTIC_WRITE)
        @Query("SELECT m FROM Member m WHERE m.id = :id")
-       Optional<Member> findByIdWithLock(@Param("id") Long id);
+        Optional<Member> findByIdWithLock(@Param("id") Long id);
+
+        @org.springframework.data.jpa.repository.Lock(LockModeType.PESSIMISTIC_WRITE)
+        @Query("SELECT m FROM Member m WHERE m.id IN :ids ORDER BY m.id")
+        List<Member> findAllByIdWithLock(@Param("ids") Collection<Long> ids);
 
        @Query("SELECT DISTINCT m.employer.id FROM Member m")
        List<Long> findDistinctEmployerIds();
@@ -102,6 +107,17 @@ public interface MemberRepository extends JpaRepository<Member, Long>, JpaSpecif
        @Override
        @org.springframework.data.jpa.repository.EntityGraph(attributePaths = { "employer", "benefitPolicy" })
        List<Member> findAll(org.springframework.data.jpa.domain.Specification<Member> spec, Sort sort);
+
+       /**
+        * Canonical paged member listing/search query.
+        *
+        * <p>The DTO mapper reads employer, policy and (for dependents) parent. Keeping
+        * those to-one associations lazy here makes the query count grow with the page
+        * size even though dependents are batch-loaded separately by the service.</p>
+        */
+       @Override
+       @org.springframework.data.jpa.repository.EntityGraph(attributePaths = { "employer", "benefitPolicy", "parent" })
+       Page<Member> findAll(org.springframework.data.jpa.domain.Specification<Member> spec, Pageable pageable);
 
        @Query(value = "SELECT m FROM Member m LEFT JOIN FETCH m.employer LEFT JOIN FETCH m.benefitPolicy WHERE " +
                      "m.active = true AND (" +

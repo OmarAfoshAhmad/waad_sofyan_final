@@ -29,6 +29,7 @@ import com.waad.tba.modules.member.dto.MemberCreateDto;
 import com.waad.tba.modules.member.dto.MemberUpdateDto;
 import com.waad.tba.modules.member.dto.MemberViewDto;
 import com.waad.tba.modules.member.entity.Member;
+import com.waad.tba.modules.member.entity.EmployerAssignmentSource;
 import com.waad.tba.modules.member.entity.PolicyAssignmentSource;
 import com.waad.tba.modules.member.entity.StatusSource;
 import com.waad.tba.modules.member.mapper.UnifiedMemberMapper;
@@ -41,6 +42,8 @@ import com.waad.tba.modules.member.security.MemberScopeFilter;
 import com.waad.tba.modules.systemadmin.service.AuditLogService;
 import com.waad.tba.security.AuthorizationService;
 import com.waad.tba.modules.rbac.entity.User;
+import com.waad.tba.modules.rbac.permission.EffectivePermissionService;
+import com.waad.tba.modules.rbac.permission.SystemPermission;
 
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
@@ -85,12 +88,14 @@ public class UnifiedMemberService {
     private final CardNumberGeneratorService cardNumberGenerator;
     private final UnifiedMemberMapper mapper;
     private final AuthorizationService authorizationService;
+    private final EffectivePermissionService effectivePermissionService;
     private final MemberFinancialSummaryService financialSummaryService;
     private final JdbcTemplate jdbcTemplate;
     private final AuditLogService auditLogService;
     private final FamilyEligibilityService familyEligibilityService;
     private final MemberStatusTransitionService statusTransitionService;
     private final MemberPolicyResolver memberPolicyResolver;
+    private final MemberEmployerResolver memberEmployerResolver;
     private final MemberQueryAccessPolicy queryAccessPolicy;
     private final MemberCommandAccessPolicy commandAccessPolicy;
 
@@ -166,6 +171,7 @@ public class UnifiedMemberService {
 
         // 4. Save principal
         principal = memberRepository.save(principal);
+        recordInitialEmployerAssignment(principal, "تعيين جهة العمل عند إنشاء المستفيد");
         recordInitialPolicyAssignment(principal, "تعيين وثيقة عند إنشاء المستفيد");
         log.info("✅ Created PRINCIPAL member ID={}, barcode={}, cardNumber={}, employer={}",
                 principal.getId(), principal.getBarcode(), principal.getCardNumber(),
@@ -310,6 +316,7 @@ public class UnifiedMemberService {
 
         // 4. Save
         dependent = memberRepository.save(dependent);
+        recordInitialEmployerAssignment(dependent, "تعيين جهة العمل عند إنشاء التابع (موروثة من الموظف الرئيسي)");
         recordInitialPolicyAssignment(dependent, "تعيين وثيقة عند إنشاء التابع (موروثة من الموظف الرئيسي)");
         log.info("✅ Created DEPENDENT member ID={}, cardNumber={}, relationship={}",
                 dependent.getId(), dependent.getCardNumber(), dependent.getRelationship());
@@ -336,6 +343,17 @@ public class UnifiedMemberService {
         memberPolicyResolver.assignPolicy(member, member.getBenefitPolicy(),
                 member.getStartDate() != null ? member.getStartDate() : LocalDate.now(),
                 reason, PolicyAssignmentSource.MANUAL,
+                currentUser != null ? currentUser.getId() : null);
+    }
+
+    private void recordInitialEmployerAssignment(Member member, String reason) {
+        if (member.getEmployer() == null) {
+            throw new BusinessRuleException("جهة العمل إلزامية عند إنشاء المستفيد");
+        }
+        User currentUser = authorizationService.getCurrentUser();
+        memberEmployerResolver.assignEmployer(member, member.getEmployer(),
+                member.getStartDate() != null ? member.getStartDate() : LocalDate.now(),
+                reason, EmployerAssignmentSource.MANUAL,
                 currentUser != null ? currentUser.getId() : null);
     }
 
@@ -499,6 +517,8 @@ public class UnifiedMemberService {
             case ACTIVE -> MemberOperation.REINSTATE;
             case TERMINATED -> MemberOperation.TERMINATE;
             case SUSPENDED, PENDING -> MemberOperation.CHANGE_STATUS;
+            case DUPLICATE_MERGED -> throw new BusinessRuleException(
+                    "حالة الدمج تُنشأ حصراً من عملية معالجة المكررات");
         };
         commandAccessPolicy.require(operation, employerIdOf(stored));
         Long userId = currentUser != null ? currentUser.getId() : null;
@@ -509,6 +529,8 @@ public class UnifiedMemberService {
             case TERMINATED -> statusTransitionService.terminateMembership(id, reason, userId, StatusSource.MANUAL);
             case PENDING -> statusTransitionService.transitionTo(id, Member.MemberStatus.PENDING, reason,
                     StatusSource.MANUAL, java.util.UUID.randomUUID().toString(), userId);
+            case DUPLICATE_MERGED -> throw new BusinessRuleException(
+                    "حالة الدمج تُنشأ حصراً من عملية معالجة المكررات");
         };
 
         log.info("✅ Member ID={} status changed to: {}", id, newStatus);
@@ -530,9 +552,11 @@ public class UnifiedMemberService {
         Member stored = requireStoredMember(id);
         commandAccessPolicy.require(MemberOperation.REINSTATE, employerIdOf(stored));
         User currentUser = authorizationService.getCurrentUser();
-        boolean isSuperAdmin = currentUser != null && "SUPER_ADMIN".equalsIgnoreCase(currentUser.getUserType());
+        boolean mayReinstateTerminated = currentUser != null
+                && effectivePermissionService.resolve(currentUser)
+                        .contains(SystemPermission.MEMBER_REINSTATE_TERMINATED);
         Member member = statusTransitionService.reinstateTerminated(id, reason,
-                currentUser != null ? currentUser.getId() : null, isSuperAdmin);
+                currentUser != null ? currentUser.getId() : null, mayReinstateTerminated);
         if (member.isPrincipal()) {
             List<Member> dependents = memberRepository.findByParentId(member.getId());
             return mapper.toViewDto(member, dependents);
@@ -777,8 +801,22 @@ public class UnifiedMemberService {
      */
     @Transactional
     public void bulkTerminateMemberships(java.util.Collection<Long> memberIds) {
+        bulkTerminateMemberships(memberIds, "LEGACY_BULK_TERMINATE_ENDPOINT");
+    }
+
+    /**
+     * @param reason must be the caller's actual justification, not a
+     *               placeholder -- this ends coverage for every id in the
+     *               batch and is recorded once per member in the same
+     *               append-only status history a single termination uses.
+     */
+    @Transactional
+    public void bulkTerminateMemberships(java.util.Collection<Long> memberIds, String reason) {
         if (memberIds == null || memberIds.isEmpty()) {
             throw new BusinessRuleException("يجب تحديد مستفيد واحد على الأقل");
+        }
+        if (reason == null || reason.isBlank()) {
+            throw new BusinessRuleException("سبب إنهاء العضوية إلزامي");
         }
         java.util.List<Member> members = memberIds.stream()
                 .distinct()
@@ -791,7 +829,7 @@ public class UnifiedMemberService {
         Long userId = currentUser != null ? currentUser.getId() : null;
         for (Member member : members) {
             statusTransitionService.terminateMembership(member.getId(),
-                    "LEGACY_BULK_TERMINATE_ENDPOINT", userId, StatusSource.SYSTEM);
+                    reason, userId, StatusSource.SYSTEM);
         }
     }
 
@@ -865,34 +903,7 @@ public class UnifiedMemberService {
         final AuthorizedMemberScope scope = queryAccessPolicy.requireListing(
                 MemberOperation.LIST, employerId);
 
-        Specification<Member> spec = (root, query, cb) -> {
-            List<Predicate> predicates = new ArrayList<>();
-
-            predicates.add(MemberScopeFilter.toPredicate(scope, root.get("employer").get("id"), cb));
-
-            if (status != null && !status.trim().isEmpty()) {
-                predicates.add(cb.equal(root.get("status"), status));
-            }
-
-            if (type != null && !type.trim().isEmpty()) {
-                if ("PRINCIPAL".equalsIgnoreCase(type)) {
-                    predicates.add(cb.isNull(root.get("parent")));
-                } else if ("DEPENDENT".equalsIgnoreCase(type)) {
-                    predicates.add(cb.isNotNull(root.get("parent")));
-                } else {
-                    // Try to filter by specific relationship
-                    try {
-                        Member.Relationship rel = Member.Relationship.valueOf(type.toUpperCase());
-                        predicates.add(cb.equal(root.get("relationship"), rel));
-                        predicates.add(cb.isNotNull(root.get("parent")));
-                    } catch (IllegalArgumentException e) {
-                        // Invalid relationship type, ignore or fallback
-                    }
-                }
-            }
-
-            return cb.and(predicates.toArray(new Predicate[0]));
-        };
+        Specification<Member> spec = MemberFilter.listing(status, type).toSpecification(scope);
 
         // Fix Pageable sort since 'type' is transient
         org.springframework.data.domain.Pageable safePageable = pageable;
@@ -928,12 +939,14 @@ public class UnifiedMemberService {
 
         // Map to DTOs using Page.map() to preserve metadata
         final Map<Long, List<Member>> finalDependentsMap = dependentsMap;
+        final com.waad.tba.modules.member.mapper.UnifiedMemberMapper.ReadContext readContext =
+                new com.waad.tba.modules.member.mapper.UnifiedMemberMapper.ReadContext(scope.maskSensitiveFields());
         return membersPage.map(member -> {
             if (member.isPrincipal()) {
                 List<Member> dependents = finalDependentsMap.getOrDefault(member.getId(), List.of());
-                return mapper.toViewDto(member, dependents);
+                return mapper.toViewDto(member, dependents, readContext);
             }
-            return mapper.toViewDto(member);
+            return mapper.toViewDto(member, List.of(), readContext);
         });
     }
 
@@ -956,33 +969,7 @@ public class UnifiedMemberService {
         final AuthorizedMemberScope scope = queryAccessPolicy.requireListing(
                 MemberOperation.LIST, employerId);
 
-        Specification<Member> spec = (root, query, cb) -> {
-            List<Predicate> predicates = new ArrayList<>();
-
-            predicates.add(MemberScopeFilter.toPredicate(scope, root.get("employer").get("id"), cb));
-
-            if (status != null && !status.trim().isEmpty()) {
-                predicates.add(cb.equal(root.get("status"), status));
-            }
-
-            if (type != null && !type.trim().isEmpty()) {
-                if ("PRINCIPAL".equalsIgnoreCase(type)) {
-                    predicates.add(cb.isNull(root.get("parent")));
-                } else if ("DEPENDENT".equalsIgnoreCase(type)) {
-                    predicates.add(cb.isNotNull(root.get("parent")));
-                } else {
-                    try {
-                        Member.Relationship rel = Member.Relationship.valueOf(type.toUpperCase());
-                        predicates.add(cb.equal(root.get("relationship"), rel));
-                        predicates.add(cb.isNotNull(root.get("parent")));
-                    } catch (IllegalArgumentException e) {
-                        // Ignore
-                    }
-                }
-            }
-
-            return cb.and(predicates.toArray(new Predicate[0]));
-        };
+        Specification<Member> spec = MemberFilter.listing(status, type).toSpecification(scope);
 
         return memberRepository.count(spec);
     }
@@ -1037,84 +1024,10 @@ public class UnifiedMemberService {
             return Page.empty(pageable);
         }
 
-        Specification<Member> spec = (root, query, cb) -> {
-            List<Predicate> predicates = new ArrayList<>();
-
-            if (nameAr != null && !nameAr.trim().isEmpty()) {
-                String searchAr = "%" + nameAr.toLowerCase() + "%";
-                if (nameEn != null && !nameEn.trim().isEmpty() && !nameEn.equalsIgnoreCase(nameAr)) {
-                    // If both are provided and different, combine with OR to search fullName
-                    String searchEn = "%" + nameEn.toLowerCase() + "%";
-                    predicates.add(cb.or(
-                            cb.like(cb.lower(root.get("fullName")), searchAr),
-                            cb.like(cb.lower(root.get("fullName")), searchEn),
-                            cb.like(cb.lower(root.get("cardNumber")), searchAr),
-                            cb.like(cb.lower(root.get("cardNumber")), searchEn),
-                            cb.like(cb.lower(root.get("nationalNumber")), searchAr),
-                            cb.like(root.get("barcode"), searchAr)));
-                } else {
-                    predicates.add(cb.or(
-                            cb.like(cb.lower(root.get("fullName")), searchAr),
-                            cb.like(cb.lower(root.get("cardNumber")), searchAr),
-                            cb.like(cb.lower(root.get("nationalNumber")), searchAr),
-                            cb.like(root.get("barcode"), searchAr)));
-                }
-            } else if (nameEn != null && !nameEn.trim().isEmpty()) {
-                String searchEn = "%" + nameEn.toLowerCase() + "%";
-                predicates.add(cb.or(
-                        cb.like(cb.lower(root.get("fullName")), searchEn),
-                        cb.like(cb.lower(root.get("cardNumber")), searchEn),
-                        cb.like(cb.lower(root.get("nationalNumber")), searchEn),
-                        cb.like(root.get("barcode"), searchEn)));
-            }
-
-            if (nationalNumber != null && !nationalNumber.trim().isEmpty()) {
-                predicates.add(cb.like(root.get("nationalNumber"), "%" + nationalNumber + "%"));
-            }
-
-            if (barcode != null && !barcode.trim().isEmpty()) {
-                predicates.add(cb.like(root.get("barcode"), "%" + barcode + "%"));
-            }
-
-            if (cardNumber != null && !cardNumber.trim().isEmpty()) {
-                predicates.add(cb.like(root.get("cardNumber"), "%" + cardNumber + "%"));
-            }
-
-            predicates.add(MemberScopeFilter.toPredicate(scope, root.get("employer").get("id"), cb));
-
-            if (benefitPolicyId != null) {
-                predicates.add(cb.equal(root.get("benefitPolicy").get("id"), benefitPolicyId));
-            }
-
-            if (status != null && !status.trim().isEmpty()) {
-                predicates.add(cb.equal(root.get("status"), status));
-            }
-
-            if (type != null && !type.trim().isEmpty()) {
-                if ("PRINCIPAL".equalsIgnoreCase(type)) {
-                    predicates.add(cb.isNull(root.get("parent")));
-                } else if ("DEPENDENT".equalsIgnoreCase(type)) {
-                    predicates.add(cb.isNotNull(root.get("parent")));
-                } else {
-                    try {
-                        Member.Relationship rel = Member.Relationship.valueOf(type.toUpperCase());
-                        predicates.add(cb.equal(root.get("relationship"), rel));
-                        predicates.add(cb.isNotNull(root.get("parent")));
-                    } catch (IllegalArgumentException e) {
-                        // Ignore
-                    }
-                }
-            }
-
-            // active / soft-delete filter
-            if (deleted) {
-                predicates.add(cb.equal(root.get("active"), false));
-            } else {
-                predicates.add(cb.or(cb.isNull(root.get("active")), cb.equal(root.get("active"), true)));
-            }
-
-            return cb.and(predicates.toArray(new Predicate[0]));
-        };
+        Specification<Member> spec = new MemberFilter(nameAr, nameEn, nationalNumber, barcode, cardNumber,
+                benefitPolicyId, status, type,
+                deleted ? MemberFilter.DeletedMode.DELETED_ONLY : MemberFilter.DeletedMode.ACTIVE_ONLY)
+                .toSpecification(scope);
 
         // Fix Pageable sort since 'type' is transient
         org.springframework.data.domain.Pageable safePageable = pageable;
@@ -1150,12 +1063,14 @@ public class UnifiedMemberService {
 
         // Map to DTOs using Page.map() to preserve metadata
         final Map<Long, List<Member>> finalDependentsMap = dependentsMap;
+        final com.waad.tba.modules.member.mapper.UnifiedMemberMapper.ReadContext readContext =
+                new com.waad.tba.modules.member.mapper.UnifiedMemberMapper.ReadContext(scope.maskSensitiveFields());
         return membersPage.map(member -> {
             if (member.isPrincipal()) {
                 List<Member> dependents = finalDependentsMap.getOrDefault(member.getId(), List.of());
-                return mapper.toViewDto(member, dependents);
+                return mapper.toViewDto(member, dependents, readContext);
             }
-            return mapper.toViewDto(member);
+            return mapper.toViewDto(member, List.of(), readContext);
         });
     }
 

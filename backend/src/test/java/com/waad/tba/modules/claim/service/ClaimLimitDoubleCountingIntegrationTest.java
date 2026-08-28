@@ -185,6 +185,7 @@ class ClaimLimitDoubleCountingIntegrationTest extends PostgresIntegrationTestBas
                 .benefitPolicy(policy)
                 .active(true)
                 .build());
+        initializeTemporalAssignments(member);
 
         provider = providerRepository.save(Provider.builder()
                 .name("Limit Test Hospital " + suffix)
@@ -343,6 +344,17 @@ class ClaimLimitDoubleCountingIntegrationTest extends PostgresIntegrationTestBas
         // Other real usage: 60 (a separate claim, untouched by the edit under test).
         Visit visitA = newVisitWithPricedService("A", new BigDecimal("60.00"));
         createDirectClaim(visitA, new BigDecimal("60.00"), "A");
+
+        // Commit claim A on its own before claim B is approved -- in production
+        // each claim's approval is its own request/transaction, so claim A's
+        // ledger-commit listener (including the general-ceiling guard) always
+        // runs against an already-committed world. Approving both A and B inside
+        // one shared test transaction would instead have A's own commit see B as
+        // an "unledgered" sibling merely because B's own commit listener has not
+        // fired yet in the same batch -- a test-methodology race, not a real one.
+        org.springframework.test.context.transaction.TestTransaction.flagForCommit();
+        org.springframework.test.context.transaction.TestTransaction.end();
+        org.springframework.test.context.transaction.TestTransaction.start();
 
         // Claim under test: approved at 50.
         Visit visitB = newVisitWithPricedService("B", new BigDecimal("50.00"));

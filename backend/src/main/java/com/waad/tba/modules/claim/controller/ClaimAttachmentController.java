@@ -35,7 +35,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/claims")
 @RequiredArgsConstructor
-@PreAuthorize("isAuthenticated()")
+@PreAuthorize("@permissionGuard.has('CLAIM_VIEW')")
 public class ClaimAttachmentController {
     
     private final ClaimAttachmentService attachmentService;
@@ -49,7 +49,7 @@ public class ClaimAttachmentController {
      * @return Uploaded attachment details
      */
     @PostMapping("/{claimId}/attachments")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'DATA_ENTRY', 'PROVIDER_STAFF')")
+    @PreAuthorize("@claimAccessGuard.canEdit(#claimId)")
     public ResponseEntity<ApiResponse<ClaimAttachmentDto>> uploadAttachment(
             @PathVariable("claimId") Long claimId,
             @RequestParam("file") MultipartFile file,
@@ -83,7 +83,7 @@ public class ClaimAttachmentController {
      * @return List of attachments
      */
     @GetMapping("/{claimId}/attachments")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@claimAccessGuard.canRead(#claimId)")
     public ResponseEntity<List<ClaimAttachmentDto>> getClaimAttachments(@PathVariable("claimId") Long claimId) {
         log.info("\uD83D\uDCCB Get attachments for claim ID: {}", claimId);
         
@@ -121,7 +121,7 @@ public class ClaimAttachmentController {
      * @return File content as Resource
      */
     @GetMapping("/{claimId}/attachments/{attachmentId}")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@claimAccessGuard.canRead(#claimId)")
     public ResponseEntity<Resource> downloadAttachment(
             @PathVariable("claimId") Long claimId,
             @PathVariable("attachmentId") Long attachmentId) {
@@ -171,7 +171,7 @@ public class ClaimAttachmentController {
      * @return Success message
      */
     @DeleteMapping("/{claimId}/attachments/{attachmentId}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'DATA_ENTRY', 'PROVIDER_STAFF')")
+    @PreAuthorize("@claimAccessGuard.canEdit(#claimId)")
     public ResponseEntity<String> deleteAttachment(
             @PathVariable("claimId") Long claimId,
             @PathVariable("attachmentId") Long attachmentId) {
@@ -196,7 +196,7 @@ public class ClaimAttachmentController {
      * @return Number of attachments
      */
     @GetMapping("/{claimId}/attachments/count")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@claimAccessGuard.canRead(#claimId)")
     public ResponseEntity<Long> getAttachmentCount(@PathVariable("claimId") Long claimId) {
         log.info("Get attachment count for claim ID: {}", claimId);
         

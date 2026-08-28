@@ -59,6 +59,11 @@ public class MemberImportBatchRow {
     @Column(name = "previous_snapshot", columnDefinition = "jsonb")
     private String previousSnapshot;
 
+    /** Import-owned values after the row was applied; used for conflict detection. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "imported_snapshot", nullable = false, columnDefinition = "jsonb")
+    private String importedSnapshot;
+
     @CreatedDate
     @Column(updatable = false, name = "created_at")
     private LocalDateTime createdAt;

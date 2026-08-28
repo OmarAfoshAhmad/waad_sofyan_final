@@ -21,6 +21,7 @@ public class KinshipMismatchService {
 
     private final MemberRepository memberRepository;
     private final CardNumberGeneratorService cardNumberGeneratorService;
+    private final MemberFamilyService memberFamilyService;
 
     @Transactional(readOnly = true)
     public List<KinshipMismatchDto> findMismatches() {
@@ -122,19 +123,17 @@ public class KinshipMismatchService {
         Member member = memberRepository.findById(memberId)
                 .orElseThrow(() -> new IllegalArgumentException("Member not found"));
 
-        if (request.getNewRelationship() != null) {
-            member.setRelationship(request.getNewRelationship());
-        }
+        if (request.getNewRelationship() != null) memberFamilyService.correctRelationship(memberId,
+                new com.waad.tba.modules.member.dto.MemberRelationshipCorrectionRequest(
+                        request.getNewRelationship(), request.getReason(), member.getVersion()));
         if (request.getNewGender() != null) {
             member.setGender(request.getNewGender());
         }
         member.setKinshipVerified(true);
-        memberRepository.save(member);
+        memberRepository.saveAndFlush(member);
 
-        // After saving the fix, resequence dependents for the parent to ensure birthDate ordering
-        if (member.isDependent() && member.getParent() != null) {
-            cardNumberGeneratorService.resequenceDependents(member.getParent());
-        }
+        // A kinship correction must not rewrite card/barcode identity. Visual
+        // order is maintained by MemberFamilyService instead.
     }
 
     @Transactional
@@ -152,9 +151,9 @@ public class KinshipMismatchService {
         }
         List<Member> members = memberRepository.findAllById(request.getMemberIds());
         for (Member member : members) {
-            if (request.getNewRelationship() != null) {
-                member.setRelationship(request.getNewRelationship());
-            }
+            if (request.getNewRelationship() != null) memberFamilyService.correctRelationship(member.getId(),
+                    new com.waad.tba.modules.member.dto.MemberRelationshipCorrectionRequest(
+                            request.getNewRelationship(), request.getReason(), member.getVersion()));
             if (request.getNewGender() != null) {
                 member.setGender(request.getNewGender());
             }
@@ -162,12 +161,7 @@ public class KinshipMismatchService {
         }
         memberRepository.saveAll(members);
 
-        // Resequence for each distinct parent to ensure birthDate ordering
-        members.stream()
-            .filter(m -> m.isDependent() && m.getParent() != null)
-            .map(Member::getParent)
-            .distinct()
-            .forEach(cardNumberGeneratorService::resequenceDependents);
+        // Do not resequence identity numbers after a descriptive correction.
     }
 
     @Transactional

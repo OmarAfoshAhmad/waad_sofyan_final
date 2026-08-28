@@ -46,7 +46,7 @@ import lombok.extern.slf4j.Slf4j;
 @RequestMapping("/api/v1/reports")
 @RequiredArgsConstructor
 @Tag(name = "Reports", description = "Financial Reports - Adjudication & Settlement")
-@PreAuthorize("isAuthenticated()")
+@PreAuthorize("@permissionGuard.has('FINANCIAL_REPORT_VIEW')")
 public class ReportsController {
     
     private final AdjudicationReportService adjudicationReportService;
@@ -70,7 +70,7 @@ public class ReportsController {
     // every other tenant's adjudication totals via the free-text
     // providerName filter.
     @GetMapping("/adjudication")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER')")
+    @PreAuthorize("@permissionGuard.has('FINANCIAL_REPORT_VIEW')")
     @Operation(
         summary = "تقرير التدقيق المالي",
         description = "يُظهر: المطلوب | المستقطع (تحمل المريض) | المستحق للمستشفى"
@@ -103,7 +103,7 @@ public class ReportsController {
     // Same scoping gap as /adjudication above — restricted to internal
     // finance staff.
     @GetMapping("/provider-settlement")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER')")
+    @PreAuthorize("@permissionGuard.has('FINANCIAL_REPORT_VIEW')")
     @Operation(
         summary = "تقرير تسوية مقدم الخدمة",
         description = "المطالبات الموافق عليها والجاهزة للتسوية"
@@ -124,7 +124,7 @@ public class ReportsController {
      * - إجمالي المدفوعات والتحملات
      */
     @GetMapping("/member-statement/{memberId}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER', 'EMPLOYER_ADMIN', 'MEDICAL_REVIEWER')")
+    @PreAuthorize("@claimAccessGuard.canReadMemberFor('FINANCIAL_REPORT_VIEW', #memberId)")
     @Operation(
         summary = "كشف حساب العضو",
         description = "جميع مطالبات العضو مع الإجماليات"
@@ -168,7 +168,7 @@ public class ReportsController {
     // Same scoping gap as /adjudication above — restricted to internal
     // finance staff (unscoped system-wide monthly summary).
     @GetMapping("/summary")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER')")
+    @PreAuthorize("@permissionGuard.has('FINANCIAL_REPORT_VIEW')")
     @Operation(
         summary = "ملخص الإحصائيات",
         description = "إحصائيات سريعة للوحة التحكم"
@@ -199,7 +199,7 @@ public class ReportsController {
      * - يمنع الواجهة من حساب المبالغ محلياً
      */
     @GetMapping("/financial-summary")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER', 'EMPLOYER_ADMIN', 'MEDICAL_REVIEWER')")
+    @PreAuthorize("@permissionGuard.has('FINANCIAL_REPORT_VIEW')")
     @Operation(
         summary = "الملخص المالي الشامل",
         description = "إجماليات مالية محسوبة من قاعدة البيانات - المصدر الوحيد للحقيقة"
@@ -234,7 +234,7 @@ public class ReportsController {
     // a provider caller previously saw every employer's AND every competing
     // provider's settlement totals with no way to confine it to their own.
     @GetMapping("/settlement-summary")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER', 'EMPLOYER_ADMIN', 'MEDICAL_REVIEWER')")
+    @PreAuthorize("@permissionGuard.has('SETTLEMENT_VIEW')")
     @Operation(
         summary = "ملخص التسويات",
         description = "إجماليات للمطالبات الموافق عليها والمسددة"
@@ -270,7 +270,7 @@ public class ReportsController {
      * - PROVIDER: Can only view their own provider (providerId ignored, uses token)
      */
     @GetMapping("/provider-settlements")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
+    @PreAuthorize("@permissionGuard.has('SETTLEMENT_VIEW')")
     @Operation(
         summary = "تقرير تسوية مقدم الخدمة",
         description = "تقرير مفصل على مستوى الخدمة/السطر يطابق التقارير الورقية"
@@ -327,7 +327,7 @@ public class ReportsController {
      * Provider: returns only their provider
      */
     @GetMapping("/provider-settlements/providers")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
+    @PreAuthorize("@permissionGuard.has('SETTLEMENT_VIEW')")
     @Operation(
         summary = "قائمة مقدمي الخدمة للتقارير",
         description = "قائمة مقدمي الخدمة المتاحين لتقارير التسوية"
@@ -365,7 +365,7 @@ public class ReportsController {
      * - PROVIDER: Can only export their own provider
      */
     @GetMapping("/provider-settlements/export/excel")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
+    @PreAuthorize("@permissionGuard.has('FINANCIAL_REPORT_VIEW')")
     @Operation(
         summary = "تصدير تقرير التسوية إلى Excel",
         description = "تصدير تقرير تسوية مقدم الخدمة بصيغة Excel - نفس أرقام الشاشة"

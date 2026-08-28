@@ -28,6 +28,11 @@ public class DependentViewDto {
     @Schema(description = "Dependent ID", example = "456")
     private Long id;
 
+    @Schema(description = "Optimistic-lock row version. Required as expectedVersion/expectedVersions when calling "
+            + "a family operation (transfer, relationship correction, policy change, reorder, employer transfer) "
+            + "so a concurrent edit is rejected instead of silently overwritten.")
+    private Long version;
+
     @Schema(description = "Relationship to principal", example = "SON")
     private Member.Relationship relationship;
 

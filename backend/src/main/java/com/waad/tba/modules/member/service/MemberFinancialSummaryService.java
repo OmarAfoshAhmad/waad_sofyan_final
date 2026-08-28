@@ -3,8 +3,8 @@ package com.waad.tba.modules.member.service;
 import com.waad.tba.common.exception.ResourceNotFoundException;
 import com.waad.tba.common.exception.BusinessRuleException;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy;
-import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository;
 import com.waad.tba.modules.benefitpolicy.service.BenefitPolicyCoverageService;
+import com.waad.tba.modules.benefitpolicy.service.LimitBalanceReader;
 import com.waad.tba.modules.claim.projection.MemberFinancialAggregateProjection;
 import com.waad.tba.modules.claim.repository.ClaimRepository;
 import com.waad.tba.modules.member.dto.MemberFinancialSummaryDto;
@@ -61,10 +61,11 @@ public class MemberFinancialSummaryService {
 
     private final MemberRepository memberRepository;
     private final BenefitPolicyCoverageService coverageService;
-    private final BenefitPolicyRepository benefitPolicyRepository;
     private final ClaimRepository claimRepository;
     private final MedicalServiceRepository medicalServiceRepository;
     private final MemberQueryAccessPolicy queryAccessPolicy;
+    private final MemberPolicyResolver memberPolicyResolver;
+    private final LimitBalanceReader limitBalanceReader;
 
     /**
      * HTTP/read-model entry point. Internal eligibility batching deliberately uses
@@ -132,11 +133,17 @@ public class MemberFinancialSummaryService {
                 .findFinancialAggregatesByMemberIds(memberIds).stream()
                 .collect(Collectors.toMap(MemberFinancialAggregateProjection::getMemberId, row -> row));
 
-        // WAAD-FIN-1.0 S4: the ceiling's own axis, read once for the whole batch --
-        // see BenefitPolicyCoverageService.getLimitConsumedForYear's javadoc for why
-        // this must never be totalApproved.
-        Map<Long, BigDecimal> consumedByMember = coverageService.getLimitConsumedForYear(
-                memberIds, today.getYear(), null);
+        // WAAD-FIN-1.0 S4 + finance-08: the ceiling's own axis, read once for the
+        // whole batch and filtered to each member's OWN policy id -- never
+        // BenefitPolicyCoverageService.getLimitConsumedForYear's unfiltered
+        // total, which sums a member's consumption across every policy they
+        // held that calendar year. A member who changed policies mid-year has
+        // two distinct ceilings; summing both into one figure understated (or
+        // overstated) whichever policy's remaining balance this screen shows.
+        Map<Long, Long> policyIdByMember = policyByMember.entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().getId()));
+        Map<Long, BigDecimal> consumedByMember = limitBalanceReader.readGeneralCeilingCommittedBulk(
+                policyIdByMember, LocalDate.of(today.getYear(), 1, 1), LocalDate.of(today.getYear(), 12, 31), null);
 
         Map<Long, MemberFinancialSummaryDto> result = new LinkedHashMap<>();
         for (Member member : members) {
@@ -156,12 +163,7 @@ public class MemberFinancialSummaryService {
     private Map<Long, BenefitPolicy> resolvePolicies(List<Member> members, LocalDate asOfDate) {
         Map<Long, BenefitPolicy> byMember = new LinkedHashMap<>();
         for (Member member : members) {
-            BenefitPolicy policy = member.getBenefitPolicy();
-            if (policy == null && member.getEmployer() != null) {
-                policy = benefitPolicyRepository
-                        .findActiveEffectivePolicyForEmployer(member.getEmployer().getId(), asOfDate)
-                        .orElse(null);
-            }
+            BenefitPolicy policy = memberPolicyResolver.resolveFor(member, asOfDate).orElse(null);
             if (policy != null) {
                 byMember.put(member.getId(), policy);
             }

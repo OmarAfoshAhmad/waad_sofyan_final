@@ -38,12 +38,14 @@ class UnifiedMemberPhotoSecurityTest {
     @Mock private CardNumberGeneratorService cardNumberGenerator;
     @Mock private UnifiedMemberMapper mapper;
     @Mock private AuthorizationService authorizationService;
+    @Mock private com.waad.tba.modules.rbac.permission.EffectivePermissionService effectivePermissionService;
     @Mock private MemberFinancialSummaryService financialSummaryService;
     @Mock private JdbcTemplate jdbcTemplate;
     @Mock private AuditLogService auditLogService;
     @Mock private com.waad.tba.modules.eligibility.service.FamilyEligibilityService familyEligibilityService;
     @Mock private com.waad.tba.modules.member.service.MemberStatusTransitionService statusTransitionService;
     @Mock private com.waad.tba.modules.member.service.MemberPolicyResolver memberPolicyResolver;
+    @Mock private MemberEmployerResolver memberEmployerResolver;
     @Mock private MemberQueryAccessPolicy memberQueryAccessPolicy;
     @Mock private com.waad.tba.modules.member.security.MemberCommandAccessPolicy memberCommandAccessPolicy;
 
@@ -58,12 +60,14 @@ class UnifiedMemberPhotoSecurityTest {
                 cardNumberGenerator,
                 mapper,
                 authorizationService,
+                effectivePermissionService,
                 financialSummaryService,
                 jdbcTemplate,
                 auditLogService,
                 familyEligibilityService,
                 statusTransitionService,
                 memberPolicyResolver,
+                memberEmployerResolver,
                 memberQueryAccessPolicy,
                 memberCommandAccessPolicy);
     }

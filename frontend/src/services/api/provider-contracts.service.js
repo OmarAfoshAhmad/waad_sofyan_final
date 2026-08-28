@@ -323,9 +323,7 @@ export const activateContract = async (id) => {
  * @returns {Promise<Object>} Updated contract
  */
 export const suspendContract = async (id, reason = '') => {
-  const response = await axiosClient.post(`${BASE_URL}/${id}/suspend`, null, {
-    params: { reason }
-  });
+  const response = await axiosClient.post(`${BASE_URL}/${id}/suspend`, { reason });
   return unwrap(response);
 };
 
@@ -337,9 +335,7 @@ export const suspendContract = async (id, reason = '') => {
  * @returns {Promise<Object>} Updated contract
  */
 export const terminateContract = async (id, reason = '') => {
-  const response = await axiosClient.post(`${BASE_URL}/${id}/terminate`, null, {
-    params: { reason }
-  });
+  const response = await axiosClient.post(`${BASE_URL}/${id}/terminate`, { reason });
   return unwrap(response);
 };
 

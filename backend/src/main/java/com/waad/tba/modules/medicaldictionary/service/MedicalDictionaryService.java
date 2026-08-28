@@ -288,8 +288,16 @@ public class MedicalDictionaryService {
             String query,
             Pageable pageable) {
         String normalizedQuery = blankToNull(query);
-        Page<PriceListClassificationSession> page = priceListSessionRepository
-                .searchSummaries(status, normalizedQuery, pageable);
+        Page<PriceListClassificationSession> page;
+        if (normalizedQuery == null) {
+            page = status == null
+                    ? priceListSessionRepository.findAll(pageable)
+                    : priceListSessionRepository.findByStatus(status, pageable);
+        } else {
+            page = status == null
+                    ? priceListSessionRepository.searchByQuery(normalizedQuery, pageable)
+                    : priceListSessionRepository.searchByStatusAndQuery(status, normalizedQuery, pageable);
+        }
         return page.map(this::toPriceListSessionSummaryResponse);
     }
 

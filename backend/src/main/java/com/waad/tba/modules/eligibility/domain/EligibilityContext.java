@@ -187,9 +187,8 @@ public class EligibilityContext {
      * Get member's employer ID safely
      */
     public Long getMemberEmployerId() {
-        if (member == null) return null;
-        if (member.getEmployer() != null) {
-            return member.getEmployer().getId();
+        if (employer != null) {
+            return employer.getId();
         }
         return null;
     }

@@ -46,6 +46,7 @@ public class MemberPolicyResolver {
     private final MemberPolicyAssignmentRepository assignmentRepository;
     private final BenefitPolicyRepository policyRepository;
     private final com.waad.tba.modules.member.repository.MemberRepository memberRepository;
+    private final MemberEmployerResolver memberEmployerResolver;
 
     /**
      * Walks the cause chain looking for the constraint name. Postgres reports
@@ -71,10 +72,11 @@ public class MemberPolicyResolver {
      */
     @Transactional(readOnly = true)
     public Optional<BenefitPolicy> resolveFor(Member member, LocalDate serviceDate) {
+        requireServiceDate(serviceDate);
         if (member == null || member.getId() == null) {
             return Optional.empty();
         }
-        LocalDate effectiveDate = serviceDate != null ? serviceDate : LocalDate.now();
+        LocalDate effectiveDate = serviceDate;
 
         Optional<MemberPolicyAssignment> covering = assignmentRepository.findCovering(member.getId(), effectiveDate);
         if (covering.isPresent()) {
@@ -97,18 +99,15 @@ public class MemberPolicyResolver {
                 return Optional.empty();
             }
 
-            // The policy must belong to the member's employer. NOTE: this
-            // compares against the member's CURRENT employer, because employer
-            // history is not recorded anywhere -- there is no member_employer
-            // assignment table the way there is now for policies. For a member
-            // who has changed employer, a backdated question therefore checks
-            // the wrong employer. That gap is real and deliberate to leave
-            // visible rather than paper over with a guess; closing it needs the
-            // same temporal treatment policies just received.
-            Long memberEmployerId = member.getEmployer() != null ? member.getEmployer().getId() : null;
+            // Validate against the employer that owned the member ON THE SAME
+            // DATE. Comparing with members.employer_id would reject valid
+            // backdated claims after an employer transfer, or accept a policy
+            // from the wrong historical employer.
+            Long memberEmployerId = memberEmployerResolver.resolveFor(member, effectiveDate)
+                    .map(e -> e.getId()).orElse(null);
             Long policyEmployerId = resolved.getEmployer() != null ? resolved.getEmployer().getId() : null;
-            if (memberEmployerId != null && policyEmployerId != null
-                    && !memberEmployerId.equals(policyEmployerId)) {
+            if (memberEmployerId == null || policyEmployerId == null
+                    || !memberEmployerId.equals(policyEmployerId)) {
                 log.warn("[MemberPolicy][EMPLOYER_MISMATCH] memberId={} employer={} but assigned policy {} belongs "
                         + "to employer {} on {}", member.getId(), memberEmployerId, resolved.getId(),
                         policyEmployerId, effectiveDate);
@@ -126,12 +125,10 @@ public class MemberPolicyResolver {
         //     exactly the defect this class removes. Fail closed.
         //
         // (b) The member has NO assignment rows at all: not an answer, a data
-        //     gap. V171 backfilled one row for every member holding a policy,
-        //     so this should be unreachable; if it happens, some path created
-        //     a member without recording an assignment. Falling back to the
-        //     pointer keeps that member serviceable rather than silently
-        //     denying real coverage, but it is logged at WARN with a distinct
-        //     marker so the missing path is findable instead of invisible.
+        //     integrity gap. V171 backfilled existing rows and every live
+        //     creation path must record an assignment. The convenience pointer
+        //     is deliberately NOT a fallback: using it would grant coverage
+        //     without knowing when that policy started applying.
         boolean hasAnyAssignment = !assignmentRepository
                 .findByMemberIdOrderByAssignmentStartDateDesc(member.getId()).isEmpty();
         if (hasAnyAssignment) {
@@ -140,10 +137,9 @@ public class MemberPolicyResolver {
         }
 
         if (member.getBenefitPolicy() != null) {
-            log.warn("[MemberPolicy][MISSING_ASSIGNMENT] memberId={} has benefit_policy_id={} but no assignment row; "
-                    + "falling back to the pointer for {}. Some creation path is not recording assignments.",
+            log.error("[MemberPolicy][MISSING_ASSIGNMENT] memberId={} has benefit_policy_id={} but no assignment "
+                    + "covering {}. Refusing the dated decision; the pointer is display-only.",
                     member.getId(), member.getBenefitPolicy().getId(), effectiveDate);
-            return Optional.of(member.getBenefitPolicy());
         }
         return Optional.empty();
     }
@@ -155,11 +151,11 @@ public class MemberPolicyResolver {
      */
     @Transactional(readOnly = true)
     public Optional<MemberPolicyAssignment> resolveAssignmentFor(Member member, LocalDate serviceDate) {
+        requireServiceDate(serviceDate);
         if (member == null || member.getId() == null) {
             return Optional.empty();
         }
-        return assignmentRepository.findCovering(member.getId(),
-                serviceDate != null ? serviceDate : LocalDate.now());
+        return assignmentRepository.findCovering(member.getId(), serviceDate);
     }
 
     /**
@@ -169,10 +165,11 @@ public class MemberPolicyResolver {
      */
     @Transactional(readOnly = true)
     public BenefitPolicy resolveForOrFail(Member member, LocalDate serviceDate) {
+        requireServiceDate(serviceDate);
         return resolveFor(member, serviceDate).orElseThrow(() -> new BusinessRuleException(
                 "لا توجد وثيقة منافع سارية للمستفيد "
                         + (member != null ? member.getFullName() : "")
-                        + " بتاريخ الخدمة " + (serviceDate != null ? serviceDate : LocalDate.now())
+                        + " بتاريخ الخدمة " + serviceDate
                         + ". لا يمكن اتخاذ قرار مالي بدون وثيقة سارية في ذلك التاريخ."));
     }
 
@@ -195,28 +192,36 @@ public class MemberPolicyResolver {
     @Transactional(propagation = Propagation.REQUIRED)
     public MemberPolicyAssignment assignPolicy(Member member, BenefitPolicy policy, LocalDate effectiveFrom,
             String reason, PolicyAssignmentSource source, Long actingUserId) {
+        if (member == null || member.getId() == null) {
+            throw new BusinessRuleException("يجب حفظ المستفيد قبل تعيين وثيقة المنافع");
+        }
         if (policy == null) {
             throw new BusinessRuleException("لا يمكن تعيين وثيقة غير موجودة");
         }
         if (reason == null || reason.trim().isEmpty()) {
             throw new BusinessRuleException("سبب تعيين وثيقة المنافع إلزامي");
         }
-        LocalDate from = effectiveFrom != null ? effectiveFrom : LocalDate.now();
+        if (effectiveFrom == null) {
+            throw new BusinessRuleException("تاريخ سريان تعيين وثيقة المنافع إلزامي");
+        }
+        LocalDate from = effectiveFrom;
 
         // Serialize concurrent assignments for this member: without the lock,
         // two requests both read "no open assignment" (or both read the same
         // one) and both insert an open-ended row. The exclusion constraint
         // would still catch it, but as a raw constraint violation rather than
         // an orderly wait.
-        if (member.getId() != null) {
-            memberRepository.findByIdWithLock(member.getId());
-        }
+        Member lockedMember = memberRepository.findByIdWithLock(member.getId())
+                .orElseThrow(() -> new BusinessRuleException("المستفيد غير موجود"));
 
         Optional<MemberPolicyAssignment> open =
                 assignmentRepository.findByMemberIdAndAssignmentEndDateIsNull(member.getId());
         if (open.isPresent()) {
             MemberPolicyAssignment current = open.get();
             if (current.getPolicyId().equals(policy.getId())) {
+                lockedMember.setBenefitPolicy(policy);
+                memberRepository.saveAndFlush(lockedMember);
+                synchronizeCaller(member, lockedMember);
                 return current;
             }
             if (!from.isAfter(current.getAssignmentStartDate())) {
@@ -243,8 +248,8 @@ public class MemberPolicyResolver {
                     .assignmentReason(reason.trim())
                     .assignmentSource(source != null ? source : PolicyAssignmentSource.MANUAL)
                     .assignedBy(actingUserId)
-                    .memberFullName(member.getFullName())
-                    .memberCardNumber(member.getCardNumber())
+                    .memberFullName(lockedMember.getFullName())
+                    .memberCardNumber(lockedMember.getCardNumber())
                     .createdAt(LocalDateTime.now())
                     .build());
         } catch (DataIntegrityViolationException e) {
@@ -262,10 +267,33 @@ public class MemberPolicyResolver {
         // members.benefit_policy_id stays as a denormalized "current policy"
         // convenience pointer for list/detail screens. It is no longer the
         // source of truth for any dated decision -- resolveFor is.
-        member.setBenefitPolicy(policy);
+        lockedMember.setBenefitPolicy(policy);
+        memberRepository.saveAndFlush(lockedMember);
+        synchronizeCaller(member, lockedMember);
 
         log.info("[MemberPolicy] Assigned policy {} to member {} from {} (source={})",
                 policy.getId(), member.getId(), from, created.getAssignmentSource());
         return created;
+    }
+
+    private static void synchronizeCaller(Member caller, Member persisted) {
+        if (caller != persisted) {
+            caller.setBenefitPolicy(persisted.getBenefitPolicy());
+            caller.setVersion(persisted.getVersion());
+        }
+    }
+
+    /** See MemberEmployerResolver.restoreCurrentPointerAfterImport. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void restoreCurrentPointerAfterImport(Member member, BenefitPolicy policy) {
+        member.setBenefitPolicy(policy);
+        memberRepository.save(member);
+    }
+
+    private static void requireServiceDate(LocalDate serviceDate) {
+        if (serviceDate == null) {
+            throw new BusinessRuleException(
+                    "تاريخ الخدمة إلزامي لحل وثيقة المنافع، ولا يجوز استبداله بتاريخ اليوم");
+        }
     }
 }

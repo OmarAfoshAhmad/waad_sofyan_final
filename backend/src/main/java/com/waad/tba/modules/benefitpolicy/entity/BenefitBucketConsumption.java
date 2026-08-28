@@ -20,8 +20,8 @@ public class BenefitBucketConsumption {
      * something did.
      */
     public enum ReversalReason {
-        PREAUTH_RELEASE, PREAUTH_EXPIRY, PREAUTH_CANCELLATION,
-        CLAIM_REVERSAL, CLAIM_CORRECTION
+        PREAUTH_RELEASE, PREAUTH_EXPIRY, PREAUTH_CANCELLATION, PREAUTH_CONVERSION_RELEASE,
+        CLAIM_REVERSAL, CLAIM_CORRECTION, OPENING_CORRECTION
     }
 
     /**
@@ -64,6 +64,10 @@ public class BenefitBucketConsumption {
     @Builder.Default private LimitScope limitScope = LimitScope.BUCKET;
     @Column(name = "preauth_id") private Long preauthId;
     @Column(name = "preauth_line_id") private Long preauthLineId;
+    /** The dated enrollment decision under which a PREAUTH hold was posted. */
+    @Column(name = "member_policy_assignment_id") private Long memberPolicyAssignmentId;
+    /** The import batch that produced an OPENING_IMPORT movement, and only those. */
+    @Column(name = "opening_batch_id") private Long openingBatchId;
     @Column(name = "created_at", nullable = false, updatable = false) private LocalDateTime createdAt;
     @Column(name = "committed_at") private LocalDateTime committedAt;
     @Column(name = "reversed_at") private LocalDateTime reversedAt;

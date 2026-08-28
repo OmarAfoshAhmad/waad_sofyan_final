@@ -14,6 +14,7 @@ import org.springframework.stereotype.Repository;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import java.util.Collection;
 
 /**
  * Repository for PreAuthorization entity
@@ -154,6 +155,40 @@ public interface PreAuthorizationRepository extends JpaRepository<PreAuthorizati
                      "AND pa.status IN :statuses", countQuery = "SELECT COUNT(pa) FROM PreAuthorization pa WHERE pa.active = true AND pa.status IN :statuses")
        Page<PreAuthorization> findByStatusIn(@Param("statuses") List<PreAuthStatus> statuses, Pageable pageable);
 
+       @Query(value = "SELECT pa FROM PreAuthorization pa " +
+                     "LEFT JOIN FETCH pa.visit v " +
+                     "WHERE pa.active = true AND pa.status IN :statuses " +
+                     "AND pa.providerId = :providerId",
+              countQuery = "SELECT COUNT(pa) FROM PreAuthorization pa " +
+                     "WHERE pa.active = true AND pa.status IN :statuses " +
+                     "AND pa.providerId = :providerId")
+       Page<PreAuthorization> findByStatusInAndProviderId(
+                     @Param("statuses") List<PreAuthStatus> statuses,
+                     @Param("providerId") Long providerId,
+                     Pageable pageable);
+
+       @Query(value = "SELECT pa FROM PreAuthorization pa " +
+                     "LEFT JOIN FETCH pa.visit v " +
+                     "WHERE pa.active = true AND pa.status IN :statuses " +
+                     "AND pa.providerId IN :providerIds",
+              countQuery = "SELECT COUNT(pa) FROM PreAuthorization pa " +
+                     "WHERE pa.active = true AND pa.status IN :statuses " +
+                     "AND pa.providerId IN :providerIds")
+       Page<PreAuthorization> findByStatusInAndProviderIdIn(
+                     @Param("statuses") List<PreAuthStatus> statuses,
+                     @Param("providerIds") java.util.Collection<Long> providerIds,
+                     Pageable pageable);
+
+       @Query(value = "SELECT pa FROM PreAuthorization pa " +
+                     "LEFT JOIN FETCH pa.visit v JOIN Member m ON m.id = pa.memberId " +
+                     "WHERE pa.active = true AND pa.status IN :statuses AND m.employer.id = :employerId",
+              countQuery = "SELECT COUNT(pa) FROM PreAuthorization pa JOIN Member m ON m.id = pa.memberId " +
+                     "WHERE pa.active = true AND pa.status IN :statuses AND m.employer.id = :employerId")
+       Page<PreAuthorization> findByStatusInAndEmployerId(
+                     @Param("statuses") List<PreAuthStatus> statuses,
+                     @Param("employerId") Long employerId,
+                     Pageable pageable);
+
        /**
         * Count pre-authorizations by status list.
         */
@@ -209,6 +244,18 @@ public interface PreAuthorizationRepository extends JpaRepository<PreAuthorizati
                      @Param("currentDate") LocalDate currentDate,
                      @Param("expiryDate") LocalDate expiryDate);
 
+       @Query("SELECT pa FROM PreAuthorization pa WHERE pa.active = true " +
+                     "AND pa.status = 'APPROVED' " +
+                     "AND pa.expiryDate BETWEEN :currentDate AND :expiryDate " +
+                     "AND (:scopeKind = 'GLOBAL' " +
+                     "OR (:scopeKind = 'PROVIDERS' AND pa.providerId IN :scopeIds) " +
+                     "OR (:scopeKind = 'EMPLOYERS' AND EXISTS (SELECT m.id FROM Member m WHERE m.id = pa.memberId AND m.employer.id IN :scopeIds)))")
+       List<PreAuthorization> findPreAuthsExpiringWithinDaysScoped(
+                     @Param("currentDate") LocalDate currentDate,
+                     @Param("expiryDate") LocalDate expiryDate,
+                     @Param("scopeKind") String scopeKind,
+                     @Param("scopeIds") Collection<Long> scopeIds);
+
        // ==================== Statistics ====================
 
        /**
@@ -219,6 +266,14 @@ public interface PreAuthorizationRepository extends JpaRepository<PreAuthorizati
                      "GROUP BY pa.status")
        List<Object[]> countByStatus();
 
+       @Query("SELECT pa.status, COUNT(pa) FROM PreAuthorization pa " +
+                     "WHERE pa.active = true AND (:scopeKind = 'GLOBAL' " +
+                     "OR (:scopeKind = 'PROVIDERS' AND pa.providerId IN :scopeIds) " +
+                     "OR (:scopeKind = 'EMPLOYERS' AND EXISTS (SELECT m.id FROM Member m WHERE m.id = pa.memberId AND m.employer.id IN :scopeIds))) " +
+                     "GROUP BY pa.status")
+       List<Object[]> countByStatusScoped(@Param("scopeKind") String scopeKind,
+                     @Param("scopeIds") Collection<Long> scopeIds);
+
        /**
         * Sum approved amounts by status
         */
@@ -227,6 +282,14 @@ public interface PreAuthorizationRepository extends JpaRepository<PreAuthorizati
                      "WHERE pa.active = true " +
                      "GROUP BY pa.status")
        List<Object[]> sumAmountsByStatus();
+
+       @Query("SELECT pa.status, SUM(pa.approvedAmount), COUNT(pa) FROM PreAuthorization pa " +
+                     "WHERE pa.active = true AND (:scopeKind = 'GLOBAL' " +
+                     "OR (:scopeKind = 'PROVIDERS' AND pa.providerId IN :scopeIds) " +
+                     "OR (:scopeKind = 'EMPLOYERS' AND EXISTS (SELECT m.id FROM Member m WHERE m.id = pa.memberId AND m.employer.id IN :scopeIds))) " +
+                     "GROUP BY pa.status")
+       List<Object[]> sumAmountsByStatusScoped(@Param("scopeKind") String scopeKind,
+                     @Param("scopeIds") Collection<Long> scopeIds);
 
        /**
         * Get statistics for date range
@@ -262,6 +325,15 @@ public interface PreAuthorizationRepository extends JpaRepository<PreAuthorizati
                      "pa.createdAt ASC")
        List<PreAuthorization> findHighPriorityPending();
 
+       @Query("SELECT pa FROM PreAuthorization pa WHERE pa.active = true " +
+                     "AND pa.status = 'PENDING' AND pa.priority IN ('EMERGENCY', 'URGENT') " +
+                     "AND (:scopeKind = 'GLOBAL' " +
+                     "OR (:scopeKind = 'PROVIDERS' AND pa.providerId IN :scopeIds) " +
+                     "OR (:scopeKind = 'EMPLOYERS' AND EXISTS (SELECT m.id FROM Member m WHERE m.id = pa.memberId AND m.employer.id IN :scopeIds))) " +
+                     "ORDER BY CASE pa.priority WHEN 'EMERGENCY' THEN 1 WHEN 'URGENT' THEN 2 ELSE 3 END, pa.createdAt ASC")
+       List<PreAuthorization> findHighPriorityPendingScoped(@Param("scopeKind") String scopeKind,
+                     @Param("scopeIds") Collection<Long> scopeIds);
+
        // ==================== Search ====================
 
        /**
@@ -274,6 +346,21 @@ public interface PreAuthorizationRepository extends JpaRepository<PreAuthorizati
                      "OR LOWER(pa.diagnosisDescription) LIKE LOWER(CONCAT('%', :query, '%')) " +
                      "OR LOWER(pa.notes) LIKE LOWER(CONCAT('%', :query, '%')))")
        Page<PreAuthorization> search(@Param("query") String query, Pageable pageable);
+
+       @org.springframework.data.jpa.repository.EntityGraph(attributePaths = { "visit" })
+       @Query("SELECT pa FROM PreAuthorization pa WHERE pa.active = true " +
+                     "AND (:scopeKind = 'GLOBAL' " +
+                     "OR (:scopeKind = 'PROVIDERS' AND pa.providerId IN :scopeIds) " +
+                     "OR (:scopeKind = 'EMPLOYERS' AND EXISTS (SELECT m.id FROM Member m " +
+                     "WHERE m.id = pa.memberId AND m.employer.id IN :scopeIds))) " +
+                     "AND (LOWER(pa.referenceNumber) LIKE LOWER(CONCAT('%', :query, '%')) " +
+                     "OR LOWER(pa.preAuthNumber) LIKE LOWER(CONCAT('%', :query, '%')) " +
+                     "OR LOWER(pa.diagnosisDescription) LIKE LOWER(CONCAT('%', :query, '%')) " +
+                     "OR LOWER(pa.notes) LIKE LOWER(CONCAT('%', :query, '%')))")
+       Page<PreAuthorization> searchScoped(@Param("query") String query,
+                     @Param("scopeKind") String scopeKind,
+                     @Param("scopeIds") java.util.Collection<Long> scopeIds,
+                     Pageable pageable);
 
        // ==================== Find by Visit (NEW FLOW 2026-01-13) ====================
 
@@ -320,6 +407,19 @@ public interface PreAuthorizationRepository extends JpaRepository<PreAuthorizati
                      @Param("serviceCode") String serviceCode,
                      @Param("currentDate") LocalDate currentDate);
 
+       @Query("SELECT pa FROM PreAuthorization pa WHERE pa.active = true " +
+                     "AND pa.memberId = :memberId " +
+                     "AND pa.providerId IN :providerIds " +
+                     "AND pa.serviceCode = :serviceCode " +
+                     "AND pa.status = 'APPROVED' " +
+                     "AND (pa.expiryDate IS NULL OR pa.expiryDate >= :currentDate) " +
+                     "ORDER BY pa.createdAt DESC")
+       List<PreAuthorization> findValidByMemberServiceAndProviderIds(
+                     @Param("memberId") Long memberId,
+                     @Param("serviceCode") String serviceCode,
+                     @Param("providerIds") java.util.Set<Long> providerIds,
+                     @Param("currentDate") LocalDate currentDate);
+
        /**
         * Aggregate stats for all active records in a single DB round-trip.
         * Returns: [totalCount, sumContractPrice, sumApprovedAmount(APPROVED only)]
@@ -331,6 +431,14 @@ public interface PreAuthorizationRepository extends JpaRepository<PreAuthorizati
                      "FROM PreAuthorization pa WHERE pa.active = true")
        Object[] getActiveSummary();
 
+       @Query("SELECT COUNT(pa), COALESCE(SUM(pa.contractPrice), 0), " +
+                     "COALESCE(SUM(CASE WHEN pa.status = 'APPROVED' THEN pa.approvedAmount ELSE null END), 0) " +
+                     "FROM PreAuthorization pa WHERE pa.active = true AND (:scopeKind = 'GLOBAL' " +
+                     "OR (:scopeKind = 'PROVIDERS' AND pa.providerId IN :scopeIds) " +
+                     "OR (:scopeKind = 'EMPLOYERS' AND EXISTS (SELECT m.id FROM Member m WHERE m.id = pa.memberId AND m.employer.id IN :scopeIds)))")
+       Object[] getActiveSummaryScoped(@Param("scopeKind") String scopeKind,
+                     @Param("scopeIds") Collection<Long> scopeIds);
+
        /**
         * Find all active pre-authorizations from a start date (for trend calculation).
         * Replaces findAll().stream().filter(date range) in
@@ -340,6 +448,15 @@ public interface PreAuthorizationRepository extends JpaRepository<PreAuthorizati
                      "AND pa.requestDate >= :startDate " +
                      "ORDER BY pa.requestDate ASC")
        List<PreAuthorization> findActiveFromDate(@Param("startDate") LocalDate startDate);
+
+       @Query("SELECT pa FROM PreAuthorization pa WHERE pa.active = true " +
+                     "AND pa.requestDate >= :startDate AND (:scopeKind = 'GLOBAL' " +
+                     "OR (:scopeKind = 'PROVIDERS' AND pa.providerId IN :scopeIds) " +
+                     "OR (:scopeKind = 'EMPLOYERS' AND EXISTS (SELECT m.id FROM Member m WHERE m.id = pa.memberId AND m.employer.id IN :scopeIds))) " +
+                     "ORDER BY pa.requestDate ASC")
+       List<PreAuthorization> findActiveFromDateScoped(@Param("startDate") LocalDate startDate,
+                     @Param("scopeKind") String scopeKind,
+                     @Param("scopeIds") Collection<Long> scopeIds);
 
        /**
         * Provider-level aggregation for dashboard top-providers widget.
@@ -353,6 +470,15 @@ public interface PreAuthorizationRepository extends JpaRepository<PreAuthorizati
                      "GROUP BY pa.providerId " +
                      "ORDER BY COUNT(pa) DESC")
        List<Object[]> getActiveProviderStats();
+
+       @Query("SELECT pa.providerId, COUNT(pa), " +
+                     "COALESCE(SUM(CASE WHEN pa.status = 'APPROVED' THEN pa.approvedAmount ELSE null END), 0) " +
+                     "FROM PreAuthorization pa WHERE pa.active = true AND (:scopeKind = 'GLOBAL' " +
+                     "OR (:scopeKind = 'PROVIDERS' AND pa.providerId IN :scopeIds) " +
+                     "OR (:scopeKind = 'EMPLOYERS' AND EXISTS (SELECT m.id FROM Member m WHERE m.id = pa.memberId AND m.employer.id IN :scopeIds))) " +
+                     "GROUP BY pa.providerId ORDER BY COUNT(pa) DESC")
+       List<Object[]> getActiveProviderStatsScoped(@Param("scopeKind") String scopeKind,
+                     @Param("scopeIds") Collection<Long> scopeIds);
 
        @Query("SELECT DISTINCT p.memberId FROM PreAuthorization p WHERE p.memberId IN :memberIds AND p.active = true")
        List<Long> findMemberIdsWithPreAuths(@Param("memberIds") java.util.Collection<Long> memberIds);

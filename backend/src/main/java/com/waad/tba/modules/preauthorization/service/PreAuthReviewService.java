@@ -8,8 +8,11 @@ import com.waad.tba.modules.preauthorization.entity.PreAuthorization.PreAuthStat
 import com.waad.tba.modules.preauthorization.entity.PreAuthorizationLine;
 import com.waad.tba.modules.preauthorization.entity.PreAuthorizationLine.LineDecisionStatus;
 import com.waad.tba.modules.preauthorization.entity.PreAuthorizationLine.PriceVarianceStatus;
+import com.waad.tba.modules.preauthorization.entity.PreauthDecisionSnapshot;
+import com.waad.tba.modules.preauthorization.entity.PreauthLineSnapshot;
 import com.waad.tba.modules.preauthorization.repository.PreAuthorizationLineRepository;
 import com.waad.tba.modules.preauthorization.repository.PreAuthorizationRepository;
+import com.waad.tba.modules.preauthorization.repository.PreauthLineSnapshotRepository;
 import com.waad.tba.security.AuthorizationService;
 import com.waad.tba.modules.rbac.entity.User;
 import com.waad.tba.modules.claim.service.ReviewerProviderIsolationService;
@@ -23,6 +26,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 /**
  * خدمة مراجعة الموافقات المسبقة على مستوى سطر الخدمة.
@@ -47,6 +51,8 @@ public class PreAuthReviewService {
     private final PreAuthorizationAuditService auditService;
     private final AuthorizationService authorizationService;
     private final ReviewerProviderIsolationService reviewerIsolationService;
+    private final PreAuthReservationLedgerService reservationLedgerService;
+    private final PreauthLineSnapshotRepository lineSnapshotRepository;
 
     // ==================== قرار على مستوى سطر واحد ====================
 
@@ -85,7 +91,16 @@ public class PreAuthReviewService {
         BigDecimal previousApprovedAmount = line.getApprovedAmount();
         LineDecisionStatus previousDecisionStatus = line.getDecisionStatus();
 
-        // ── 5. تطبيق القرار ───────────────────────────────────────────────────
+        // ── 4.5 المصدر الرسمي لقرار السطر ────────────────────────────────────
+        // reviewDecision/approvedQuantity/explicitRejectedAmount هي الحقول
+        // الوحيدة التي يقرأها المحرك المالي الحقيقي
+        // (PreAuthorizationDecisionBuilder). ما دونها في هذه الدالة
+        // (decisionStatus/approvedAmount/companyShare/patientShare) عرض فقط،
+        // وتُعاد كتابته من نتيجة المحرك الفعلية بعد finalizeReview -- وليس
+        // مصدراً مستقلاً للقرار المالي.
+        applyCanonicalDecision(line, dto);
+
+        // ── 5. تطبيق القرار (عرض فقط) ────────────────────────────────────────
         line.setDecisionStatus(dto.getDecisionStatus());
         line.setDecisionNotes(dto.getDecisionNotes());
         line.setDecisionReasonCode(dto.getDecisionReasonCode());
@@ -161,11 +176,63 @@ public class PreAuthReviewService {
         return line;
     }
 
+    /**
+     * يترجم قرار الشاشة (decisionStatus + مبلغ معتمد اختياري) إلى الحقول
+     * الكنسية التي يقرأها {@link PreAuthorizationDecisionBuilder}. البُعد
+     * المستخدَم هنا هو المبلغ لا الكمية -- المراجع لا يُدخل كميات، فتبقى
+     * approvedQuantity مرتبطة بـrequestedQuantity دائماً، والتمييز الفعلي
+     * (كامل/جزئي/مرفوض) يحمله reviewDecision وexplicitRejectedAmount.
+     */
+    private void applyCanonicalDecision(PreAuthorizationLine line, PreAuthLineDecisionDto dto) {
+        int requestedQuantity = line.getRequestedQuantity() != null ? line.getRequestedQuantity() : 1;
+        BigDecimal requested = line.getRequestedAmount() != null ? line.getRequestedAmount() : BigDecimal.ZERO;
+
+        switch (dto.getDecisionStatus()) {
+            case REJECTED -> {
+                line.setReviewDecision(PreAuthorizationLine.ReviewDecision.REJECT);
+                line.setApprovedQuantity(0);
+                line.setExplicitRejectedAmount(BigDecimal.ZERO);
+                line.setRejectionReason(dto.getDecisionNotes());
+            }
+            case PARTIALLY_APPROVED -> {
+                BigDecimal approved = dto.getApprovedAmount() != null ? dto.getApprovedAmount() : BigDecimal.ZERO;
+                BigDecimal rejected = requested.subtract(approved);
+                if (rejected.signum() < 0) {
+                    throw new BusinessRuleException("المبلغ المعتمد للسطر يتجاوز المبلغ المطلوب");
+                }
+                line.setReviewDecision(PreAuthorizationLine.ReviewDecision.PARTIALLY_APPROVE);
+                line.setApprovedQuantity(requestedQuantity);
+                line.setExplicitRejectedAmount(rejected);
+                line.setRejectionReason(dto.getDecisionNotes());
+            }
+            case APPROVED -> {
+                line.setReviewDecision(PreAuthorizationLine.ReviewDecision.APPROVE);
+                line.setApprovedQuantity(requestedQuantity);
+                line.setExplicitRejectedAmount(BigDecimal.ZERO);
+            }
+            case INFO_REQUESTED -> {
+                // Not a financial decision yet -- leave the canonical fields at
+                // "unreviewed" rather than inventing one. finalizeReview's own
+                // PENDING guard is what actually gates progress; this state
+                // just isn't final.
+            }
+            default -> throw new BusinessRuleException("حالة قرار غير مدعومة: " + dto.getDecisionStatus());
+        }
+    }
+
     // ==================== إنهاء المراجعة النهائية ====================
 
     /**
      * يُنهي المراجعة بعد أن يُقرر المراجع على جميع السطور.
-     * يحسب الإجماليات النهائية ويُحدّث وضع الموافقة المسبقة.
+     *
+     * لم تعد الإجماليات تُحسب هنا يدوياً من decisionStatus/approvedAmount --
+     * تلك حقول عرض فقط الآن. القرار المالي الحقيقي (بما فيه فحص كل وعاء
+     * وسقف، وحجزه فعلياً في الدفتر) يأتي حصراً من
+     * {@link PreAuthReservationLedgerService#approveAndReserve}، وهو ما يجعل
+     * هذا المسار و`/approve` ينتهيان في نفس المحرك. لا تتحول الحالة إلى
+     * APPROVED/PARTIALLY_APPROVED إلا بعد نجاح الحجز في نفس المعاملة --
+     * approveAndReserve تكتب الحالة قبل flush الدفتر، فإخفاق الحجز يُرجع
+     * المعاملة كلها ولا تبقى APPROVED بلا حجز.
      *
      * @param preAuthId معرّف الموافقة المسبقة
      * @param reviewer  اسم المراجع من JWT
@@ -186,59 +253,74 @@ public class PreAuthReviewService {
                     "لا يمكن إنهاء المراجعة. توجد " + pendingCount + " سطور لم يُتخذ قرار بشأنها بعد.");
         }
 
-        // ── 2. حساب الإجماليات ────────────────────────────────────────────────
-        BigDecimal totalApproved = lines.stream()
-                .filter(l -> l.getDecisionStatus() != LineDecisionStatus.REJECTED)
-                .map(l -> l.getApprovedAmount() != null ? l.getApprovedAmount() : BigDecimal.ZERO)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        BigDecimal totalPatientShare = lines.stream()
-                .map(l -> l.getPatientShare() != null ? l.getPatientShare() : BigDecimal.ZERO)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        BigDecimal totalCompanyShare = lines.stream()
-                .map(l -> l.getCompanyShare() != null ? l.getCompanyShare() : BigDecimal.ZERO)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        // ── 3. تحديد وضع الموافقة النهائية ──────────────────────────────────
-        boolean allApproved = lines.stream()
-                .allMatch(l -> l.getDecisionStatus() == LineDecisionStatus.APPROVED);
         boolean allRejected = lines.stream()
                 .allMatch(l -> l.getDecisionStatus() == LineDecisionStatus.REJECTED);
 
-        PreAuthStatus finalStatus;
-        if (allApproved) {
-            finalStatus = PreAuthStatus.APPROVED;
-        } else if (allRejected) {
-            finalStatus = PreAuthStatus.REJECTED;
-        } else {
-            finalStatus = PreAuthStatus.PARTIALLY_APPROVED;
+        if (allRejected) {
+            // لا شيء لحجزه -- approveAndReserve ترفض أصلاً في هذه الحالة
+            // بعينها (outcome=REJECTED)، فلا داعٍ لاستدعائها.
+            return rejectEntirely(preAuth, lines, reviewer);
         }
 
-        // ── 4. تحديث الموافقة المسبقة ────────────────────────────────────────
-        preAuth.setStatus(finalStatus);
-        preAuth.setApprovedAmount(totalApproved);
-        preAuth.setApprovedTotalAmount(totalApproved);
-        preAuth.setPatientShare(totalPatientShare);
-        preAuth.setCompanyShare(totalCompanyShare);
+        PreauthDecisionSnapshot snapshot = reservationLedgerService.approveAndReserve(preAuthId, null, reviewer);
+        resyncLinesFromSnapshot(lines, snapshot.getId());
+
+        preAuth = preAuthRepo.findById(preAuthId).orElseThrow();
+
+        auditService.logApprove(preAuthId, preAuth.getReferenceNumber(), reviewer,
+                "إنهاء المراجعة: " + preAuth.getStatus().getArabicLabel()
+                        + " | الإجمالي المعتمد: " + preAuth.getApprovedTotalAmount() + " د.ل");
+
+        log.info("✅ [REVIEW] Review finalized: preAuthId={}, status={}, totalApproved={}",
+                preAuthId, preAuth.getStatus(), preAuth.getApprovedTotalAmount());
+
+        return preAuth;
+    }
+
+    private PreAuthorization rejectEntirely(PreAuthorization preAuth, List<PreAuthorizationLine> lines,
+            String reviewer) {
+        preAuth.setStatus(PreAuthStatus.REJECTED);
+        preAuth.setApprovedAmount(BigDecimal.ZERO);
+        preAuth.setApprovedTotalAmount(BigDecimal.ZERO);
+        preAuth.setPatientShare(BigDecimal.ZERO);
+        preAuth.setCompanyShare(BigDecimal.ZERO);
+        preAuth.setReservedAmount(BigDecimal.ZERO);
         preAuth.setApprovedBy(reviewer);
         preAuth.setApprovedAt(LocalDateTime.now());
         preAuth.setUpdatedBy(reviewer);
-
-        // حساب reservedAmount = companyShare للمتابعة (لا يُخصم من الحد)
-        preAuth.setReservedAmount(totalCompanyShare);
-
         preAuthRepo.save(preAuth);
 
-        // ── 5. Audit ──────────────────────────────────────────────────────────
-        auditService.logApprove(preAuthId, preAuth.getReferenceNumber(), reviewer,
-                "إنهاء المراجعة: " + finalStatus.getArabicLabel()
-                        + " | الإجمالي المعتمد: " + totalApproved + " د.ل");
+        auditService.logApprove(preAuth.getId(), preAuth.getReferenceNumber(), reviewer,
+                "إنهاء المراجعة: " + PreAuthStatus.REJECTED.getArabicLabel() + " | كل السطور مرفوضة");
 
-        log.info("✅ [REVIEW] Review finalized: preAuthId={}, status={}, totalApproved={}",
-                preAuthId, finalStatus, totalApproved);
-
+        log.info("✅ [REVIEW] Review finalized as fully rejected: preAuthId={}", preAuth.getId());
         return preAuth;
+    }
+
+    /**
+     * الحقول القديمة (approvedAmount/companyShare/patientShare/decisionStatus)
+     * تصبح عرضاً لِما قرره المحرك فعلاً، لا حساباً موازياً له -- تُقرأ من
+     * PreauthLineSnapshot الذي approveAndReserve كتبه للتو، وليس من إدخال
+     * المراجع الخام.
+     */
+    private void resyncLinesFromSnapshot(List<PreAuthorizationLine> lines, Long decisionSnapshotId) {
+        Map<Long, PreauthLineSnapshot> byLineId = lineSnapshotRepository
+                .findByDecisionSnapshotId(decisionSnapshotId).stream()
+                .collect(java.util.stream.Collectors.toMap(PreauthLineSnapshot::getPreauthLineId, s -> s));
+
+        for (PreAuthorizationLine line : lines) {
+            PreauthLineSnapshot snap = byLineId.get(line.getId());
+            if (snap == null) continue; // لا أثر مالي لهذا السطر (مثلاً رفض صريح لم يُنتج حركة)
+            line.setApprovedAmount(snap.getApprovedAmount());
+            line.setCompanyShare(snap.getCompanyShare());
+            line.setPatientShare(snap.getPatientShare());
+            line.setDecisionStatus(switch (snap.getReviewDecision()) {
+                case "REJECT" -> LineDecisionStatus.REJECTED;
+                case "PARTIALLY_APPROVE" -> LineDecisionStatus.PARTIALLY_APPROVED;
+                default -> LineDecisionStatus.APPROVED;
+            });
+            lineRepo.save(line);
+        }
     }
 
     // ==================== بدء مراجعة (PENDING → UNDER_REVIEW) ====================

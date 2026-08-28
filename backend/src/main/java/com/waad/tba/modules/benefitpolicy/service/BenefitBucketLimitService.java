@@ -25,7 +25,11 @@ public class BenefitBucketLimitService {
     public List<LimitSnapshot> findApplicable(Long ruleId, Long memberId, LocalDate serviceDate,
                                                EncounterType encounterType, Long excludeClaimId) {
         if (ruleId == null || memberId == null) return List.of();
-        LocalDate date = serviceDate == null ? LocalDate.now() : serviceDate;
+        if (serviceDate == null) {
+            throw new IllegalArgumentException(
+                    "تاريخ الخدمة إلزامي لحساب السقوف، ولا يجوز استبداله بتاريخ اليوم");
+        }
+        LocalDate date = serviceDate;
         Map<Long, BenefitLimitBucket> buckets = new LinkedHashMap<>();
         Set<Long> directlyLinkedBucketIds = new HashSet<>();
         for (BenefitRuleBucket link : ruleBucketRepository.findByRuleIdOrderByConsumptionOrder(ruleId)) {

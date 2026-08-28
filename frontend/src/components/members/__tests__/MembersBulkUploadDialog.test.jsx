@@ -6,8 +6,14 @@ import MembersBulkUploadDialog from '../MembersBulkUploadDialog';
 import { executeImport, previewImport } from 'services/api/unified-members.service';
 
 const enqueueSnackbar = vi.fn();
+const authState = vi.hoisted(() => ({
+  user: { role: 'DATA_ENTRY', permissions: ['MEMBER_IMPORT'] }
+}));
 
 vi.mock('notistack', () => ({ useSnackbar: () => ({ enqueueSnackbar }) }));
+vi.mock('hooks/useAuth', () => ({
+  default: () => ({ user: authState.user })
+}));
 vi.mock('services/api/unified-members.service', () => ({
   downloadTemplate: vi.fn(), previewImport: vi.fn(), executeImport: vi.fn()
 }));
@@ -22,12 +28,27 @@ vi.mock('components/tba/EmployerFilterSelector', () => ({
 describe('MembersBulkUploadDialog import contract', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    authState.user = { role: 'DATA_ENTRY', permissions: ['MEMBER_IMPORT'] };
     previewImport.mockResolvedValue({
       data: { batchId: 'preview-1', headerRowNumber: 2, totalRows: 3, validRows: 3, invalidRows: 0, canProceed: true }
     });
     executeImport.mockResolvedValue({
       data: { success: true, summary: { totalRows: 3, created: 3, skipped: 0, rejected: 0, failed: 0 } }
     });
+  });
+
+  it('hides destructive cleanup unless the effective permission explicitly grants it', () => {
+    render(<MembersBulkUploadDialog open onClose={vi.fn()} />);
+
+    expect(screen.queryByRole('checkbox', { name: /مسح المستفيدين القدامى/ })).not.toBeInTheDocument();
+  });
+
+  it('shows destructive cleanup when DANGER_ZONE_EXECUTE is effectively granted', () => {
+    authState.user = { role: 'DATA_ENTRY', permissions: ['MEMBER_IMPORT', 'DANGER_ZONE_EXECUTE'] };
+
+    render(<MembersBulkUploadDialog open onClose={vi.fn()} />);
+
+    expect(screen.getByRole('checkbox', { name: /مسح المستفيدين القدامى/ })).toBeInTheDocument();
   });
 
   it('requires preview before execute and carries the preview identity into execution', async () => {
@@ -43,7 +64,7 @@ describe('MembersBulkUploadDialog import contract', () => {
     await user.click(screen.getByRole('button', { name: 'معاينة الملف' }));
     await screen.findByText('نتيجة المعاينة قبل التنفيذ');
 
-    expect(previewImport).toHaveBeenCalledWith(file, { employerId: 77 });
+    expect(previewImport).toHaveBeenCalledWith(file, { employerId: 77, clearOldMembers: false });
     expect(executeImport).not.toHaveBeenCalled();
 
     await user.click(screen.getByRole('button', { name: 'تأكيد وتنفيذ الاستيراد' }));

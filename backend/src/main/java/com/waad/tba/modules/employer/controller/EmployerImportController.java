@@ -32,12 +32,12 @@ import java.nio.charset.StandardCharsets;
 @RequiredArgsConstructor
 @Tag(name = "Employer Bulk Import", description = "Template download and two-stage bulk import of employers")
 @SecurityRequirement(name = "bearer-jwt")
-@PreAuthorize("hasRole('SUPER_ADMIN')")
 public class EmployerImportController {
 
     private final EmployerImportService importService;
 
     @GetMapping("/template")
+    @PreAuthorize("@permissionGuard.has('EMPLOYER_MANAGE')")
     @Operation(summary = "Download the employer bulk import template")
     public ResponseEntity<byte[]> downloadTemplate() throws IOException {
         byte[] content = importService.generateTemplate();
@@ -45,6 +45,7 @@ public class EmployerImportController {
     }
 
     @PostMapping(value = "/preview", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("@permissionGuard.has('EMPLOYER_MANAGE')")
     @Operation(summary = "Preview & validate an employer import file without persisting anything")
     public ResponseEntity<ApiResponse<EmployerImportPreviewResultDto>> preview(@RequestParam("file") MultipartFile file) {
         EmployerImportPreviewResultDto result = importService.preview(file);
@@ -54,6 +55,7 @@ public class EmployerImportController {
     }
 
     @PostMapping("/confirm")
+    @PreAuthorize("@permissionGuard.has('EMPLOYER_MANAGE')")
     @Operation(summary = "Apply the valid rows from a previously previewed import session")
     public ResponseEntity<ApiResponse<EmployerImportConfirmResultDto>> confirm(@RequestParam("sessionId") String sessionId) {
         EmployerImportConfirmResultDto result = importService.confirm(sessionId);
@@ -62,6 +64,7 @@ public class EmployerImportController {
     }
 
     @GetMapping("/errors/{sessionId}")
+    @PreAuthorize("@permissionGuard.has('EMPLOYER_MANAGE')")
     @Operation(summary = "Download an Excel report of the rows that failed validation")
     public ResponseEntity<byte[]> downloadErrorReport(@PathVariable String sessionId) throws IOException {
         byte[] content = importService.generateErrorReport(sessionId);

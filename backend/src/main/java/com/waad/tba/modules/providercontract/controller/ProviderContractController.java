@@ -21,6 +21,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.waad.tba.common.dto.ApiResponse;
+import com.waad.tba.common.dto.ReasonRequest;
 import com.waad.tba.modules.providercontract.dto.ProviderContractCreateDto;
 import com.waad.tba.modules.providercontract.dto.ProviderContractPricingItemCreateDto;
 import com.waad.tba.modules.providercontract.dto.ProviderContractPricingItemResponseDto;
@@ -74,7 +75,7 @@ public class ProviderContractController {
      * List all contracts (paginated)
      */
     @GetMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'DATA_ENTRY', 'MEDICAL_REVIEWER')")
+    @PreAuthorize("@providerContractAccessGuard.canReadGlobal()")
     @Operation(summary = "List all contracts", description = "Get paginated list of all provider contracts. Internal TPA staff only — contracts hold cross-provider negotiated rates.")
     public ResponseEntity<ApiResponse<Page<ProviderContractResponseDto>>> getAll(
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
@@ -89,7 +90,7 @@ public class ProviderContractController {
      * List soft-deleted contracts (paginated)
      */
     @GetMapping("/deleted")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
+    @PreAuthorize("@providerContractAccessGuard.canReadGlobal()")
     @Operation(summary = "List deleted contracts", description = "Get paginated list of soft-deleted provider contracts")
     public ResponseEntity<ApiResponse<Page<ProviderContractResponseDto>>> getDeleted(
             @PageableDefault(size = 20, sort = "updatedAt", direction = Sort.Direction.DESC) Pageable pageable) {
@@ -104,7 +105,7 @@ public class ProviderContractController {
      * Search contracts
      */
     @GetMapping("/search")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'MEDICAL_REVIEWER')")
+    @PreAuthorize("@providerContractAccessGuard.canReadGlobal()")
     @Operation(summary = "Search contracts", description = "Search contracts by code or provider name")
     public ResponseEntity<ApiResponse<Page<ProviderContractResponseDto>>> search(
             @Parameter(description = "Search query") @RequestParam(name = "q", required = false) String q,
@@ -121,7 +122,7 @@ public class ProviderContractController {
     }
 
     @GetMapping("/discount-percentages")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'MEDICAL_REVIEWER')")
+    @PreAuthorize("@providerContractAccessGuard.canReadGlobal()")
     public ResponseEntity<ApiResponse<List<java.math.BigDecimal>>> getDiscountPercentages() {
         return ResponseEntity.ok(ApiResponse.success(
                 "Discount percentages retrieved successfully",
@@ -133,7 +134,7 @@ public class ProviderContractController {
      * Get contract statistics
      */
     @GetMapping("/stats")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'MEDICAL_REVIEWER')")
+    @PreAuthorize("@providerContractAccessGuard.canReadGlobal()")
     @Operation(summary = "Get statistics", description = "Get contract statistics summary")
     public ResponseEntity<ApiResponse<ProviderContractStatsDto>> getStats() {
         log.debug("REST request to get contract statistics");
@@ -146,7 +147,7 @@ public class ProviderContractController {
      * Get contracts expiring within N days
      */
     @GetMapping("/expiring")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'MEDICAL_REVIEWER')")
+    @PreAuthorize("@providerContractAccessGuard.canReadGlobal()")
     @Operation(summary = "Get expiring contracts", description = "List contracts expiring within specified days")
     public ResponseEntity<ApiResponse<List<ProviderContractResponseDto>>> getExpiring(
             @Parameter(description = "Days until expiration") @RequestParam(name = "days", defaultValue = "30") int days) {
@@ -161,7 +162,7 @@ public class ProviderContractController {
      * Get contracts by status
      */
     @GetMapping("/status/{status}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'MEDICAL_REVIEWER')")
+    @PreAuthorize("@providerContractAccessGuard.canReadGlobal()")
     @Operation(summary = "Get contracts by status", description = "List contracts filtered by status")
     public ResponseEntity<ApiResponse<Page<ProviderContractResponseDto>>> getByStatus(
             @Parameter(description = "Contract status") @PathVariable("status") ContractStatus status,
@@ -177,7 +178,7 @@ public class ProviderContractController {
      * Get contract by ID
      */
     @GetMapping("/{id:\\d+}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'MEDICAL_REVIEWER')")
+    @PreAuthorize("@providerContractAccessGuard.canReadContract(#id)")
     @Operation(summary = "Get contract by ID", description = "Get detailed contract information")
     public ResponseEntity<ApiResponse<ProviderContractResponseDto>> getById(
             @Parameter(description = "Contract ID") @PathVariable("id") Long id) {
@@ -192,7 +193,7 @@ public class ProviderContractController {
      * Get contract by code
      */
     @GetMapping("/code/{code}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'MEDICAL_REVIEWER')")
+    @PreAuthorize("@providerContractAccessGuard.canReadContractCode(#code)")
     @Operation(summary = "Get contract by code", description = "Get contract by contract code")
     public ResponseEntity<ApiResponse<ProviderContractResponseDto>> getByCode(
             @Parameter(description = "Contract code") @PathVariable("code") String code) {
@@ -207,7 +208,7 @@ public class ProviderContractController {
      * Get contracts for a provider
      */
     @GetMapping("/provider/{providerId}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'MEDICAL_REVIEWER')")
+    @PreAuthorize("@providerContractAccessGuard.canReadProvider(#providerId)")
     @Operation(summary = "Get contracts by provider", description = "List all contracts for a provider")
     public ResponseEntity<ApiResponse<Page<ProviderContractResponseDto>>> getByProvider(
             @Parameter(description = "Provider ID") @PathVariable("providerId") Long providerId,
@@ -223,7 +224,7 @@ public class ProviderContractController {
      * Get active contract for a provider
      */
     @GetMapping("/provider/{providerId}/active")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'MEDICAL_REVIEWER')")
+    @PreAuthorize("@providerContractAccessGuard.canReadProvider(#providerId)")
     @Operation(summary = "Get active contract", description = "Get the active contract for a provider")
     public ResponseEntity<ApiResponse<ProviderContractResponseDto>> getActiveByProvider(
             @Parameter(description = "Provider ID") @PathVariable("providerId") Long providerId) {
@@ -246,7 +247,7 @@ public class ProviderContractController {
      * Direct MedicalCategory queries are NOT allowed for this purpose
      */
     @GetMapping("/provider/{providerId}/categories")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
+    @PreAuthorize("@providerContractAccessGuard.canReadProvider(#providerId)")
     @Operation(summary = "Get contracted categories", description = "Get medical categories available in provider's active contract. Use this for claims/preauth creation.")
     public ResponseEntity<ApiResponse<List<ProviderContractPricingItemService.ContractCategoryDto>>> getContractedCategories(
             @Parameter(description = "Provider ID") @PathVariable("providerId") Long providerId) {
@@ -267,7 +268,7 @@ public class ProviderContractController {
      * Direct MedicalService queries are NOT allowed for this purpose
      */
     @GetMapping("/provider/{providerId}/categories/{categoryId}/services")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
+    @PreAuthorize("@providerContractAccessGuard.canReadProvider(#providerId)")
     @Operation(summary = "Get contracted services by category", description = "Get medical services for a category in provider's active contract. Use this for claims/preauth creation.")
     public ResponseEntity<ApiResponse<List<ProviderContractPricingItemService.ContractServiceDto>>> getContractedServicesByCategory(
             @Parameter(description = "Provider ID") @PathVariable("providerId") Long providerId,
@@ -286,7 +287,7 @@ public class ProviderContractController {
      * filter)
      */
     @GetMapping("/provider/{providerId}/services")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF', 'ACCOUNTANT', 'MEDICAL_REVIEWER')")
+    @PreAuthorize("@providerContractAccessGuard.canReadProvider(#providerId)")
     @Operation(summary = "Get all contracted services", description = "Get all medical services in provider's active contract.")
     public ResponseEntity<ApiResponse<List<ProviderContractPricingItemService.ContractServiceDto>>> getAllContractedServices(
             @Parameter(description = "Provider ID") @PathVariable("providerId") Long providerId) {
@@ -303,7 +304,7 @@ public class ProviderContractController {
      * Create new contract
      */
     @PostMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
+    @PreAuthorize("@providerContractAccessGuard.canManageProvider(#dto.providerId)")
     @Operation(summary = "Create contract", description = "Create a new provider contract")
     public ResponseEntity<ApiResponse<ProviderContractResponseDto>> create(
             @Valid @RequestBody ProviderContractCreateDto dto) {
@@ -319,7 +320,7 @@ public class ProviderContractController {
      * Update contract
      */
     @PutMapping("/{id:\\d+}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
+    @PreAuthorize("@providerContractAccessGuard.canManageContract(#id)")
     @Operation(summary = "Update contract", description = "Update an existing contract")
     public ResponseEntity<ApiResponse<ProviderContractResponseDto>> update(
             @Parameter(description = "Contract ID") @PathVariable("id") Long id,
@@ -335,7 +336,7 @@ public class ProviderContractController {
      * Delete contract (soft delete)
      */
     @DeleteMapping("/{id:\\d+}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
+    @PreAuthorize("@providerContractAccessGuard.canManageContract(#id)")
     @Operation(summary = "Delete contract", description = "Soft delete a contract")
     public ResponseEntity<ApiResponse<Void>> delete(
             @Parameter(description = "Contract ID") @PathVariable("id") Long id) {
@@ -350,7 +351,7 @@ public class ProviderContractController {
      * Restore a soft-deleted contract
      */
     @PutMapping("/{id:\\d+}/restore")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
+    @PreAuthorize("@providerContractAccessGuard.canManageContract(#id)")
     @Operation(summary = "Restore contract", description = "Restore a soft-deleted provider contract")
     public ResponseEntity<ApiResponse<ProviderContractResponseDto>> restore(
             @Parameter(description = "Contract ID") @PathVariable("id") Long id) {
@@ -365,7 +366,7 @@ public class ProviderContractController {
      * Permanently delete a soft-deleted contract
      */
     @DeleteMapping("/{id:\\d+}/hard")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
+    @PreAuthorize("@providerContractAccessGuard.canManageContract(#id) and @permissionGuard.has('DANGER_ZONE_EXECUTE')")
     @Operation(summary = "Hard delete contract", description = "Permanently delete a soft-deleted provider contract")
     public ResponseEntity<ApiResponse<Void>> hardDelete(
             @Parameter(description = "Contract ID") @PathVariable("id") Long id) {
@@ -384,7 +385,7 @@ public class ProviderContractController {
      * Bulk update contracts
      */
     @PostMapping("/bulk-update")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
+    @PreAuthorize("@providerContractAccessGuard.canManageGlobal()")
     @Operation(summary = "Bulk update contracts", description = "Update multiple contracts at once")
     public ResponseEntity<ApiResponse<com.waad.tba.modules.providercontract.dto.BulkProviderContractResultDto>> bulkUpdateContracts(
             @Valid @RequestBody com.waad.tba.modules.providercontract.dto.BulkProviderContractUpdateDto dto) {
@@ -400,7 +401,7 @@ public class ProviderContractController {
      * Bulk soft-delete contracts; each contract processed independently.
      */
     @PostMapping("/bulk-delete")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
+    @PreAuthorize("@providerContractAccessGuard.canManageGlobal()")
     @Operation(summary = "Bulk delete contracts", description = "Soft-delete multiple contracts, returning a per-contract result")
     public ResponseEntity<ApiResponse<com.waad.tba.modules.providercontract.dto.BulkProviderContractResultDto>> bulkDeleteContracts(
             @RequestBody List<Long> contractIds) {
@@ -420,7 +421,7 @@ public class ProviderContractController {
      * Activate a contract
      */
     @PostMapping("/{id:\\d+}/activate")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
+    @PreAuthorize("@providerContractAccessGuard.canManageContract(#id)")
     @Operation(summary = "Activate contract", description = "Activate a draft or suspended contract")
     public ResponseEntity<ApiResponse<ProviderContractResponseDto>> activate(
             @Parameter(description = "Contract ID") @PathVariable("id") Long id) {
@@ -435,11 +436,12 @@ public class ProviderContractController {
      * Suspend a contract
      */
     @PostMapping("/{id:\\d+}/suspend")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
+    @PreAuthorize("@providerContractAccessGuard.canManageContract(#id)")
     @Operation(summary = "Suspend contract", description = "Suspend an active contract")
     public ResponseEntity<ApiResponse<ProviderContractResponseDto>> suspend(
             @Parameter(description = "Contract ID") @PathVariable("id") Long id,
-            @Parameter(description = "Suspension reason") @RequestParam(name = "reason", required = false) String reason) {
+            @Parameter(description = "Suspension reason") @RequestBody(required = false) ReasonRequest reasonRequest) {
+                String reason = ReasonRequest.reasonOf(reasonRequest);
 
         log.debug("REST request to suspend contract: {}", id);
         ProviderContractResponseDto result = contractService.suspend(id, reason);
@@ -451,11 +453,12 @@ public class ProviderContractController {
      * Terminate a contract
      */
     @PostMapping("/{id:\\d+}/terminate")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
+    @PreAuthorize("@providerContractAccessGuard.canManageContract(#id)")
     @Operation(summary = "Terminate contract", description = "Terminate a contract permanently")
     public ResponseEntity<ApiResponse<ProviderContractResponseDto>> terminate(
             @Parameter(description = "Contract ID") @PathVariable("id") Long id,
-            @Parameter(description = "Termination reason") @RequestParam(name = "reason", required = false) String reason) {
+            @Parameter(description = "Termination reason") @RequestBody(required = false) ReasonRequest reasonRequest) {
+                String reason = ReasonRequest.reasonOf(reasonRequest);
 
         log.debug("REST request to terminate contract: {}", id);
         ProviderContractResponseDto result = contractService.terminate(id, reason);
@@ -471,7 +474,7 @@ public class ProviderContractController {
      * List pricing items for a contract
      */
     @GetMapping("/{contractId}/pricing")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
+    @PreAuthorize("@providerContractAccessGuard.canReadContract(#contractId)")
     @Operation(summary = "List pricing items", description = "Get pricing items for a contract with optional search and filtering")
     public ResponseEntity<ApiResponse<Page<ProviderContractPricingItemResponseDto>>> getPricing(
             @Parameter(description = "Contract ID") @PathVariable("contractId") Long contractId,
@@ -490,7 +493,7 @@ public class ProviderContractController {
      * Search pricing items
      */
     @GetMapping("/{contractId}/pricing/search")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
+    @PreAuthorize("@providerContractAccessGuard.canReadContract(#contractId)")
     @Operation(summary = "Search pricing items", description = "Search pricing items by service code or name")
     public ResponseEntity<ApiResponse<Page<ProviderContractPricingItemResponseDto>>> searchPricing(
             @Parameter(description = "Contract ID") @PathVariable("contractId") Long contractId,
@@ -508,7 +511,7 @@ public class ProviderContractController {
      * Get summary of categories and item counts for a contract
      */
     @GetMapping("/{contractId}/pricing/categories-summary")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
+    @PreAuthorize("@providerContractAccessGuard.canReadContract(#contractId)")
     @Operation(summary = "Get categories summary", description = "Get category names and item counts for a contract")
     public ResponseEntity<ApiResponse<List<com.waad.tba.modules.providercontract.dto.CategorySummaryDto>>> getCategoriesSummary(
             @Parameter(description = "Contract ID") @PathVariable("contractId") Long contractId) {
@@ -523,7 +526,7 @@ public class ProviderContractController {
      * Bulk update categories
      */
     @PatchMapping("/{contractId}/pricing/bulk-category")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
+    @PreAuthorize("@providerContractAccessGuard.canManageContract(#contractId)")
     @Operation(summary = "Bulk update categories", description = "Update the category for multiple pricing items")
     public ResponseEntity<ApiResponse<Void>> bulkUpdateCategories(
             @Parameter(description = "Contract ID") @PathVariable("contractId") Long contractId,
@@ -539,7 +542,7 @@ public class ProviderContractController {
      * Get pricing statistics
      */
     @GetMapping("/{contractId}/pricing/stats")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
+    @PreAuthorize("@providerContractAccessGuard.canReadContract(#contractId)")
     @Operation(summary = "Get pricing stats", description = "Get pricing statistics for a contract")
     public ResponseEntity<ApiResponse<ProviderContractPricingItemService.PricingStatsDto>> getPricingStats(
             @Parameter(description = "Contract ID") @PathVariable("contractId") Long contractId) {
@@ -554,7 +557,7 @@ public class ProviderContractController {
      * Get pricing item by ID
      */
     @GetMapping("/pricing/{pricingId}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
+    @PreAuthorize("@providerContractAccessGuard.canReadPricingItem(#pricingId)")
     @Operation(summary = "Get pricing item", description = "Get pricing item by ID")
     public ResponseEntity<ApiResponse<ProviderContractPricingItemResponseDto>> getPricingById(
             @Parameter(description = "Pricing item ID") @PathVariable("pricingId") Long pricingId) {
@@ -569,7 +572,7 @@ public class ProviderContractController {
      * Add pricing item
      */
     @PostMapping("/{contractId}/pricing")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
+    @PreAuthorize("@providerContractAccessGuard.canManageContract(#contractId)")
     @Operation(summary = "Add pricing item", description = "Add a pricing item to a contract")
     public ResponseEntity<ApiResponse<ProviderContractPricingItemResponseDto>> addPricing(
             @Parameter(description = "Contract ID") @PathVariable("contractId") Long contractId,
@@ -586,7 +589,7 @@ public class ProviderContractController {
      * Bulk add pricing items
      */
     @PostMapping("/{contractId}/pricing/bulk")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
+    @PreAuthorize("@providerContractAccessGuard.canManageContract(#contractId)")
     @Operation(summary = "Bulk add pricing", description = "Add multiple pricing items to a contract")
     public ResponseEntity<ApiResponse<List<ProviderContractPricingItemResponseDto>>> addBulkPricing(
             @Parameter(description = "Contract ID") @PathVariable("contractId") Long contractId,
@@ -603,7 +606,7 @@ public class ProviderContractController {
      * Update pricing item
      */
     @PutMapping("/pricing/{pricingId}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
+    @PreAuthorize("@providerContractAccessGuard.canManagePricingItem(#pricingId)")
     @Operation(summary = "Update pricing item", description = "Update a pricing item")
     public ResponseEntity<ApiResponse<ProviderContractPricingItemResponseDto>> updatePricing(
             @Parameter(description = "Pricing item ID") @PathVariable("pricingId") Long pricingId,
@@ -619,7 +622,7 @@ public class ProviderContractController {
      * Delete pricing item
      */
     @DeleteMapping("/pricing/{pricingId}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
+    @PreAuthorize("@providerContractAccessGuard.canManagePricingItem(#pricingId)")
     @Operation(summary = "Delete pricing item", description = "Delete a pricing item")
     public ResponseEntity<ApiResponse<Void>> deletePricing(
             @Parameter(description = "Pricing item ID") @PathVariable("pricingId") Long pricingId) {
@@ -634,7 +637,7 @@ public class ProviderContractController {
      * Delete all pricing items for a contract
      */
     @DeleteMapping("/{contractId}/pricing")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
+    @PreAuthorize("@providerContractAccessGuard.canManageContract(#contractId)")
     @Operation(summary = "Delete all pricing", description = "Delete all pricing items for a draft contract")
     public ResponseEntity<ApiResponse<Integer>> deleteAllPricing(
             @Parameter(description = "Contract ID") @PathVariable("contractId") Long contractId) {
@@ -649,7 +652,7 @@ public class ProviderContractController {
      * Repair unmapped pricing items
      */
     @PostMapping("/{contractId}/pricing/repair")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
+    @PreAuthorize("@providerContractAccessGuard.canManageContract(#contractId)")
     @Operation(summary = "Repair unmapped items", description = "Attempts to link unmapped pricing items to system medical services by code or name")
     public ResponseEntity<ApiResponse<Integer>> repairPricing(
             @Parameter(description = "Contract ID") @PathVariable("contractId") Long contractId) {

@@ -19,7 +19,6 @@ import {
   FormControl,
   InputLabel,
   Select,
-  FormHelperText,
   CircularProgress,
   Alert,
   Box,
@@ -32,7 +31,12 @@ import {
   IconButton,
   Tooltip,
   Badge,
-  Chip
+  Chip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions
 } from '@mui/material';
 import {
   Save as SaveIcon,
@@ -44,7 +48,8 @@ import {
   Delete as DeleteIcon,
   PhotoCamera as PhotoCameraIcon,
   Edit as EditIcon,
-  CloudUpload as CloudUploadIcon
+  CloudUpload as CloudUploadIcon,
+  SwapHoriz as SwapHorizIcon
 } from '@mui/icons-material';
 import DatePicker from 'components/common/SystemDatePicker';
 import dayjs from 'dayjs';
@@ -54,15 +59,24 @@ import ModernPageHeader from 'components/tba/ModernPageHeader';
 import {
   getMember,
   updateMember,
-  changeMemberStatus,
   uploadPhoto,
   deletePhoto,
-  RELATIONSHIPS,
+  previewEmployerTransfer,
+  transferEmployerFamily,
   GENDERS
 } from 'services/api/unified-members.service';
+import { getBenefitPoliciesByEmployer } from 'services/api/benefit-policies.service';
 import axiosClient from 'utils/axios';
 import { openSnackbar } from 'api/snackbar';
 import { MemberAvatar } from '../../components/tba';
+import useAuth from 'hooks/useAuth';
+import { getMemberCapabilities } from './memberCapabilities';
+
+const RELATIONSHIP_LABELS = {
+  WIFE: 'زوجة', HUSBAND: 'زوج', SON: 'ابن', DAUGHTER: 'ابنة',
+  FATHER: 'أب', MOTHER: 'أم', BROTHER: 'أخ', SISTER: 'أخت'
+};
+const STATUS_LABELS = { ACTIVE: 'نشط', SUSPENDED: 'موقوف', PENDING: 'قيد المراجعة', TERMINATED: 'منتهي' };
 
 /**
  * Unified Member Edit Component
@@ -70,6 +84,8 @@ import { MemberAvatar } from '../../components/tba';
 const UnifiedMemberEdit = () => {
   const navigate = useNavigate();
   const { id } = useParams();
+  const { user } = useAuth();
+  const capabilities = getMemberCapabilities(user);
 
   // Tab State
   const [tabValue, setTabValue] = useState(0);
@@ -120,10 +136,21 @@ const UnifiedMemberEdit = () => {
 
   // Lookup Data
   const [employers, setEmployers] = useState([]);
-  const [benefitPolicies, setBenefitPolicies] = useState([]);
   const [isPrincipal, setIsPrincipal] = useState(false);
-  const [initialStatus, setInitialStatus] = useState('ACTIVE');
-  const [statusReason, setStatusReason] = useState('');
+
+  // Batch هـ -- whole-family employer transfer
+  const [employerTransferDialog, setEmployerTransferDialog] = useState({
+    open: false,
+    step: 'select', // 'select' -> 'preview'
+    newEmployerId: '',
+    policyOptions: [],
+    newPolicyId: '',
+    noPolicy: false,
+    effectiveDate: new Date().toISOString().slice(0, 10),
+    reason: '',
+    preview: null,
+    loading: false
+  });
 
   /**
    * Helper to check if a tab has validation errors
@@ -184,7 +211,6 @@ const UnifiedMemberEdit = () => {
             : null,
         hasExistingPhoto: !!data.profilePhotoPath
       });
-      setInitialStatus(data.status || 'ACTIVE');
     } catch (error) {
       console.error('Error fetching member:', error);
       setFetchError('فشل في تحميل بيانات المنتفع');
@@ -195,14 +221,97 @@ const UnifiedMemberEdit = () => {
 
   const fetchLookupData = async () => {
     try {
-      const [orgsRes, policiesRes] = await Promise.all([
-        axiosClient.get('/employers/selectors'),
-        axiosClient.get('/benefit-policies', { params: { size: 1000 } })
-      ]);
+      const [orgsRes] = await Promise.all([axiosClient.get('/employers/selectors')]);
       setEmployers(orgsRes.data?.data || []);
-      setBenefitPolicies(policiesRes.data?.data?.content || []);
     } catch (error) {
       console.error('Error fetching lookup data:', error);
+    }
+  };
+
+  const openEmployerTransferDialog = () => {
+    setEmployerTransferDialog({
+      open: true,
+      step: 'select',
+      newEmployerId: '',
+      policyOptions: [],
+      newPolicyId: '',
+      noPolicy: false,
+      effectiveDate: new Date().toISOString().slice(0, 10),
+      reason: '',
+      preview: null,
+      loading: false
+    });
+  };
+
+  const selectNewEmployerForTransfer = async (newEmployerId) => {
+    setEmployerTransferDialog((prev) => ({ ...prev, newEmployerId, newPolicyId: '', noPolicy: false, policyOptions: [] }));
+    if (!newEmployerId) return;
+    try {
+      const policies = await getBenefitPoliciesByEmployer(newEmployerId);
+      const list = Array.isArray(policies) ? policies : policies?.content || [];
+      setEmployerTransferDialog((prev) => (prev.newEmployerId === newEmployerId ? { ...prev, policyOptions: list } : prev));
+    } catch {
+      // Leave policyOptions empty -- forces an explicit "no policy" choice rather than a guess.
+    }
+  };
+
+  const loadTransferPreview = async () => {
+    const { newEmployerId } = employerTransferDialog;
+    if (!newEmployerId) {
+      openSnackbar({ open: true, message: 'اختر جهة العمل الجديدة أولاً', variant: 'alert', alert: { color: 'warning' } });
+      return;
+    }
+    setEmployerTransferDialog((prev) => ({ ...prev, loading: true }));
+    try {
+      const res = await previewEmployerTransfer(id, newEmployerId);
+      const preview = res?.data || res;
+      setEmployerTransferDialog((prev) => ({ ...prev, step: 'preview', preview, loading: false }));
+    } catch (err) {
+      openSnackbar({
+        open: true,
+        message: err?.response?.data?.message || 'تعذّر تحميل معاينة النقل',
+        variant: 'alert',
+        alert: { color: 'error' }
+      });
+      setEmployerTransferDialog((prev) => ({ ...prev, loading: false }));
+    }
+  };
+
+  const confirmEmployerTransfer = async () => {
+    const { newEmployerId, newPolicyId, noPolicy, effectiveDate, reason, preview } = employerTransferDialog;
+    if (!noPolicy && !newPolicyId) {
+      openSnackbar({ open: true, message: 'حدّد الوثيقة الجديدة، أو أكّد عدم وجود وثيقة لهذه الأسرة', variant: 'alert', alert: { color: 'warning' } });
+      return;
+    }
+    if (!reason.trim()) {
+      openSnackbar({ open: true, message: 'سبب نقل جهة العمل إلزامي', variant: 'alert', alert: { color: 'warning' } });
+      return;
+    }
+    const expectedVersions = {};
+    (preview?.familyMembers || []).forEach((m) => {
+      expectedVersions[m.memberId] = m.version;
+    });
+    setEmployerTransferDialog((prev) => ({ ...prev, loading: true }));
+    try {
+      await transferEmployerFamily(id, {
+        newEmployerId,
+        newPolicyId: noPolicy ? null : newPolicyId,
+        noPolicy,
+        effectiveDate,
+        reason: reason.trim(),
+        expectedVersions
+      });
+      openSnackbar({ open: true, message: 'تم نقل الأسرة إلى جهة العمل الجديدة بنجاح', variant: 'alert', alert: { color: 'success' } });
+      setEmployerTransferDialog((prev) => ({ ...prev, open: false, loading: false }));
+      fetchMemberData();
+    } catch (err) {
+      openSnackbar({
+        open: true,
+        message: err?.response?.data?.message || 'تعذّر نقل الأسرة -- تأكد أن بيانات الأسرة لم تتغيّر أثناء المعاينة',
+        variant: 'alert',
+        alert: { color: 'error' }
+      });
+      setEmployerTransferDialog((prev) => ({ ...prev, loading: false }));
     }
   };
 
@@ -268,8 +377,12 @@ const UnifiedMemberEdit = () => {
     const newErrors = {};
     if (!form.fullName?.trim()) newErrors.fullName = 'الاسم الكامل مطلوب';
 
-    if (isPrincipal && !form.employerId) newErrors.employerId = 'جهة العمل مطلوبة';
-    if (!isPrincipal && !form.relationship) newErrors.relationship = 'صلة القرابة مطلوبة';
+    // employerId and relationship are deliberately NOT validated here: both
+    // fields are read-only in this form (moved to the dedicated employer-
+    // transfer and relationship-correction operations), so requiring them
+    // would block saving an ordinary metadata edit (phone, address...) on
+    // any legacy record that happens to be missing one -- the user has no
+    // way to fix that field from this screen at all.
 
     if (form.nationalNumber && form.nationalNumber.length !== 12) {
       newErrors.nationalNumber = 'الرقم الوطني يجب أن يتكون من 12 خانة';
@@ -281,10 +394,8 @@ const UnifiedMemberEdit = () => {
 
     setErrors(newErrors);
 
-    if (newErrors.fullName || newErrors.nationalNumber || newErrors.relationship) {
+    if (newErrors.fullName || newErrors.nationalNumber) {
       setTabValue(0);
-    } else if (newErrors.employerId) {
-      setTabValue(1);
     } else if (newErrors.phone || newErrors.email) {
       setTabValue(2);
     }
@@ -297,12 +408,6 @@ const UnifiedMemberEdit = () => {
    */
   const handleSubmit = async () => {
     if (!validateForm()) return;
-
-    if (form.status !== initialStatus && form.status === 'SUSPENDED' && !statusReason.trim()) {
-      setErrors((prev) => ({ ...prev, statusReason: 'سبب الإيقاف مطلوب' }));
-      setTabValue(0);
-      return;
-    }
 
     try {
       setSaving(true);
@@ -318,10 +423,8 @@ const UnifiedMemberEdit = () => {
         employeeNumber: form.employeeNumber || null,
         joinDate: form.joinDate ? dayjs(form.joinDate).format('YYYY-MM-DD') : null,
         occupation: form.occupation || null,
-        // status/active are intentionally NOT part of this payload — they're saved separately
-        // via changeMemberStatus() below, which enforces the reason-for-SUSPENDED rule, syncs
-        // active, cascades to dependents, and writes an audit log entry. Sending them here would
-        // silently bypass all of that.
+        // status/active are intentionally NOT part of this descriptive update.
+        // Lifecycle transitions use the dedicated audited dialog/endpoints.
         startDate: form.startDate ? dayjs(form.startDate).format('YYYY-MM-DD') : null,
         endDate: form.endDate ? dayjs(form.endDate).format('YYYY-MM-DD') : null,
         notes: form.notes || null
@@ -334,11 +437,6 @@ const UnifiedMemberEdit = () => {
       // keeps this payload honest about what it is allowed to modify.
 
       await updateMember(id, payload);
-
-      if (form.status !== initialStatus) {
-        await changeMemberStatus(id, form.status, form.status === 'SUSPENDED' ? statusReason.trim() : undefined);
-        setInitialStatus(form.status);
-      }
 
       if (form.photoFile) {
         try {
@@ -549,37 +647,14 @@ const UnifiedMemberEdit = () => {
 
                     {!isPrincipal && (
                       <Grid size={{ xs: 12, md: 4 }}>
-                        <FormControl fullWidth required error={!!errors.relationship} size="small">
-                          <InputLabel>صلة القرابة</InputLabel>
-                          <Select
-                            value={form.relationship}
-                            onChange={handleChange('relationship')}
-                            label="صلة القرابة"
-                            MenuProps={menuProps}
-                          >
-                            {Object.entries(RELATIONSHIPS).map(([key, value]) => (
-                              <MenuItem key={key} value={value}>
-                                {value === 'WIFE'
-                                  ? 'زوجة'
-                                  : value === 'HUSBAND'
-                                    ? 'زوج'
-                                    : value === 'SON'
-                                      ? 'ابن'
-                                      : value === 'DAUGHTER'
-                                        ? 'ابنة'
-                                        : value === 'FATHER'
-                                          ? 'أب'
-                                          : value === 'MOTHER'
-                                            ? 'أم'
-                                            : value === 'BROTHER'
-                                              ? 'أخ'
-                                              : value === 'SISTER'
-                                                ? 'أخت'
-                                                : value}
-                              </MenuItem>
-                            ))}
-                          </Select>
-                        </FormControl>
+                        <TextField
+                          fullWidth
+                          label="صلة القرابة"
+                          value={RELATIONSHIP_LABELS[form.relationship] || form.relationship || '-'}
+                          slotProps={{ input: { readOnly: true } }}
+                          helperText="تغيير القرابة عملية أسرية مستقلة ومدققة."
+                          size="small"
+                        />
                       </Grid>
                     )}
                     <Grid size={{ xs: 12, md: 6 }}>
@@ -587,36 +662,20 @@ const UnifiedMemberEdit = () => {
                     </Grid>
 
                     <Grid size={{ xs: 12, md: 6 }}>
-                      <FormControl fullWidth size="small">
-                        <InputLabel>حالة المستفيد</InputLabel>
-                        <Select value={form.status || 'ACTIVE'} label="حالة المستفيد" onChange={handleChange('status')} MenuProps={menuProps}>
-                          <MenuItem value="ACTIVE">نشط</MenuItem>
-                          <MenuItem value="SUSPENDED">موقوف</MenuItem>
-                          <MenuItem value="PENDING">قيد المراجعة</MenuItem>
-                          <MenuItem value="TERMINATED">منتهي</MenuItem>
-                        </Select>
-                        <FormHelperText>تؤثر الحالة على الأهلية والبحث في البوابة.</FormHelperText>
-                      </FormControl>
+                      <TextField
+                        fullWidth
+                        label="حالة المستفيد"
+                        value={STATUS_LABELS[form.status] || form.status || '-'}
+                        slotProps={{ input: { readOnly: true } }}
+                        helperText="غيّر الحالة من الإجراء المستقل لضمان السبب والتدقيق وأثر الأسرة."
+                        size="small"
+                      />
                     </Grid>
-                    {form.status === 'SUSPENDED' && form.status === initialStatus && form.blockedReason && (
+                    {form.status === 'SUSPENDED' && form.blockedReason && (
                       <Grid size={{ xs: 12, md: 6 }} sx={{ display: 'flex', alignItems: 'center' }}>
                         <Tooltip title={form.blockedReason}>
                           <Chip label={`سبب الإيقاف: ${form.blockedReason}`} color="warning" variant="outlined" sx={{ maxWidth: '100%' }} />
                         </Tooltip>
-                      </Grid>
-                    )}
-                    {form.status === 'SUSPENDED' && form.status !== initialStatus && (
-                      <Grid size={{ xs: 12, md: 6 }}>
-                        <TextField
-                          fullWidth
-                          required
-                          label="سبب الإيقاف"
-                          value={statusReason}
-                          onChange={(e) => setStatusReason(e.target.value)}
-                          error={!!errors.statusReason}
-                          helperText={errors.statusReason}
-                          size="small"
-                        />
                       </Grid>
                     )}
                   </Grid>
@@ -705,20 +764,21 @@ const UnifiedMemberEdit = () => {
                 {isPrincipal ? (
                   <>
                     <Grid size={{ xs: 12 }}>
-                      <FormControl fullWidth required error={!!errors.employerId} size="small">
-                        <InputLabel>جهة العمل</InputLabel>
-                        <Select value={form.employerId} onChange={handleChange('employerId')} label="جهة العمل" MenuProps={menuProps}>
-                          <MenuItem value="">
-                            <em>اختر جهة العمل...</em>
-                          </MenuItem>
-                          {Array.isArray(employers) &&
-                            employers.map((emp) => (
-                              <MenuItem key={emp.id} value={emp.id}>
-                                {emp.label}
-                              </MenuItem>
-                            ))}
-                        </Select>
-                      </FormControl>
+                      <Stack direction="row" spacing={1} alignItems="flex-start">
+                        <TextField
+                          fullWidth
+                          label="جهة العمل"
+                          value={employers.find((emp) => String(emp.id) === String(form.employerId))?.label || form.employerId || '-'}
+                          slotProps={{ input: { readOnly: true } }}
+                          helperText="نقل جهة العمل عملية مستقلة ومؤرخة ولا يتم من التعديل العام."
+                          size="small"
+                        />
+                        {capabilities.transfer && (
+                          <Button variant="outlined" size="small" startIcon={<SwapHorizIcon />} onClick={openEmployerTransferDialog} sx={{ mt: 0.5, whiteSpace: 'nowrap' }}>
+                            نقل إلى جهة أخرى
+                          </Button>
+                        )}
+                      </Stack>
                     </Grid>
                     <Grid size={{ xs: 12, md: 4 }}>
                       <TextField
@@ -843,6 +903,119 @@ const UnifiedMemberEdit = () => {
           </Button>
         </Box>
       </MainCard>
+
+      {/* نقل رئيس أسرة وأسرته إلى جهة عمل أخرى -- عملية مستقلة كاملة */}
+      <Dialog
+        open={employerTransferDialog.open}
+        onClose={() => (employerTransferDialog.loading ? null : setEmployerTransferDialog((prev) => ({ ...prev, open: false })))}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>نقل الأسرة إلى جهة عمل أخرى</DialogTitle>
+        <DialogContent>
+          {employerTransferDialog.step === 'select' ? (
+            <Stack spacing={2} sx={{ mt: 1 }}>
+              <DialogContentText>
+                سينتقل رئيس الأسرة وكل تابعيه معاً إلى الجهة الجديدة، أو لا أحد ينتقل. لن يتأثر أي سجل مالي أو مطالبة سابقة لتاريخ السريان.
+              </DialogContentText>
+              <FormControl fullWidth size="small">
+                <InputLabel>جهة العمل الجديدة</InputLabel>
+                <Select
+                  label="جهة العمل الجديدة"
+                  value={employerTransferDialog.newEmployerId}
+                  onChange={(e) => selectNewEmployerForTransfer(e.target.value)}
+                >
+                  {employers
+                    .filter((emp) => String(emp.id) !== String(form.employerId))
+                    .map((emp) => (
+                      <MenuItem key={emp.id} value={emp.id}>
+                        {emp.label}
+                      </MenuItem>
+                    ))}
+                </Select>
+              </FormControl>
+            </Stack>
+          ) : (
+            <Stack spacing={2} sx={{ mt: 1 }}>
+              <DialogContentText>
+                {employerTransferDialog.preview?.currentEmployerName} ← {employerTransferDialog.preview?.newEmployerName}
+              </DialogContentText>
+              <Paper variant="outlined" sx={{ p: 1.5 }}>
+                <Typography variant="subtitle2" gutterBottom>
+                  أفراد الأسرة المتأثرون ({employerTransferDialog.preview?.familyMembers?.length || 0})
+                </Typography>
+                {(employerTransferDialog.preview?.familyMembers || []).map((m) => (
+                  <Typography key={m.memberId} variant="body2" color="text.secondary">
+                    {m.principal ? '(رئيس الأسرة) ' : ''}
+                    {m.fullName} {m.relationship ? `(${RELATIONSHIP_LABELS[m.relationship] || m.relationship})` : ''}
+                  </Typography>
+                ))}
+              </Paper>
+              <FormControl fullWidth size="small">
+                <InputLabel>الوثيقة الجديدة</InputLabel>
+                <Select
+                  label="الوثيقة الجديدة"
+                  value={employerTransferDialog.noPolicy ? '__NONE__' : employerTransferDialog.newPolicyId}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (value === '__NONE__') {
+                      setEmployerTransferDialog((prev) => ({ ...prev, noPolicy: true, newPolicyId: '' }));
+                    } else {
+                      setEmployerTransferDialog((prev) => ({ ...prev, noPolicy: false, newPolicyId: value }));
+                    }
+                  }}
+                >
+                  {employerTransferDialog.policyOptions.map((p) => (
+                    <MenuItem key={p.id} value={p.id}>
+                      {p.policyName || p.name || `وثيقة #${p.id}`}
+                    </MenuItem>
+                  ))}
+                  <MenuItem value="__NONE__">
+                    <em>بلا وثيقة بعد (تأكيد صريح)</em>
+                  </MenuItem>
+                </Select>
+              </FormControl>
+              <TextField
+                type="date"
+                label="تاريخ السريان"
+                fullWidth
+                size="small"
+                InputLabelProps={{ shrink: true }}
+                value={employerTransferDialog.effectiveDate}
+                onChange={(e) => setEmployerTransferDialog((prev) => ({ ...prev, effectiveDate: e.target.value }))}
+              />
+              <TextField
+                label="سبب النقل"
+                required
+                fullWidth
+                multiline
+                minRows={2}
+                value={employerTransferDialog.reason}
+                onChange={(e) => setEmployerTransferDialog((prev) => ({ ...prev, reason: e.target.value }))}
+              />
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEmployerTransferDialog((prev) => ({ ...prev, open: false }))} disabled={employerTransferDialog.loading}>
+            إلغاء
+          </Button>
+          {employerTransferDialog.step === 'select' ? (
+            <Button variant="contained" disabled={!employerTransferDialog.newEmployerId || employerTransferDialog.loading} onClick={loadTransferPreview}>
+              {employerTransferDialog.loading ? 'جارِ التحميل...' : 'متابعة'}
+            </Button>
+          ) : (
+            <Button
+              variant="contained"
+              color="warning"
+              disabled={employerTransferDialog.loading || !employerTransferDialog.reason.trim() || (!employerTransferDialog.noPolicy && !employerTransferDialog.newPolicyId)}
+              onClick={confirmEmployerTransfer}
+            >
+              {employerTransferDialog.loading ? 'جارِ النقل...' : 'تأكيد نقل الأسرة'}
+            </Button>
+          )}
+        </DialogActions>
+      </Dialog>
     </>
   );
 };

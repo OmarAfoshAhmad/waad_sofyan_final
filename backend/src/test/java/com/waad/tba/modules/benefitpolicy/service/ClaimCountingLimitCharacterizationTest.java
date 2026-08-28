@@ -136,6 +136,7 @@ class ClaimCountingLimitCharacterizationTest extends com.waad.tba.support.Postgr
                 .fullName("Counting Member " + suffix).barcode("CB-" + suffix)
                 .nationalNumber("CN-" + suffix).employer(employer).benefitPolicy(policy)
                 .active(true).build());
+        initializeTemporalAssignments(member);
 
         provider = providerRepository.save(Provider.builder()
                 .name("Counting Hospital " + suffix).providerType(ProviderType.HOSPITAL)

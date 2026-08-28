@@ -18,6 +18,7 @@ import { ArrowBack as ArrowBackIcon, Save as SaveIcon, Business as BusinessIcon 
 import { useSnackbar } from 'notistack';
 
 import MainCard from 'components/MainCard';
+import PermissionGuard from 'components/PermissionGuard';
 import ModernPageHeader from 'components/tba/ModernPageHeader';
 import { createEmployer, checkEmployerField } from 'services/api/employers.service';
 
@@ -161,7 +162,7 @@ const EmployerCreate = () => {
   };
 
   return (
-    <>
+    <PermissionGuard requiredPermission="EMPLOYER_MANAGE" isRouteGuard>
       <ModernPageHeader
         title={LABELS.add}
         icon={BusinessIcon}
@@ -314,7 +315,7 @@ const EmployerCreate = () => {
           </Stack>
         </Box>
       </MainCard>
-    </>
+    </PermissionGuard>
   );
 };
 

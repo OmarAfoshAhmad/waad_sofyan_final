@@ -104,9 +104,101 @@ public class LimitBalanceReader {
             Long memberId,
             Long preAuthorizationId,
             List<PreauthorizedClaimBalance> limits,
-            BigDecimal bindingAvailableForThisClaim) {}
+            BigDecimal bindingAvailableForThisClaim) {
+
+        /**
+         * Adapter for the financial engine. The ordinary balances remain
+         * unchanged and auditable above; only this claim-specific projection
+         * exposes the amount/times that the owner of the hold may spend.
+         */
+        public BalanceSet asFinancialEngineInput() {
+            List<LimitBalance> projected = limits.stream().map(item -> {
+                LimitBalance b = item.balance();
+                return new LimitBalance(b.limit(), b.committed(), b.reserved(),
+                        b.actualRemaining(), item.availableForThisClaim(),
+                        b.timesLimit(), b.committedTimes(), b.reservedTimes(),
+                        b.actualRemainingTimes(), item.availableTimesForThisClaim());
+            }).toList();
+            List<String> bindingKeys = projected.stream()
+                    .filter(b -> b.reservableAvailable() != null
+                            && bindingAvailableForThisClaim != null
+                            && b.reservableAvailable().compareTo(bindingAvailableForThisClaim) == 0)
+                    .map(b -> b.limit().definition().semanticKey()).toList();
+            return new BalanceSet(memberId, projected, bindingAvailableForThisClaim, bindingKeys);
+        }
+    }
 
     private record BalanceKey(Long bucketId, LocalDate start, LocalDate end, Status status) {}
+
+    /**
+     * The POLICY_GENERAL ceiling read in isolation, for callers that have no
+     * {@code benefitRuleId} to hand {@link #read} -- {@code validateAmountLimits}
+     * checks a member's annual ceiling independent of any one claim line, so it
+     * cannot go through the rule-bucket resolution path {@link #read} requires.
+     * Same source, same two figures, same meaning as the POLICY_GENERAL branch
+     * of {@link #read}: committed and reserved both come from the ledger.
+     */
+    public record GeneralCeilingBalance(
+            BigDecimal limit, BigDecimal committed, BigDecimal reserved,
+            BigDecimal actualRemaining, BigDecimal reservableAvailable) {}
+
+    /**
+     * @return null when the policy carries no positive annual limit -- there is
+     *         no ceiling to report, not a ceiling of zero.
+     */
+    @Transactional(readOnly = true)
+    public GeneralCeilingBalance readGeneralCeiling(Long memberId, Long policyId, BigDecimal annualLimit,
+            LocalDate periodStart, LocalDate periodEnd, Long excludeClaimId) {
+        if (annualLimit == null || annualLimit.signum() <= 0) return null;
+        BigDecimal committed = consumptionRepository.sumGeneralScopeCommitted(
+                memberId, policyId, periodStart, periodEnd, excludeClaimId);
+        BigDecimal reserved = consumptionRepository.sumGeneralScopeReserved(
+                memberId, policyId, periodStart, periodEnd);
+        BigDecimal actualRemaining = annualLimit.subtract(committed);
+        BigDecimal reservableAvailable = actualRemaining.subtract(reserved);
+        return new GeneralCeilingBalance(annualLimit, committed, reserved, actualRemaining, reservableAvailable);
+    }
+
+    /**
+     * Bulk counterpart of {@link #readGeneralCeiling}'s committed figure --
+     * one query for the whole batch, same O(1) shape
+     * {@code MemberFinancialSummaryService.getFinancialSummaries} already
+     * guarantees. Committed only: bulk display reads (a member-financial-summary
+     * screen, a family eligibility check) show what has actually been spent,
+     * never a reservation.
+     *
+     * A member absent from {@code policyIdByMemberId} or with no committed rows
+     * under THEIR OWN policy id is present in the result with ZERO, never
+     * absent -- a caller that skips a missing key while trusting a present
+     * zero is exactly the bug this method exists to prevent for members who
+     * changed policies mid-period (whose historical rows sit under a DIFFERENT
+     * policy id and must not be added to the current policy's ceiling).
+     *
+     * @param policyIdByMemberId each member's policy AS OF THE DATE that produced
+     *                           periodStart/periodEnd -- never the member's
+     *                           current pointer, for the same reason
+     *                           {@link #readGeneralCeiling} takes an explicit
+     *                           policyId rather than resolving one itself
+     */
+    @Transactional(readOnly = true)
+    public java.util.Map<Long, BigDecimal> readGeneralCeilingCommittedBulk(
+            java.util.Map<Long, Long> policyIdByMemberId, LocalDate periodStart, LocalDate periodEnd,
+            Long excludeClaimId) {
+        java.util.Map<Long, BigDecimal> result = new HashMap<>();
+        for (Long memberId : policyIdByMemberId.keySet()) {
+            result.put(memberId, BigDecimal.ZERO);
+        }
+        if (policyIdByMemberId.isEmpty()) return result;
+
+        for (var row : consumptionRepository.sumGeneralScopeCommittedBulk(
+                policyIdByMemberId.keySet(), periodStart, periodEnd, excludeClaimId)) {
+            Long currentPolicyId = policyIdByMemberId.get(row.getMemberId());
+            if (currentPolicyId != null && currentPolicyId.equals(row.getPolicyId())) {
+                result.put(row.getMemberId(), row.getAmount());
+            }
+        }
+        return result;
+    }
 
     /**
      * The balance a claim born from a pre-authorization may spend against.
@@ -129,10 +221,13 @@ public class LimitBalanceReader {
     @Transactional(readOnly = true)
     public PreauthorizedClaimBalanceSet readForPreauthorizedClaim(Long memberId,
             List<EffectiveLimitResolver.EffectiveLimit> limits, Long excludeClaimId,
-            Long preAuthorizationId) {
+            Long preAuthorizationId, Long memberPolicyAssignmentId) {
 
         if (preAuthorizationId == null) {
             throw new IllegalArgumentException("preAuthorizationId is required");
+        }
+        if (memberPolicyAssignmentId == null) {
+            throw new IllegalArgumentException("memberPolicyAssignmentId is required");
         }
         BalanceSet base = read(memberId, limits, excludeClaimId);
 
@@ -143,7 +238,7 @@ public class LimitBalanceReader {
                     ? "POLICY_GENERAL" : "BUCKET";
 
             BigDecimal own = Optional.ofNullable(consumptionRepository.sumOwnActiveReservation(
-                    memberId, preAuthorizationId, definition.bucketId(), scope,
+                    memberId, preAuthorizationId, memberPolicyAssignmentId, definition.bucketId(), scope,
                     definition.periodStart(), definition.periodEnd())).orElse(BigDecimal.ZERO);
 
             // Added BACK, then capped: the hold returns to its owner, but never
@@ -155,7 +250,7 @@ public class LimitBalanceReader {
             Integer availableTimes = null;
             if (balance.timesLimit() != null) {
                 ownTimes = Optional.ofNullable(consumptionRepository.sumOwnActiveReservationTimes(
-                        memberId, preAuthorizationId, definition.bucketId(), scope,
+                        memberId, preAuthorizationId, memberPolicyAssignmentId, definition.bucketId(), scope,
                         definition.periodStart(), definition.periodEnd())).orElse(0);
                 // The same rule in occurrences: an approval that took the last
                 // visit must not block the claim it was granted for.
@@ -206,14 +301,20 @@ public class LimitBalanceReader {
             BigDecimal committed;
             BigDecimal reserved;
             if (definition.benefitScopeType() == BenefitScopeType.POLICY_GENERAL) {
-                committed = claimRepository.sumLimitConsumptionByMemberAndPeriodExcludingClaim(
-                        memberId, definition.periodStart(), definition.periodEnd(), excludeClaimId);
-                // Read from the general ceiling's OWN reservation rows (V174).
-                // Still never derived from bucket rows: one line can map to
-                // several buckets, so summing them would count the same money
-                // repeatedly. Until the approval service starts writing holds
-                // this is legitimately zero -- but it is now zero because
-                // nothing is reserved, not because it cannot be expressed.
+                // Both halves from the ledger now (V189). Committed used to be
+                // summed out of claim_lines while reserved was read here, so
+                // one subtraction drew on two sources and only one of them
+                // could represent a movement that was not a claim. An imported
+                // opening balance is exactly such a movement, and under the old
+                // arrangement the only way to make it count was to fabricate
+                // the claim it was not.
+                //
+                // Neither figure is ever derived from bucket rows: one line can
+                // map to several buckets, so summing those would count the same
+                // money once per category it happened to fall into.
+                committed = consumptionRepository.sumGeneralScopeCommitted(
+                        memberId, definition.policyId(), definition.periodStart(),
+                        definition.periodEnd(), excludeClaimId);
                 reserved = consumptionRepository.sumGeneralScopeReserved(
                         memberId, definition.policyId(), definition.periodStart(), definition.periodEnd());
             } else {

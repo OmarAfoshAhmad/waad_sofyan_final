@@ -136,6 +136,11 @@ public class MemberViewDto {
     @Schema(description = "Groups this member with others changed by the same family-cascade operation, if any")
     private String statusTransitionId;
 
+    @Schema(description = "Optimistic-lock row version. Required as expectedVersion/expectedVersions when calling "
+            + "a family operation (transfer, relationship correction, policy change, reorder) so a concurrent edit "
+            + "is rejected instead of silently overwritten.")
+    private Long version;
+
     // Eligibility
     @Schema(description = "Eligibility status", example = "true")
     private Boolean eligibilityStatus;
@@ -207,6 +212,9 @@ public class MemberViewDto {
      */
     @Schema(description = "Relationship type - for dependents only", example = "SON")
     private Member.Relationship relationship;
+
+    @Schema(description = "Visual order inside the family; does not alter card identity")
+    private Integer familyOrder;
 
     /**
      * List of Dependents - Only populated for PRINCIPAL members.

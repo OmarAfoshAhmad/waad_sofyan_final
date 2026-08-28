@@ -34,22 +34,20 @@ import {
   IconButton,
   Divider
 } from '@mui/material';
-import {
-  QrCodeScanner as QrCodeScannerIcon,
-  Search as SearchIcon,
-  CheckCircle as CheckCircleIcon,
-  Cancel as CancelIcon,
-  Visibility as VisibilityIcon,
-  PersonAdd as PersonAddIcon,
-  QrCode as QrCodeIcon,
-  CreditCard as CreditCardIcon,
-  Badge as BadgeIcon,
-  Savings as SavingsIcon,
-  AccountBalanceWallet as AccountBalanceWalletIcon,
-  TrendingUp as TrendingUpIcon,
-  Payments as PaymentsIcon,
-  Refresh as RefreshIcon
-} from '@mui/icons-material';
+import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner';
+import SearchIcon from '@mui/icons-material/Search';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import CancelIcon from '@mui/icons-material/Cancel';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import PersonAddIcon from '@mui/icons-material/PersonAdd';
+import QrCodeIcon from '@mui/icons-material/QrCode';
+import CreditCardIcon from '@mui/icons-material/CreditCard';
+import BadgeIcon from '@mui/icons-material/Badge';
+import SavingsIcon from '@mui/icons-material/Savings';
+import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
+import TrendingUpIcon from '@mui/icons-material/TrendingUp';
+import PaymentsIcon from '@mui/icons-material/Payments';
+import RefreshIcon from '@mui/icons-material/Refresh';
 
 import MainCard from 'components/MainCard';
 import ModernPageHeader from 'components/tba/ModernPageHeader';

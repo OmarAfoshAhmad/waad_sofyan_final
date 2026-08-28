@@ -21,29 +21,29 @@ public class KinshipMismatchController {
     // Lists members across EVERY employer, so it is a system operation and
     // not something an employer administrator may run.
     @GetMapping
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("@permissionGuard.has('SYSTEM_SETTINGS_VIEW')")
     public ResponseEntity<ApiResponse<List<KinshipMismatchDto>>> getMismatches() {
         List<KinshipMismatchDto> mismatches = kinshipMismatchService.findMismatches();
         return ResponseEntity.ok(ApiResponse.success(mismatches));
     }
 
     @PostMapping("/{id}/fix")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
-    public ResponseEntity<ApiResponse<Void>> fixMismatch(@PathVariable Long id, @RequestBody KinshipMismatchFixRequest request) {
+    @PreAuthorize("@permissionGuard.has('DANGER_ZONE_EXECUTE')")
+    public ResponseEntity<ApiResponse<Void>> fixMismatch(@PathVariable Long id, @jakarta.validation.Valid @RequestBody KinshipMismatchFixRequest request) {
         kinshipMismatchService.fixMismatch(id, request);
         return ResponseEntity.ok(ApiResponse.success("تم إصلاح بيانات القرابة بنجاح", null));
     }
 
     @PostMapping("/{id}/ignore")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("@permissionGuard.has('DANGER_ZONE_EXECUTE')")
     public ResponseEntity<ApiResponse<Void>> ignoreMismatch(@PathVariable Long id) {
         kinshipMismatchService.ignoreMismatch(id);
         return ResponseEntity.ok(ApiResponse.success("تم تأكيد صحة البيانات بنجاح", null));
     }
 
     @PostMapping("/bulk-fix")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
-    public ResponseEntity<ApiResponse<Void>> fixMismatchesBulk(@RequestBody com.waad.tba.modules.member.dto.KinshipMismatchBulkFixRequest request) {
+    @PreAuthorize("@permissionGuard.has('DANGER_ZONE_EXECUTE')")
+    public ResponseEntity<ApiResponse<Void>> fixMismatchesBulk(@jakarta.validation.Valid @RequestBody com.waad.tba.modules.member.dto.KinshipMismatchBulkFixRequest request) {
         kinshipMismatchService.fixMismatchesBulk(request);
         return ResponseEntity.ok(ApiResponse.success("تم الإصلاح الجماعي بنجاح", null));
     }
@@ -52,7 +52,7 @@ public class KinshipMismatchController {
     // so nothing but this gate scopes it. It reaches any member in any
     // employer.
     @PostMapping("/bulk-ignore")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("@permissionGuard.has('DANGER_ZONE_EXECUTE')")
     public ResponseEntity<ApiResponse<Void>> ignoreMismatchesBulk(@RequestBody List<Long> memberIds) {
         kinshipMismatchService.ignoreMismatchesBulk(memberIds);
         return ResponseEntity.ok(ApiResponse.success("تم تجاهل الأخطاء جماعياً بنجاح", null));

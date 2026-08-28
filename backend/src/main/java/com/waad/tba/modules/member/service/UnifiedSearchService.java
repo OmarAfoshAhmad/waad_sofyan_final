@@ -164,6 +164,9 @@ public class UnifiedSearchService {
                         builder.like(builder.lower(root.get("barcode")), pattern),
                         builder.like(builder.lower(root.get("cardNumber")), pattern)));
 
+        // The repository's EntityGraph keeps employer/policy/parent in the same
+        // bounded content query. Page adds one COUNT query, but avoids two lazy
+        // association queries and remains a fixed three-query production path.
         List<Member> members = memberRepository.findAll(
                 specification,
                 PageRequest.of(0, MAX_SEARCH_RESULTS, Sort.by(Sort.Direction.ASC, "id")))

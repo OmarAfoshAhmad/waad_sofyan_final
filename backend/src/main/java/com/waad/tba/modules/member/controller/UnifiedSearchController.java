@@ -35,7 +35,7 @@ import java.util.List;
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "Member Search [DEPRECATED]", description = "OLD SEARCH - DO NOT USE")
-@PreAuthorize("isAuthenticated()")
+@PreAuthorize("@permissionGuard.has('MEMBER_VIEW')")
 class UnifiedSearchControllerDeprecated {
 
     private final UnifiedSearchService unifiedSearchService;
@@ -52,7 +52,7 @@ class UnifiedSearchControllerDeprecated {
      * @return List of matching members (1 for exact match, multiple for fuzzy)
      */
     @GetMapping("/unified-search")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
+    @PreAuthorize("@permissionGuard.has('MEMBER_VIEW')")
     @Operation(
         summary = "Unified member search",
         description = "Search members by card number, name (fuzzy), or barcode/QR. " +
@@ -117,7 +117,7 @@ class UnifiedSearchControllerDeprecated {
      * @return Member details
      */
     @GetMapping("/{id}/details")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
+    @PreAuthorize("@permissionGuard.has('MEMBER_VIEW')")
     @Operation(
         summary = "Get member details by ID",
         description = "Retrieve complete member information after search selection"

@@ -39,37 +39,33 @@ class MemberSensitiveFieldWriteArchitectureTest {
                     // Creation paths set it before the first assignment exists;
                     // both immediately record an assignment through the resolver.
                     "UnifiedMemberService.java",
-                    "MemberImportRowProcessor.java",
-                    // Undoes exactly what MemberImportRowProcessor (already
-                    // allowed above) wrote, restoring the value captured in a
-                    // MemberImportFieldSnapshot at that same write -- not a new
-                    // state-change vector, the inverse half of an existing one.
-                    "MemberImportRollbackService.java"),
+                    "MemberImportRowProcessor.java"),
             ".setEmployer(", Set.of(
+                    // The dated assignment record is the source of truth; this
+                    // service alone synchronizes the display-only current pointer.
+                    "MemberEmployerResolver.java",
                     // Creation only. Moving an existing member between employers
                     // is a separate operation (not yet implemented) -- see
                     // UnifiedMemberService.rejectSensitiveFieldChanges.
                     "UnifiedMemberService.java",
                     "MemberImportRowProcessor.java",
-                    "MemberExcelImportService.java",
-                    "MemberImportRollbackService.java"),
+                    "MemberExcelImportService.java"),
             ".setParent(", Set.of(
                     // Family structure. Creation and import only; moving a
                     // dependent between principals is a separate operation.
                     "UnifiedMemberService.java",
                     "MemberImportRowProcessor.java",
+                    // Audited transfer owns changes to an existing family.
+                    "MemberFamilyService.java",
                     // Duplicate-merge re-parents the duplicate's dependents onto
                     // the surviving primary; a dedicated operation, not a field edit.
-                    "MemberDuplicateService.java",
-                    "MemberImportRollbackService.java"),
+                    "MemberDuplicateService.java"),
             ".setRelationship(", Set.of(
                     "UnifiedMemberService.java",
                     "MemberImportRowProcessor.java",
-                    // Dedicated, purpose-built correction service for kinship /
-                    // gender mismatches -- exactly the "separate operation"
-                    // shape this rule asks for, not a generic back door.
-                    "KinshipMismatchService.java",
-                    "MemberImportRollbackService.java"));
+                    // Sole owner for transfer and audited kinship correction;
+                    // KinshipMismatchService delegates here and no longer writes.
+                    "MemberFamilyService.java"));
 
     @org.junit.jupiter.api.Test
     void sensitiveMemberFieldsAreOnlyWrittenByTheirOwningService() throws Exception {

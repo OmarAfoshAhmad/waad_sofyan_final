@@ -22,7 +22,7 @@ public class PaymentController {
     private final PaymentService paymentService;
 
     @GetMapping("/summaries")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER')")
+    @PreAuthorize("@permissionGuard.has('SETTLEMENT_VIEW')")
     public ResponseEntity<List<MonthlySettlementSummaryDto>> getMonthlySummaries(
             @RequestParam(required = false) Long employerId,
             @RequestParam(required = false) Long providerId,
@@ -36,7 +36,7 @@ public class PaymentController {
     }
 
     @GetMapping("/records")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER')")
+    @PreAuthorize("@permissionGuard.has('SETTLEMENT_VIEW')")
     public ResponseEntity<List<PaymentRecordDto>> getPaymentRecords(
             @RequestParam Long employerId,
             @RequestParam Long providerId,
@@ -48,7 +48,7 @@ public class PaymentController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
+    @PreAuthorize("@permissionGuard.has('SETTLEMENT_MANAGE')")
     public ResponseEntity<PaymentRecordDto> addPayment(
             @Valid @RequestBody PaymentRequestDto request,
             Authentication authentication) {
@@ -58,7 +58,7 @@ public class PaymentController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
+    @PreAuthorize("@permissionGuard.has('SETTLEMENT_MANAGE')")
     public ResponseEntity<PaymentRecordDto> updatePayment(
             @PathVariable Long id,
             @Valid @RequestBody PaymentRequestDto request,
@@ -69,7 +69,7 @@ public class PaymentController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
+    @PreAuthorize("@permissionGuard.has('SETTLEMENT_MANAGE')")
     public ResponseEntity<Void> deletePayment(
             @PathVariable Long id,
             @RequestParam String reason,
@@ -80,7 +80,7 @@ public class PaymentController {
     }
 
     @GetMapping("/{id}/audit")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER')")
+    @PreAuthorize("@permissionGuard.has('SETTLEMENT_VIEW')")
     public ResponseEntity<List<PaymentAuditLogDto>> getPaymentAuditLogs(@PathVariable Long id) {
         List<PaymentAuditLogDto> logs = paymentService.getPaymentAuditLogs(id);
         return ResponseEntity.ok(logs);

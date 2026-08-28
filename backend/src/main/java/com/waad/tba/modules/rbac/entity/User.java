@@ -47,9 +47,18 @@ public class User {
      * Valid values: SUPER_ADMIN, MEDICAL_REVIEWER, MEDICAL_REVIEW_HEAD, INSURANCE_MANAGER, ACCOUNTANT, PROVIDER_STAFF,
      *              EMPLOYER_ADMIN, DATA_ENTRY, FINANCE_VIEWER
      */
+    /**
+     * No default, by design. This column used to initialise itself to
+     * "DATA_ENTRY" -- a role RoleService counts as internal staff, so
+     * FeatureGuard.isStaff() waved it past every portal gate. Any creation
+     * path that forgot to set it therefore minted a privileged account in
+     * silence, which is how an anonymous /register call became an
+     * internal-staff session. Creating an identity and granting it standing
+     * are two decisions; leaving this null forces the second one to be made
+     * out loud, and the NOT NULL constraint refuses the write if it is not.
+     */
     @Column(name = "user_type", nullable = false)
-    @Builder.Default
-    private String userType = "DATA_ENTRY";
+    private String userType;
 
     @Column(unique = true, nullable = false)
     private String email;
@@ -121,6 +130,11 @@ public class User {
 
     @Column(name = "last_login_at")
     private LocalDateTime lastLoginAt;
+
+    /** Monotonic marker changed whenever role, scope or permissions change. */
+    @Column(name = "authorization_version", nullable = false)
+    @Builder.Default
+    private Long authorizationVersion = 0L;
 
     @CreatedDate
     @Column(updatable = false)

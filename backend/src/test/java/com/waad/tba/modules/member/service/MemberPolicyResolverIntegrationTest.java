@@ -50,6 +50,7 @@ class MemberPolicyResolverIntegrationTest extends PostgresIntegrationTestBase {
     @Autowired private BenefitPolicyRepository policyRepository;
     @Autowired private EligibilityEngineService eligibilityService;
     @Autowired private BenefitPolicyCoverageService coverageService;
+    @Autowired private MemberEmployerResolver employerResolver;
 
     private static String suffix() {
         return UUID.randomUUID().toString().substring(0, 8);
@@ -70,10 +71,14 @@ class MemberPolicyResolverIntegrationTest extends PostgresIntegrationTestBase {
     }
 
     private Member newMember(Employer employer, BenefitPolicy policy, String s) {
-        return memberRepository.save(Member.builder()
+        Member member = memberRepository.save(Member.builder()
                 .fullName("Policy Member " + s).employer(employer).benefitPolicy(policy)
                 .cardNumber("PCARD" + s).barcode("PCARD" + s)
                 .status(Member.MemberStatus.ACTIVE).active(true).build());
+        employerResolver.assignEmployer(member, employer, LocalDate.of(1900, 1, 1),
+                "test fixture employer history",
+                com.waad.tba.modules.member.entity.EmployerAssignmentSource.MANUAL, 1L);
+        return member;
     }
 
     /** A backdated question is answered with the policy of that date, not today's. */
@@ -422,5 +427,59 @@ class MemberPolicyResolverIntegrationTest extends PostgresIntegrationTestBase {
         assertThat(assignmentRepository.findByMemberIdOrderByAssignmentStartDateDesc(member.getId()))
                 .as("re-assigning the policy already in force must not create a second row")
                 .hasSize(before);
+    }
+
+    @Test
+    void missingServiceDateFailsClosedInsteadOfUsingToday() {
+        String s = suffix();
+        Employer employer = newEmployer(s);
+        BenefitPolicy policy = newPolicy(employer, s, new BigDecimal("10000"),
+                LocalDate.now().minusYears(1), LocalDate.now().plusYears(1));
+        Member member = newMember(employer, policy, s);
+
+        assertThatThrownBy(() -> resolver.resolveFor(member, null))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("تاريخ الخدمة إلزامي");
+        assertThatThrownBy(() -> resolver.resolveAssignmentFor(member, null))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("تاريخ الخدمة إلزامي");
+        assertThatThrownBy(() -> resolver.resolveForOrFail(member, null))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("تاريخ الخدمة إلزامي");
+    }
+
+    @Test
+    void aCurrentPointerWithoutAnAssignmentNeverGrantsDatedCoverage() {
+        String s = suffix();
+        Employer employer = newEmployer(s);
+        BenefitPolicy policy = newPolicy(employer, s, new BigDecimal("10000"),
+                LocalDate.now().minusYears(1), LocalDate.now().plusYears(1));
+        Member member = newMember(employer, policy, s);
+
+        assertThat(assignmentRepository.findByMemberIdOrderByAssignmentStartDateDesc(member.getId()))
+                .as("the fixture deliberately represents a broken creation path")
+                .isEmpty();
+        assertThat(resolver.resolveFor(member, LocalDate.now()))
+                .as("members.benefit_policy_id is display-only and cannot fabricate a dated assignment")
+                .isEmpty();
+        assertThatThrownBy(() -> resolver.resolveForOrFail(member, LocalDate.now()))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("لا توجد وثيقة منافع سارية");
+    }
+
+    @Test
+    void assigningWithoutAnEffectiveDateFailsClosed() {
+        String s = suffix();
+        Employer employer = newEmployer(s);
+        BenefitPolicy policy = newPolicy(employer, s, new BigDecimal("10000"),
+                LocalDate.now().minusYears(1), LocalDate.now().plusYears(1));
+        Member member = newMember(employer, policy, s);
+
+        assertThatThrownBy(() -> resolver.assignPolicy(member, policy, null,
+                "missing date", PolicyAssignmentSource.MANUAL, 1L))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("تاريخ سريان");
+        assertThat(assignmentRepository.findByMemberIdOrderByAssignmentStartDateDesc(member.getId()))
+                .isEmpty();
     }
 }

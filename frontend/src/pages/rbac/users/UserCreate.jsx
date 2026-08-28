@@ -1,453 +1,183 @@
-/**
- * User Create Page – Simplified
- * Single form: username, password, userType (single-select dropdown)
- * POST /admin/users with { username, password, userType, ...optional }
- * No assign-roles step. Redirect to /admin/users on success.
- */
-
-import { useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-
-// MUI
-import { Box, Grid, TextField, Button, Alert, CircularProgress, InputAdornment, IconButton, MenuItem } from '@mui/material';
-
-// MUI Icons
-import PersonAddIcon from '@mui/icons-material/PersonAdd';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import {
+  Alert, Box, Button, Card, CardActionArea, CardContent, Chip, CircularProgress, Divider,
+  Grid, InputAdornment, MenuItem, Paper, Stack, Step, StepLabel, Stepper, Table,
+  TableBody, TableCell, TableContainer, TableHead, TableRow, TextField,
+  ToggleButton, ToggleButtonGroup, Typography
+} from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import SaveIcon from '@mui/icons-material/Save';
-import VisibilityIcon from '@mui/icons-material/Visibility';
-import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
-import PersonIcon from '@mui/icons-material/Person';
-import EmailIcon from '@mui/icons-material/Email';
-import LockIcon from '@mui/icons-material/Lock';
-import PhoneIcon from '@mui/icons-material/Phone';
-import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
+import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
+import AdminPanelSettingsOutlinedIcon from '@mui/icons-material/AdminPanelSettingsOutlined';
+import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
+import SearchIcon from '@mui/icons-material/Search';
+import SecurityOutlinedIcon from '@mui/icons-material/SecurityOutlined';
+import WarningAmberRoundedIcon from '@mui/icons-material/WarningAmberRounded';
 
-// Project Components
 import MainCard from 'components/MainCard';
 import ModernPageHeader from 'components/tba/ModernPageHeader';
-import TbaFormSection from 'components/tba/form/TbaFormSection';
-
-// Contexts
-import { useTableRefresh } from 'contexts/TableRefreshContext';
-
-// Services & Constants
-import usersService from 'services/rbac/users.service';
-import { SystemRole, RoleDisplayNames } from 'constants/rbac';
 import EmployerSelectField from 'components/tba/EmployerSelectField';
-
-// Snackbar
+import { useTableRefresh } from 'contexts/TableRefreshContext';
 import { openSnackbar } from 'api/snackbar';
-
-// Utils
+import axios from 'utils/axios';
+import accessControlService from 'services/rbac/access-control.service';
+import { usersService } from 'services/rbac/users.service';
+import { SystemRole, RoleDisplayNames } from 'constants/rbac';
 import { validatePassword } from 'utils/passwordValidator';
 
-// ============================================================================
-// ROLE OPTIONS for dropdown (exclude SUPER_ADMIN – only backend can set that)
-// ============================================================================
-
-const USER_TYPE_OPTIONS = Object.values(SystemRole)
-  .filter((role) => role !== 'SUPER_ADMIN')
-  .map((role) => ({
-    value: role,
-    label: RoleDisplayNames[role]?.ar || role,
-    labelEn: RoleDisplayNames[role]?.en || role
-  }));
-
-// ============================================================================
-// VALIDATION
-// ============================================================================
-
-const validate = (form) => {
-  const errors = {};
-
-  if (!form.username?.trim()) {
-    errors.username = 'اسم المستخدم مطلوب';
-  } else if (form.username.length < 3) {
-    errors.username = 'اسم المستخدم يجب أن يكون 3 أحرف على الأقل';
-  } else if (form.username.length > 50) {
-    errors.username = 'اسم المستخدم يجب أن لا يتجاوز 50 حرف';
-  }
-
-  if (!form.fullName?.trim()) {
-    errors.fullName = 'الاسم الكامل مطلوب';
-  }
-
-  if (!form.email?.trim()) {
-    errors.email = 'البريد الإلكتروني مطلوب';
-  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
-    errors.email = 'البريد الإلكتروني غير صالح';
-  }
-
-  const passwordValidation = validatePassword(form.password);
-  if (!passwordValidation.valid) {
-    errors.password = passwordValidation.errors.join(' • ');
-  }
-
-  if (form.password !== form.confirmPassword) {
-    errors.confirmPassword = 'كلمة المرور غير متطابقة';
-  }
-
-  if (!form.userType) {
-    errors.userType = 'نوع المستخدم مطلوب';
-  }
-
-  if (form.userType === SystemRole.EMPLOYER_ADMIN && !form.employerId) {
-    errors.employerId = 'يجب اختيار جهة العمل لمدير جهة العمل';
-  }
-
-  if (form.userType === SystemRole.PROVIDER_STAFF && !form.providerId) {
-    errors.providerId = 'يجب اختيار مقدم الخدمة لموظف مقدم الخدمة';
-  }
-
-  return errors;
+const STEPS = ['الدور الأساسي', 'نطاق الوصول', 'الصلاحيات الفعلية', 'مراجعة وتأكيد'];
+const CATEGORIES = {
+  MEMBERS: 'المستفيدون', CLAIMS: 'المطالبات', PREAUTHORIZATIONS: 'الموافقات المسبقة',
+  PROVIDERS: 'مقدمو الخدمة', EMPLOYERS: 'جهات العمل', CONTRACTS_PRICING: 'العقود والأسعار',
+  BENEFITS: 'المنافع', SETTLEMENTS: 'التسويات', REPORTS: 'التقارير',
+  USERS_SECURITY: 'المستخدمون والأمن', SYSTEM: 'إعدادات النظام'
 };
+const ROLE_HELP = {
+  DATA_ENTRY: 'إدخال وتحديث البيانات التشغيلية ضمن جهة محددة.',
+  EMPLOYER_ADMIN: 'متابعة مستفيدي ومطالبات جهة عمل واحدة.',
+  PROVIDER_STAFF: 'بوابة مقدم الخدمة وتقديم المطالبات والموافقات.',
+  MEDICAL_REVIEWER: 'مراجعة طبية دون الاعتماد النهائي.',
+  MEDICAL_REVIEW_HEAD: 'اعتماد قرارات فريق المراجعة.',
+  INSURANCE_MANAGER: 'إشراف قرارات التأمين الحساسة.',
+  ACCOUNTANT: 'إدارة التسويات والتقارير المالية.',
+  FINANCE_VIEWER: 'قراءة مالية فقط دون تعديل.'
+};
+const initialForm = { username: '', password: '', confirmPassword: '', fullName: '', email: '', phone: '', active: true, userType: '', employerId: '', providerId: '' };
+const needsEmployer = (role) => [SystemRole.EMPLOYER_ADMIN, SystemRole.DATA_ENTRY].includes(role);
+const needsProvider = (role) => role === SystemRole.PROVIDER_STAFF;
 
-// ============================================================================
-// MAIN COMPONENT
-// ============================================================================
-
-const UserCreate = () => {
+export default function UserCreate() {
+  const { id } = useParams();
+  const editing = Boolean(id);
   const navigate = useNavigate();
   const { triggerRefresh } = useTableRefresh();
-
-  const [form, setForm] = useState({
-    username: '',
-    password: '',
-    confirmPassword: '',
-    fullName: '',
-    email: '',
-    phone: '',
-    userType: '',
-    employerId: '',
-    providerId: ''
-  });
-
-  const [providers, setProviders] = useState([]);
-
+  const [step, setStep] = useState(0);
+  const [form, setForm] = useState(initialForm);
   const [errors, setErrors] = useState({});
-  const [loading, setLoading] = useState(false);
-  const [submitError, setSubmitError] = useState(null);
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [catalogue, setCatalogue] = useState([]);
+  const [roles, setRoles] = useState([]);
+  const [providers, setProviders] = useState([]);
+  const [overrides, setOverrides] = useState({});
+  const [originalOverrides, setOriginalOverrides] = useState({});
+  const [query, setQuery] = useState('');
+  const [category, setCategory] = useState('ALL');
+  const [changeReason, setChangeReason] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [loadError, setLoadError] = useState('');
 
-  // ========================================
-  // INITIAL DATA
-  // ========================================
-  useState(() => {
-    const fetchSelectors = async () => {
-      try {
-        const provData = await import('utils/axios')
-          .then((m) => m.default.get('/providers/selector'))
-          .then((res) => res.data?.data?.items || res.data?.items || res.data?.data || res.data)
-          .catch(() => []);
-        setProviders(provData || []);
-      } catch (err) {
-        console.error('Failed to fetch selectors:', err);
+  useEffect(() => {
+    let mounted = true;
+    Promise.all([
+      accessControlService.getPermissionCatalogue(), accessControlService.getRoleTemplates(),
+      axios.get('/providers/selector').then((r) => r.data?.data?.items || r.data?.items || r.data?.data || r.data || []),
+      editing ? usersService.getUserById(id) : Promise.resolve(null),
+      editing ? accessControlService.getEffectivePermissions(id) : Promise.resolve(null)
+    ]).then(([permissions, templates, providerRows, userResponse, permissionSnapshot]) => {
+      if (!mounted) return;
+      setCatalogue(permissions || []);
+      const user = userResponse?.data?.data || userResponse?.data;
+      const currentRole = user?.role || user?.userType;
+      setRoles((templates || []).filter((item) => item.roleCode !== SystemRole.SUPER_ADMIN || currentRole === SystemRole.SUPER_ADMIN));
+      setProviders(providerRows || []);
+      if (editing && user) {
+        setForm({ ...initialForm, username: user.username || '', fullName: user.fullName || '', email: user.email || '', phone: user.phone || '', active: user.active !== false, userType: currentRole || '', employerId: user.employerId || '', providerId: user.providerId || '' });
+        const loaded = Object.fromEntries((permissionSnapshot?.overrides || []).map((row) => [row.permissionCode, row.effect]));
+        setOverrides(loaded);
+        setOriginalOverrides(loaded);
       }
-    };
-    fetchSelectors();
-  }, []);
+    }).catch((error) => mounted && setLoadError(error?.response?.data?.message || 'تعذر تحميل عقد الصلاحيات؛ تم إيقاف الإنشاء حمايةً من إعداد ناقص.'))
+      .finally(() => mounted && setLoading(false));
+    return () => { mounted = false; };
+  }, [editing, id]);
 
-  const handleChange = (field) => (event) => {
-    const value = event.target.value;
-    setForm((prev) => ({ ...prev, [field]: value }));
-    if (errors[field]) {
-      setErrors((prev) => ({ ...prev, [field]: null }));
-    }
+  const template = roles.find((item) => item.roleCode === form.userType);
+  const inherited = useMemo(() => new Set(template?.permissionCodes || []), [template]);
+  const effective = useMemo(() => {
+    const set = new Set(inherited);
+    Object.entries(overrides).forEach(([code, mode]) => mode === 'GRANT' ? set.add(code) : mode === 'REVOKE' && set.delete(code));
+    return set;
+  }, [inherited, overrides]);
+  const visiblePermissions = useMemo(() => catalogue.filter((item) =>
+    (category === 'ALL' || item.category === category) &&
+    (!query.trim() || `${item.displayNameAr} ${item.code}`.toLowerCase().includes(query.trim().toLowerCase()))
+  ), [catalogue, category, query]);
+
+  const change = (field, value) => {
+    setForm((old) => ({ ...old, [field]: value, ...(field === 'userType' ? { employerId: '', providerId: '' } : {}) }));
+    if (field === 'userType') setOverrides({});
+    setErrors((old) => ({ ...old, [field]: undefined }));
   };
+  const validate = () => {
+    const next = {};
+    if (step === 0) {
+      if (!form.userType) next.userType = 'اختر الدور الأساسي';
+      if (!form.fullName.trim()) next.fullName = 'الاسم مطلوب';
+      if (form.username.trim().length < 3) next.username = 'اسم المستخدم 3 أحرف على الأقل';
+      if (!/^\S+@\S+\.\S+$/.test(form.email)) next.email = 'البريد غير صالح';
+      if (!editing) {
+        const password = validatePassword(form.password);
+        if (!password.valid) next.password = password.errors.join(' • ');
+        if (form.password !== form.confirmPassword) next.confirmPassword = 'كلمتا المرور غير متطابقتين';
+      }
+    }
+    if (step === 1 && needsEmployer(form.userType) && !form.employerId) next.employerId = 'جهة العمل مطلوبة';
+    if (step === 1 && needsProvider(form.userType) && !form.providerId) next.providerId = 'مقدم الخدمة مطلوب';
+    setErrors(next);
+    return Object.keys(next).length === 0;
+  };
+  const next = () => validate() && setStep((value) => value + 1);
 
-  // ========================================
-  // SUBMIT – single API call, no assign-roles
-  // ========================================
-
-  const handleSubmit = useCallback(async () => {
-    const validationErrors = validate(form);
-    if (Object.keys(validationErrors).length > 0) {
-      setErrors(validationErrors);
+  const submit = async () => {
+    const overrideCodes = new Set([...Object.keys(originalOverrides), ...Object.keys(overrides)]);
+    const changedOverrides = [...overrideCodes].filter((code) => (originalOverrides[code] || 'INHERIT') !== (overrides[code] || 'INHERIT'));
+    if ((editing || changedOverrides.length) && !changeReason.trim()) {
+      setErrors((old) => ({ ...old, changeReason: editing ? 'سبب تعديل حساب المستخدم إلزامي' : 'سبب الاستثناءات الشخصية إلزامي' }));
       return;
     }
-
+    const permissionOverrides = (editing ? changedOverrides : Object.keys(overrides)).map((permissionCode) => ({ permissionCode, mode: overrides[permissionCode] || 'INHERIT', reason: changeReason.trim() }));
+    const user = { username: form.username.trim(), ...(editing ? { active: form.active } : { password: form.password }), fullName: form.fullName.trim(), email: form.email.trim(), phone: form.phone.trim() || null, userType: form.userType, employerId: needsEmployer(form.userType) ? Number(form.employerId) : null, providerId: needsProvider(form.userType) ? Number(form.providerId) : null };
     try {
-      setLoading(true);
-      setSubmitError(null);
-
-      const payload = {
-        username: form.username.trim(),
-        password: form.password,
-        fullName: form.fullName.trim(),
-        email: form.email.trim(),
-        phone: form.phone?.trim() || null,
-        userType: form.userType,
-        employerId: form.userType === SystemRole.EMPLOYER_ADMIN ? form.employerId : null,
-        providerId: form.userType === SystemRole.PROVIDER_STAFF ? form.providerId : null
-      };
-
-      await usersService.createUser(payload);
-
-      openSnackbar({
-        open: true,
-        message: 'تم إنشاء المستخدم بنجاح',
-        variant: 'alert',
-        alert: { color: 'success' }
-      });
-
+      setSaving(true);
+      if (editing) await accessControlService.updateManagedUser(id, user, permissionOverrides, changeReason.trim());
+      else await accessControlService.createManagedUser(user, permissionOverrides);
       triggerRefresh();
+      openSnackbar({ open: true, message: editing ? 'تم تحديث المستخدم والنطاق والصلاحيات ذرياً' : 'تم إنشاء المستخدم وتطبيق النطاق والصلاحيات', variant: 'alert', alert: { color: 'success' } });
       navigate('/admin/users');
-    } catch (err) {
-      console.error('[UserCreate] Submit error:', err);
-      const errorMessage =
-        err?.response?.data?.messageAr || err?.response?.data?.message || err.message || 'فشل إنشاء المستخدم. يرجى المحاولة لاحقاً';
-      setSubmitError(errorMessage);
+    } catch (error) {
+      openSnackbar({ open: true, message: error?.response?.data?.messageAr || error?.response?.data?.message || 'تعذر إنشاء المستخدم', variant: 'alert', alert: { color: 'error' } });
+    } finally { setSaving(false); }
+  };
 
-      openSnackbar({
-        open: true,
-        message: errorMessage,
-        variant: 'alert',
-        alert: { color: 'error' }
-      });
-    } finally {
-      setLoading(false);
-    }
-  }, [form, triggerRefresh, navigate]);
+  if (loading) return <Box sx={{ minHeight: 360, display: 'grid', placeItems: 'center' }}><CircularProgress /></Box>;
+  return <Box dir="rtl">
+    <ModernPageHeader title={editing ? 'تعديل المستخدم' : 'إضافة مستخدم جديد'} subtitle="الدور والنطاق والصلاحيات في قرار واحد قابل للمراجعة" breadcrumbs={[{ label: 'الرئيسية', path: '/' }, { label: 'المستخدمون', path: '/admin/users' }, { label: editing ? 'تعديل' : 'إضافة' }]} actions={<Button variant="outlined" onClick={() => navigate('/admin/users')}>عودة</Button>} />
+    {loadError && <Alert severity="error" sx={{ mb: 2 }}>{loadError}</Alert>}
+    <MainCard contentSX={{ p: { xs: 2, md: 3 } }}>
+      <Stepper activeStep={step} alternativeLabel sx={{ mb: 4 }}>{STEPS.map((label) => <Step key={label}><StepLabel>{label}</StepLabel></Step>)}</Stepper>
 
-  // ========================================
-  // RENDER
-  // ========================================
+      {step === 0 && <Stack spacing={3}>
+        <Box><Typography variant="h3">الدور الأساسي</Typography><Typography color="text.secondary">قالب بداية، وليس حكماً نهائياً على الصلاحيات.</Typography></Box>
+        <Grid container spacing={1.5}>{roles.map((role) => <Grid item xs={12} sm={6} md={4} key={role.roleCode}><Card variant="outlined" sx={{ height: '100%', borderColor: form.userType === role.roleCode ? 'primary.main' : 'divider', bgcolor: form.userType === role.roleCode ? 'primary.lighter' : 'background.paper' }}><CardActionArea sx={{ height: '100%' }} onClick={() => change('userType', role.roleCode)}><CardContent><Stack direction="row" justifyContent="space-between"><AdminPanelSettingsOutlinedIcon color="primary" /><Chip size="small" label={`${role.permissionCodes.length} صلاحية`} /></Stack><Typography variant="h5" mt={1}>{RoleDisplayNames[role.roleCode]?.ar || role.displayNameAr}</Typography><Typography variant="body2" color="text.secondary" mt={1}>{ROLE_HELP[role.roleCode]}</Typography></CardContent></CardActionArea></Card></Grid>)}</Grid>
+        {errors.userType && <Alert severity="error">{errors.userType}</Alert>}
+        <Divider />
+        <Grid container spacing={2}>
+          <Grid item xs={12} md={6}><TextField fullWidth label="الاسم الكامل" value={form.fullName} onChange={(e) => change('fullName', e.target.value)} error={!!errors.fullName} helperText={errors.fullName} /></Grid>
+          <Grid item xs={12} md={6}><TextField fullWidth label="اسم المستخدم" value={form.username} onChange={(e) => change('username', e.target.value)} error={!!errors.username} helperText={errors.username} /></Grid>
+          <Grid item xs={12} md={6}><TextField fullWidth label="البريد الإلكتروني" value={form.email} onChange={(e) => change('email', e.target.value)} error={!!errors.email} helperText={errors.email} /></Grid>
+          <Grid item xs={12} md={6}><TextField fullWidth label="الهاتف" value={form.phone} onChange={(e) => change('phone', e.target.value)} /></Grid>
+          {!editing && <><Grid item xs={12} md={6}><TextField fullWidth type="password" label="كلمة المرور" value={form.password} onChange={(e) => change('password', e.target.value)} error={!!errors.password} helperText={errors.password} /></Grid>
+          <Grid item xs={12} md={6}><TextField fullWidth type="password" label="تأكيد كلمة المرور" value={form.confirmPassword} onChange={(e) => change('confirmPassword', e.target.value)} error={!!errors.confirmPassword} helperText={errors.confirmPassword} /></Grid></>}
+        </Grid>
+      </Stack>}
 
-  return (
-    <Box>
-      {/* Page Header */}
-      <ModernPageHeader
-        title="إنشاء مستخدم جديد"
-        subtitle="إضافة مستخدم جديد للنظام"
-        icon={PersonAddIcon}
-        breadcrumbs={[{ label: 'الرئيسية', path: '/' }, { label: 'المستخدمين', path: '/admin/users' }, { label: 'إنشاء مستخدم' }]}
-        actions={
-          <Button variant="outlined" startIcon={<ArrowBackIcon />} onClick={() => navigate('/admin/users')}>
-            العودة للقائمة
-          </Button>
-        }
-      />
+      {step === 1 && <Stack spacing={3} sx={{ maxWidth: 850, mx: 'auto' }}><Box textAlign="center"><Typography variant="h3">نطاق الوصول</Typography><Typography color="text.secondary">النطاق يحدد أين يعمل المستخدم، ولا يمنحه عمليات إضافية.</Typography></Box>{needsEmployer(form.userType) && <EmployerSelectField value={form.employerId} onChange={(value) => change('employerId', value?.target ? value.target.value : value)} error={!!errors.employerId} helperText={errors.employerId} required />}{needsProvider(form.userType) && <TextField select fullWidth label="مقدم الخدمة" value={form.providerId} onChange={(e) => change('providerId', e.target.value)} error={!!errors.providerId} helperText={errors.providerId}>{providers.map((provider) => <MenuItem key={provider.id} value={provider.id}>{provider.name}</MenuItem>)}</TextField>}{!needsEmployer(form.userType) && !needsProvider(form.userType) && <Alert severity="info">دور داخلي عام؛ تبقى كل عملية حساسة مقيدة بصلاحيتها وقواعد قسمها.</Alert>}</Stack>}
 
-      {/* Error Alert */}
-      {submitError && (
-        <Alert severity="error" sx={{ mb: '1.0rem' }} onClose={() => setSubmitError(null)}>
-          {submitError}
-        </Alert>
-      )}
+      {step === 2 && <Stack spacing={2}><Box><Typography variant="h3">الصلاحيات الفعلية</Typography><Typography color="text.secondary">السحب الصريح يتقدم على الدور. استخدم الاستثناء فقط لحاجة موثقة.</Typography></Box><Grid container spacing={1}><Grid item xs={12} md={7}><TextField fullWidth size="small" placeholder="بحث..." value={query} onChange={(e) => setQuery(e.target.value)} InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon /></InputAdornment> }} /></Grid><Grid item xs={12} md={5}><TextField select fullWidth size="small" value={category} onChange={(e) => setCategory(e.target.value)}><MenuItem value="ALL">كل التصنيفات</MenuItem>{Object.entries(CATEGORIES).map(([code, label]) => <MenuItem key={code} value={code}>{label}</MenuItem>)}</TextField></Grid></Grid><TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 520 }}><Table stickyHeader size="small"><TableHead><TableRow><TableCell>التصنيف</TableCell><TableCell>الصلاحية</TableCell><TableCell>الحالة</TableCell><TableCell align="center">القرار</TableCell></TableRow></TableHead><TableBody>{visiblePermissions.map((permission) => { const mode = overrides[permission.code] || 'INHERIT'; const enabled = effective.has(permission.code); return <TableRow key={permission.code}><TableCell>{CATEGORIES[permission.category]}</TableCell><TableCell><Typography fontWeight={600}>{permission.displayNameAr} {permission.sensitive && <WarningAmberRoundedIcon color="warning" sx={{ fontSize: 16, verticalAlign: 'middle' }} />}</Typography><Typography variant="caption" color="text.secondary">{permission.code}</Typography></TableCell><TableCell><Chip size="small" color={enabled ? 'success' : 'default'} label={mode === 'GRANT' ? 'منحة شخصية' : mode === 'REVOKE' ? 'مسحوبة' : inherited.has(permission.code) ? 'موروثة' : 'غير موروثة'} /></TableCell><TableCell align="center"><ToggleButtonGroup exclusive size="small" value={mode} onChange={(_, value) => value && setOverrides((old) => ({ ...old, [permission.code]: value }))}><ToggleButton value="INHERIT">من الدور</ToggleButton><ToggleButton value="GRANT" color="success">منح</ToggleButton><ToggleButton value="REVOKE" color="error">سحب</ToggleButton></ToggleButtonGroup></TableCell></TableRow>; })}</TableBody></Table></TableContainer></Stack>}
 
-      <MainCard>
-        <TbaFormSection title="معلومات المستخدم" icon={PersonIcon}>
-          <Grid container spacing={2.5}>
-            {/* Username */}
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField
-                fullWidth
-                label="اسم المستخدم"
-                value={form.username}
-                onChange={handleChange('username')}
-                error={!!errors.username}
-                helperText={errors.username}
-                required
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <PersonIcon color="action" />
-                    </InputAdornment>
-                  )
-                }}
-              />
-            </Grid>
+      {step === 3 && <Grid container spacing={2}><Grid item xs={12} md={8}><Stack spacing={2}><Alert severity="warning" icon={<SecurityOutlinedIcon />}>أي تعديل أمني يسحب جلسات المستخدم فوراً بعد نجاح المعاملة كاملة.</Alert><Paper variant="outlined" sx={{ p: 2 }}><Typography variant="h4">ملخص الحساب</Typography><Grid container spacing={2} mt={0.5}><Grid item xs={6}>الاسم: <b>{form.fullName}</b></Grid><Grid item xs={6}>المستخدم: <b>{form.username}</b></Grid><Grid item xs={6}>الدور: <b>{RoleDisplayNames[form.userType]?.ar}</b></Grid><Grid item xs={6}>النطاق: <b>{needsEmployer(form.userType) ? `جهة #${form.employerId}` : needsProvider(form.userType) ? `مقدم #${form.providerId}` : 'داخلي عام'}</b></Grid></Grid></Paper><Paper variant="outlined" sx={{ p: 2 }}><Typography variant="h4" mb={1}>الاختلاف عن قالب الدور</Typography>{Object.entries(overrides).some(([, mode]) => mode !== 'INHERIT') ? <Stack direction="row" gap={1} flexWrap="wrap">{Object.entries(overrides).filter(([, mode]) => mode !== 'INHERIT').map(([code, mode]) => <Chip key={code} color={mode === 'GRANT' ? 'success' : 'error'} label={`${catalogue.find((p) => p.code === code)?.displayNameAr}: ${mode === 'GRANT' ? 'منح' : 'سحب'}`} />)}</Stack> : <Typography color="text.secondary">لا توجد استثناءات شخصية.</Typography>}<TextField sx={{ mt: 2 }} fullWidth required={editing || Object.keys(overrides).length > 0} multiline minRows={2} label={editing ? 'سبب تعديل الحساب' : 'سبب الاستثناءات الشخصية'} value={changeReason} onChange={(event) => { setChangeReason(event.target.value); setErrors((old) => ({ ...old, changeReason: undefined })); }} error={!!errors.changeReason} helperText={errors.changeReason || 'سيظهر في سجل التدقيق.'} /></Paper></Stack></Grid><Grid item xs={12} md={4}><Card sx={{ bgcolor: 'success.lighter' }}><CardContent><CheckCircleOutlineIcon color="success" /><Typography variant="h1">{effective.size}</Typography><Typography>صلاحية فعّالة</Typography></CardContent></Card></Grid></Grid>}
 
-            {/* Full Name */}
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField
-                fullWidth
-                label="الاسم الكامل"
-                value={form.fullName}
-                onChange={handleChange('fullName')}
-                error={!!errors.fullName}
-                helperText={errors.fullName}
-                required
-              />
-            </Grid>
-
-            {/* Email */}
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField
-                fullWidth
-                label="البريد الإلكتروني"
-                type="email"
-                value={form.email}
-                onChange={handleChange('email')}
-                error={!!errors.email}
-                helperText={errors.email}
-                required
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <EmailIcon color="action" />
-                    </InputAdornment>
-                  )
-                }}
-              />
-            </Grid>
-
-            {/* Phone */}
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField
-                fullWidth
-                label="رقم الهاتف"
-                value={form.phone}
-                onChange={handleChange('phone')}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <PhoneIcon color="action" />
-                    </InputAdornment>
-                  )
-                }}
-              />
-            </Grid>
-
-            {/* Password */}
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField
-                fullWidth
-                label="كلمة المرور"
-                type={showPassword ? 'text' : 'password'}
-                value={form.password}
-                onChange={handleChange('password')}
-                error={!!errors.password}
-                helperText={errors.password}
-                required
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <LockIcon color="action" />
-                    </InputAdornment>
-                  ),
-                  endAdornment: (
-                    <InputAdornment position="end">
-                      <IconButton onClick={() => setShowPassword(!showPassword)} edge="end">
-                        {showPassword ? <VisibilityOffIcon /> : <VisibilityIcon />}
-                      </IconButton>
-                    </InputAdornment>
-                  )
-                }}
-              />
-            </Grid>
-
-            {/* Confirm Password */}
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField
-                fullWidth
-                label="تأكيد كلمة المرور"
-                type={showConfirmPassword ? 'text' : 'password'}
-                value={form.confirmPassword}
-                onChange={handleChange('confirmPassword')}
-                error={!!errors.confirmPassword}
-                helperText={errors.confirmPassword}
-                required
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <LockIcon color="action" />
-                    </InputAdornment>
-                  ),
-                  endAdornment: (
-                    <InputAdornment position="end">
-                      <IconButton onClick={() => setShowConfirmPassword(!showConfirmPassword)} edge="end">
-                        {showConfirmPassword ? <VisibilityOffIcon /> : <VisibilityIcon />}
-                      </IconButton>
-                    </InputAdornment>
-                  )
-                }}
-              />
-            </Grid>
-
-            {/* User Type – Single Select Dropdown */}
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField
-                select
-                fullWidth
-                label="نوع المستخدم"
-                value={form.userType}
-                onChange={handleChange('userType')}
-                error={!!errors.userType}
-                helperText={errors.userType || 'اختر دور المستخدم في النظام'}
-                required
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <AdminPanelSettingsIcon color="action" />
-                    </InputAdornment>
-                  )
-                }}
-              >
-                {USER_TYPE_OPTIONS.map((opt) => (
-                  <MenuItem key={opt.value} value={opt.value}>
-                    {opt.label} ({opt.labelEn})
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Grid>
-
-            {/* Employer Selection – Conditional for EMPLOYER_ADMIN */}
-            {form.userType === SystemRole.EMPLOYER_ADMIN && (
-              <Grid size={{ xs: 12, sm: 6 }}>
-                <EmployerSelectField
-                  value={form.employerId}
-                  onChange={(employerId) => handleChange('employerId')({ target: { value: employerId } })}
-                  error={!!errors.employerId}
-                  helperText={errors.employerId || 'اختر جهة العمل المرتبطة بهذا المستخدم'}
-                  required
-                />
-              </Grid>
-            )}
-
-            {/* Provider Selection – Conditional for PROVIDER_STAFF */}
-            {form.userType === SystemRole.PROVIDER_STAFF && (
-              <Grid size={{ xs: 12, sm: 6 }}>
-                <TextField
-                  select
-                  fullWidth
-                  label="مقدم الخدمة (Provider)"
-                  value={form.providerId}
-                  onChange={handleChange('providerId')}
-                  error={!!errors.providerId}
-                  helperText={errors.providerId || 'اختر مقدم الخدمة المرتبط بهذا المستخدم'}
-                  required
-                >
-                  {providers.map((prov) => (
-                    <MenuItem key={prov.id} value={prov.id}>
-                      {prov.nameAr || prov.nameEn || prov.name}
-                    </MenuItem>
-                  ))}
-                </TextField>
-              </Grid>
-            )}
-          </Grid>
-        </TbaFormSection>
-
-        {/* Submit */}
-        <Box
-          sx={{ display: 'flex', justifyContent: 'flex-end', mt: '1.5rem', pt: '1.0rem', borderTop: '1px solid', borderColor: 'divider' }}
-        >
-          <Button
-            variant="contained"
-            onClick={handleSubmit}
-            disabled={loading}
-            startIcon={loading ? <CircularProgress size={18} color="inherit" /> : <SaveIcon />}
-            size="large"
-          >
-            {loading ? 'جاري الحفظ...' : 'حفظ المستخدم'}
-          </Button>
-        </Box>
-      </MainCard>
-    </Box>
-  );
-};
-
-export default UserCreate;
+      <Divider sx={{ my: 3 }} /><Stack direction="row" justifyContent="space-between"><Button variant="outlined" disabled={!step || saving} onClick={() => setStep((value) => value - 1)} startIcon={<ArrowBackIcon />}>السابق</Button>{step < 3 ? <Button variant="contained" disabled={!!loadError} onClick={next} endIcon={<ArrowForwardIcon />}>التالي</Button> : <Button variant="contained" color="success" disabled={saving || !!loadError} onClick={submit} startIcon={saving ? <CircularProgress size={18} color="inherit" /> : <CheckCircleOutlineIcon />}>مراجعة وحفظ</Button>}</Stack>
+    </MainCard>
+  </Box>;
+}

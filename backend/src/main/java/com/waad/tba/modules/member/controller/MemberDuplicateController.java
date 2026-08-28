@@ -45,7 +45,7 @@ public class MemberDuplicateController {
      * Now: POST, super-admin only, a mandatory reason, and an audit line.
      */
     @PostMapping("/reset-kinship")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("@permissionGuard.has('DANGER_ZONE_EXECUTE')")
     public ApiResponse<String> resetKinship(@RequestBody KinshipResetRequest request) {
         int updated = kinshipAdminService.resetVerification(request == null ? null : request.reason());
         return ApiResponse.success("Reset " + updated + " members.", "Reset successful", "تم بنجاح");
@@ -55,7 +55,7 @@ public class MemberDuplicateController {
     public record KinshipResetRequest(String reason) {}
 
     @GetMapping
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("@permissionGuard.has('SYSTEM_SETTINGS_VIEW')")
     public ResponseEntity<ApiResponse<List<MemberDuplicateGroupDto>>> getDuplicates() {
         log.info("REST request to get member duplicates");
         List<MemberDuplicateGroupDto> duplicates = duplicateService.findDuplicates();
@@ -63,10 +63,11 @@ public class MemberDuplicateController {
     }
 
     @PostMapping("/merge")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
-    public ResponseEntity<ApiResponse<Void>> mergeDuplicates(@RequestBody MemberDuplicateMergeRequestDto request) {
+    @PreAuthorize("@permissionGuard.has('DANGER_ZONE_EXECUTE')")
+    public ResponseEntity<ApiResponse<Void>> mergeDuplicates(@jakarta.validation.Valid @RequestBody MemberDuplicateMergeRequestDto request) {
         log.info("REST request to merge duplicates for primary member {}", request.getPrimaryMemberId());
-        duplicateService.mergeDuplicates(request.getPrimaryMemberId(), request.getDuplicateMemberIds());
+        duplicateService.mergeDuplicates(request.getPrimaryMemberId(), request.getDuplicateMemberIds(),
+                request.getReason(), request.getExpectedVersions());
         return ResponseEntity.ok(ApiResponse.success("تم دمج السجلات المكررة بنجاح", null));
     }
 }

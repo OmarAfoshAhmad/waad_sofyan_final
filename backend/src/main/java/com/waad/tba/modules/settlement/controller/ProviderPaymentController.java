@@ -54,7 +54,7 @@ import lombok.extern.slf4j.Slf4j;
 @RequestMapping("/api/v1/provider-payments")
 @RequiredArgsConstructor
 @Tag(name = "Settlement - Provider Payments (v2)", description = "New one-transfer-per-provider payment model")
-@PreAuthorize("isAuthenticated()")
+@PreAuthorize("@permissionGuard.has('SETTLEMENT_VIEW')")
 public class ProviderPaymentController {
 
     private final ProviderPaymentAllocationSuggestionService suggestionService;
@@ -90,7 +90,7 @@ public class ProviderPaymentController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
+    @PreAuthorize("@permissionGuard.has('SETTLEMENT_MANAGE')")
     @Operation(summary = "Create a DRAFT payment", description = "Gated by PROVIDER_PAYMENT_POSTING_ENABLED")
     public ResponseEntity<ApiResponse<ProviderPaymentDto>> createDraft(
             @RequestBody CreateProviderPaymentRequest request) {
@@ -100,7 +100,7 @@ public class ProviderPaymentController {
     }
 
     @PostMapping("/{id}/post")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
+    @PreAuthorize("@permissionGuard.has('SETTLEMENT_MANAGE')")
     @Operation(summary = "Post a DRAFT payment", description = "Gated by PROVIDER_PAYMENT_POSTING_ENABLED")
     public ResponseEntity<ApiResponse<ProviderPaymentPostResultDto>> post(
             @PathVariable Long id, @RequestBody PostProviderPaymentRequest request) {
@@ -114,7 +114,7 @@ public class ProviderPaymentController {
     }
 
     @PostMapping("/{id}/reverse")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
+    @PreAuthorize("@permissionGuard.has('SETTLEMENT_MANAGE')")
     @Operation(summary = "Reverse a POSTED payment", description = "Gated by PROVIDER_PAYMENT_POSTING_ENABLED")
     public ResponseEntity<ApiResponse<ProviderPaymentReversalResultDto>> reverse(
             @PathVariable Long id, @RequestBody ReverseProviderPaymentRequest request) {

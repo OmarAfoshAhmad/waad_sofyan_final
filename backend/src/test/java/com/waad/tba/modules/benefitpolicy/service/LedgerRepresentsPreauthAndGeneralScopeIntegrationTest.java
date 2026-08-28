@@ -68,6 +68,15 @@ class LedgerRepresentsPreauthAndGeneralScopeIntegrationTest extends PostgresInte
             long memberId = insert(c, "INSERT INTO members (employer_id, full_name, benefit_policy_id, "
                     + "card_number, barcode, status, active) VALUES (" + employerId + ", 'Ledger Member', "
                     + policyId + ", 'LC" + s + "', 'LC" + s + "', 'ACTIVE', true) RETURNING id");
+            // The enrolment period a hold sits in. V187 requires every PREAUTH
+            // row to name one, so a fixture without it writes a row production
+            // can no longer write.
+            insert(c, "INSERT INTO member_policy_assignments (member_id, policy_id, "
+                    + "assignment_start_date, assignment_source) VALUES (" + memberId + ", " + policyId
+                    + ", CURRENT_DATE - 30, 'MANUAL') RETURNING id");
+            insert(c, "INSERT INTO member_opening_balance_batches (batch_reference, reason, "
+                    + "performed_by, source_reference) VALUES ('LG-BATCH-" + s
+                    + "', 'رصيد افتتاحي للاختبار', 'tester', 'prior system export') RETURNING id");
             long groupId = insert(c, "INSERT INTO benefit_groups (policy_id, code, name_ar, "
                     + "aggregation_mode) VALUES (" + policyId + ", 'G-" + s + "', 'مجموعة', 'INDIVIDUAL') RETURNING id");
             long bucketId = insert(c, "INSERT INTO benefit_limit_buckets (policy_id, benefit_group_id, code, "
@@ -107,7 +116,8 @@ class LedgerRepresentsPreauthAndGeneralScopeIntegrationTest extends PostgresInte
         return "INSERT INTO benefit_bucket_consumptions "
                 + "(source_type, limit_scope, status, policy_id, member_id, bucket_id, claim_id, claim_line_id, "
                 + " preauth_id, preauth_line_id, period_start, period_end, approved_amount, times_consumed, "
-                + " calculation_version, idempotency_key, reversal_of_id, reversal_reason, created_at) VALUES ("
+                + " calculation_version, idempotency_key, reversal_of_id, reversal_reason, "
+                + " member_policy_assignment_id, opening_batch_id, created_at) VALUES ("
                 + "'" + sourceType + "', '" + scope + "', '" + status + "', " + f.policyId() + ", " + f.memberId()
                 + ", " + (bucketId == null ? "NULL" : bucketId)
                 + ", " + (claimId == null ? "NULL" : claimId)
@@ -116,7 +126,19 @@ class LedgerRepresentsPreauthAndGeneralScopeIntegrationTest extends PostgresInte
                 + ", " + (preauthLineId == null ? "NULL" : preauthLineId)
                 + ", DATE '" + PERIOD_START + "', DATE '" + PERIOD_END + "', " + amount + ", 0, 1, '" + key + "', "
                 + (reversalOf == null ? "NULL" : reversalOf) + ", "
-                + (reversalReason == null ? "NULL" : "'" + reversalReason + "'") + ", now())";
+                + (reversalReason == null ? "NULL" : "'" + reversalReason + "'") + ", "
+                // Only PREAUTH rows carry it: a claim's consumption belongs to
+                // no reservation, and naming one would be a false statement.
+                + ("PREAUTH".equals(sourceType)
+                        ? "(SELECT id FROM member_policy_assignments WHERE member_id = " + f.memberId()
+                                + " ORDER BY id LIMIT 1)"
+                        : "NULL")
+                // An imported balance must name the batch that brought it in;
+                // anything else must not name one at all (V188).
+                + ", " + ("OPENING_IMPORT".equals(sourceType)
+                        ? "(SELECT id FROM member_opening_balance_batches ORDER BY id LIMIT 1)"
+                        : "NULL")
+                + ", now())";
     }
 
     private void exec(String sql) throws Exception {

@@ -144,6 +144,17 @@ const MAX_UPLOAD_SIZE_MB = 10;
 const MAX_UPLOAD_SIZE_BYTES = MAX_UPLOAD_SIZE_MB * 1024 * 1024;
 const ALLOWED_FILE_EXTENSIONS = ['pdf', 'jpg', 'jpeg', 'png', 'gif', 'doc', 'docx'];
 const FILE_ACCEPT_ATTR = '.pdf,.jpg,.jpeg,.png,.gif,.doc,.docx';
+const NO_GENERAL_LIMIT_LABEL = 'لا يوجد سقف عام';
+
+const hasGeneralAnnualLimit = (limit) => {
+  const annualLimit = Number(limit?.annualLimit);
+  return Number.isFinite(annualLimit) && annualLimit > 0;
+};
+
+const formatGeneralLimitAmount = (limit, amount) => (hasGeneralAnnualLimit(limit) ? formatCurrency(amount ?? 0) : NO_GENERAL_LIMIT_LABEL);
+
+const formatGeneralLimitUsage = (limit) =>
+  hasGeneralAnnualLimit(limit) ? `${Number(limit?.usagePercentage ?? 0).toFixed(0)}%` : 'لا توجد نسبة استخدام';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // STYLED COMPONENTS / SECTION COMPONENTS
@@ -2409,7 +2420,7 @@ export default function ProviderClaimsSubmission() {
                       {LABELS.annualLimit}
                     </Typography>
                     <Typography variant="body2" fontWeight={700}>
-                      {formatCurrency(memberLimit.annualLimit || 0)}
+                      {hasGeneralAnnualLimit(memberLimit) ? formatCurrency(memberLimit.annualLimit) : NO_GENERAL_LIMIT_LABEL}
                     </Typography>
                   </Box>
                   <Box sx={{ p: 1, borderRadius: '0.375rem', bgcolor: (theme) => alpha(theme.palette.error.main, 0.08) }}>
@@ -2417,7 +2428,7 @@ export default function ProviderClaimsSubmission() {
                       {LABELS.usedAmount}
                     </Typography>
                     <Typography variant="body2" fontWeight={700} color="error.main">
-                      {formatCurrency(memberLimit.usedAmount || 0)}
+                      {formatGeneralLimitAmount(memberLimit, memberLimit.usedAmount)}
                     </Typography>
                   </Box>
                   <Box sx={{ p: 1, borderRadius: '0.375rem', bgcolor: (theme) => alpha(theme.palette.success.main, 0.1) }}>
@@ -2425,7 +2436,7 @@ export default function ProviderClaimsSubmission() {
                       {LABELS.remainingLimit}
                     </Typography>
                     <Typography variant="body2" fontWeight={800} color="success.main">
-                      {formatCurrency(memberLimit.remainingLimit || 0)}
+                      {formatGeneralLimitAmount(memberLimit, memberLimit.remainingLimit)}
                     </Typography>
                   </Box>
                   <Box sx={{ p: 1, borderRadius: '0.375rem', bgcolor: (theme) => alpha(theme.palette.primary.main, 0.1) }}>
@@ -2438,10 +2449,13 @@ export default function ProviderClaimsSubmission() {
                   </Box>
                   <LinearProgress
                     variant="determinate"
-                    value={memberLimit.usagePercentage || 0}
-                    color={memberLimit.usagePercentage >= 80 ? 'error' : 'success'}
+                    value={hasGeneralAnnualLimit(memberLimit) ? memberLimit.usagePercentage || 0 : 0}
+                    color={hasGeneralAnnualLimit(memberLimit) && memberLimit.usagePercentage >= 80 ? 'error' : 'success'}
                     sx={{ mt: 0.5, height: '0.375rem', borderRadius: 1 }}
                   />
+                  <Typography variant="caption" color="text.secondary" textAlign="center">
+                    {formatGeneralLimitUsage(memberLimit)}
+                  </Typography>
                 </Stack>
               ) : (
                 <Alert severity="info" sx={{ borderRadius: '0.25rem' }}>

@@ -14,14 +14,25 @@ public interface PriceListClassificationSessionRepository extends JpaRepository<
     @Query("""
             SELECT session
             FROM PriceListClassificationSession session
-            WHERE (:status IS NULL OR session.status = :status)
-              AND (:query IS NULL
-                   OR LOWER(COALESCE(session.sessionName, '')) LIKE LOWER(CONCAT('%', :query, '%'))
+            WHERE LOWER(COALESCE(session.sessionName, '')) LIKE LOWER(CONCAT('%', :query, '%'))
+               OR LOWER(COALESCE(session.originalFileName, '')) LIKE LOWER(CONCAT('%', :query, '%'))
+               OR LOWER(COALESCE(session.providerName, '')) LIKE LOWER(CONCAT('%', :query, '%'))
+               OR LOWER(COALESCE(session.contractCode, '')) LIKE LOWER(CONCAT('%', :query, '%'))
+            """)
+    Page<PriceListClassificationSession> searchByQuery(
+            @Param("query") String query,
+            Pageable pageable);
+
+    @Query("""
+            SELECT session
+            FROM PriceListClassificationSession session
+            WHERE session.status = :status
+              AND (LOWER(COALESCE(session.sessionName, '')) LIKE LOWER(CONCAT('%', :query, '%'))
                    OR LOWER(COALESCE(session.originalFileName, '')) LIKE LOWER(CONCAT('%', :query, '%'))
                    OR LOWER(COALESCE(session.providerName, '')) LIKE LOWER(CONCAT('%', :query, '%'))
                    OR LOWER(COALESCE(session.contractCode, '')) LIKE LOWER(CONCAT('%', :query, '%')))
             """)
-    Page<PriceListClassificationSession> searchSummaries(
+    Page<PriceListClassificationSession> searchByStatusAndQuery(
             @Param("status") PriceListSessionStatus status,
             @Param("query") String query,
             Pageable pageable);

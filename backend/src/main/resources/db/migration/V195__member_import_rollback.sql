@@ -13,7 +13,9 @@
 CREATE TABLE member_import_batch_rows (
     id                BIGSERIAL PRIMARY KEY,
     import_log_id     BIGINT NOT NULL REFERENCES member_import_logs(id) ON DELETE RESTRICT,
-    member_id         BIGINT NOT NULL REFERENCES members(id) ON DELETE RESTRICT,
+    -- Deliberately no FK to members: CREATED members may be physically
+    -- removed by rollback while this audit evidence must survive.
+    member_id         BIGINT NOT NULL,
 
     action            VARCHAR(10) NOT NULL CHECK (action IN ('CREATED', 'UPDATED')),
 
@@ -23,6 +25,10 @@ CREATE TABLE member_import_batch_rows (
     -- "before"); required for an UPDATED row (there is nothing to revert
     -- to otherwise).
     previous_snapshot JSONB,
+    -- Exact import-owned values immediately after the row was applied.
+    -- Rollback compares this with the current row and refuses to overwrite
+    -- any member that was edited after the import.
+    imported_snapshot JSONB NOT NULL,
 
     created_at        TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
@@ -36,7 +42,12 @@ CREATE INDEX idx_import_batch_rows_member ON member_import_batch_rows (member_id
 
 CREATE TABLE member_import_rollbacks (
     id                       BIGSERIAL PRIMARY KEY,
-    import_log_id            BIGINT NOT NULL REFERENCES member_import_logs(id) ON DELETE RESTRICT,
+    -- Audit attempts are written in REQUIRES_NEW while the business
+    -- transaction may hold FOR UPDATE on member_import_logs. A FK check here
+    -- would wait on that outer lock and self-deadlock. Keep the immutable
+    -- logical identifier without a physical FK, as with other durable audit
+    -- records that must survive/describe a failed transaction.
+    import_log_id            BIGINT NOT NULL,
 
     reason                   VARCHAR(500) NOT NULL,
     performed_by             VARCHAR(120) NOT NULL,
@@ -70,3 +81,22 @@ CREATE TABLE member_import_rollback_skips (
 );
 
 CREATE INDEX idx_import_rollback_skips_rollback ON member_import_rollback_skips (rollback_id);
+
+CREATE OR REPLACE FUNCTION reject_member_import_rollback_audit_mutation()
+RETURNS TRIGGER AS $$
+BEGIN
+    RAISE EXCEPTION '% is append-only: % is not allowed', TG_TABLE_NAME, TG_OP;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_member_import_batch_rows_append_only
+    BEFORE UPDATE OR DELETE ON member_import_batch_rows
+    FOR EACH ROW EXECUTE FUNCTION reject_member_import_rollback_audit_mutation();
+
+CREATE TRIGGER trg_member_import_rollbacks_append_only
+    BEFORE UPDATE OR DELETE ON member_import_rollbacks
+    FOR EACH ROW EXECUTE FUNCTION reject_member_import_rollback_audit_mutation();
+
+CREATE TRIGGER trg_member_import_rollback_skips_append_only
+    BEFORE UPDATE OR DELETE ON member_import_rollback_skips
+    FOR EACH ROW EXECUTE FUNCTION reject_member_import_rollback_audit_mutation();

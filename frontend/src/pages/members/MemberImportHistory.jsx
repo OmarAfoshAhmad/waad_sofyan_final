@@ -42,6 +42,12 @@ import {
 
 const STATUS_LABEL = { COMPLETED: 'مكتمل', PARTIAL: 'مكتمل مع أخطاء', FAILED: 'فشل', PENDING: 'قيد الإعداد', VALIDATING: 'جارِ التحقق', PROCESSING: 'جارِ المعالجة' };
 const STATUS_COLOR = { COMPLETED: 'success', PARTIAL: 'warning', FAILED: 'error', PENDING: 'default', VALIDATING: 'info', PROCESSING: 'info' };
+const ROLLBACK_SKIP_REASON = {
+  HAS_PROTECTED_HISTORY: 'له سجل مالي أو طبي يجب الحفاظ عليه',
+  MODIFIED_AFTER_IMPORT: 'عُدّلت بياناته بعد الاستيراد ولن تُكتب فوق التعديل اللاحق',
+  MEMBER_MISSING: 'لم يعد السجل موجوداً',
+  FAMILY_STILL_REFERENCES_MEMBER: 'ما زال مرتبطاً بأسرة محفوظة'
+};
 
 function downloadCsv(filename, headers, rows) {
   const escape = (value) => {
@@ -63,7 +69,8 @@ function downloadCsv(filename, headers, rows) {
 const MemberImportHistory = () => {
   const { enqueueSnackbar } = useSnackbar();
   const { user } = useAuth();
-  const isSuperAdmin = (user?.roles?.[0] || user?.role || '').replace(/^ROLE_/, '') === 'SUPER_ADMIN';
+  const permissions = new Set(user?.permissions || []);
+  const canRollback = permissions.has('MEMBER_IMPORT') && permissions.has('DANGER_ZONE_EXECUTE');
 
   const [logs, setLogs] = useState([]);
   const [totalElements, setTotalElements] = useState(0);
@@ -224,7 +231,7 @@ const MemberImportHistory = () => {
                           </IconButton>
                         </Tooltip>
                       )}
-                      {isSuperAdmin && (log.status === 'COMPLETED' || log.status === 'PARTIAL') && (
+                      {canRollback && (log.status === 'COMPLETED' || log.status === 'PARTIAL') && (
                         <Tooltip title="تراجع عن هذا الاستيراد">
                           <IconButton size="small" color="warning" onClick={() => openRollbackDialog(log)}>
                             <UndoIcon fontSize="small" />
@@ -267,18 +274,21 @@ const MemberImportHistory = () => {
                 هذه الدفعة أنشأت <b>{rollbackPreview.createdCount}</b> عضو وعدّلت <b>{rollbackPreview.updatedCount}</b> عضو.
               </Typography>
               <Typography variant="body2" color="success.main">
-                سيُحذف <b>{rollbackPreview.wouldRevertCreatedCount}</b> عضو أُنشئ حديثاً، وستُعاد <b>{rollbackPreview.updatedCount}</b>
+                سيُحذف <b>{rollbackPreview.wouldRevertCreatedCount}</b> عضو أُنشئ حديثاً، وستُعاد <b>{rollbackPreview.wouldRevertUpdatedCount}</b>
                 {' '}عضو معدَّل إلى قيمها السابقة.
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                التراجع لا يكتب فوق أي تعديل حدث بعد الاستيراد، ويحافظ على السجلات ذات الأثر المالي أو الطبي.
               </Typography>
               {rollbackPreview.wouldSkipCount > 0 && (
                 <Box>
                   <Typography variant="body2" color="warning.main" fontWeight="bold">
-                    سيُستثنى {rollbackPreview.wouldSkipCount} عضو له حركة مالية (لن يُحذف):
+                    سيُستثنى {rollbackPreview.wouldSkipCount} عضو للحماية التالية:
                   </Typography>
                   <Box sx={{ maxHeight: 150, overflow: 'auto', mt: 1 }}>
                     {rollbackPreview.skips?.map((s) => (
                       <Typography key={s.memberId} variant="caption" display="block">
-                        {s.memberName || `#${s.memberId}`}
+                        {s.memberName || `#${s.memberId}`} — {ROLLBACK_SKIP_REASON[s.reason] || s.reason || 'سبب حماية غير محدد'}
                       </Typography>
                     ))}
                   </Box>
@@ -294,6 +304,9 @@ const MemberImportHistory = () => {
                 onChange={(e) => setRollbackReason(e.target.value)}
                 disabled={rollbackLoading}
               />
+              <Typography variant="caption" color="warning.main">
+                العملية لا يمكن إلغاؤها بعد اكتمالها؛ راجع الأعداد والاستثناءات قبل التأكيد.
+              </Typography>
             </Stack>
           )}
         </DialogContent>

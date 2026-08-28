@@ -37,6 +37,13 @@ public class UnifiedMemberMapper {
 
     private final AuthorizationService authorizationService;
 
+    /** Request-scoped facts needed while mapping a page; resolve once, not per row. */
+    public record ReadContext(boolean maskSensitiveFields) {}
+
+    public ReadContext currentReadContext() {
+        return new ReadContext(shouldMaskSensitiveFields());
+    }
+
     /**
      * SECTION_02 HIGH finding #9: national ID and home address are masked for
      * external provider-portal users — every read endpoint previously
@@ -48,8 +55,8 @@ public class UnifiedMemberMapper {
         return authorizationService.isProvider(currentUser);
     }
 
-    private String maskNationalNumber(String nationalNumber) {
-        if (!shouldMaskSensitiveFields()) {
+    private String maskNationalNumber(String nationalNumber, boolean maskSensitiveFields) {
+        if (!maskSensitiveFields) {
             return nationalNumber;
         }
         if (nationalNumber == null || nationalNumber.length() < 4) {
@@ -58,8 +65,8 @@ public class UnifiedMemberMapper {
         return "****" + nationalNumber.substring(nationalNumber.length() - 4);
     }
 
-    private String maskAddress(String address) {
-        return shouldMaskSensitiveFields() ? null : address;
+    private String maskAddress(String address, boolean maskSensitiveFields) {
+        return maskSensitiveFields ? null : address;
     }
 
     /**
@@ -183,12 +190,17 @@ public class UnifiedMemberMapper {
      * Convert Member entity to MemberViewDto (for PRINCIPAL with dependents).
      */
     public MemberViewDto toViewDto(Member entity, List<Member> dependents) {
-        MemberViewDto dto = toViewDto(entity);
+        return toViewDto(entity, dependents, currentReadContext());
+    }
+
+    public MemberViewDto toViewDto(Member entity, List<Member> dependents, ReadContext context) {
+        boolean maskSensitiveFields = context.maskSensitiveFields();
+        MemberViewDto dto = toViewDto(entity, maskSensitiveFields);
 
         // Add dependent information
         if (dependents != null && !dependents.isEmpty()) {
             List<DependentViewDto> dependentDtos = dependents.stream()
-                    .map(this::toDependentViewDto)
+                    .map(dependent -> toDependentViewDto(dependent, maskSensitiveFields))
                     .collect(Collectors.toList());
             dto.setDependents(dependentDtos);
             dto.setDependentsCount(dependentDtos.size());
@@ -203,11 +215,15 @@ public class UnifiedMemberMapper {
      * Convert Member entity to MemberViewDto (single member).
      */
     public MemberViewDto toViewDto(Member entity) {
+        return toViewDto(entity, shouldMaskSensitiveFields());
+    }
+
+    private MemberViewDto toViewDto(Member entity, boolean maskSensitiveFields) {
         MemberViewDto dto = MemberViewDto.builder()
                 .id(entity.getId())
                 .type(entity.getType().name()) // PRINCIPAL or DEPENDENT
                 .fullName(entity.getFullName())
-                .nationalNumber(maskNationalNumber(entity.getNationalNumber()))
+                .nationalNumber(maskNationalNumber(entity.getNationalNumber(), maskSensitiveFields))
                 .cardNumber(entity.getCardNumber())
                 .barcode(entity.getBarcode()) // NULL for dependents
                 .birthDate(entity.getBirthDate())
@@ -215,7 +231,7 @@ public class UnifiedMemberMapper {
                 .maritalStatus(entity.getMaritalStatus())
                 .phone(entity.getPhone())
                 .email(entity.getEmail())
-                .address(maskAddress(entity.getAddress()))
+                .address(maskAddress(entity.getAddress(), maskSensitiveFields))
                 .nationality(entity.getNationality())
                 .policyNumber(entity.getPolicyNumber())
                 .employeeNumber(entity.getEmployeeNumber())
@@ -231,6 +247,7 @@ public class UnifiedMemberMapper {
                 .statusChangedAt(entity.getStatusChangedAt())
                 .previousStatus(entity.getPreviousStatus())
                 .statusTransitionId(entity.getStatusTransitionId())
+                .version(entity.getVersion())
                 .eligibilityStatus(entity.getEligibilityStatus())
                 .photoUrl(entity.getPhotoUrl())
                 .profilePhotoPath(entity.getProfilePhotoPath())
@@ -262,6 +279,7 @@ public class UnifiedMemberMapper {
                 dto.setParentFullName(entity.getParent().getFullName());
             } 
             dto.setRelationship(entity.getRelationship());
+            dto.setFamilyOrder(entity.getFamilyOrder());
         }
 
         return dto;
@@ -271,15 +289,20 @@ public class UnifiedMemberMapper {
      * Convert Member entity to DependentViewDto (for dependent display).
      */
     public DependentViewDto toDependentViewDto(Member entity) {
+        return toDependentViewDto(entity, shouldMaskSensitiveFields());
+    }
+
+    private DependentViewDto toDependentViewDto(Member entity, boolean maskSensitiveFields) {
         if (!entity.isDependent()) {
             throw new IllegalArgumentException("Cannot convert principal to DependentViewDto");
         }
 
         return DependentViewDto.builder()
                 .id(entity.getId())
+                .version(entity.getVersion())
                 .relationship(entity.getRelationship())
                 .fullName(entity.getFullName())
-                .nationalNumber(maskNationalNumber(entity.getNationalNumber()))
+                .nationalNumber(maskNationalNumber(entity.getNationalNumber(), maskSensitiveFields))
                 .cardNumber(entity.getCardNumber())
                 .birthDate(entity.getBirthDate())
                 .gender(entity.getGender())

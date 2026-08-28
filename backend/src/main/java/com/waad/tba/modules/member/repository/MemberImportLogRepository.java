@@ -2,6 +2,7 @@ package com.waad.tba.modules.member.repository;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Collection;
 import java.util.Optional;
 
 import org.springframework.data.domain.Page;
@@ -16,6 +17,11 @@ import com.waad.tba.modules.member.entity.MemberImportLog.ImportStatus;
 
 @Repository
 public interface MemberImportLogRepository extends JpaRepository<MemberImportLog, Long> {
+
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @org.springframework.data.jpa.repository.Query("select l from MemberImportLog l where l.id = :id")
+    java.util.Optional<MemberImportLog> findByIdForRollback(
+            @org.springframework.data.repository.query.Param("id") Long id);
     
     /**
      * Find by batch ID
@@ -38,6 +44,30 @@ public interface MemberImportLogRepository extends JpaRepository<MemberImportLog
      * Find by company scope with pagination
      */
     Page<MemberImportLog> findByCompanyScopeId(Long companyScopeId, Pageable pageable);
+
+    @Query(value = """
+            select l.* from member_import_logs l
+            where exists (select 1 from member_import_batch_rows r where r.import_log_id = l.id)
+              and not exists (
+                  select 1 from member_import_batch_rows r
+                  where r.import_log_id = l.id
+                    and ((r.imported_snapshot ->> 'employerId') is null
+                         or cast(r.imported_snapshot ->> 'employerId' as bigint) not in (:employerIds))
+              )
+            order by l.created_at desc
+            """,
+            countQuery = """
+            select count(*) from member_import_logs l
+            where exists (select 1 from member_import_batch_rows r where r.import_log_id = l.id)
+              and not exists (
+                  select 1 from member_import_batch_rows r
+                  where r.import_log_id = l.id
+                    and ((r.imported_snapshot ->> 'employerId') is null
+                         or cast(r.imported_snapshot ->> 'employerId' as bigint) not in (:employerIds))
+              )
+            """, nativeQuery = true)
+    Page<MemberImportLog> findVisibleToEmployers(@Param("employerIds") Collection<Long> employerIds,
+            Pageable pageable);
     
     /**
      * Find by status

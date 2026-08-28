@@ -11,15 +11,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ClaimFinalApprovalAuthorizationContractTest {
 
     @Test
-    void finalApprovalIsRestrictedToHeadInsuranceManagerAndSuperAdmin() throws Exception {
+    void finalApprovalRequiresTheClaimApproveCapabilityAndResourceScope() throws Exception {
         Method approval = ClaimController.class.getMethod(
                 "approveClaim", Long.class, ApproveClaimRequest.class);
 
         PreAuthorize rule = approval.getAnnotation(PreAuthorize.class);
 
         assertThat(rule).isNotNull();
-        assertThat(rule.value())
-                .contains("SUPER_ADMIN", "INSURANCE_MANAGER", "MEDICAL_REVIEW_HEAD")
-                .doesNotContain("MEDICAL_REVIEWER");
+        assertThat(rule.value()).isEqualTo("@claimAccessGuard.canApprove(#id)");
     }
 }
