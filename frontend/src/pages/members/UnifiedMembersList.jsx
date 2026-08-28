@@ -26,6 +26,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Autocomplete,
   Alert,
+  Badge,
   Box,
   Button,
   ButtonBase,
@@ -73,6 +74,7 @@ import { useSnackbar } from 'notistack';
 import MainCard from 'components/MainCard';
 import { ModernPageHeader, MemberAvatar, SoftDeleteToggle, ActionConfirmDialog } from 'components/tba';
 import { UnifiedMedicalTable } from 'components/common';
+import FamilyRestroomIcon from '@mui/icons-material/FamilyRestroom';
 import MembersBulkUploadDialog from 'components/members/MembersBulkUploadDialog';
 import MemberCeilingCell from 'components/members/MemberCeilingCell';
 import MemberCeilingDrawer from 'components/members/MemberCeilingDrawer';
@@ -482,14 +484,66 @@ const UnifiedMembersList = () => {
       align: 'center',
       sortable: true
     },
-    { id: 'dependentsCount', label: 'التبعية / التابعون', minWidth: '7.5rem', sortable: false, align: 'center' },
     // Not sortable: the figure is read per page from the ledger, so the
     // database cannot order by it without computing it for every member.
     ...(capabilities.viewLimits && !ceilingsForbidden
       ? [{ id: 'ceiling', label: 'المتاح لالتزام جديد', minWidth: '10.5rem', sortable: false, align: 'center' }]
       : []),
-    { id: 'actions', label: 'إجراءات', minWidth: '9.375rem', sortable: false, align: 'center' }
+    { id: 'actions', label: 'إجراءات', minWidth: '11.25rem', sortable: false, align: 'center' }
   ];
+
+  /**
+   * Family, as one control in the actions row.
+   *
+   * A principal shows how many dependents they carry; a dependent gets a way
+   * back to the principal they hang off. Both are navigation about the family,
+   * so they belong beside the other actions rather than in a column of their
+   * own that is blank for half the rows.
+   */
+  const renderFamilyAction = (member) => {
+    if (member.type === MEMBER_TYPES.DEPENDENT) {
+      return (
+        <Tooltip title={`عرض الموظف (${member.parentFullName || 'غير محدد'})`}>
+          <span>
+            <IconButton
+              size="small"
+              color="info"
+              disabled={!member.parentId}
+              aria-label="عرض الموظف الرئيسي"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (member.parentId) navigate(`/members/${member.parentId}`);
+              }}
+            >
+              <FamilyRestroomIcon fontSize="small" />
+            </IconButton>
+          </span>
+        </Tooltip>
+      );
+    }
+
+    const count = member.dependentsCount || 0;
+    return (
+      <Tooltip title={count > 0 ? `يملك ${count} تابعين` : 'لا يوجد تابعون'}>
+        <span>
+          <IconButton
+            size="small"
+            color={count > 0 ? 'secondary' : 'default'}
+            disabled={count === 0}
+            aria-label={count > 0 ? `عرض ${count} تابعين` : 'لا يوجد تابعون'}
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(`/members/${member.id}`);
+            }}
+          >
+            <Badge badgeContent={count} color="secondary" overlap="circular">
+              <FamilyRestroomIcon fontSize="small" />
+            </Badge>
+          </IconButton>
+        </span>
+      </Tooltip>
+    );
+  };
 
   // ════════════════════════════════════════════════════════════════════════
   // TABLE CELL RENDERER
@@ -596,50 +650,12 @@ const UnifiedMembersList = () => {
       case 'employerName':
         return <Typography variant="body2">{member.employerName || '-'}</Typography>;
 
-      case 'dependentsCount':
-        if (member.type === MEMBER_TYPES.DEPENDENT) {
-          return (
-            <Tooltip title={`عرض الموظف (${member.parentFullName || 'غير محدد'})`}>
-              <IconButton
-                size="small"
-                color="info"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (member.parentId) navigate(`/members/${member.parentId}`);
-                }}
-                sx={{ border: '1px solid', borderColor: 'info.main', borderRadius: 1 }}
-              >
-                <VisibilityIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-          );
-        }
-
-        // PRINCIPAL member dependents badge
-        return (
-          <Tooltip title={member.dependentsCount > 0 ? 'يملك تابعين (اضغط عرض لمعرفتهم)' : 'لا يوجد تابعين'}>
-            <Chip
-              label={member.dependentsCount || 0}
-              size="small"
-              variant="outlined"
-              sx={{
-                minWidth: '1.75rem',
-                height: '1.25rem',
-                borderRadius: '0.375rem',
-                bgcolor: member.dependentsCount > 0 ? 'secondary.lighter' : 'transparent',
-                borderColor: member.dependentsCount > 0 ? 'secondary.light' : 'divider',
-                color: member.dependentsCount > 0 ? 'secondary.main' : 'text.disabled',
-                fontWeight: member.dependentsCount > 0 ? 600 : 400
-              }}
-            />
-          </Tooltip>
-        );
-
       case 'actions':
         if (showDeleted) {
           // Actions for deleted members
           return (
-            <Stack direction="row" spacing={0.5}>
+            <Stack direction="row" spacing={0.5} alignItems="center">
+              {renderFamilyAction(member)}
               {capabilities.reinstateTerminated && <Tooltip title="إعادة عضوية استثنائية">
                 <IconButton size="small" color="success" onClick={() =>
                   setLifecycleDialog({ open: true, action: 'REINSTATE', member })}>
@@ -657,7 +673,8 @@ const UnifiedMembersList = () => {
 
         // Actions for active members
         return (
-          <Stack direction="row" spacing={0.5}>
+          <Stack direction="row" spacing={0.5} alignItems="center">
+            {renderFamilyAction(member)}
             <Tooltip title="عرض التفاصيل">
               <IconButton size="small" color="info" onClick={() => navigate(`/members/${member.id}`)}>
                 <VisibilityIcon fontSize="small" />
