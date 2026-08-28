@@ -118,6 +118,11 @@ const UnifiedMembersList = () => {
   const [ceilings, setCeilings] = useState({});
   const [ceilingsLoading, setCeilingsLoading] = useState(false);
   const [ceilingDrawerMember, setCeilingDrawerMember] = useState(null);
+  // Set once the server says this account may never read ceilings. The
+  // permission bit alone is not enough to decide: MEMBER_LIMIT_VIEW is held by
+  // roles the backend's scope rule still refuses for a bulk read, so a column
+  // gated on the bit alone renders permanently broken for them.
+  const [ceilingsForbidden, setCeilingsForbidden] = useState(false);
   const [loading, setLoading] = useState(false);
   const [totalCount, setTotalCount] = useState(0);
   const [loadError, setLoadError] = useState('');
@@ -230,7 +235,7 @@ const UnifiedMembersList = () => {
    */
   const fetchCeilings = async (pageMembers) => {
     const ids = (pageMembers || []).map((m) => m.id).filter(Boolean);
-    if (!capabilities.viewLimits || ids.length === 0) {
+    if (!capabilities.viewLimits || ceilingsForbidden || ids.length === 0) {
       setCeilings({});
       return;
     }
@@ -241,6 +246,14 @@ const UnifiedMembersList = () => {
     } catch (error) {
       console.error('Error fetching member ceilings:', error);
       setCeilings({});
+      // 403 is not a failed read, it is an answer: this account may not see
+      // ceilings at all. Leaving the column in place would show every row as
+      // "unavailable" forever, which reads as a system fault rather than as a
+      // permission, and is the disabled-control pattern the access rules exist
+      // to avoid. Any other failure is transient and keeps the column.
+      if (error?.response?.status === 403) {
+        setCeilingsForbidden(true);
+      }
     } finally {
       setCeilingsLoading(false);
     }
@@ -472,7 +485,7 @@ const UnifiedMembersList = () => {
     { id: 'dependentsCount', label: 'التبعية / التابعون', minWidth: '7.5rem', sortable: false, align: 'center' },
     // Not sortable: the figure is read per page from the ledger, so the
     // database cannot order by it without computing it for every member.
-    ...(capabilities.viewLimits
+    ...(capabilities.viewLimits && !ceilingsForbidden
       ? [{ id: 'ceiling', label: 'المتاح لالتزام جديد', minWidth: '10.5rem', sortable: false, align: 'center' }]
       : []),
     { id: 'actions', label: 'إجراءات', minWidth: '9.375rem', sortable: false, align: 'center' }

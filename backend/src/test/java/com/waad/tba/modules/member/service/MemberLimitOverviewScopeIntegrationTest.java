@@ -49,6 +49,7 @@ class MemberLimitOverviewScopeIntegrationTest extends PostgresIntegrationTestBas
     private long otherEmployerId;
     private long ownMemberId;
     private long otherMemberId;
+    private long providerId;
 
     private static String suffix() {
         return UUID.randomUUID().toString().substring(0, 10);
@@ -60,6 +61,10 @@ class MemberLimitOverviewScopeIntegrationTest extends PostgresIntegrationTestBas
         otherEmployerId = newEmployer();
         ownMemberId = memberUnder(ownEmployerId);
         otherMemberId = memberUnder(otherEmployerId);
+        String s = suffix();
+        providerId = jdbc.queryForObject("INSERT INTO providers (name, license_number, "
+                + "provider_type, allow_all_employers) VALUES ('Scope Prov " + s + "', 'SCLIC-" + s
+                + "', 'CLINIC', true) RETURNING id", Long.class);
     }
 
     @AfterEach
@@ -94,13 +99,38 @@ class MemberLimitOverviewScopeIntegrationTest extends PostgresIntegrationTestBas
 
     /** Signs in a user whose reach is limited to one employer. */
     private void signInAsEmployerAdminOf(long employerId) {
+        signInAs("EMPLOYER_ADMIN", employerId, null);
+    }
+
+    private void signInAs(String userType, Long employerId, Long providerId) {
         String username = "scope-" + suffix();
         userRepository.save(com.waad.tba.modules.rbac.entity.User.builder()
-                .username(username).password("x").fullName("Scope Admin")
-                .email(username + "@waad.ly").userType("EMPLOYER_ADMIN")
-                .employerId(employerId).active(true).build());
+                .username(username).password("x").fullName("Scope User")
+                .email(username + "@waad.ly").userType(userType)
+                .employerId(employerId).providerId(providerId).active(true).build());
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(username, "x", List.of()));
+    }
+
+    @Test
+    void aDataEntryUserMayNotBulkReadCeilings() {
+        signInAs("DATA_ENTRY", ownEmployerId, null);
+
+        assertThatThrownBy(() -> service.authorizedSummariesFor(List.of(ownMemberId)))
+                .as("the role enters identity, employer and policy; consumed and remaining "
+                        + "limits are not part of that, and MemberQueryAccessPolicy has "
+                        + "always said so")
+                .isInstanceOf(MemberAccessDeniedException.class);
+    }
+
+    @Test
+    void aProviderMayNotBulkReadCeilings() {
+        signInAs("PROVIDER_STAFF", null, providerId);
+
+        assertThatThrownBy(() -> service.authorizedSummariesFor(List.of(ownMemberId)))
+                .as("a provider treats patients; paging through the members list pulling "
+                        + "ceilings is the bulk extraction the privileged set exists to stop")
+                .isInstanceOf(MemberAccessDeniedException.class);
     }
 
     @Test

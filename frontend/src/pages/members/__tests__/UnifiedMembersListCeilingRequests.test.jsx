@@ -148,6 +148,34 @@ describe('members list ceiling requests', () => {
     expect(screen.getAllByText('غير متاح').length).toBeGreaterThan(0);
   });
 
+  it('drops the column when the server says this account may never read ceilings', async () => {
+    const forbidden = new Error('forbidden');
+    forbidden.response = { status: 403 };
+    getLimitsOverview.mockRejectedValue(forbidden);
+
+    renderList();
+
+    await waitFor(() => expect(getLimitsOverview).toHaveBeenCalledTimes(1));
+
+    // MEMBER_LIMIT_VIEW is held by roles the backend still refuses for a bulk
+    // read, so the permission bit alone would leave a column reading
+    // "unavailable" on every row forever -- a system fault to look at, not a
+    // permission.
+    await waitFor(() => expect(screen.queryByText('المتاح لالتزام جديد')).not.toBeInTheDocument());
+    expect(screen.getByText('عضو 1')).toBeInTheDocument();
+  });
+
+  it('keeps the column for a transient failure, because that one is worth retrying', async () => {
+    getLimitsOverview.mockRejectedValue(new Error('network'));
+
+    renderList();
+
+    await waitFor(() => expect(getLimitsOverview).toHaveBeenCalledTimes(1));
+
+    expect(screen.getByText('المتاح لالتزام جديد')).toBeInTheDocument();
+    expect(screen.getAllByText('غير متاح').length).toBeGreaterThan(0);
+  });
+
   it('hides the column entirely without the limit permission', async () => {
     useAuth.mockReturnValue({ user: { permissions: ['MEMBER_VIEW'] } });
 
