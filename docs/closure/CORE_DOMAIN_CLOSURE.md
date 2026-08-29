@@ -352,7 +352,57 @@ contract, and a valid restore succeeding.
 covers dates and member cap; whether a second mechanism blocks a policy
 conflict specifically was not traced.
 
-### E-08 concurrency, E-09 DB constraints, E-10 audit (beyond archive/restore), E-11 performance, E-12 integration gate — OPEN
+### E-08 concurrency — VERIFIED
+
+**CLAIM:** archiving an employer and assigning a new member to it, run at the
+same instant, cannot both succeed and cannot corrupt either fact.
+
+**FAILURE FOUND** Neither side took any lock. `EmployerService.archive`
+counts current assignments then writes `active=false`; `MemberEmployerResolver
+.assignEmployer` had no check on the employer's state at all -- a member could
+be assigned to an archived employer with nothing refusing it, and a real race
+between the two could let an employer archive itself believing nobody
+belonged to it a moment before an assignment landed that would have blocked
+it.
+
+**FIX** Both take the same `PESSIMISTIC_WRITE` lock on the employer row
+(`EmployerRepository.findByIdForLifecycleTransition`) before deciding, so the
+two serialise on the row rather than racing. `assignEmployer` now also
+refuses outright when the employer it is locking is not active.
+
+**EVIDENCE, not simulated** -- Constitution Phase 10 requires real threads,
+not sequential calls standing in for a race. Two real threads, released past
+a `CountDownLatch` barrier at the same instant, each in its own transaction
+via `TransactionTemplate`.
+
+**WITH the lock:** 20 repetitions within one Spring context, run twice over
+(40 trials total) -- every one landed in a consistent state (either the
+employer stayed active and the assignment succeeded, or the employer
+archived and the assignment was refused; never both, never neither), in
+~32 seconds per 20.
+
+**WITHOUT it** (both locks removed during triage, to prove the fix is load-
+bearing and not decorative): a single trial could pass by luck, but any
+attempt to repeat the race made the whole test JVM hang -- past a
+150-second hard kill, with the Maven summary never printing a test count.
+This is a finding worth stating precisely, because it is not what was
+expected. Postgres was holding one thread on a genuine row-level wait with
+no `lock_timeout` configured -- not a fast, cleanly-caught conflict, but an
+unbounded block. `Future.get(timeout)` in the test gives up waiting for the
+result; it does not cancel the underlying blocked database call, so the
+connection never returns to the pool, and a handful of repetitions exhausted
+it. **An unguarded race here is not a rare wrong answer -- it is a liveness
+hazard that can starve the connection pool under real concurrent traffic**,
+which is a more severe failure mode than the data-corruption race this test
+set out to find.
+
+**REGRESSION TEST**
+`EmployerArchiveVersusMemberAssignmentConcurrencyIntegrationTest`.
+
+**REMAINING UNKNOWN** Other archive-adjacent races named in the protocol
+(archive vs. policy activation, for one) were not constructed.
+
+### E-09 DB constraints, E-10 audit (beyond archive/restore), E-11 performance, E-12 integration gate — OPEN
 
 Not examined.
 

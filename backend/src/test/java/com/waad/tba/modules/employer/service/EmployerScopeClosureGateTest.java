@@ -110,6 +110,7 @@ class EmployerScopeClosureGateTest {
     void deleteIsAlwaysRefused() {
         globalScope();
         when(employerRepository.findById(7L)).thenReturn(Optional.of(employer(7L, "A")));
+        when(employerRepository.findByIdForLifecycleTransition(7L)).thenReturn(Optional.of(employer(7L, "A")));
 
         assertThatThrownBy(() -> service.delete(7L))
                 .as("an employer is named by member assignments, policies, claims and ledger rows; "
@@ -127,6 +128,7 @@ class EmployerScopeClosureGateTest {
     void archiveIsBlockedByActiveMembers() {
         globalScope();
         when(employerRepository.findById(7L)).thenReturn(Optional.of(employer(7L, "A")));
+        when(employerRepository.findByIdForLifecycleTransition(7L)).thenReturn(Optional.of(employer(7L, "A")));
         when(assignmentRepository.countActiveMembersAssignedOn(org.mockito.ArgumentMatchers.eq(7L), any()))
                 .thenReturn(3L);
         when(benefitPolicyRepository.countByEmployerIdAndActiveTrue(7L)).thenReturn(0L);
@@ -140,6 +142,7 @@ class EmployerScopeClosureGateTest {
     void archiveIsBlockedByActivePolicies() {
         globalScope();
         when(employerRepository.findById(7L)).thenReturn(Optional.of(employer(7L, "A")));
+        when(employerRepository.findByIdForLifecycleTransition(7L)).thenReturn(Optional.of(employer(7L, "A")));
         when(assignmentRepository.countActiveMembersAssignedOn(org.mockito.ArgumentMatchers.eq(7L), any()))
                 .thenReturn(0L);
         when(benefitPolicyRepository.countByEmployerIdAndActiveTrue(7L)).thenReturn(1L);

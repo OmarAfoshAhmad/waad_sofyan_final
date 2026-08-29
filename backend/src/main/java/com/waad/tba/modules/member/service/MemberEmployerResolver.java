@@ -72,6 +72,19 @@ public class MemberEmployerResolver {
         Member lockedMember = memberRepository.findByIdWithLock(member.getId())
                 .orElseThrow(() -> new BusinessRuleException("المستفيد غير موجود"));
 
+        // Locked with the same query EmployerService.archive() takes on this
+        // row, so the two serialise on the employer rather than racing.
+        // Without this, a concurrent archive can read "nobody belongs to this
+        // employer" a moment before this assignment commits: the count is
+        // taken before the new row lands, archive proceeds believing the
+        // employer is empty, and the row that would have blocked it lands
+        // under an employer that is now archived.
+        Employer lockedEmployer = employerRepository.findByIdForLifecycleTransition(employer.getId())
+                .orElseThrow(() -> new BusinessRuleException("جهة العمل غير موجودة"));
+        if (!Boolean.TRUE.equals(lockedEmployer.getActive())) {
+            throw new BusinessRuleException("لا يمكن تعيين مستفيد لجهة عمل مؤرشفة");
+        }
+
         Optional<MemberEmployerAssignment> open =
                 assignmentRepository.findByMemberIdAndAssignmentEndDateIsNull(member.getId());
         if (open.isPresent()) {

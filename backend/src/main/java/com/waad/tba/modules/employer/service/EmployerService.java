@@ -360,7 +360,13 @@ public class EmployerService {
     public EmployerResponseDto archive(Long id) {
         log.info("[EmployerService] Archiving employer ID: {}", id);
 
+        // findEmployerById() only applies the scope check; the row itself is
+        // then locked here for the rest of the transaction. Without the lock,
+        // a member assignment landing between the count below and the write
+        // to active=false can commit under an employer this transaction is
+        // about to archive. See EmployerRepository.findByIdForLifecycleTransition.
         Employer employer = findEmployerById(id);
+        employer = employerRepository.findByIdForLifecycleTransition(id).orElseThrow();
 
         // An explicit transition, not a setter. Archiving something already
         // archived is not success -- the operator asked for a state change

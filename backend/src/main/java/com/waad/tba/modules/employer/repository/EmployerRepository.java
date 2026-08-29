@@ -2,9 +2,11 @@ package com.waad.tba.modules.employer.repository;
 
 import com.waad.tba.modules.employer.entity.Employer;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.data.domain.Page;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Pageable;
 
 import java.util.List;
@@ -41,6 +43,23 @@ public interface EmployerRepository extends JpaRepository<Employer, Long> {
     long countByActiveTrue();
 
     Optional<Employer> findByCode(String code);
+
+    /**
+     * Locked for the duration of the transaction that archives or restores
+     * this employer.
+     *
+     * archive() is read-check-write across two tables: it counts assignments,
+     * then flips active. Without a lock here, a member assignment being
+     * written concurrently under MemberEmployerResolver.assignEmployer can
+     * race it -- the count is taken before the new row lands, archive proceeds
+     * believing nobody belongs to the employer, and the row that would have
+     * blocked it commits a moment later under an employer that is now
+     * archived. The lock serialises the two: whichever transaction reaches
+     * this employer first, the second sees its committed result.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT e FROM Employer e WHERE e.id = :id")
+    Optional<Employer> findByIdForLifecycleTransition(@Param("id") Long id);
 
     boolean existsByCodeIgnoreCase(String code);
 
