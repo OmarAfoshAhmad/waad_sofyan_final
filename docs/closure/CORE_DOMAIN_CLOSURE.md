@@ -402,7 +402,50 @@ set out to find.
 **REMAINING UNKNOWN** Other archive-adjacent races named in the protocol
 (archive vs. policy activation, for one) were not constructed.
 
-### E-09 DB constraints, E-10 audit (beyond archive/restore), E-11 performance, E-12 integration gate — OPEN
+### E-09 DB constraints — VERIFIED
+
+**CLAIM:** every rule `EmployerService.validateEmployerTerms` enforces in
+Java also holds at the database, so a write reaching this table by any other
+path -- an import, a script, a future service -- cannot violate it.
+
+**FAILURE FOUND** Two rules were Java-only. `contract_end_date >=
+contract_start_date` and `max_member_limit > 0` had no `CHECK` behind them at
+all.
+
+**FIX** `V200` adds both as `NOT VALID` + a separate `VALIDATE`, the pattern
+already used elsewhere in this schema for a live table: existing rows are
+not re-scanned at ALTER time, and validation afterwards does not block
+concurrent writes.
+
+**REGRESSION TEST**
+`EmployerTermsConstraintsAcrossV200MigrationTest` -- applies over a live V199
+database carrying a pre-existing, compliant employer row (proving the
+constraint does not disturb what was already there), then exercises both
+CHECKs: reversed dates refused, equal dates and an open-ended contract
+accepted, a zero or negative cap refused, no cap accepted. Proved to bite by
+neutralising both CHECKs to `CHECK (true)` and watching the refusal
+assertions fail.
+
+**A fixture broke, for the right reason.** Closing this immediately made a
+gap visible in `EmployerRestoreIntegrationTest`: its "restore with an invalid
+contract" case forced an end-before-start row into existence with a raw
+`UPDATE`, bypassing `EmployerService` entirely -- which is exactly the write
+path this migration exists to close. The `UPDATE` itself now fails on
+`chk_employer_contract_period` before `restore()` is ever reached. The test
+was rewritten to assert the stronger, now-true guarantee directly: the
+database refuses the write, and an employer whose terms were never actually
+corrupted restores without incident. Both layers agree; neither is
+compensating for the other's absence.
+
+**REMAINING UNKNOWN** `employers.is_default` is a unique-in-intent flag
+consumed by `SystemController` to pick "the" system employer, but **no write
+path in the codebase ever sets it** -- grep found reads only. Adding a
+uniqueness constraint on a column nothing writes to would be a schema
+decision with no live risk to justify it today; left as an open observation
+rather than fixed speculatively. If a write path is ever added, this needs
+revisiting before it ships.
+
+### E-10 audit (beyond archive/restore), E-11 performance, E-12 integration gate — OPEN
 
 Not examined.
 

@@ -132,16 +132,37 @@ class EmployerRestoreIntegrationTest extends PostgresIntegrationTestBase {
                 .isInstanceOf(BusinessRuleException.class);
     }
 
+    /**
+     * An end-before-start contract used to be reachable only through
+     * EmployerService, which refused it in Java (validateEmployerTerms) --
+     * so the case this test modelled was "restore() catches what a direct
+     * write would have let through". V200 (E-09) closed that gap with
+     * chk_employer_contract_period, which means the row this test used to
+     * force into existence with a raw UPDATE can no longer exist at all: the
+     * write itself is refused before restore() is ever reached.
+     *
+     * That is a stronger guarantee than the one being tested for, not a
+     * different one -- both layers now agree, and this asserts exactly that
+     * agreement rather than the Java-only version of it.
+     * EmployerTermsConstraintsAcrossV200MigrationTest covers the constraint
+     * itself against a live database; this keeps the service-level case
+     * honest about what can reach it.
+     */
     @Test
-    @DisplayName("restore with an invalid contract (end before start) is refused")
-    void restoreWithInvalidContractIsRefused() {
+    @DisplayName("an invalid contract cannot reach restore() -- the database refuses it first")
+    void anInvalidContractCannotBeWrittenAtAll() {
         long id = employer();
         employerService.archive(id);
-        jdbc.update("UPDATE employers SET contract_start_date = ?, contract_end_date = ? WHERE id = ?",
-                LocalDate.now(), LocalDate.now().minusDays(1), id);
 
-        assertThatThrownBy(() -> employerService.restore(id))
-                .isInstanceOf(BusinessRuleException.class);
+        assertThatThrownBy(() -> jdbc.update(
+                "UPDATE employers SET contract_start_date = ?, contract_end_date = ? WHERE id = ?",
+                LocalDate.now(), LocalDate.now().minusDays(1), id))
+                .as("chk_employer_contract_period, not Java, is what stops this now")
+                .hasMessageContaining("chk_employer_contract_period");
+
+        assertThatCode(() -> employerService.restore(id))
+                .as("the employer's terms were never actually corrupted, so restore succeeds")
+                .doesNotThrowAnyException();
     }
 
     @Test
