@@ -1197,7 +1197,11 @@ public class UnifiedMemberController {
          * built to remove.
          */
         @PostMapping("/limits/overview")
-        @PreAuthorize("@permissionGuard.has('MEMBER_LIMIT_VIEW')")
+        // The permission the service actually requires. Naming the
+        // single-member one here made the endpoint state one rule and enforce
+        // another -- it failed closed, so nothing leaked, but a reader of the
+        // annotation would have been wrong about who may call it.
+        @PreAuthorize("@permissionGuard.has('MEMBER_LIMIT_LIST_VIEW')")
         @Operation(summary = "Current general ceiling for a page of members", description = "Returns each member's current general-limit summary: consumed, reserved, "
                         + "actualRemaining and reservableAvailable, with the server date and read instant. "
                         + "Members outside the caller's scope refuse the whole request.")
