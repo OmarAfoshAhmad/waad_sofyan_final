@@ -39,6 +39,14 @@ public enum MemberOperation {
      * one with it.
      */
     LIST_LIMITS,
+
+    /**
+     * Granting or ending an exceptional increase to one member's general
+     * ceiling. Not a read of the ceiling and not an edit of the record: it
+     * commits the insurer's money for one person against the policy their
+     * colleagues share.
+     */
+    MANAGE_LIMIT_UPLIFT,
     /** Bulk extraction: the whole result set leaves the system as a file. */
     EXPORT,
 

@@ -14,6 +14,7 @@ public enum SystemPermission {
     MEMBER_FINANCIAL_VIEW(PermissionCategory.MEMBERS, "عرض الحسابات المالية للمستفيد", true),
     MEMBER_LIMIT_VIEW(PermissionCategory.MEMBERS, "عرض رصيد سقف المستفيد للتعامل الطبي", false),
     MEMBER_LIMIT_LIST_VIEW(PermissionCategory.MEMBERS, "عرض أرصدة السقوف في قائمة المستفيدين", false),
+    MEMBER_LIMIT_UPLIFT_MANAGE(PermissionCategory.MEMBERS, "منح ورفع استثناءات السقف العام للمستفيد", true),
     MEMBER_IMPORT(PermissionCategory.MEMBERS, "استيراد المستفيدين", true),
     MEMBER_EXPORT(PermissionCategory.MEMBERS, "تصدير المستفيدين", true),
     CLAIM_VIEW(PermissionCategory.CLAIMS, "عرض المطالبات", false),

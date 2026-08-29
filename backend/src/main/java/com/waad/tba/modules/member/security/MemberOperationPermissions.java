@@ -57,6 +57,11 @@ public final class MemberOperationPermissions {
         BY_OPERATION.put(MemberOperation.LIST_LIMITS, SystemPermission.MEMBER_LIMIT_LIST_VIEW);
         BY_OPERATION.put(MemberOperation.EXPORT, SystemPermission.MEMBER_EXPORT);
 
+        // Raising a ceiling is a write, not a read, and answers to neither of
+        // the two view grants above.
+        BY_OPERATION.put(MemberOperation.MANAGE_LIMIT_UPLIFT,
+                SystemPermission.MEMBER_LIMIT_UPLIFT_MANAGE);
+
         // ── writing ────────────────────────────────────────────────────────
         BY_OPERATION.put(MemberOperation.CREATE_MEMBER, SystemPermission.MEMBER_CREATE);
         BY_OPERATION.put(MemberOperation.ADD_DEPENDENT, SystemPermission.MEMBER_CREATE);

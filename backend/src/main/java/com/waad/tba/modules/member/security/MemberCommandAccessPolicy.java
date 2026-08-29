@@ -124,6 +124,7 @@ public class MemberCommandAccessPolicy {
             case CHANGE_STATUS, TERMINATE, REINSTATE, BULK_OPERATION ->
                     "تغيير حالة المستفيد يتطلب صلاحية تغيير الحالة";
             case REINSTATE_TERMINATED -> "إعادة عضوية منتهية تتطلب صلاحية خاصة";
+            case MANAGE_LIMIT_UPLIFT -> "رفع السقف العام استثناءً يتطلب صلاحية خاصة";
             case TRANSFER_EMPLOYER, TRANSFER_DEPENDENT ->
                     "النقل بين جهات العمل يتطلب صلاحية النقل";
             case CREATE_MEMBER, ADD_DEPENDENT -> "إنشاء مستفيد يتطلب صلاحية الإنشاء";
