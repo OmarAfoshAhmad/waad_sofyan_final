@@ -201,6 +201,16 @@ const MemberImportHistory = () => {
         );
 
       case 'status':
+        // A batch the server has judged interrupted is not a running job.
+        // Showing it as "جارِ المعالجة" forever is the one thing this screen
+        // must not do: the operator waits for a spinner that will never stop.
+        if (log.interrupted) {
+          return (
+            <Tooltip title="انقطع تنفيذ هذه الدفعة قبل اكتمالها. لم تُحفظ منها أي بيانات، ويمكن رفع الملف مرة أخرى.">
+              <Chip size="small" color="default" variant="outlined" label="منقطع — لم يُحفظ شيء" />
+            </Tooltip>
+          );
+        }
         return <Chip size="small" color={STATUS_COLOR[log.status] || 'default'} label={STATUS_LABEL[log.status] || log.status} />;
 
       case 'actions':

@@ -1,11 +1,14 @@
 package com.waad.tba.modules.member.controller;
 
 import java.io.IOException;
+import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.Map;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -24,6 +27,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import com.waad.tba.common.dto.ApiResponse;
 import com.waad.tba.modules.member.dto.ExcelColumnDetectionDto;
+import com.waad.tba.modules.member.dto.MemberImportLogSummaryDto;
 import com.waad.tba.modules.member.dto.MemberImportPreviewDto;
 import com.waad.tba.modules.member.dto.MemberImportResultDto;
 import com.waad.tba.modules.member.dto.MemberImportRollbackPreviewDto;
@@ -67,6 +71,16 @@ public class MemberExcelTemplateController {
     private final MemberImportLogRepository importLogRepository;
     private final MemberImportBatchRowRepository importBatchRowRepository;
     private final MemberImportAccessPolicy importAccessPolicy;
+
+    /**
+     * How long a batch may sit on PROCESSING before the history screen stops
+     * calling it a running job. The import is one synchronous request inside
+     * one transaction, so anything past this is a process that died: the row
+     * will never be written to again, and the members it was writing rolled
+     * back with it.
+     */
+    @Value("${waad.member-import.stale-after:PT30M}")
+    private Duration importStaleAfter;
     private final MemberImportErrorRepository importErrorRepository;
     private final MemberImportPreviewTicketService previewTicketService;
     private final MemberImportRollbackService rollbackService;
@@ -323,17 +337,21 @@ public class MemberExcelTemplateController {
     @GetMapping("/logs")
     @PreAuthorize("@permissionGuard.has('MEMBER_IMPORT')")
     @Operation(summary = "Get import logs")
-    public ResponseEntity<ApiResponse<Page<MemberImportLog>>> getImportLogs(
+    public ResponseEntity<ApiResponse<Page<MemberImportLogSummaryDto>>> getImportLogs(
             @RequestParam(name = "page", defaultValue = "1") int page,
             @RequestParam(name = "size", defaultValue = "20") int size) {
-        
+
         var authorised = importAccessPolicy.requireHistoryScope();
         var pageable = PageRequest.of(Math.max(0, page - 1), size, Sort.by(Sort.Direction.DESC, "createdAt"));
         Page<MemberImportLog> logs = authorised.isGlobal()
                 ? importLogRepository.findAll(pageable)
                 : importLogRepository.findVisibleToEmployers(authorised.employerIds(), pageable);
-        
-        return ResponseEntity.ok(ApiResponse.success("Import logs retrieved", logs));
+
+        // One clock reading for the whole page, so two rows started a second
+        // apart cannot be judged against two different "now"s.
+        LocalDateTime now = LocalDateTime.now();
+        return ResponseEntity.ok(ApiResponse.success("Import logs retrieved",
+                logs.map(row -> MemberImportLogSummaryDto.from(row, importStaleAfter, now))));
     }
 
     @GetMapping("/{batchId}/rollback/preview")

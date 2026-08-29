@@ -48,6 +48,11 @@ class MemberAccessWiringArchitectureTest {
         assertThat(member).contains("@PostMapping(\"/eligibility/evaluations\")");
     }
 
+    // /{id}/details is not listed here any more: the route is gone. It was a
+    // second read of MemberSearchDto beside the identical endpoint on the
+    // controller already marked deprecated, and no screen ever called either.
+    // DATA_ENTRY reaches a member through @GetMapping("/{id}"), still asserted
+    // below.
     @Test
     void dataEntryCommandRoutesHaveTheReadAndSelectorDependenciesTheyNeed() {
         String member = read(MAIN.resolve("controller/UnifiedMemberController.java"));
@@ -61,8 +66,6 @@ class MemberAccessWiringArchitectureTest {
         assertThat(annotationBefore(member, "@GetMapping(\"/{id}\")"))
                 .contains("@permissionGuard.has('MEMBER_VIEW')");
         assertThat(annotationBefore(member, "@GetMapping(\"/unified-search\")"))
-                .contains("@permissionGuard.has('MEMBER_VIEW')");
-        assertThat(annotationBefore(member, "@GetMapping(\"/{id}/details\")"))
                 .contains("@permissionGuard.has('MEMBER_VIEW')");
         assertThat(annotationBefore(employer, "@GetMapping({ \"selectors\", \"/selector\" })"))
                 .contains("@permissionGuard.has('EMPLOYER_VIEW')");

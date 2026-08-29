@@ -196,6 +196,13 @@ waad:
       - image/jpg
       - application/dicom
       - application/x-dicom
+  member-import:
+    # A members import runs as one synchronous request in one transaction.
+    # Past this, a batch still marked PROCESSING is a process that died, not
+    # a job still running, and the history screen says so instead of showing
+    # a spinner forever. Nothing is rewritten -- the members that batch was
+    # writing rolled back with it, and the same file can be uploaded again.
+    stale-after: ${WAAD_MEMBER_IMPORT_STALE_AFTER:PT30M}
   employer-import:
     # Used when a bulk-import row doesn't specify an annual limit for its
     # auto-created default insurance policy.
