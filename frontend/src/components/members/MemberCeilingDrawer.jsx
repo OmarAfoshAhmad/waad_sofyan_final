@@ -45,29 +45,54 @@ const formatInstant = (value) => {
   return Number.isNaN(parsed.getTime()) ? null : parsed.toLocaleString('en-GB');
 };
 
-function Figure({ label, value, emphasis, hint }) {
+/**
+ * Label and figure in a two-column table rather than a stack of captions.
+ *
+ * Loose pairs down a panel make the reader match each number to its label by
+ * position, and the moment two of them sit close together the eye pairs the
+ * wrong ones. A table row does that matching for them.
+ */
+function FigureTable({ caption, rows }) {
   return (
-    <Stack spacing={0.25}>
-      <Typography variant="caption" color="text.secondary">
-        {label}
-      </Typography>
-      <Typography variant={emphasis ? 'h6' : 'body1'} fontWeight={emphasis ? 'bold' : 'medium'}>
-        {value}
-      </Typography>
-      {hint && (
-        <Typography variant="caption" color="text.secondary">
-          {hint}
+    <Box>
+      {caption && (
+        <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
+          {caption}
         </Typography>
       )}
-    </Stack>
+      <Table size="small">
+        <TableBody>
+          {rows.map(([label, value, hint, emphasis]) => (
+            <TableRow key={label}>
+              <TableCell sx={{ border: 0, py: 0.75, width: '55%' }}>
+                <Typography variant="body2" color="text.secondary">
+                  {label}
+                </Typography>
+                {hint && (
+                  <Typography variant="caption" color="text.secondary" display="block">
+                    {hint}
+                  </Typography>
+                )}
+              </TableCell>
+              <TableCell align="left" sx={{ border: 0, py: 0.75 }}>
+                <Typography
+                  variant={emphasis ? 'h6' : 'body1'}
+                  fontWeight={emphasis ? 'bold' : 'medium'}
+                >
+                  {value}
+                </Typography>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </Box>
   );
 }
 
-Figure.propTypes = {
-  label: PropTypes.string.isRequired,
-  value: PropTypes.node.isRequired,
-  emphasis: PropTypes.bool,
-  hint: PropTypes.string
+FigureTable.propTypes = {
+  caption: PropTypes.string,
+  rows: PropTypes.arrayOf(PropTypes.array).isRequired
 };
 
 export default function MemberCeilingDrawer({ open, member, initialSummary, onClose }) {
@@ -147,17 +172,37 @@ export default function MemberCeilingDrawer({ open, member, initialSummary, onCl
             </Stack>
 
             {hasCeiling ? (
-              <Stack spacing={1.5}>
-                <Figure label="السقف السنوي" value={formatAmount(general.limit)} />
-                <Figure label="المستهلك الفعلي" value={formatAmount(general.committed)} />
-                <Figure label="المحجوز بموافقات مسبقة" value={formatAmount(general.reserved)} />
-                <Figure label="المتبقي الفعلي" value={formatAmount(general.actualRemaining)} hint="محاسبياً: السقف ناقص المستهلك" />
-                <Figure
-                  label="المتاح لالتزام جديد"
-                  value={formatAmount(general.reservableAvailable)}
-                  emphasis
-                  hint="المتبقي الفعلي ناقص المحجوز — الرقم الذي يُتخذ عليه القرار"
+              <Stack spacing={2}>
+                {/* What the ledger holds. Three facts, read not derived. */}
+                <FigureTable
+                  rows={[
+                    ['السقف السنوي', formatAmount(general.limit)],
+                    ['المستهلك الفعلي', formatAmount(general.committed)],
+                    ['المحجوز بموافقات مسبقة', formatAmount(general.reserved)]
+                  ]}
                 />
+
+                {/* What follows from them. Kept in their own table because
+                    they are conclusions, not readings, and reading them in a
+                    single list with the three above invites adding a figure
+                    to something it was already subtracted from. */}
+                <FigureTable
+                  caption="المحسوب منها"
+                  rows={[
+                    [
+                      'المتبقي محاسبياً',
+                      formatAmount(general.actualRemaining),
+                      'السقف ناقص المستهلك'
+                    ],
+                    [
+                      'المتاح لالتزام جديد',
+                      formatAmount(general.reservableAvailable),
+                      'المتبقي محاسبياً ناقص المحجوز — الرقم الذي يُتخذ عليه القرار',
+                      true
+                    ]
+                  ]}
+                />
+
                 {general.alertStatus === 'EXCEEDED' && (
                   <Alert severity="error">تم تجاوز السقف السنوي</Alert>
                 )}
@@ -193,35 +238,66 @@ export default function MemberCeilingDrawer({ open, member, initialSummary, onCl
                       <TableCell>الوعاء</TableCell>
                       <TableCell align="center">السقف</TableCell>
                       <TableCell align="center">مستهلك</TableCell>
-                      <TableCell align="center">محجوز</TableCell>
-                      <TableCell align="center">المتبقي الفعلي</TableCell>
+                      {/* Two figures in one column, stacked. Six columns in a
+                          drawer this wide left every number cramped, and the
+                          two that belong together were the ones split apart. */}
+                      <TableCell align="center">محجوز / المتبقي</TableCell>
                       <TableCell align="center">المتاح لالتزام جديد</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {buckets.map((bucket) => (
-                      <TableRow key={bucket.bucketId} hover>
+                    {buckets.map((bucket) => {
+                      const name = (
                         <TableCell>
                           <Typography variant="body2">{bucket.name}</Typography>
                           <Typography variant="caption" color="text.secondary" fontFamily="monospace">
                             {bucket.code}
                           </Typography>
                         </TableCell>
-                        <TableCell align="center">{formatAmount(bucket.limit)}</TableCell>
-                        <TableCell align="center">{formatAmount(bucket.committed)}</TableCell>
-                        <TableCell align="center">{formatAmount(bucket.reserved)}</TableCell>
-                        <TableCell align="center">{formatAmount(bucket.actualRemaining)}</TableCell>
-                        <TableCell align="center">
-                          <Typography
-                            variant="body2"
-                            fontWeight="bold"
-                            color={Number(bucket.reservableAvailable) < 0 ? 'error.main' : 'text.primary'}
-                          >
-                            {formatAmount(bucket.reservableAvailable)}
-                          </Typography>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                      );
+
+                      // A bucket that limits occurrences and not money has no
+                      // monetary figures at all. Laying it out as five
+                      // "غير متاح" cells read as a broken row rather than as a
+                      // benefit measured in visits.
+                      if (bucket.limit === null || bucket.limit === undefined) {
+                        return (
+                          <TableRow key={bucket.bucketId} hover>
+                            {name}
+                            <TableCell colSpan={4}>
+                              <Typography variant="body2" color="text.secondary">
+                                {bucket.timesLimit !== null && bucket.timesLimit !== undefined
+                                  ? `يحدّ عدد المرات (${bucket.timesLimit}) ولا يحدّ مبلغاً`
+                                  : 'لا يحدّ مبلغاً'}
+                              </Typography>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      }
+
+                      return (
+                        <TableRow key={bucket.bucketId} hover>
+                          {name}
+                          <TableCell align="center">{formatAmount(bucket.limit)}</TableCell>
+                          <TableCell align="center">{formatAmount(bucket.committed)}</TableCell>
+                          <TableCell align="center">
+                            <Typography variant="body2">{formatAmount(bucket.reserved)}</Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              متبقٍ {formatAmount(bucket.actualRemaining)}
+                            </Typography>
+                          </TableCell>
+                          <TableCell align="center">
+                            <Typography
+                              variant="body2"
+                              fontWeight="bold"
+                              color={Number(bucket.reservableAvailable) < 0 ? 'error.main' : 'text.primary'}
+                            >
+                              {formatAmount(bucket.reservableAvailable)}
+                            </Typography>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </Box>

@@ -145,7 +145,12 @@ const MembersBulkUploadDialog = ({ open, onClose, onSuccess }) => {
       stopProgressSimulation(100);
       setResult(data);
 
-      if (data?.success) {
+      if (data?.alreadyImported) {
+        // Refused on purpose, and nothing went wrong. Calling this "completed
+        // with errors" sent someone looking for a fault that did not exist,
+        // over a summary of four zeroes that meant "no work was needed".
+        enqueueSnackbar(data.message || 'هذا الملف مستورد سلفاً', { variant: 'info' });
+      } else if (data?.success) {
         enqueueSnackbar(`${LABELS.success}: ${data.summary?.created} عضو`, { variant: 'success' });
       } else {
         enqueueSnackbar('اكتمل الاستيراد مع وجود أخطاء', { variant: 'warning' });

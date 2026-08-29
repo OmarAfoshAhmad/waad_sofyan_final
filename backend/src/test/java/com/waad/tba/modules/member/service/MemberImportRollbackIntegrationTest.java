@@ -109,6 +109,90 @@ class MemberImportRollbackIntegrationTest extends PostgresIntegrationTestBase {
     }
 
     @Test
+    void askingToRollBackTheSameBatchTwiceChangesNothingTheSecondTime() throws Exception {
+        Fixture fixture = fixture();
+        String card = "RBT" + fixture.suffix();
+        String batch = "rollback-twice-" + fixture.suffix();
+
+        importService.executeImport(excel(List.of(HEADER,
+                row("Twice Principal", fixture.employer(), "N-T", card, "095", "Engineer", "IT"))),
+                batch, fixture.employer().getId(), fixture.policy().getId(), 0, false);
+
+        MemberImportLog logRow = importLogRepository.findByImportBatchId(batch).orElseThrow();
+        var first = rollbackService.execute(logRow.getId(), "أُرسل الملف بالخطأ");
+        assertThat(first.getRevertedCreatedCount()).isEqualTo(1);
+
+        // A double click, a retried request after the connection dropped, or
+        // an impatient second press. None of them may run the reversal again:
+        // the effect of an operation must not depend on how many times the
+        // request arrived.
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> rollbackService.execute(logRow.getId(), "محاولة ثانية"))
+                .isInstanceOf(com.waad.tba.common.exception.BusinessRuleException.class)
+                .hasMessageContaining("سبق التراجع");
+
+        assertThat(rollbackRepository.findByImportLogIdAndStatus(logRow.getId(),
+                com.waad.tba.modules.member.entity.MemberImportRollback.Status.COMPLETED))
+                .as("exactly one completed reversal, whatever was asked for")
+                .isPresent();
+        assertThat(importLogRepository.findById(logRow.getId()).orElseThrow().getStatus())
+                .isEqualTo(MemberImportLog.ImportStatus.ROLLED_BACK);
+    }
+
+    @Test
+    void theSameFileCanBeImportedAgainAfterItsBatchIsRolledBack() throws Exception {
+        Fixture fixture = fixture();
+        String card = "RBR" + fixture.suffix();
+        var file = excel(List.of(HEADER,
+                row("Re-import Principal", fixture.employer(), "N-R", card, "093", "Engineer", "IT")));
+
+        String firstBatch = "rollback-reimport-1-" + fixture.suffix();
+        importService.executeImport(file, firstBatch,
+                fixture.employer().getId(), fixture.policy().getId(), 0, false);
+        MemberImportLog first = importLogRepository.findByImportBatchId(firstBatch).orElseThrow();
+
+        rollbackService.execute(first.getId(), "أُرسل الملف بالخطأ");
+
+        // The batch is no longer standing, and the log has to say so -- every
+        // reader of that status is asking whether it still is.
+        assertThat(importLogRepository.findById(first.getId()).orElseThrow().getStatus())
+                .isEqualTo(MemberImportLog.ImportStatus.ROLLED_BACK);
+
+        var second = importService.executeImport(file, "rollback-reimport-2-" + fixture.suffix(),
+                fixture.employer().getId(), fixture.policy().getId(), 0, false);
+
+        // Re-importing after a revert is the normal next step, and the
+        // idempotency guard used to make it impossible: the rows were gone and
+        // the fingerprint still answered "already done". Rollback was a
+        // one-way door.
+        assertThat(second.getCreatedCount())
+                .as("the same file must load again once its batch has been reverted")
+                .isEqualTo(1);
+        assertThat(second.isAlreadyImported()).isFalse();
+        assertThat(memberRepository.findByCardNumber(card)).isPresent();
+    }
+
+    @Test
+    void animportRefusedAsADuplicateSaysSoRatherThanReportingErrors() throws Exception {
+        Fixture fixture = fixture();
+        String card = "RBD" + fixture.suffix();
+        var file = excel(List.of(HEADER,
+                row("Duplicate Principal", fixture.employer(), "N-D2", card, "094", "Engineer", "IT")));
+
+        importService.executeImport(file, "rollback-dup-1-" + fixture.suffix(),
+                fixture.employer().getId(), fixture.policy().getId(), 0, false);
+
+        var again = importService.executeImport(file, "rollback-dup-2-" + fixture.suffix(),
+                fixture.employer().getId(), fixture.policy().getId(), 0, false);
+
+        // Nothing went wrong here. A screen that reads four zeroes and calls
+        // them errors sends someone hunting for a fault that does not exist.
+        assertThat(again.isAlreadyImported()).isTrue();
+        assertThat(again.getErrorCount()).isZero();
+        assertThat(again.getMessage()).contains("مستورد سلفاً");
+    }
+
+    @Test
     void unchangedUpdatedMemberRestoresAllImportOwnedFieldsIncludingAttributes() throws Exception {
         Fixture fixture = fixture();
         String card = "RBU" + fixture.suffix();

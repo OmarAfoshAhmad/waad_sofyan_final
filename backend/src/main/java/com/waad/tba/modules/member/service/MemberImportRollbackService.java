@@ -127,6 +127,21 @@ public class MemberImportRollbackService {
                         .map(e -> MemberImportRollbackSkip.builder().rollbackId(rollback.getId())
                                 .memberId(e.getKey()).reason(e.getValue()).build()).toList());
             }
+
+            // The batch itself is no longer standing, and everything that asks
+            // about it means "is it still standing": the history screen, and
+            // the idempotency guard that refuses to re-run a completed import.
+            // Leaving the log at COMPLETED made a reverted batch look intact
+            // and made re-importing the same file impossible -- which is the
+            // one thing someone does after a rollback.
+            //
+            // Skips are the exception. If any row could not be reverted, part
+            // of the import survives, and calling the whole batch reverted
+            // would be a worse lie than the one being fixed.
+            if (plan.skips().isEmpty()) {
+                logRow.markRolledBack();
+                importLogRepository.saveAndFlush(logRow);
+            }
             return MemberImportRollbackResultDto.builder().rollbackId(rollback.getId())
                     .importLogId(importLogId).status("COMPLETED")
                     .revertedCreatedCount(deleted).revertedUpdatedCount(restored)
