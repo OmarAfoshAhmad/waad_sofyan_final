@@ -60,6 +60,7 @@ public class EmployerService {
     private final AuthorizationService authorizationService;
     private final MemberAccessScopeResolver scopeResolver;
     private final com.waad.tba.modules.member.repository.MemberEmployerAssignmentRepository assignmentRepository;
+    private final com.waad.tba.modules.systemadmin.service.AuditLogService auditLogService;
 
     /**
      * Get all active, non-archived employers (paginated)
@@ -361,6 +362,14 @@ public class EmployerService {
 
         Employer employer = findEmployerById(id);
 
+        // An explicit transition, not a setter. Archiving something already
+        // archived is not success -- the operator asked for a state change
+        // that cannot happen, and reporting "done" hides that from the bulk
+        // result, which is the one place they would see it.
+        if (!Boolean.TRUE.equals(employer.getActive())) {
+            throw new BusinessRuleException("جهة العمل مؤرشفة بالفعل");
+        }
+
         // Only members who still BELONG to this employer today block archiving.
         // Historical ones must never block it -- otherwise any employer that
         // ever had a member becomes permanently un-archivable, which was the
@@ -384,6 +393,10 @@ public class EmployerService {
 
         employer.setActive(false);
         Employer updated = employerRepository.save(employer);
+        // "UPDATED": AuditLogService.toAction() has no ARCHIVED case, and adding
+        // one is a new audit vocabulary entry, not a local decision. The
+        // specific act is in the reason text, which is what a reviewer reads.
+        audit("UPDATED", id, "أرشفة جهة العمل " + updated.getName() + " (" + updated.getCode() + ")");
 
         log.info("[EmployerService] Archived employer ID: {}", id);
         return mapper.toResponse(updated);
@@ -404,6 +417,10 @@ public class EmployerService {
 
         Employer employer = findEmployerById(id);
 
+        if (Boolean.TRUE.equals(employer.getActive())) {
+            throw new BusinessRuleException("جهة العمل نشطة بالفعل");
+        }
+
         // Re-run the same contract-terms validation update() enforces —
         // restore() previously skipped it entirely, so an employer could
         // come back active with a contract end date before its start date,
@@ -412,9 +429,10 @@ public class EmployerService {
                 employer.getMaxMemberLimit(),
                 assignmentRepository.countActiveMembersAssignedOn(id, LocalDate.now()));
 
-        // Restore by setting active=true
         employer.setActive(true);
         Employer updated = employerRepository.save(employer);
+        // "RESTORED" maps directly onto AuditAction.RESTORED.
+        audit("RESTORED", id, "استعادة جهة العمل " + updated.getName() + " (" + updated.getCode() + ")");
 
         log.info("[EmployerService] Restored employer ID: {}", id);
         return mapper.toResponse(updated);
@@ -497,6 +515,19 @@ public class EmployerService {
      * forbidden. A 403 on a specific id confirms that id exists, which is a
      * different answer from the one a tenant is entitled to.
      */
+    /**
+     * Archiving and restoring an employer change what every screen in the
+     * system shows and what other tenants can be linked to. Neither was
+     * recorded anywhere but a log line, which is not a record anyone can
+     * query six months later.
+     */
+    private void audit(String action, Long employerId, String details) {
+        User actor = authorizationService.getCurrentUser();
+        auditLogService.createAuditLog(action, "EMPLOYER", employerId, details,
+                actor == null ? null : actor.getId(),
+                actor == null ? null : actor.getUsername(), null, null);
+    }
+
     private Employer findEmployerById(Long id) {
         Employer employer = employerRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Employer not found with id: " + id));

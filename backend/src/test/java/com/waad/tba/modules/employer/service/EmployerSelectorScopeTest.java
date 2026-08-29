@@ -39,7 +39,8 @@ class EmployerSelectorScopeTest {
             mock(BenefitPolicyRepository.class),
             authorizationService,
             scopeResolver,
-            assignmentRepository);
+            assignmentRepository,
+            mock(com.waad.tba.modules.systemadmin.service.AuditLogService.class));
 
     @Test
     void dataEntryReceivesOnlyItsConfiguredActiveEmployer() {

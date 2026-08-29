@@ -316,7 +316,43 @@ controller. But `EMPLOYER_MANAGE` alone gates update, archive, restore, the
 refused delete AND bulk-archive. Whether that breadth is intended is a business
 question, not a code one.
 
-### E-06 restore, E-08 concurrency, E-09 DB constraints, E-10 audit, E-11 performance, E-12 integration gate — OPEN
+### E-06 restore — VERIFIED
+
+**CLAIM:** archive and restore are explicit, guarded, audited transitions --
+not the inverse of a flag flip.
+
+**FAILURES FOUND**
+1. `restore()` on an already-active employer succeeded silently. `archive()`
+   on an already-archived one did too. Neither refused a transition that
+   cannot happen; a bulk operation reporting "success" for a no-op hides that
+   from the one place an operator would see it.
+2. **Zero audit signal anywhere in the module.** Archiving hides an employer
+   from every list in the system and restoring brings a tenant back; neither
+   left a record anyone could query, only a log line.
+
+**ROOT CAUSE** Both were written as setters (`employer.setActive(...)`) with
+validation bolted on, not as transitions with entry conditions.
+
+**FIX** Both refuse when the employer is already in the requested state.
+Both call through `AuditLogService`. Naming the act ran into a real
+constraint: `AuditAction` has `RESTORED` but no `ARCHIVED` — adding one is an
+audit-vocabulary decision, not a local one, so archive is recorded as
+`UPDATED` with the specific act in the queryable reason text, and restore
+uses `RESTORED` directly since it already exists.
+
+**REGRESSION TESTS** `EmployerRestoreIntegrationTest` -- 7 cases: both
+double-transition refusals (each proved to bite by removing the guard and
+watching the specific case fail), both audit assertions (querying
+`medical_audit_logs` for the actual persisted reason and action), restore
+over a member cap already exceeded while archived, restore with an invalid
+contract, and a valid restore succeeding.
+
+**REMAINING UNKNOWN** Restoring while a conflicting active policy exists
+(protocol's fourth restore case) was not constructed -- `validateEmployerTerms`
+covers dates and member cap; whether a second mechanism blocks a policy
+conflict specifically was not traced.
+
+### E-08 concurrency, E-09 DB constraints, E-10 audit (beyond archive/restore), E-11 performance, E-12 integration gate — OPEN
 
 Not examined.
 

@@ -61,7 +61,8 @@ class EmployerScopeClosureGateTest {
             benefitPolicyRepository,
             authorizationService,
             scopeResolver,
-            assignmentRepository);
+            assignmentRepository,
+            mock(com.waad.tba.modules.systemadmin.service.AuditLogService.class));
 
     private User user(String type, Long employerId) {
         User user = new User();
