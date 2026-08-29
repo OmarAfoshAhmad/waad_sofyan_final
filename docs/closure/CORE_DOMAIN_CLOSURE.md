@@ -217,9 +217,141 @@ count. The protocol's 30,000-member dataset gate was not run this round.
 
 ---
 
-## EMPLOYERS — OPEN
+## EMPLOYERS — PARTIALLY VERIFIED
 
-Not examined this round.
+Examined against the E-01..E-12 gate. Four of twelve are `VERIFIED`; the rest
+were not reached this round and are `OPEN`, not assumed.
+
+### E-01 no delete erases history — VERIFIED
+
+`EmployerService.delete` always throws; an employer is named by member
+assignments, policies, claims and ledger rows. `EmployerScopeClosureGateTest`
+asserts the refusal AND that neither `delete` nor `deleteById` was reached.
+
+### E-02 archive is a guarded transition — VERIFIED
+
+Blocked by members belonging today, and separately by an active policy. Two
+cases, so one passing cannot mask the other.
+
+### E-03 the dated assignment is the source of truth — VERIFIED
+
+**CLAIM:** no decision about a member's employer is made from
+`members.employer_id`.
+
+**FAILURES FOUND** — one looked for, three found by the guard written for it:
+
+| where | what it decided from the pointer |
+|---|---|
+| `EmployerService.archive` | whether an employer may be archived |
+| `EmployerService.update` | whether a member cap may be lowered -- while `restore()` had already moved to the assignments, so one rule had two sources |
+| `MemberExcelImportService` | **who gets terminated** by a replacement import |
+| `MedicalAuditLogController` | which members appear in an employer's audit trail |
+
+The third is the shape of the risk: a destructive write decided from a cache
+of the answer. The fourth taught something -- its question is "who was EVER
+here", not "who is here today", so answering it with the nearest dated query
+would have made it *more* wrong. `findMemberIdsEverAssignedTo` was built for
+it rather than allow-listing the file.
+
+**FIX** Three reads, each named for the date it answers, so nobody reaching
+for one gets another's answer: `countActiveMembersAssignedOn`,
+`findMemberIdsAssignedOn`, `findMemberIdsEverAssignedTo`. Plus
+`countActiveMembersWithNoAssignmentTo`, which measures the GAP between the two
+sources and exists so a destructive operation can refuse to run over data it
+cannot place.
+
+**A design question the fix exposed.** Two atomicity tests seeded a member with
+the pointer and no assignment. Under the old code the replacement terminated
+them; under the new one it did not see them. Both are wrong, and skipping
+silently is the worse of the two -- the import reports success and the
+stragglers stay. Replacement now refuses and names how many records need
+fixing.
+
+**REGRESSION TESTS**
+`EmployerArchiveFollowsTheDatedAssignmentIntegrationTest` -- five cases. Two of
+them prove WHICH SOURCE was read, by making the pointer and the assignment
+disagree on purpose:
+
+- pointer says B, assignment says A -> archiving A is blocked
+- pointer says A, assignment says B -> archiving A is allowed
+
+Both fail under the old implementation; verified by reverting it.
+
+`MemberExcelImportAtomicityIntegrationTest
+.replacementRefusesWhenAMemberCarriesThePointerWithNoDatedAssignment`.
+
+`EmployerDecisionsReadTheDatedAssignmentArchitectureTest` bans pointer reads
+outside an allow-list of three display-only files, and asserts the dated reads
+are named for their dates.
+
+### E-04 scope — VERIFIED
+
+**A live cross-tenant leak, reachable with default role templates.**
+`GET /api/v1/employers` was guarded by `EMPLOYER_VIEW` alone and `searchPage`
+carried no scope predicate -- no aspect, no interceptor, no Hibernate filter
+exists anywhere in the codebase. `DATA_ENTRY` holds `EMPLOYER_VIEW` by default
+(V191) and is scoped to one employer.
+
+Three tests failed on first run: listing returned every employer, reading
+another by id succeeded, and **archiving another employer succeeded**.
+
+The only correct logic was buried inside `getSelectors()` and keyed on the
+role NAME -- an E-05 violation of its own, applied to one of eight reads.
+
+**FIX** `EmployerService` consults `MemberAccessScopeResolver`, not a second
+scope model that could disagree with it. `findEmployerById` is the shared door
+for getById/update/archive/restore, so the check sits there once; an
+out-of-scope employer is reported NOT FOUND rather than forbidden, because a
+403 on a specific id confirms that id exists. The listing narrows IN THE
+QUERY -- filtering a page afterwards leaves its total count describing rows the
+caller may not see.
+
+Proved to bite by removing the check from the finder and from the listing
+separately.
+
+### E-05 permission not role — PARTIALLY VERIFIED
+
+Every endpoint uses `permissionGuard.has(...)`; no role shortcuts in the
+controller. But `EMPLOYER_MANAGE` alone gates update, archive, restore, the
+refused delete AND bulk-archive. Whether that breadth is intended is a business
+question, not a code one.
+
+### E-06 restore, E-08 concurrency, E-09 DB constraints, E-10 audit, E-11 performance, E-12 integration gate — OPEN
+
+Not examined.
+
+### E-07 import — PARTIALLY VERIFIED
+
+The employer import writes through `EmployerService`, so it inherits the scope
+check. A case was added for the sharpest form: a scoped operator putting
+another employer's code in a spreadsheet to reactivate it. Refused; the
+employer stays archived.
+
+That case could not have failed before -- **the entire employer import suite
+ran with no authenticated user at all**, so nothing about who was importing
+was ever part of the test.
+
+`OPEN`: invalid rows, partial failure, rollback.
+
+---
+
+### Found in MEMBERS while auditing employers
+
+`MemberAccessScopeResolver.providerScope` ignored
+`ProviderAllowedEmployer.active`. `Provider.allowedEmployers` is an unfiltered
+`@OneToMany`, so a provider's scope included every employer it had EVER been
+contracted with -- an ended contract left their staff able to read that
+employer's members indefinitely, with the link correctly marked inactive and
+the code that mattered not reading the mark.
+
+Fixed at its root.
+`MemberAccessScopeResolverIntegrationTest.anEndedContractEndsTheProvidersReach`,
+proved to bite.
+
+**The generalisation, still OPEN:** a relation with a state or a validity
+window is not a foreign key. `Provider -> Employer` was one instance;
+`User -> Employer`, `Policy -> Employer` and `Member -> Employer` deserve the
+same question.
 
 ## BENEFIT POLICIES — OPEN
 
@@ -322,7 +454,7 @@ Tests       72 passed (72)
 
 ```
 MEMBERS                   = PARTIALLY VERIFIED
-EMPLOYERS                 = OPEN
+EMPLOYERS                 = PARTIALLY VERIFIED
 BENEFIT_POLICIES          = OPEN
 COVERAGE_RULES            = PARTIALLY VERIFIED
 CROSS_MODULE_INTEGRATION  = PARTIALLY VERIFIED

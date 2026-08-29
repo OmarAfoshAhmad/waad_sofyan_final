@@ -230,6 +230,32 @@ public interface MemberRepository extends JpaRepository<Member, Long>, JpaSpecif
        long countByEmployerIdAndActiveTrue(Long employerOrgId);
 
        /**
+        * Active members carrying this employer's pointer that the dated model
+        * cannot place: no assignment to that employer covering the date.
+        *
+        * A RECONCILIATION between the two sources, not a decision from either.
+        * It exists so a destructive bulk operation can refuse to run over data
+        * it cannot reason about, rather than quietly doing the right thing to
+        * some of the roster and nothing to the rest.
+        *
+        * Named for what it measures. Anyone reaching for
+        * countByEmployerIdAndActiveTrue to make a decision gets the pointer's
+        * answer; this one's name says it is about the gap between the two.
+        */
+       @Query("""
+                       SELECT COUNT(m) FROM Member m
+                       WHERE m.employer.id = :employerId AND m.active = true
+                         AND NOT EXISTS (
+                             SELECT 1 FROM MemberEmployerAssignment a
+                             WHERE a.memberId = m.id AND a.employerId = :employerId
+                               AND a.assignmentStartDate <= :date
+                               AND (a.assignmentEndDate IS NULL OR a.assignmentEndDate > :date)
+                         )
+                       """)
+       long countActiveMembersWithNoAssignmentTo(@Param("employerId") Long employerId,
+                       @Param("date") java.time.LocalDate date);
+
+       /**
         * Search members by employer organization ID (paginated)
         * FIXED: Added countQuery for proper pagination with FETCH JOIN
         */

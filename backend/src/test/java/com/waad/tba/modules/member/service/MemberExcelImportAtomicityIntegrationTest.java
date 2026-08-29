@@ -105,6 +105,27 @@ class MemberExcelImportAtomicityIntegrationTest extends PostgresIntegrationTestB
     @Autowired private MemberEmployerAssignmentRepository employerAssignmentRepository;
     @Autowired private MemberPolicyAssignmentRepository policyAssignmentRepository;
     @Autowired private VisitRepository visitRepository;
+
+    @Autowired
+    private org.springframework.jdbc.core.JdbcTemplate jdbc;
+
+    /**
+     * The dated assignment MemberEmployerResolver writes alongside the
+     * pointer.
+     *
+     * These fixtures used to set only members.employer_id, which no
+     * production path produces -- the canonical writer sets both. The
+     * replacement import now decides who to terminate from the assignments,
+     * and refuses outright when a member carries the pointer with no
+     * assignment to place them, so a fixture missing one is a member the
+     * system is right to refuse to reason about.
+     */
+    private void assignToEmployer(Long memberId, Long employerId) {
+        jdbc.update("INSERT INTO member_employer_assignments (member_id, employer_id,"
+                + " assignment_start_date, assignment_reason, assignment_source)"
+                + " VALUES (?, ?, ?, 'تجهيز اختبار الاستبدال', 'MANUAL')",
+                memberId, employerId, java.time.LocalDate.now().minusMonths(1));
+    }
     @MockitoBean private MemberImportAccessPolicy importAccessPolicy;
 
     @BeforeEach
@@ -519,6 +540,7 @@ class MemberExcelImportAtomicityIntegrationTest extends PostgresIntegrationTestB
         Member preExisting = memberRepository.save(Member.builder()
                 .fullName("Stale Member " + s).employer(employer)
                 .cardNumber("STALE" + s).barcode("STALE" + s).status(Member.MemberStatus.SUSPENDED).active(false).build());
+        assignToEmployer(preExisting.getId(), employer.getId());
 
         MockMultipartFile file = excel(List.of(
                 HEADER,
@@ -566,6 +588,7 @@ class MemberExcelImportAtomicityIntegrationTest extends PostgresIntegrationTestB
         Member preExisting = memberRepository.save(Member.builder()
                 .fullName("Stale Member " + s).employer(employer)
                 .cardNumber("STALE2" + s).barcode("STALE2" + s).status(Member.MemberStatus.SUSPENDED).active(false).build());
+        assignToEmployer(preExisting.getId(), employer.getId());
 
         doThrow(new DataIntegrityViolationException("simulated unique constraint violation"))
                 .when(memberRepository)
@@ -600,6 +623,7 @@ class MemberExcelImportAtomicityIntegrationTest extends PostgresIntegrationTestB
                 .benefitPolicy(policy)
                 .cardNumber("HISTABS" + s).barcode("HISTABS" + s)
                 .status(Member.MemberStatus.ACTIVE).active(true).build());
+        assignToEmployer(absent.getId(), employer.getId());
         Long visitId = visitRepository.saveAndFlush(Visit.builder()
                 .member(absent).employer(employer).visitDate(LocalDate.now().minusDays(3)).build()).getId();
 
@@ -657,4 +681,48 @@ class MemberExcelImportAtomicityIntegrationTest extends PostgresIntegrationTestB
         assertThat(unchanged.getFullName()).isEqualTo("Existing " + s);
     }
 
+
+    /**
+     * A replacement over members the dated model cannot place is refused,
+     * loudly, rather than applied to the half it understands.
+     *
+     * Replacement is the most destructive thing this importer does: the file
+     * says "these are all my people" and everyone absent from it is ended. It
+     * used to choose them from members.employer_id, so a member with the
+     * pointer and no assignment was ended on the strength of a denormalised
+     * value. Choosing from the assignments instead fixed that and created a
+     * new question -- what about a member the assignments do not place at all?
+     *
+     * Skipping them silently is the one answer with no signal: the import
+     * reports success, the stragglers stay active, and nobody finds out until
+     * a reconciliation months later. So the operation refuses and says how
+     * many records need fixing first.
+     */
+    @Test
+    void replacementRefusesWhenAMemberCarriesThePointerWithNoDatedAssignment() throws Exception {
+        String s = randomSuffix();
+        Employer employer = newEmployer(s);
+        BenefitPolicy policy = newPolicy(employer, s);
+
+        Member unplaceable = memberRepository.saveAndFlush(Member.builder()
+                .fullName("Unplaceable " + s).employer(employer).benefitPolicy(policy)
+                .cardNumber("UNPL" + s).barcode("UNPL" + s)
+                .status(Member.MemberStatus.ACTIVE).active(true).build());
+        // Deliberately no assignToEmployer here -- that is the whole case.
+
+        MockMultipartFile replacement = excel(List.of(
+                HEADER,
+                new String[] { "Present " + s, employer.getName(), "NP" + s, "2026-01-01", "PRES" + s }));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                        importService.executeImport(replacement, "batch-unplaceable-" + s,
+                                employer.getId(), null, 0, true))
+                .hasMessageContaining("سجل انتساب مؤرّخ");
+
+        Member untouched = memberRepository.findById(unplaceable.getId()).orElseThrow();
+        assertThat(untouched.getStatus())
+                .as("nothing was ended on data the system could not reason about")
+                .isEqualTo(Member.MemberStatus.ACTIVE);
+        assertThat(untouched.getActive()).isTrue();
+    }
 }

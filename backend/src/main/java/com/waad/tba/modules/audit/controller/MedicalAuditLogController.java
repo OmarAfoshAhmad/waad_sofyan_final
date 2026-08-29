@@ -55,6 +55,7 @@ public class MedicalAuditLogController {
         private final VisitRepository visitRepository;
         private final PreAuthorizationRepository preAuthorizationRepository;
         private final MemberRepository memberRepository;
+        private final com.waad.tba.modules.member.repository.MemberEmployerAssignmentRepository assignmentRepository;
 
         @GetMapping
         @Operation(summary = "Search claim audit logs", description = "Filter by claimId, providerId, employerId and/or correlationId with pagination")
@@ -133,8 +134,13 @@ public class MedicalAuditLogController {
                 }
 
                 if (employerId != null) {
-                        List<String> memberIds = memberRepository.findByEmployerId(employerId).stream()
-                                        .map(m -> String.valueOf(m.getId())).collect(Collectors.toList());
+                        // Everyone EVER assigned to this employer, from the dated
+                        // assignments -- not members.employer_id, which names only
+                        // who is with them right now. An audit filtered by employer
+                        // that omitted the people who have since left would be
+                        // missing most of what an audit gets opened to find.
+                        List<String> memberIds = assignmentRepository.findMemberIdsEverAssignedTo(employerId)
+                                        .stream().map(String::valueOf).collect(Collectors.toList());
 
                         branches.add(entityTypeAndIdsIn(EntityType.MEMBER, memberIds));
                         branches.add(entityTypeAndIdsIn(EntityType.EMPLOYER, List.of(String.valueOf(employerId))));

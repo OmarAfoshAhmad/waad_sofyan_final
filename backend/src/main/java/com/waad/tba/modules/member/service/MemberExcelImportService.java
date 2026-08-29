@@ -80,6 +80,7 @@ public class MemberExcelImportService {
     private final BarcodeGeneratorService barcodeGeneratorService;
     private final MemberImportAuditRecorder auditRecorder;
     private final MemberImportMetrics metrics;
+    private final com.waad.tba.modules.member.repository.MemberEmployerAssignmentRepository assignmentRepository;
     private final MemberStatusTransitionService statusTransitionService;
     private final MemberEmployerResolver memberEmployerResolver;
     private final com.waad.tba.modules.member.repository.MemberEmployerAssignmentRepository employerAssignmentRepository;
@@ -736,7 +737,40 @@ public class MemberExcelImportService {
 
     private void terminateMembersAbsentFromReplacement(Long employerId, Set<String> presentCards) {
         log.info("🧹 Terminating members absent from replacement file for employerId={}", employerId);
-        List<Member> allMembers = memberRepository.findByEmployerId(employerId);
+
+        // Who belongs to this employer TODAY, from the dated assignments.
+        //
+        // This decides who gets terminated, so reading members.employer_id --
+        // a denormalised current pointer -- put a destructive write on a cache
+        // of the answer. A member whose pointer had drifted would be missed by
+        // a replacement that should have ended them, or ended by one that
+        // should not have touched them, and either way the file would look
+        // like it had been applied correctly.
+        List<Long> assignedToday = assignmentRepository.findMemberIdsAssignedOn(employerId, java.time.LocalDate.now());
+
+        // A member carrying this employer's pointer but no dated assignment is
+        // a record the dated model cannot place. MemberPolicyResolver already
+        // refuses to decide about such a member rather than falling back to
+        // the pointer, and this is a far more destructive decision than that
+        // one: a replacement says "these are all my people", and everyone it
+        // omits is ended.
+        //
+        // Skipping them silently is the one outcome with no signal -- the file
+        // reports success, the stragglers stay, and nobody finds out until the
+        // next reconciliation. So the whole replacement is refused and the
+        // operator is told what to fix.
+        long unplaceable = memberRepository.countActiveMembersWithNoAssignmentTo(
+                employerId, java.time.LocalDate.now());
+        if (unplaceable > 0) {
+            throw new BusinessRuleException(String.format(
+                    "تعذّر تنفيذ الاستبدال: %d مستفيد مرتبط بهذه الجهة بلا سجل انتساب مؤرّخ. "
+                            + "صحّح انتسابهم أولاً حتى لا يُنهى أحد بالخطأ أو يُترك دون قصد.",
+                    unplaceable));
+        }
+
+        List<Member> allMembers = assignedToday.isEmpty()
+                ? List.of()
+                : memberRepository.findAllById(assignedToday);
         if (allMembers.isEmpty()) {
             return;
         }

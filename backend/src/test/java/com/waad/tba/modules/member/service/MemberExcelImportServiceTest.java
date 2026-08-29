@@ -141,6 +141,7 @@ class MemberExcelImportServiceTest {
                 barcodeGeneratorService,
                 auditRecorder,
                 new MemberImportMetrics(new io.micrometer.core.instrument.simple.SimpleMeterRegistry()),
+                org.mockito.Mockito.mock(com.waad.tba.modules.member.repository.MemberEmployerAssignmentRepository.class),
                 statusTransitionService,
                 memberEmployerResolver,
                 employerAssignmentRepository,
