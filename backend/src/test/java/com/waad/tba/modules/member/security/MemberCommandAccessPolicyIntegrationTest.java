@@ -48,13 +48,22 @@ class MemberCommandAccessPolicyIntegrationTest extends PostgresIntegrationTestBa
                 + "', 'Cmd " + label + " " + s + "') RETURNING id", Long.class);
     }
 
-    private void actingAs(String userType, Long employerId, Long providerId) {
+    private Long actingAs(String userType, Long employerId, Long providerId) {
         String username = "cp-" + suffix();
-        userRepository.save(com.waad.tba.modules.rbac.entity.User.builder()
+        var user = userRepository.save(com.waad.tba.modules.rbac.entity.User.builder()
                 .username(username).password("x").fullName("Cmd Test").email(username + "@waad.ly")
                 .userType(userType).employerId(employerId).providerId(providerId).active(true).build());
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(username, "x", List.of()));
+        return user.getId();
+    }
+
+    /** The exceptional grant an administrator records for one user. */
+    private void grant(Long userId, String permission) {
+        jdbc.update("INSERT INTO rbac_user_permission_overrides (user_id, permission_code, effect, "
+                + "reason, changed_by) VALUES (?, ?, 'GRANT', 'قرار إداري في الاختبار', ?) "
+                + "ON CONFLICT (user_id, permission_code) DO UPDATE SET effect = EXCLUDED.effect",
+                userId, permission, userId);
     }
 
     private boolean allowed(MemberOperation op, Long employerId) {
@@ -198,5 +207,53 @@ class MemberCommandAccessPolicyIntegrationTest extends PostgresIntegrationTestBa
 
         actingAs("SUPER_ADMIN", null, null);
         assertThat(allowed(MemberOperation.EDIT_DEMOGRAPHICS, null)).isTrue();
+    }
+
+    // -- the exceptional grant, which did not work -----------------------
+
+    /**
+     * Reinstating a terminated membership has its own permission,
+     * MEMBER_REINSTATE_TERMINATED, precisely so that an administrator can hand
+     * it to one person without also handing them every status change.
+     *
+     * It did not work. The endpoint's @PreAuthorize named it, but the service
+     * asked the policy for MemberOperation.REINSTATE -- MEMBER_CHANGE_STATUS
+     * -- and separately read MEMBER_REINSTATE_TERMINATED out of the effective
+     * permissions by hand. So the grant got the user past the annotation and
+     * the service refused them, and the effective requirement was silently
+     * both permissions at once. MemberOperation.REINSTATE_TERMINATED, its
+     * entry in the permission map and its refusal message all sat unused.
+     */
+    @Test
+    void theExceptionalReinstateGrantIsEnoughOnItsOwn() {
+        long a = employer("A");
+        Long user = actingAs("EMPLOYER_ADMIN", a, null);
+
+        assertThat(allowed(MemberOperation.REINSTATE_TERMINATED, a))
+                .as("no grant yet")
+                .isFalse();
+
+        grant(user, "MEMBER_REINSTATE_TERMINATED");
+
+        assertThat(allowed(MemberOperation.REINSTATE_TERMINATED, a))
+                .as("the whole point of a dedicated permission is that granting it is sufficient")
+                .isTrue();
+    }
+
+    /**
+     * And it stays its own act: the everyday status permission does not carry
+     * it, or the separate grant would be decoration.
+     */
+    @Test
+    void theEverydayStatusGrantDoesNotReachATerminatedMembership() {
+        long a = employer("A");
+        Long user = actingAs("EMPLOYER_ADMIN", a, null);
+        grant(user, "MEMBER_CHANGE_STATUS");
+
+        assertThat(allowed(MemberOperation.CHANGE_STATUS, a)).isTrue();
+        assertThat(allowed(MemberOperation.REINSTATE, a)).isTrue();
+        assertThat(allowed(MemberOperation.REINSTATE_TERMINATED, a))
+                .as("reviving a deliberately ended membership is not an ordinary status change")
+                .isFalse();
     }
 }

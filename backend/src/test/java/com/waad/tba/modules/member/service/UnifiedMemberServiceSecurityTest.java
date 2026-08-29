@@ -93,7 +93,6 @@ class UnifiedMemberServiceSecurityTest {
                 org.mockito.Mockito.mock(CardNumberGeneratorService.class),
                 org.mockito.Mockito.mock(com.waad.tba.modules.member.mapper.UnifiedMemberMapper.class),
                 authorizationService,
-                org.mockito.Mockito.mock(com.waad.tba.modules.rbac.permission.EffectivePermissionService.class),
                 org.mockito.Mockito.mock(MemberFinancialSummaryService.class),
                 jdbcTemplate,
                 org.mockito.Mockito.mock(com.waad.tba.modules.systemadmin.service.AuditLogService.class),

@@ -42,8 +42,6 @@ import com.waad.tba.modules.member.security.MemberScopeFilter;
 import com.waad.tba.modules.systemadmin.service.AuditLogService;
 import com.waad.tba.security.AuthorizationService;
 import com.waad.tba.modules.rbac.entity.User;
-import com.waad.tba.modules.rbac.permission.EffectivePermissionService;
-import com.waad.tba.modules.rbac.permission.SystemPermission;
 
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
@@ -88,7 +86,6 @@ public class UnifiedMemberService {
     private final CardNumberGeneratorService cardNumberGenerator;
     private final UnifiedMemberMapper mapper;
     private final AuthorizationService authorizationService;
-    private final EffectivePermissionService effectivePermissionService;
     private final MemberFinancialSummaryService financialSummaryService;
     private final JdbcTemplate jdbcTemplate;
     private final AuditLogService auditLogService;
@@ -543,20 +540,28 @@ public class UnifiedMemberService {
     }
 
     /**
-     * TERMINATED -> ACTIVE. Exceptional action: requires SUPER_ADMIN and a
+     * TERMINATED -> ACTIVE. Exceptional action requiring its own grant and a
      * mandatory reason, unlike the ordinary {@link #toggleActive}/restore
      * path (which explicitly refuses to touch a TERMINATED member).
+     *
+     * The operation is REINSTATE_TERMINATED, not REINSTATE. It used to be
+     * REINSTATE -- MEMBER_CHANGE_STATUS -- with MEMBER_REINSTATE_TERMINATED
+     * read separately out of the effective permissions right here and handed
+     * to the transition service as a boolean. Two consequences followed. The
+     * endpoint's @PreAuthorize named MEMBER_REINSTATE_TERMINATED while the
+     * service demanded MEMBER_CHANGE_STATUS, so granting the dedicated
+     * permission to one user -- the entire reason it exists -- got them past
+     * the annotation and refused by the service. And MemberOperation
+     * .REINSTATE_TERMINATED, its entry in the permission map and its refusal
+     * message all existed with nothing calling them.
      */
     @Transactional
     public MemberViewDto reinstateTerminatedMember(Long id, String reason) {
         Member stored = requireStoredMember(id);
-        commandAccessPolicy.require(MemberOperation.REINSTATE, employerIdOf(stored));
+        commandAccessPolicy.require(MemberOperation.REINSTATE_TERMINATED, employerIdOf(stored));
         User currentUser = authorizationService.getCurrentUser();
-        boolean mayReinstateTerminated = currentUser != null
-                && effectivePermissionService.resolve(currentUser)
-                        .contains(SystemPermission.MEMBER_REINSTATE_TERMINATED);
         Member member = statusTransitionService.reinstateTerminated(id, reason,
-                currentUser != null ? currentUser.getId() : null, mayReinstateTerminated);
+                currentUser != null ? currentUser.getId() : null);
         if (member.isPrincipal()) {
             List<Member> dependents = memberRepository.findByParentId(member.getId());
             return mapper.toViewDto(member, dependents);

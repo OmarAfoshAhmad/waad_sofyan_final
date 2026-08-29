@@ -55,7 +55,10 @@ public class MemberDuplicateController {
     public record KinshipResetRequest(String reason) {}
 
     @GetMapping
-    @PreAuthorize("@permissionGuard.has('SYSTEM_SETTINGS_VIEW')")
+    // Both, because both are enforced: the annotation named only the first
+    // while findDuplicates() requires RESOLVE_DUPLICATES -- DANGER_ZONE_EXECUTE
+    // -- so the gate a reader saw was not the gate that applied.
+    @PreAuthorize("@permissionGuard.has('SYSTEM_SETTINGS_VIEW') and @permissionGuard.has('DANGER_ZONE_EXECUTE')")
     public ResponseEntity<ApiResponse<List<MemberDuplicateGroupDto>>> getDuplicates() {
         log.info("REST request to get member duplicates");
         List<MemberDuplicateGroupDto> duplicates = duplicateService.findDuplicates();

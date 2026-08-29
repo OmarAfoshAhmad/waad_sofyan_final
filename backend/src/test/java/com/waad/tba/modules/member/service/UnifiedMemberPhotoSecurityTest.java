@@ -38,7 +38,6 @@ class UnifiedMemberPhotoSecurityTest {
     @Mock private CardNumberGeneratorService cardNumberGenerator;
     @Mock private UnifiedMemberMapper mapper;
     @Mock private AuthorizationService authorizationService;
-    @Mock private com.waad.tba.modules.rbac.permission.EffectivePermissionService effectivePermissionService;
     @Mock private MemberFinancialSummaryService financialSummaryService;
     @Mock private JdbcTemplate jdbcTemplate;
     @Mock private AuditLogService auditLogService;
@@ -60,7 +59,6 @@ class UnifiedMemberPhotoSecurityTest {
                 cardNumberGenerator,
                 mapper,
                 authorizationService,
-                effectivePermissionService,
                 financialSummaryService,
                 jdbcTemplate,
                 auditLogService,

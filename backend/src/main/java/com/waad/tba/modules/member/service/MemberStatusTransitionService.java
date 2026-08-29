@@ -212,18 +212,17 @@ public class MemberStatusTransitionService {
     /**
      * TERMINATED -> ACTIVE. Exceptional action: caller must already have
      * verified elevated permission (isSuperAdmin) before calling -- this
-     * method re-checks it too (defense in depth, not just a controller
-     * @PreAuthorize) and requires a reason. Re-validates the employer's
+     * Requires a reason. Whether the caller may perform it is decided by
+     * MemberCommandAccessPolicy against MemberOperation.REINSTATE_TERMINATED
+     * before this is reached -- this method used to take a boolean saying so,
+     * which put a permission decision in the domain layer and left the
+     * decision itself computed in two places. Re-validates the employer's
      * benefit policy is currently active before reinstating; does NOT touch
      * any claim/visit/preauth history -- reinstating membership is not the
      * same as reversing whatever happened while the member was terminated.
      */
     @Transactional
-    public Member reinstateTerminated(Long memberId, String reason, Long actingUserId,
-            boolean callerHasExceptionalPermission) {
-        if (!callerHasExceptionalPermission) {
-            throw new AccessDeniedException("إعادة عضوية منتهية تتطلب صلاحية الاستعادة الاستثنائية");
-        }
+    public Member reinstateTerminated(Long memberId, String reason, Long actingUserId) {
         if (reason == null || reason.trim().isEmpty()) {
             throw new BusinessRuleException("سبب إعادة العضوية المنتهية إلزامي");
         }

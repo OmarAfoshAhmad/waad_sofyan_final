@@ -153,23 +153,27 @@ class MemberStatusTransitionServiceIntegrationTest extends PostgresIntegrationTe
         assertThat(reloaded.getActive()).isTrue();
     }
 
-    // 4. Terminate then attempt restore without permission/reason: rejected.
+    // 4. Terminate then attempt restore without a reason: rejected.
+    //
+    // The permission half of this used to live here, as a boolean argument the
+    // caller passed in. It moved to MemberCommandAccessPolicy against
+    // MemberOperation.REINSTATE_TERMINATED, where the rest of the module's
+    // access decisions are, and is asserted by
+    // MemberCommandAccessPolicyIntegrationTest. What stays is what the state
+    // machine actually owns: a reinstatement must say why.
     @Test
-    void reinstateTerminatedRejectedWithoutSuperAdminOrReason() {
+    void reinstateTerminatedRejectedWithoutAReason() {
         String s = suffix();
         Employer employer = newEmployer(s);
         BenefitPolicy policy = newPolicy(employer, s);
         Member principal = newPrincipal(employer, policy, s);
         transitionService.terminateMembership(principal.getId(), "إنهاء", 1L, StatusSource.MANUAL);
 
-        assertThatThrownBy(() -> transitionService.reinstateTerminated(principal.getId(), "سبب", 1L, false))
-                .isInstanceOf(AccessDeniedException.class);
-
-        assertThatThrownBy(() -> transitionService.reinstateTerminated(principal.getId(), null, 1L, true))
+        assertThatThrownBy(() -> transitionService.reinstateTerminated(principal.getId(), null, 1L))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessageContaining("سبب");
 
-        assertThatThrownBy(() -> transitionService.reinstateTerminated(principal.getId(), "  ", 1L, true))
+        assertThatThrownBy(() -> transitionService.reinstateTerminated(principal.getId(), "  ", 1L))
                 .isInstanceOf(BusinessRuleException.class);
 
         Member reloaded = memberRepository.findById(principal.getId()).orElseThrow();
@@ -178,7 +182,7 @@ class MemberStatusTransitionServiceIntegrationTest extends PostgresIntegrationTe
 
     // 5. Terminate then restore WITH permission: succeeds and is audited.
     @Test
-    void reinstateTerminatedSucceedsWithSuperAdminAndReasonAndIsAudited() {
+    void reinstateTerminatedSucceedsWithAReasonAndIsAudited() {
         String s = suffix();
         Employer employer = newEmployer(s);
         BenefitPolicy policy = newPolicy(employer, s);
@@ -186,7 +190,7 @@ class MemberStatusTransitionServiceIntegrationTest extends PostgresIntegrationTe
         transitionService.terminateMembership(principal.getId(), "إنهاء أولي", 1L, StatusSource.MANUAL);
 
         Member reinstated = transitionService.reinstateTerminated(principal.getId(),
-                "قرار إداري بإعادة القيد", 9L, true);
+                "قرار إداري بإعادة القيد", 9L);
 
         assertThat(reinstated.getStatus()).isEqualTo(Member.MemberStatus.ACTIVE);
         assertThat(reinstated.getActive()).isTrue();
