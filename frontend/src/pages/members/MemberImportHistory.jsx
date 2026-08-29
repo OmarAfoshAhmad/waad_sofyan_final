@@ -10,12 +10,22 @@ import {
   DialogTitle,
   Divider,
   IconButton,
+  InputAdornment,
+  MenuItem,
   Stack,
   TextField,
   Tooltip,
   Typography
 } from '@mui/material';
-import { Download as DownloadIcon, ErrorOutline as ErrorOutlineIcon, Undo as UndoIcon, Refresh as RefreshIcon } from '@mui/icons-material';
+import {
+  Download as DownloadIcon,
+  ErrorOutline as ErrorOutlineIcon,
+  Undo as UndoIcon,
+  Refresh as RefreshIcon,
+  Search as SearchIcon,
+  Close as CloseIcon,
+  History as HistoryIcon
+} from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
 import MainCard from 'components/MainCard';
 import UnifiedMedicalTable from 'components/common/UnifiedMedicalTable';
@@ -80,6 +90,25 @@ const MemberImportHistory = () => {
   const [pageSize, setPageSize] = useState(20);
   const [loading, setLoading] = useState(false);
 
+  const [statusFilter, setStatusFilter] = useState('ALL');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+
+  // Same reason as the members list: one request per pause, not one per
+  // keystroke.
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchTerm), 400);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  // Any filter change starts from the first page. Staying on page 4 of a
+  // narrower result set shows an empty table and reads as "nothing found".
+  useEffect(() => {
+    setPage(0);
+  }, [statusFilter, debouncedSearch, fromDate, toDate]);
+
   const [rollbackTarget, setRollbackTarget] = useState(null); // the log row being considered
   const [rollbackPreview, setRollbackPreview] = useState(null);
   const [rollbackReason, setRollbackReason] = useState('');
@@ -88,7 +117,12 @@ const MemberImportHistory = () => {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await getImportLogs(page + 1, pageSize);
+      const response = await getImportLogs(page + 1, pageSize, {
+        status: statusFilter,
+        search: debouncedSearch,
+        from: fromDate,
+        to: toDate
+      });
       const data = response?.data || response;
       setLogs(data?.content || []);
       setTotalElements(data?.totalElements || 0);
@@ -97,7 +131,7 @@ const MemberImportHistory = () => {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, enqueueSnackbar]);
+  }, [page, pageSize, statusFilter, debouncedSearch, fromDate, toDate, enqueueSnackbar]);
 
   useEffect(() => {
     load();
@@ -240,17 +274,126 @@ const MemberImportHistory = () => {
     }
   };
 
+  const hasActiveFilter = statusFilter !== 'ALL' || Boolean(searchTerm) || Boolean(fromDate) || Boolean(toDate);
+
+  const clearFilters = () => {
+    setStatusFilter('ALL');
+    setSearchTerm('');
+    setFromDate('');
+    setToDate('');
+  };
+
   return (
-    <MainCard content={false}>
+    <Box sx={{ width: '100%' }}>
       <ModernPageHeader
         title="سجل استيراد الأعضاء"
         subtitle="كل دفعات استيراد الأعضاء بملف Excel: من نفّذها، متى، وأعدادها. يمكن تصدير الأخطاء أو التراجع عن دفعة كاملة."
-        actions={
-          <IconButton onClick={load} disabled={loading}>
-            <RefreshIcon />
-          </IconButton>
-        }
+        icon={<HistoryIcon />}
+        breadcrumbs={[
+          { label: 'الرئيسية', href: '/' },
+          { label: 'المستفيدين', href: '/members' },
+          { label: 'سجل الاستيراد' }
+        ]}
+        sx={{ mb: 0.5 }}
       />
+
+      {/* Same row the members list uses: refresh, a count, search, then the
+          filters -- one visual grammar for both screens. */}
+      <MainCard sx={{ mb: 1 }}>
+        <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} alignItems={{ xs: 'stretch', md: 'center' }}>
+          <Tooltip title="تحديث">
+            <span>
+              <IconButton
+                onClick={load}
+                disabled={loading}
+                color="primary"
+                sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, width: '2.5rem', height: '2.5rem' }}
+              >
+                <RefreshIcon />
+              </IconButton>
+            </span>
+          </Tooltip>
+
+          <Chip
+            icon={<HistoryIcon fontSize="small" />}
+            label={`${totalElements} عملية`}
+            variant="outlined"
+            color="primary"
+            sx={{ height: '2.5rem', borderRadius: 1, fontWeight: 'bold', fontSize: '0.875rem', px: 1 }}
+          />
+
+          <TextField
+            sx={{ flexGrow: 1, minWidth: { md: '12.5rem' } }}
+            size="small"
+            placeholder="بحث باسم الملف أو رقم الدفعة أو المنفّذ..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon color="action" />
+                </InputAdornment>
+              ),
+              endAdornment: searchTerm && (
+                <InputAdornment position="end">
+                  <IconButton size="small" onClick={() => setSearchTerm('')}>
+                    <CloseIcon fontSize="small" />
+                  </IconButton>
+                </InputAdornment>
+              ),
+              sx: { height: '2.5rem' }
+            }}
+          />
+
+          <TextField
+            select
+            size="small"
+            label="الحالة"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            sx={{ minWidth: '9.375rem', bgcolor: 'background.paper' }}
+            InputLabelProps={{ shrink: true }}
+            InputProps={{ sx: { height: '2.5rem' } }}
+          >
+            <MenuItem value="ALL">كل الحالات</MenuItem>
+            {Object.entries(STATUS_LABEL).map(([value, label]) => (
+              <MenuItem key={value} value={value}>
+                {label}
+              </MenuItem>
+            ))}
+          </TextField>
+
+          <TextField
+            type="date"
+            size="small"
+            label="من تاريخ"
+            value={fromDate}
+            onChange={(e) => setFromDate(e.target.value)}
+            sx={{ minWidth: '10rem', bgcolor: 'background.paper' }}
+            InputLabelProps={{ shrink: true }}
+            InputProps={{ sx: { height: '2.5rem' } }}
+          />
+
+          <TextField
+            type="date"
+            size="small"
+            label="إلى تاريخ"
+            value={toDate}
+            onChange={(e) => setToDate(e.target.value)}
+            sx={{ minWidth: '10rem', bgcolor: 'background.paper' }}
+            InputLabelProps={{ shrink: true }}
+            InputProps={{ sx: { height: '2.5rem' } }}
+          />
+
+          {hasActiveFilter && (
+            <Button size="small" onClick={clearFilters} startIcon={<CloseIcon fontSize="small" />} sx={{ height: '2.5rem' }}>
+              مسح
+            </Button>
+          )}
+        </Stack>
+      </MainCard>
+
+      <MainCard content={false}>
       <UnifiedMedicalTable
         columns={columns}
         rows={rows}
@@ -265,7 +408,7 @@ const MemberImportHistory = () => {
         }}
         renderCell={renderCell}
         getRowKey={(log) => log.id}
-        emptyMessage="لا توجد عمليات استيراد مسجَّلة"
+        emptyMessage={hasActiveFilter ? 'لا توجد عمليات تطابق الفلاتر المحددة' : 'لا توجد عمليات استيراد مسجَّلة'}
         loadingMessage="جارِ التحميل..."
       />
 
@@ -331,7 +474,8 @@ const MemberImportHistory = () => {
           )}
         </DialogActions>
       </Dialog>
-    </MainCard>
+      </MainCard>
+    </Box>
   );
 };
 

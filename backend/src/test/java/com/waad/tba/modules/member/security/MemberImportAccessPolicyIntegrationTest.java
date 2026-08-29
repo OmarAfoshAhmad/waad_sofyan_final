@@ -280,7 +280,7 @@ class MemberImportAccessPolicyIntegrationTest extends PostgresIntegrationTestBas
         importBatchRowRepository.save(row(mixed.getId(), 900003L, a));
         importBatchRowRepository.save(row(mixed.getId(), 900004L, b));
 
-        var ids = importLogRepository.findVisibleToEmployers(List.of(a), PageRequest.of(0, 200))
+        var ids = importLogRepository.findVisibleToEmployers(List.of(a), null, null, null, null, PageRequest.of(0, 200))
                 .map(MemberImportLog::getId).toSet();
 
         assertThat(ids).contains(own.getId());

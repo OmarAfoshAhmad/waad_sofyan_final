@@ -45,6 +45,37 @@ public interface MemberImportLogRepository extends JpaRepository<MemberImportLog
      */
     Page<MemberImportLog> findByCompanyScopeId(Long companyScopeId, Pageable pageable);
 
+    /**
+     * The four filters the history screen offers, applied identically on both
+     * the global and the employer-scoped read.
+     *
+     * They are written twice -- once in JPQL here, once inside the native
+     * scoped query below -- because the scope predicate needs a JSONB
+     * subquery that JPQL cannot express. Two spellings of one filter set is a
+     * duplication worth watching, so MemberImportLogFilterIntegrationTest
+     * runs the same cases through both and fails if they ever disagree.
+     *
+     * `search` matches the file name, the batch id and who ran it: those are
+     * the three things someone has in hand when they come here to trace a
+     * particular import.
+     */
+    @Query("""
+            select l from MemberImportLog l
+            where (cast(:status as String) is null or l.status = :status)
+              and (cast(:searchPattern as String) is null
+                   or lower(l.fileName) like :searchPattern
+                   or lower(l.importBatchId) like :searchPattern
+                   or lower(l.importedByUsername) like :searchPattern)
+              and (cast(:fromDate as LocalDateTime) is null or l.createdAt >= :fromDate)
+              and (cast(:toDate as LocalDateTime) is null or l.createdAt < :toDate)
+            """)
+    Page<MemberImportLog> findFiltered(
+            @Param("status") ImportStatus status,
+            @Param("searchPattern") String searchPattern,
+            @Param("fromDate") LocalDateTime fromDate,
+            @Param("toDate") LocalDateTime toDate,
+            Pageable pageable);
+
     @Query(value = """
             select l.* from member_import_logs l
             where exists (select 1 from member_import_batch_rows r where r.import_log_id = l.id)
@@ -54,6 +85,13 @@ public interface MemberImportLogRepository extends JpaRepository<MemberImportLog
                     and ((r.imported_snapshot ->> 'employerId') is null
                          or cast(r.imported_snapshot ->> 'employerId' as bigint) not in (:employerIds))
               )
+              and (cast(:status as text) is null or l.status = cast(:status as text))
+              and (cast(:searchPattern as text) is null
+                   or lower(l.file_name) like cast(:searchPattern as text)
+                   or lower(l.import_batch_id) like cast(:searchPattern as text)
+                   or lower(l.imported_by_username) like cast(:searchPattern as text))
+              and (cast(:fromDate as timestamp) is null or l.created_at >= cast(:fromDate as timestamp))
+              and (cast(:toDate as timestamp) is null or l.created_at < cast(:toDate as timestamp))
             order by l.created_at desc
             """,
             countQuery = """
@@ -65,8 +103,19 @@ public interface MemberImportLogRepository extends JpaRepository<MemberImportLog
                     and ((r.imported_snapshot ->> 'employerId') is null
                          or cast(r.imported_snapshot ->> 'employerId' as bigint) not in (:employerIds))
               )
+              and (cast(:status as text) is null or l.status = cast(:status as text))
+              and (cast(:searchPattern as text) is null
+                   or lower(l.file_name) like cast(:searchPattern as text)
+                   or lower(l.import_batch_id) like cast(:searchPattern as text)
+                   or lower(l.imported_by_username) like cast(:searchPattern as text))
+              and (cast(:fromDate as timestamp) is null or l.created_at >= cast(:fromDate as timestamp))
+              and (cast(:toDate as timestamp) is null or l.created_at < cast(:toDate as timestamp))
             """, nativeQuery = true)
     Page<MemberImportLog> findVisibleToEmployers(@Param("employerIds") Collection<Long> employerIds,
+            @Param("status") String status,
+            @Param("searchPattern") String searchPattern,
+            @Param("fromDate") LocalDateTime fromDate,
+            @Param("toDate") LocalDateTime toDate,
             Pageable pageable);
     
     /**

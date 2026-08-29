@@ -339,19 +339,57 @@ public class MemberExcelTemplateController {
     @Operation(summary = "Get import logs")
     public ResponseEntity<ApiResponse<Page<MemberImportLogSummaryDto>>> getImportLogs(
             @RequestParam(name = "page", defaultValue = "1") int page,
-            @RequestParam(name = "size", defaultValue = "20") int size) {
+            @RequestParam(name = "size", defaultValue = "20") int size,
+            @RequestParam(name = "status", required = false) String status,
+            @RequestParam(name = "search", required = false) String search,
+            @RequestParam(name = "from", required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate from,
+            @RequestParam(name = "to", required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate to) {
 
         var authorised = importAccessPolicy.requireHistoryScope();
-        var pageable = PageRequest.of(Math.max(0, page - 1), size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        int pageIndex = Math.max(0, page - 1);
+
+        MemberImportLog.ImportStatus statusFilter = parseStatus(status);
+        // One pattern, lowercased once, rather than three concat() calls the
+        // database has to build per row.
+        String searchFilter = (search == null || search.isBlank()) ? null
+                : "%" + search.trim().toLowerCase(java.util.Locale.ROOT) + "%";
+        LocalDateTime fromFilter = from == null ? null : from.atStartOfDay();
+        // Half-open on the day boundary: "to = 2026-08-29" has to include
+        // everything that happened on the 29th, so the bound is the start of
+        // the 30th and the comparison is strictly less-than.
+        LocalDateTime toFilter = to == null ? null : to.plusDays(1).atStartOfDay();
+
         Page<MemberImportLog> logs = authorised.isGlobal()
-                ? importLogRepository.findAll(pageable)
-                : importLogRepository.findVisibleToEmployers(authorised.employerIds(), pageable);
+                ? importLogRepository.findFiltered(statusFilter, searchFilter, fromFilter, toFilter,
+                        PageRequest.of(pageIndex, size, Sort.by(Sort.Direction.DESC, "createdAt")))
+                // Unsorted on purpose: the scoped read is a native query that
+                // orders itself, and a Sort appended to it reaches Postgres as
+                // the JPA property name rather than the column.
+                : importLogRepository.findVisibleToEmployers(authorised.employerIds(),
+                        statusFilter == null ? null : statusFilter.name(),
+                        searchFilter, fromFilter, toFilter, PageRequest.of(pageIndex, size));
 
         // One clock reading for the whole page, so two rows started a second
         // apart cannot be judged against two different "now"s.
         LocalDateTime now = LocalDateTime.now();
         return ResponseEntity.ok(ApiResponse.success("Import logs retrieved",
                 logs.map(row -> MemberImportLogSummaryDto.from(row, importStaleAfter, now))));
+    }
+
+    /**
+     * An unknown status name is a filter that can never match, not a request
+     * for everything: silently widening it would show the operator rows they
+     * did not ask for and give no sign why.
+     */
+    private MemberImportLog.ImportStatus parseStatus(String status) {
+        if (status == null || status.isBlank() || "ALL".equalsIgnoreCase(status)) {
+            return null;
+        }
+        try {
+            return MemberImportLog.ImportStatus.valueOf(status.trim().toUpperCase(java.util.Locale.ROOT));
+        } catch (IllegalArgumentException ex) {
+            throw new com.waad.tba.common.exception.BusinessRuleException("قيمة الحالة غير معروفة");
+        }
     }
 
     @GetMapping("/{batchId}/rollback/preview")
