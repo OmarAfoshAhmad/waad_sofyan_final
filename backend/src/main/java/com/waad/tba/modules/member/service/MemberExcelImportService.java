@@ -584,9 +584,27 @@ public class MemberExcelImportService {
             // REQUIRES_NEW: durably records the failure even though this
             // method's own transaction is about to roll back every member it
             // wrote.
-            auditRecorder.markFailed(importLogId, e.getMessage());
+            auditRecorder.markFailed(importLogId, readableFailure(e));
             throw e;
         }
+    }
+
+    /**
+     * What the operator is allowed to read about a failed batch.
+     *
+     * errorMessage is surfaced on the import-progress widget, so whatever
+     * goes in here reaches a screen. A BusinessRuleException carries a
+     * sentence written to be read -- "الصف 1: لا يمكن نقل عضو قائم إلى جهة
+     * أخرى عبر الاستيراد" tells the operator exactly what to fix. Anything
+     * else is a technical fault whose message names classes, columns or
+     * constraints, and the full text of it is already in the log line above
+     * with its stack trace.
+     */
+    private String readableFailure(Exception e) {
+        if (e instanceof com.waad.tba.common.exception.BusinessRuleException && e.getMessage() != null) {
+            return e.getMessage();
+        }
+        return "تعذر إكمال الاستيراد. لم تُحفظ أي بيانات من هذه الدفعة.";
     }
 
     /**

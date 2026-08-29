@@ -304,12 +304,14 @@ public class MemberExcelTemplateController {
     @GetMapping("/status/{batchId}")
     @PreAuthorize("@permissionGuard.has('MEMBER_IMPORT')")
     @Operation(summary = "Get import status by batch ID")
-    public ResponseEntity<ApiResponse<MemberImportLog>> getImportStatus(
+    public ResponseEntity<ApiResponse<MemberImportLogSummaryDto>> getImportStatus(
               @PathVariable("batchId") String batchId) {
           var importLog = importLogRepository.findByImportBatchId(batchId);
           importLog.ifPresent(this::authorizeHistory);
+          LocalDateTime now = LocalDateTime.now();
           return importLog
-                .map(foundLog -> ResponseEntity.ok(ApiResponse.success("Import status found", foundLog)))
+                .map(foundLog -> ResponseEntity.ok(ApiResponse.success("Import status found",
+                        MemberImportLogSummaryDto.from(foundLog, importStaleAfter, now))))
                 .orElse(ResponseEntity.notFound().build());
     }
 

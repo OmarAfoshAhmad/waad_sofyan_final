@@ -36,8 +36,11 @@ public record MemberImportLogSummaryDto(
         Integer totalRows,
         Integer createdCount,
         Integer updatedCount,
+        Integer skippedCount,
         Integer errorCount,
         String status,
+        /** Safe by construction: see MemberExcelImportService.readableFailure. */
+        String errorMessage,
         boolean interrupted) {
 
     public static MemberImportLogSummaryDto from(MemberImportLog log, Duration staleAfter, LocalDateTime now) {
@@ -51,8 +54,10 @@ public record MemberImportLogSummaryDto(
                 log.getTotalRows(),
                 log.getCreatedCount(),
                 log.getUpdatedCount(),
+                log.getSkippedCount(),
                 log.getErrorCount(),
                 log.getStatus() == null ? null : log.getStatus().name(),
+                log.getErrorMessage(),
                 isInterrupted(log, staleAfter, now));
     }
 
