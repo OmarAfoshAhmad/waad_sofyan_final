@@ -298,7 +298,12 @@ export const ClaimLineRow = ({
                     // usedCount من الـ backend يتضمن الكمية الحالية بعد الإصلاح
                     const used = line.usageDetails.usedCount ?? 0;
                     const limit = line.usageDetails.timesLimit;
-                    const remaining = Math.max(0, limit - used);
+                    // Signed, not clamped. A bucket used more times than it
+                    // allows showed 0 here, which is the same thing an
+                    // exactly-used bucket shows -- and the person reading it is
+                    // deciding whether to add another line. Same rule the
+                    // server follows for money.
+                    const remaining = limit - used;
                     return (
                       <Typography
                         variant="caption"
@@ -315,13 +320,12 @@ export const ClaimLineRow = ({
                   })()}
                 {line.usageDetails.amountLimit > 0 &&
                   (() => {
-                    // remainingAmount محسوب من الـ backend مباشرة
-                    const remaining = Math.max(
-                      0,
-                      line.usageDetails.remainingAmount != null
-                        ? line.usageDetails.remainingAmount
-                        : line.usageDetails.amountLimit - (line.usageDetails.usedAmount ?? 0)
-                    );
+                    // The server's figure, as sent. It used to be clamped at
+                    // zero here and recomputed from amountLimit - usedAmount
+                    // when absent -- a second source of truth for a number the
+                    // server already owns, and a clamp that hid an overspend
+                    // behind the value an exactly-spent bucket shows.
+                    const remaining = line.usageDetails.remainingAmount;
                     return (
                       <Typography
                         variant="caption"

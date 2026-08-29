@@ -417,7 +417,10 @@ export const useBenefitPolicyReport = ({ employerId, filters = DEFAULT_FILTERS }
       const memberCount = policyMemberCounts[policy.id] || 0;
       const annualLimit = (policy.maxClaimAmount || 0) * memberCount;
       const usedAmount = policyUsage[policy.id] || 0;
-      const remaining = Math.max(0, annualLimit - usedAmount);
+      // Signed. A policy whose members have consumed more than the
+      // aggregate showed 0 remaining, which reads as "fully used" rather than
+      // "over" -- and this figure drives the stress status below it.
+      const remaining = annualLimit - usedAmount;
       const utilizationPercent = annualLimit > 0 ? (usedAmount / annualLimit) * 100 : 0;
 
       // Determine status

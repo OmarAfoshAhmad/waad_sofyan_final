@@ -776,7 +776,6 @@ export const searchMembersByName = async (query) => {
  * @returns {string} data[].employerName - Employer name
  * @returns {string} data[].policyName - Benefit policy name
  * @returns {number} data[].copayAmount - Copayment percentage
- * @returns {number} data[].coverageLimit - Coverage limit
  * @returns {string} data[].message - Status message
  * @returns {string} data[].searchType - "BARCODE", "CARD_NUMBER", or "NAME_FUZZY"
  * @returns {number} data[].similarityScore - Similarity score (for fuzzy search)

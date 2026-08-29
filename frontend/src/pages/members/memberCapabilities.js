@@ -21,7 +21,10 @@ export const MEMBER_CAPABILITY_PERMISSIONS = Object.freeze({
   // One member's ceiling, opened from the drawer.
   viewLimits: 'MEMBER_LIMIT_VIEW',
   // A page of them: the list column, which is a different grant.
-  viewLimitsList: 'MEMBER_LIMIT_LIST_VIEW'
+  viewLimitsList: 'MEMBER_LIMIT_LIST_VIEW',
+  // Granting or ending an exceptional increase. A write, and neither of the
+  // two reads above carries it.
+  manageLimitUplift: 'MEMBER_LIMIT_UPLIFT_MANAGE'
 });
 
 /** Mirrors the backend effective-permission checks at action level. */
@@ -40,6 +43,7 @@ export const getMemberCapabilities = (user) => {
     viewLimits: permissions.has('MEMBER_LIMIT_VIEW'),
     // Gates the ceiling column. The server refuses the bulk read without this
     // exact permission, so the column is absent rather than present-and-failing.
-    viewLimitsList: permissions.has('MEMBER_LIMIT_LIST_VIEW')
+    viewLimitsList: permissions.has('MEMBER_LIMIT_LIST_VIEW'),
+    manageLimitUplift: permissions.has('MEMBER_LIMIT_UPLIFT_MANAGE')
   });
 };

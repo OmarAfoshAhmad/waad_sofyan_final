@@ -36,6 +36,7 @@ import {
   IconButton,
   InputLabel,
   MenuItem,
+  Divider,
   Select,
   Stack,
   TextField,
@@ -78,6 +79,7 @@ import FamilyRestroomIcon from '@mui/icons-material/FamilyRestroom';
 import MembersBulkUploadDialog from 'components/members/MembersBulkUploadDialog';
 import MemberCeilingCell from 'components/members/MemberCeilingCell';
 import MemberCeilingDrawer from 'components/members/MemberCeilingDrawer';
+import MemberLimitUpliftDialog from 'components/members/MemberLimitUpliftDialog';
 import DataExportWizard from 'components/tba/DataExportWizard';
 import {
   searchMembers,
@@ -90,7 +92,8 @@ import {
   toggleMemberActive,
   getLimitsOverview,
   MEMBER_TYPES,
-  MEMBER_STATUSES
+  MEMBER_STATUSES,
+  MEMBER_FILTER_WITH_UPLIFT
 } from 'services/api/unified-members.service';
 import axiosClient from 'utils/axios';
 import { RELATIONSHIP_CONFIG } from 'components/insurance/MemberTypeIndicator';
@@ -130,6 +133,7 @@ const UnifiedMembersList = () => {
   const [ceilings, setCeilings] = useState({});
   const [ceilingsLoading, setCeilingsLoading] = useState(false);
   const [ceilingDrawerMember, setCeilingDrawerMember] = useState(null);
+  const [upliftMember, setUpliftMember] = useState(null);
   // Set if the server ever answers 403. The permission bit is now the single
   // thing that decides on both sides, so this should not fire on a page load
   // -- it is here for the permission being revoked while someone is looking at
@@ -913,6 +917,11 @@ const UnifiedMembersList = () => {
               <MenuItem value={MEMBER_STATUSES.PENDING}>قيد المراجعة</MenuItem>
               <MenuItem value={MEMBER_STATUSES.TERMINATED}>منتهية العضوية</MenuItem>
               <MenuItem value={MEMBER_STATUSES.DUPLICATE_MERGED}>مدموج</MenuItem>
+              <Divider />
+              {/* Not a status -- see MEMBER_FILTER_WITH_UPLIFT. It sits here
+                  because this is where someone looks for it, separated by a
+                  rule so the list does not read as one vocabulary. */}
+              <MenuItem value={MEMBER_FILTER_WITH_UPLIFT}>لديه استثناء سقف</MenuItem>
             </TextField>
 
             {/* Reset Button */}
@@ -961,7 +970,19 @@ const UnifiedMembersList = () => {
         member={ceilingDrawerMember}
         initialSummary={ceilingDrawerMember ? ceilings[ceilingDrawerMember.id] : null}
         onClose={() => setCeilingDrawerMember(null)}
+        onManageUplifts={capabilities.manageLimitUplift ? (m) => setUpliftMember(m) : undefined}
       />
+
+      {/* Exceptions on one member's ceiling: granting, ending, and the record
+          of who did which. Absent entirely without the grant. */}
+      {capabilities.manageLimitUplift && (
+        <MemberLimitUpliftDialog
+          open={Boolean(upliftMember)}
+          member={upliftMember}
+          onClose={() => setUpliftMember(null)}
+          onChanged={() => fetchMembers()}
+        />
+      )}
 
       {/* Import Dialog */}
       <MembersBulkUploadDialog open={importDialogOpen} onClose={handleCloseImportDialog} />

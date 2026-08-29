@@ -705,6 +705,37 @@ export const GENDERS = {
 /**
  * Member statuses enum
  */
+/**
+ * Not a member status, and sent through the status filter anyway.
+ *
+ * A member with an exceptional ceiling uplift is also ACTIVE, or SUSPENDED,
+ * or anything else -- the two are different questions. It travels through the
+ * status control because that is where someone looks for it, and the server
+ * recognises it before parsing a status and applies it as its own predicate.
+ * See MemberFilter.WITH_UPLIFT.
+ */
+export const MEMBER_FILTER_WITH_UPLIFT = 'WITH_UPLIFT';
+
+/**
+ * Every exception ever granted on this member's ceiling, the ended included.
+ * Guarded server-side by MEMBER_LIMIT_UPLIFT_MANAGE.
+ */
+export const getLimitUplifts = async (memberId) => {
+  const response = await api.get(`${UNIFIED_MEMBERS_BASE_URL}/${memberId}/limit-uplifts`);
+  return response.data;
+};
+
+export const grantLimitUplift = async (memberId, payload) => {
+  const response = await api.post(`${UNIFIED_MEMBERS_BASE_URL}/${memberId}/limit-uplifts`, payload);
+  return response.data;
+};
+
+/** Ends one early. The row is kept; only its window closes. */
+export const revokeLimitUplift = async (upliftId, reason) => {
+  const response = await api.post(`${UNIFIED_MEMBERS_BASE_URL}/limit-uplifts/${upliftId}/revoke`, { reason });
+  return response.data;
+};
+
 export const MEMBER_STATUSES = {
   ACTIVE: 'ACTIVE',
   SUSPENDED: 'SUSPENDED',
@@ -859,7 +890,11 @@ export default {
   getLimitDetail,
   RELATIONSHIPS,
   GENDERS,
+  getLimitUplifts,
+  grantLimitUplift,
+  revokeLimitUplift,
   MEMBER_STATUSES,
+  MEMBER_FILTER_WITH_UPLIFT,
   MEMBER_STATUS_LABELS,
   MEMBER_TYPES,
   restoreFamily,

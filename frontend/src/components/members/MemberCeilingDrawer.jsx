@@ -95,7 +95,13 @@ FigureTable.propTypes = {
   rows: PropTypes.arrayOf(PropTypes.array).isRequired
 };
 
-export default function MemberCeilingDrawer({ open, member, initialSummary, onClose }) {
+/**
+ * @param onManageUplifts optional. When supplied, the drawer offers a way into
+ *   the exceptions on this ceiling; the caller passes it only for a user who
+ *   holds MEMBER_LIMIT_UPLIFT_MANAGE, so a user without the grant sees no
+ *   control rather than a control that will be refused.
+ */
+export default function MemberCeilingDrawer({ open, member, initialSummary, onClose, onManageUplifts }) {
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -176,7 +182,18 @@ export default function MemberCeilingDrawer({ open, member, initialSummary, onCl
                 {/* What the ledger holds. Three facts, read not derived. */}
                 <FigureTable
                   rows={[
-                    ['السقف السنوي', formatAmount(general.limit)],
+                    // When an exception is raising this member's ceiling, the
+                    // ceiling is shown decomposed. A single raised figure
+                    // cannot be checked against the policy, and the whole
+                    // point of an exception is that someone can later ask why
+                    // this member's ceiling differs from their colleague's.
+                    ...(general.uplift > 0
+                      ? [
+                          ['سقف الوثيقة', formatAmount(general.policyLimit)],
+                          ['استثناء مضاف', `+ ${formatAmount(general.uplift)}`, 'زيادة استثنائية لهذا المستفيد وحده'],
+                          ['السقف السنوي المطبَّق', formatAmount(general.limit), 'سقف الوثيقة + الاستثناء']
+                        ]
+                      : [['السقف السنوي', formatAmount(general.limit)]]),
                     ['المستهلك الفعلي', formatAmount(general.committed)],
                     ['المحجوز بموافقات مسبقة', formatAmount(general.reserved)]
                   ]}
@@ -186,6 +203,17 @@ export default function MemberCeilingDrawer({ open, member, initialSummary, onCl
                     they are conclusions, not readings, and reading them in a
                     single list with the three above invites adding a figure
                     to something it was already subtracted from. */}
+                {onManageUplifts && (
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => onManageUplifts(member)}
+                    sx={{ alignSelf: 'flex-start' }}
+                  >
+                    {general.uplift > 0 ? 'إدارة استثناءات السقف' : 'رفع السقف استثناءً'}
+                  </Button>
+                )}
+
                 <FigureTable
                   caption="المحسوب منها"
                   rows={[
@@ -324,6 +352,7 @@ export default function MemberCeilingDrawer({ open, member, initialSummary, onCl
 }
 
 MemberCeilingDrawer.propTypes = {
+  onManageUplifts: PropTypes.func,
   open: PropTypes.bool.isRequired,
   member: PropTypes.shape({
     id: PropTypes.number,

@@ -1,3 +1,15 @@
+/**
+ * @returns {{code: string, category: string, message: string, details: object,
+ *            trackingId: (string|null)}}
+ *
+ * trackingId is the last link in a chain that was already complete on the
+ * server and stopped here. LogMdcFilter stamps a traceId onto every request,
+ * logback prints it on every line as [%X{traceId}], and GlobalExceptionHandler
+ * returns it as trackingId on the error body -- but nothing showed it, so a
+ * user reporting a failure had nothing to quote and support had no way to find
+ * the line. It is null when the failure never reached the server at all, which
+ * is itself worth being able to tell apart.
+ */
 export const normalizeApiError = (error) => {
   const payload = error?.response?.data || {};
 
@@ -7,8 +19,9 @@ export const normalizeApiError = (error) => {
   const details = payload.details || {
     reason: error?.message || 'Unknown error'
   };
+  const trackingId = payload.trackingId || null;
 
-  return { code, category, message, details };
+  return { code, category, message, details, trackingId };
 };
 
 export const runWithRetry = async (operation, { maxRetries = 1, shouldRetry } = {}) => {

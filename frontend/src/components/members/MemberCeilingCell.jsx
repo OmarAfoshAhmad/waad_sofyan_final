@@ -84,6 +84,11 @@ export default function MemberCeilingCell({ summary, loading }) {
   }
 
   const limit = Number(summary.limit) || 0;
+  // Zero for almost every row. When it is not, this member's ceiling differs
+  // from their colleagues' on the same policy, and the row has to say so --
+  // otherwise the only way to notice is to open the drawer, and nobody opens
+  // a drawer to check something they have no reason to suspect.
+  const uplift = Number(summary.uplift) || 0;
   const committed = Number(summary.committed) || 0;
   const reserved = Number(summary.reserved) || 0;
   const available = Number(summary.reservableAvailable);
@@ -109,10 +114,24 @@ export default function MemberCeilingCell({ summary, loading }) {
         <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 0.5 }}>
           من {formatAmount(limit)}
         </Typography>
+        {uplift > 0 && (
+          <Typography
+            component="span"
+            variant="caption"
+            color="info.main"
+            sx={{ ml: 0.5, fontWeight: 'bold' }}
+          >
+            ★
+          </Typography>
+        )}
       </Typography>
 
       <Tooltip
-        title={`السقف ${formatAmount(limit)} · مستهلك ${formatAmount(committed)} · محجوز ${formatAmount(reserved)}`}
+        title={
+          uplift > 0
+            ? `السقف ${formatAmount(limit)} (وثيقة ${formatAmount(summary.policyLimit)} + استثناء ${formatAmount(uplift)}) · مستهلك ${formatAmount(committed)} · محجوز ${formatAmount(reserved)}`
+            : `السقف ${formatAmount(limit)} · مستهلك ${formatAmount(committed)} · محجوز ${formatAmount(reserved)}`
+        }
       >
         <Box
           sx={{
@@ -156,6 +175,8 @@ MemberCeilingCell.propTypes = {
   summary: PropTypes.shape({
     mode: PropTypes.string,
     limit: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
+    policyLimit: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
+    uplift: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
     committed: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
     reserved: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
     actualRemaining: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
