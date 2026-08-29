@@ -47,6 +47,20 @@ public class ApiResponse<T> {
                 .build();
     }
 
+    /**
+     * A failure that still carries what the operation found out.
+     *
+     * The message-only form throws the payload away, which is right for a
+     * refusal with nothing to say and wrong for one that produced per-row
+     * reasons before it stopped. An import that failed on row 1 knows which
+     * row and why; discarding that leaves the screen with nothing to show.
+     */
+    public static <T> ApiResponse<T> error(String message, T data) {
+        ApiResponse<T> response = error(message);
+        response.setData(data);
+        return response;
+    }
+
     public static <T> ApiResponse<T> error(String message) {
         return ApiResponse.<T>builder()
                 .status("error")

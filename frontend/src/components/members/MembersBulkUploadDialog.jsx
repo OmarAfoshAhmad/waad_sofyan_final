@@ -151,7 +151,8 @@ const MembersBulkUploadDialog = ({ open, onClose, onSuccess }) => {
         // over a summary of four zeroes that meant "no work was needed".
         enqueueSnackbar(data.message || 'هذا الملف مستورد سلفاً', { variant: 'info' });
       } else if (data?.success) {
-        enqueueSnackbar(`${LABELS.success}: ${data.summary?.created} عضو`, { variant: 'success' });
+        enqueueSnackbar(`${LABELS.success}: ${data.createdCount ?? 0} جديد و${data.updatedCount ?? 0} محدَّث`,
+          { variant: 'success' });
       } else {
         enqueueSnackbar('اكتمل الاستيراد مع وجود أخطاء', { variant: 'warning' });
       }
@@ -161,6 +162,14 @@ const MembersBulkUploadDialog = ({ open, onClose, onSuccess }) => {
       stopProgressSimulation(0);
       console.error('Upload failed:', error.response?.data || error.message);
       const errorMessage = error.response?.data?.message || error.message || LABELS.error;
+      // A failed import still carries its per-row reasons, and the panel is
+      // the only place they can be read. Showing them is the difference
+      // between "something went wrong" and "row 1 tried to move an existing
+      // member to another employer".
+      const failedResult = error.response?.data?.data;
+      if (failedResult) {
+        setResult(failedResult);
+      }
       enqueueSnackbar(errorMessage, { variant: 'error' });
     } finally {
       setUploading(false);
@@ -323,7 +332,7 @@ const MembersBulkUploadDialog = ({ open, onClose, onSuccess }) => {
                 <Grid size={3}>
                   <Paper variant="outlined" sx={{ p: '1.0rem', textAlign: 'center', bgcolor: 'primary.lighter' }}>
                     <Typography variant="h4" color="primary.main">
-                      {result.summary?.totalRows || 0}
+                      {result.totalProcessed ?? 0}
                     </Typography>
                     <Typography variant="caption">إجمالي الصفوف</Typography>
                   </Paper>
@@ -331,23 +340,23 @@ const MembersBulkUploadDialog = ({ open, onClose, onSuccess }) => {
                 <Grid size={3}>
                   <Paper variant="outlined" sx={{ p: '1.0rem', textAlign: 'center', bgcolor: 'success.lighter' }}>
                     <Typography variant="h4" color="success.main">
-                      {result.summary?.created || 0}
+                      {result.createdCount ?? 0}
                     </Typography>
                     <Typography variant="caption">تم استيرادها</Typography>
                   </Paper>
                 </Grid>
                 <Grid size={3}>
-                  <Paper variant="outlined" sx={{ p: '1.0rem', textAlign: 'center', bgcolor: 'warning.lighter' }}>
-                    <Typography variant="h4" color="warning.main">
-                      {result.summary?.skipped || 0}
+                  <Paper variant="outlined" sx={{ p: '1.0rem', textAlign: 'center', bgcolor: 'info.lighter' }}>
+                    <Typography variant="h4" color="info.main">
+                      {result.updatedCount ?? 0}
                     </Typography>
-                    <Typography variant="caption">تكرار/تخطي</Typography>
+                    <Typography variant="caption">تم تحديثها</Typography>
                   </Paper>
                 </Grid>
                 <Grid size={3}>
                   <Paper variant="outlined" sx={{ p: '1.0rem', textAlign: 'center', bgcolor: 'error.lighter' }}>
                     <Typography variant="h4" color="error.main">
-                      {(result.summary?.rejected || 0) + (result.summary?.failed || 0)}
+                      {result.errorCount ?? 0}
                     </Typography>
                     <Typography variant="caption">فشل</Typography>
                   </Paper>
@@ -364,18 +373,18 @@ const MembersBulkUploadDialog = ({ open, onClose, onSuccess }) => {
                       <thead style={{ position: 'sticky', top: 0, backgroundColor: '#f5f5f5' }}>
                         <tr>
                           <th style={{ padding: '0.375rem', textAlign: 'right', borderBottom: '2px solid #ddd' }}>الصف</th>
-                          <th style={{ padding: '0.375rem', textAlign: 'right', borderBottom: '2px solid #ddd' }}>المعرف/الاسم</th>
+                          <th style={{ padding: '0.375rem', textAlign: 'right', borderBottom: '2px solid #ddd' }}>الرقم الوطني</th>
                           <th style={{ padding: '0.375rem', textAlign: 'right', borderBottom: '2px solid #ddd' }}>السبب</th>
-                          <th style={{ padding: '0.375rem', textAlign: 'right', borderBottom: '2px solid #ddd' }}>القيمة</th>
+                          <th style={{ padding: '0.375rem', textAlign: 'right', borderBottom: '2px solid #ddd' }}>الحقل</th>
                         </tr>
                       </thead>
                       <tbody>
                         {result.errors.map((err, idx) => (
                           <tr key={idx} style={{ borderBottom: '1px solid #eee' }}>
                             <td style={{ padding: '0.375rem', textAlign: 'center' }}>{err.rowNumber}</td>
-                            <td style={{ padding: '0.375rem' }}>{err.rowIdentifier || '-'}</td>
-                            <td style={{ padding: '0.375rem', color: '#d32f2f' }}>{err.messageAr}</td>
-                            <td style={{ padding: '0.375rem', fontFamily: 'monospace' }}>{err.value || '-'}</td>
+                            <td style={{ padding: '0.375rem' }}>{err.nationalId || '-'}</td>
+                            <td style={{ padding: '0.375rem', color: '#d32f2f' }}>{err.message}</td>
+                            <td style={{ padding: '0.375rem', fontFamily: 'monospace' }}>{err.field || '-'}</td>
                           </tr>
                         ))}
                       </tbody>

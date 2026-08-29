@@ -265,8 +265,12 @@ public class MemberExcelTemplateController {
                 return ResponseEntity.ok(ApiResponse.success(
                         "تم الاستيراد مع بعض الأخطاء: " + result.getMessage(), result));
             } else {
+                // The result travels with the failure. The service has already
+                // worked out which rows failed and why; returning only a
+                // sentence leaves the dialog with four zeroes and no reason,
+                // which reads as an empty successful run.
                 return ResponseEntity.badRequest()
-                        .body(ApiResponse.error("فشل الاستيراد: " + result.getMessage()));
+                        .body(ApiResponse.error("فشل الاستيراد: " + result.getMessage(), result));
             }
             
         } catch (Exception e) {
