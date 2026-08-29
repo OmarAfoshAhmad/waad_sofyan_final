@@ -189,9 +189,17 @@ public class MemberFinancialSummaryService {
                 .ceilingMode(ceiling == null ? CurrentGeneralLimitSummary.Mode.UNAVAILABLE : ceiling.mode());
 
         if (policy != null) {
+            // annualLimit is what applies to THIS member, which is the policy
+            // figure only when no exception has been granted. Taking it from
+            // the policy while the balances below come from the effective
+            // ceiling reported a remaining balance larger than the limit.
+            boolean ceilingHasFigures = ceiling != null
+                    && ceiling.mode() == CurrentGeneralLimitSummary.Mode.FOUND;
             builder.policyId(policy.policyId())
                     .policyName(policy.name())
-                    .annualLimit(policy.annualLimit())
+                    .annualLimit(ceilingHasFigures ? ceiling.limit() : policy.annualLimit())
+                    .policyLimit(ceilingHasFigures ? ceiling.policyLimit() : policy.annualLimit())
+                    .upliftAmount(ceilingHasFigures ? ceiling.uplift() : null)
                     .policyStartDate(policy.startDate())
                     .policyEndDate(policy.endDate())
                     .policyActive(policy.active() && policy.isInForceOn(asOfDate));

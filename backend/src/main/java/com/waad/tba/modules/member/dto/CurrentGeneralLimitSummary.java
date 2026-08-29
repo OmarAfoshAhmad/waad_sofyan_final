@@ -26,6 +26,14 @@ public record CurrentGeneralLimitSummary(
         /** The policy these figures belong to, null unless mode is FOUND or UNLIMITED. */
         Long policyId,
         BigDecimal limit,
+        /**
+         * The two halves of {@code limit}, so a raised ceiling can be checked
+         * rather than only read. policyLimit is what the member's benefit
+         * policy grants everyone on it; uplift is the exceptional increase
+         * granted to this member alone, and is zero for almost everyone.
+         */
+        BigDecimal policyLimit,
+        BigDecimal uplift,
         BigDecimal committed,
         BigDecimal reserved,
         BigDecimal actualRemaining,

@@ -25,6 +25,20 @@ public record MemberFilter(
 
     public enum DeletedMode { ACTIVE_ONLY, DELETED_ONLY, INCLUDE_ALL }
 
+    /**
+     * The value the status dropdown sends for "members with an exceptional
+     * ceiling uplift in force".
+     *
+     * It arrives through the status control because that is where a user looks
+     * for it, and it is NOT a status: a member with an uplift is also ACTIVE,
+     * or SUSPENDED, or anything else. Folding it into the status column would
+     * repeat exactly the mistake the comment further down describes -- two
+     * different questions sharing one field, so answering one silently
+     * answers the other. It is recognised here, kept out of parseStatus, and
+     * applied as its own predicate.
+     */
+    public static final String WITH_UPLIFT = "WITH_UPLIFT";
+
     public static MemberFilter listing(String status, String type) {
         return new MemberFilter(null, null, null, null, null, null, status, type, DeletedMode.INCLUDE_ALL);
     }
@@ -36,8 +50,10 @@ public record MemberFilter(
     }
 
     public Specification<Member> toSpecification(AuthorizedMemberScope scope) {
-        final Member.MemberStatus parsedStatus = parseStatus(status);
+        final boolean upliftedOnly = WITH_UPLIFT.equalsIgnoreCase(trim(status));
+        final Member.MemberStatus parsedStatus = upliftedOnly ? null : parseStatus(status);
         final TypeCriterion parsedType = parseType(type);
+        final java.time.LocalDate today = java.time.LocalDate.now();
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
             predicates.add(MemberScopeFilter.toPredicate(scope, root.get("employer").get("id"), cb));
@@ -48,6 +64,19 @@ public record MemberFilter(
             }
             if (parsedStatus != null) {
                 predicates.add(cb.equal(root.get("status"), parsedStatus));
+            }
+            if (upliftedOnly) {
+                // EXISTS rather than a join: a member can hold more than one
+                // uplift, and a join would return them once per uplift.
+                var uplifts = query.subquery(Long.class);
+                var uplift = uplifts.from(
+                        com.waad.tba.modules.member.entity.MemberGeneralLimitUplift.class);
+                uplifts.select(cb.literal(1L)).where(
+                        cb.equal(uplift.get("memberId"), root.get("id")),
+                        cb.lessThanOrEqualTo(uplift.get("effectiveFrom"), today),
+                        cb.or(cb.isNull(uplift.get("effectiveTo")),
+                                cb.greaterThan(uplift.get("effectiveTo"), today)));
+                predicates.add(cb.exists(uplifts));
             }
             if (parsedType != null) {
                 if (parsedType.principal()) predicates.add(cb.isNull(root.get("parent")));

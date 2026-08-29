@@ -60,8 +60,6 @@ public class MemberSearchDto {
     @Schema(description = "Co-payment amount (percentage)", example = "10")
     private Integer copayAmount;
 
-    @Schema(description = "Coverage limit", example = "50000")
-    private Double coverageLimit;
 
     @Schema(description = "Membership start date", example = "2024-01-01")
     @JsonFormat(pattern = "yyyy-MM-dd")
@@ -120,10 +118,15 @@ public class MemberSearchDto {
         // Add benefit policy info
         if (member.getBenefitPolicy() != null) {
             builder.policyName(member.getBenefitPolicy().getName())
-                   .copayAmount(member.getBenefitPolicy().getDefaultCoveragePercent() != null ? 
-                       100 - member.getBenefitPolicy().getDefaultCoveragePercent() : null)
-                   .coverageLimit(member.getBenefitPolicy().getAnnualLimit() != null ? 
-                       member.getBenefitPolicy().getAnnualLimit().doubleValue() : null);
+                   .copayAmount(member.getBenefitPolicy().getDefaultCoveragePercent() != null ?
+                       100 - member.getBenefitPolicy().getDefaultCoveragePercent() : null);
+            // coverageLimit used to be set here from the policy's annual limit.
+            // It was named as though it were this member's coverage and was the
+            // policy's, which stopped being the same number the day an
+            // exceptional uplift could raise one member's ceiling. No screen
+            // read it, so it is gone rather than made to do a per-row ceiling
+            // read: the search endpoint returns identity, not balances, and a
+            // balance belongs to the reader that knows how to compute one.
         }
 
         // Add similarity score for fuzzy search

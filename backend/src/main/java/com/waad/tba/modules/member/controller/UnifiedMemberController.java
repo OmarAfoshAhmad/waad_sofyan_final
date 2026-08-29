@@ -7,6 +7,8 @@ import com.waad.tba.common.exception.BusinessRuleException;
 import com.waad.tba.modules.member.dto.DependentMemberDto;
 import com.waad.tba.modules.member.dto.FamilyEligibilityResponseDto;
 import com.waad.tba.modules.member.dto.MemberCreateDto;
+import com.waad.tba.modules.member.dto.MemberLimitUpliftDto;
+import com.waad.tba.modules.member.dto.MemberLimitUpliftRequest;
 import com.waad.tba.modules.member.dto.CurrentGeneralLimitSummary;
 import com.waad.tba.modules.member.dto.MemberFinancialSummaryDto;
 import com.waad.tba.modules.member.dto.MemberLimitDetail;
@@ -136,6 +138,7 @@ public class UnifiedMemberController {
         private final MemberFinancialSummaryService financialSummaryService;
         private final com.waad.tba.modules.member.service.MemberLimitOverviewService limitOverviewService;
         private final com.waad.tba.modules.member.service.MemberLimitDetailService limitDetailService;
+        private final com.waad.tba.modules.member.service.MemberLimitUpliftService limitUpliftService;
         private final PdfTemplateService pdfTemplateService;
         private final HtmlToPdfService htmlToPdfService;
         private final FileStorageService fileStorageService;
@@ -1226,6 +1229,51 @@ public class UnifiedMemberController {
         @Operation(summary = "One member's general ceiling and bucket balances")
         public ResponseEntity<MemberLimitDetail> getLimitDetail(@PathVariable("memberId") Long memberId) {
                 return ResponseEntity.ok(limitDetailService.authorizedDetailFor(memberId));
+        }
+
+        // ── exceptional ceiling uplifts ────────────────────────────────
+
+        /**
+         * Every exception ever granted on this member's general ceiling,
+         * including the expired and the revoked.
+         *
+         * Guarded by the manage permission rather than the view one: reading
+         * the history exposes who granted an exception and why, which is a
+         * record about the decision, not about the member's balance.
+         */
+        @GetMapping("/{memberId}/limit-uplifts")
+        @PreAuthorize("@permissionGuard.has('MEMBER_LIMIT_UPLIFT_MANAGE')")
+        @Operation(summary = "استثناءات رفع السقف العام للمستفيد")
+        public ResponseEntity<ApiResponse<java.util.List<MemberLimitUpliftDto>>> getLimitUplifts(
+                        @PathVariable("memberId") Long memberId) {
+                return ResponseEntity.ok(ApiResponse.success("تم جلب استثناءات السقف",
+                                limitUpliftService.historyFor(memberId, java.time.LocalDate.now())));
+        }
+
+        @PostMapping("/{memberId}/limit-uplifts")
+        @PreAuthorize("@permissionGuard.has('MEMBER_LIMIT_UPLIFT_MANAGE')")
+        @Operation(summary = "رفع السقف العام لمستفيد استثناءً، بسبب موثق")
+        public ResponseEntity<ApiResponse<MemberLimitUpliftDto>> grantLimitUplift(
+                        @PathVariable("memberId") Long memberId,
+                        @RequestBody MemberLimitUpliftRequest request) {
+                MemberLimitUpliftDto granted = limitUpliftService.grant(memberId, request);
+                return ResponseEntity.ok(ApiResponse.success("تم رفع السقف استثناءً", granted));
+        }
+
+        /**
+         * Ends an uplift early. Not a delete: the row stays and its window
+         * closes, because the question asked six months later is not "is there
+         * an exception" but "was there one, and who ended it".
+         */
+        @PostMapping("/limit-uplifts/{upliftId}/revoke")
+        @PreAuthorize("@permissionGuard.has('MEMBER_LIMIT_UPLIFT_MANAGE')")
+        @Operation(summary = "إلغاء استثناء رفع السقف بسبب موثق")
+        public ResponseEntity<ApiResponse<MemberLimitUpliftDto>> revokeLimitUplift(
+                        @PathVariable("upliftId") Long upliftId,
+                        @RequestBody ReasonRequest reasonRequest) {
+                MemberLimitUpliftDto revoked = limitUpliftService.revoke(upliftId,
+                                ReasonRequest.reasonOf(reasonRequest));
+                return ResponseEntity.ok(ApiResponse.success("تم إلغاء استثناء السقف", revoked));
         }
 
         @GetMapping("/{memberId}/remaining-limit")

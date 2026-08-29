@@ -36,8 +36,8 @@ import lombok.RequiredArgsConstructor;
  * time.
  *
  * The single reason this class exists is to keep the number of queries a
- * function of the page rather than of its rows. It performs six, whatever the
- * page holds:
+ * function of the page rather than of its rows. It performs seven, whatever
+ * the page holds:
  *
  *   1. the dated policy assignment for every member
  *   2. whether those policies were in force, and whose they are
@@ -45,6 +45,7 @@ import lombok.RequiredArgsConstructor;
  *   4. the annual limit of each distinct policy that survived
  *   5. committed against the general ceiling
  *   6. reserved against it
+ *   7. any exceptional uplift raising an individual member's ceiling (in 5-6's reader)
  *
  * The first three belong to MemberPolicyResolver and are the same checks its
  * single-member path makes; the split keeps dated resolution unable to see
@@ -149,6 +150,10 @@ public class MemberLimitOverviewService {
 
         Map<Long, BigDecimal> annualLimitByPolicyId = annualLimits(policyIds);
 
+        // The exceptional uplift raising an individual member's ceiling is
+        // resolved inside LimitBalanceReader, not here. A caller that has to
+        // remember to supply it is a caller that can forget, and forgetting
+        // produces a lower ceiling with nothing to show it happened.
         Map<Long, GeneralCeilingReading> readings = limitBalanceReader.readGeneralCeilingBulk(
                 policyIdByMemberId, annualLimitByPolicyId,
                 LocalDate.of(asOfDate.getYear(), 1, 1),
@@ -219,8 +224,8 @@ public class MemberLimitOverviewService {
             case UNAVAILABLE -> empty(asOfDate, readAt, Mode.UNAVAILABLE, AlertStatus.UNAVAILABLE);
             case NOT_CONFIGURED -> empty(asOfDate, readAt, Mode.NOT_CONFIGURED, AlertStatus.UNAVAILABLE);
             case UNLIMITED -> new CurrentGeneralLimitSummary(asOfDate, readAt, Mode.UNLIMITED,
-                    policyId, null, reading.committed(), reading.reserved(), null, null, null,
-                    AlertStatus.UNLIMITED);
+                    policyId, null, null, null, reading.committed(), reading.reserved(),
+                    null, null, null, AlertStatus.UNLIMITED);
             case FOUND -> found(asOfDate, readAt, policyId, reading);
         };
     }
@@ -233,7 +238,8 @@ public class MemberLimitOverviewService {
                 .divide(limit, 1, RoundingMode.HALF_UP);
 
         return new CurrentGeneralLimitSummary(asOfDate, readAt, Mode.FOUND, policyId,
-                limit, reading.committed(), reading.reserved(),
+                limit, reading.policyLimit(), reading.uplift(),
+                reading.committed(), reading.reserved(),
                 reading.actualRemaining(), reading.reservableAvailable(),
                 utilization, alertFor(reading));
     }
@@ -270,6 +276,6 @@ public class MemberLimitOverviewService {
     private CurrentGeneralLimitSummary empty(LocalDate asOfDate, LocalDateTime readAt,
             Mode mode, AlertStatus alertStatus) {
         return new CurrentGeneralLimitSummary(asOfDate, readAt, mode,
-                null, null, null, null, null, null, null, alertStatus);
+                null, null, null, null, null, null, null, null, null, alertStatus);
     }
 }

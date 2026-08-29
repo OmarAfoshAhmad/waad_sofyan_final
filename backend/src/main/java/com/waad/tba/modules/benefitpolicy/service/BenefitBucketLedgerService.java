@@ -196,7 +196,15 @@ public class BenefitBucketLedgerService {
         BigDecimal current = claim.getLines().stream()
                 .map(line -> Optional.ofNullable(line.getLimitConsumption()).orElse(BigDecimal.ZERO))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        if (previouslyUsed.add(current).compareTo(lockedPolicy.getAnnualLimit()) > 0) {
+        // The EFFECTIVE ceiling, not the policy's. These differ whenever an
+        // exceptional uplift has been granted to this member, and comparing
+        // against the policy figure here would refuse a claim that fits inside
+        // the ceiling every screen shows -- an exception that looks granted
+        // and is never honoured.
+        BigDecimal effectiveCeiling = ceiling == null
+                ? lockedPolicy.getAnnualLimit()
+                : ceiling.annualLimit();
+        if (previouslyUsed.add(current).compareTo(effectiveCeiling) > 0) {
             throw new BusinessRuleException("تغير الرصيد أثناء الاعتماد وتجاوز السقف العام السنوي للوثيقة. أعد احتساب المطالبة ثم حاول مجددًا.");
         }
     }

@@ -70,9 +70,25 @@ public class MemberFinancialSummaryDto {
     private String policyName;
     
     /**
-     * Annual coverage limit from policy
+     * The ceiling that APPLIES to this member: the policy's annual limit plus
+     * any exceptional uplift granted to them alone.
+     *
+     * It used to be the policy figure alone while actualRemaining beside it
+     * came from the effective ceiling, so a member with an uplift was reported
+     * with a remaining balance larger than their limit. The same field feeds
+     * /remaining-limit, which the provider portal reads while a claim is being
+     * entered.
+     *
+     * policyLimit and upliftAmount carry the two halves, because a ceiling
+     * nobody can decompose is a ceiling nobody can check.
      */
     private BigDecimal annualLimit;
+
+    /** What the benefit policy grants everyone on it. */
+    private BigDecimal policyLimit;
+
+    /** The exceptional increase for this member alone. Zero for almost everyone. */
+    private BigDecimal upliftAmount;
     
     /**
      * Policy start date
