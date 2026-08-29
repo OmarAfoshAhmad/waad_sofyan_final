@@ -51,6 +51,32 @@ class EmployerImportIntegrationTest extends PostgresIntegrationTestBase {
     @Autowired
     private BenefitPolicyRepository benefitPolicyRepository;
 
+    @Autowired
+    private com.waad.tba.modules.rbac.repository.UserRepository users;
+
+    /**
+     * The import writes employers through EmployerService, which is scoped --
+     * so an unauthenticated run is now refused, and used to succeed only
+     * because nothing was checked. Authenticating here is the fixture catching
+     * up with reality, not a relaxation: an employer import is performed by a
+     * person, and which employers they may touch is part of the operation.
+     */
+    @org.junit.jupiter.api.BeforeEach
+    void authenticateAsAnAdministrator() {
+        String username = "emp-import-" + java.util.UUID.randomUUID().toString().substring(0, 8);
+        users.save(com.waad.tba.modules.rbac.entity.User.builder()
+                .username(username).password("x").fullName("Employer Import Test")
+                .email(username + "@waad.ly").userType("SUPER_ADMIN").active(true).build());
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+                new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                        username, "x", java.util.List.of()));
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void clearAuthentication() {
+        org.springframework.security.core.context.SecurityContextHolder.clearContext();
+    }
+
     private static final String[] HEADERS =
             {"اسم جهة العمل", "رمز الجهة", "رقم الهاتف", "البريد الإلكتروني", "العنوان", "الحد السنوي", "نسبة التغطية"};
 
@@ -214,6 +240,66 @@ class EmployerImportIntegrationTest extends PostgresIntegrationTestBase {
 
         Employer reactivated = employerRepository.findById(created.getId()).orElseThrow();
         assertThat(reactivated.getActive()).isTrue();
+    }
+
+    /**
+     * E-07 meets E-04: an import file is a list of employers, and a scoped
+     * operator must not be able to reach past their own by putting another
+     * employer's code in a spreadsheet.
+     *
+     * Reactivating an archived employer is the sharpest form of it. The row
+     * looks like ordinary data, the operator may never have seen the employer
+     * it names, and the effect is to bring a tenant back into every list in
+     * the system.
+     *
+     * This case did not exist, and could not have failed before: the whole
+     * suite ran unauthenticated, so nothing about who was importing was ever
+     * part of the test.
+     */
+    @Test
+    void aScopedOperatorCannotReactivateAnEmployerOutsideTheirScopeThroughAnImport() throws Exception {
+        String unique = "SCOPE-" + System.nanoTime();
+        String name = "شركة خارج النطاق " + unique;
+
+        com.waad.tba.modules.employer.dto.EmployerCreateDto createDto =
+                new com.waad.tba.modules.employer.dto.EmployerCreateDto();
+        createDto.setCode(employerService.generateNextCode());
+        createDto.setName(name);
+        createDto.setPhone("0966666666");
+        createDto.setEmail("outside@" + unique + ".ly");
+        createDto.setAddress("مصراتة");
+        var outsider = employerService.create(createDto);
+        employerService.archive(outsider.getId());
+
+        // A different employer entirely, and the operator belongs to it.
+        var ownEmployer = employerRepository.save(Employer.builder()
+                .code("OWN-" + unique).name("جهة المشغّل " + unique).active(true).build());
+        actAsOperatorScopedTo(ownEmployer.getId());
+
+        MockMultipartFile file = buildWorkbook(new String[][]{
+                {name, outsider.getCode(), "0966666666", "outside@" + unique + ".ly", "مصراتة", null, null}
+        });
+        EmployerImportConfirmResultDto result =
+                importService.confirm(importService.preview(file).getSessionId());
+
+        assertThat(result.getSuccessCount())
+                .as("the row names an employer this operator may not touch")
+                .isZero();
+        assertThat(employerRepository.findById(outsider.getId()).orElseThrow().getActive())
+                .as("and it is still archived")
+                .isFalse();
+    }
+
+    /** An EMPLOYER_ADMIN linked to one employer, which is what scopes them. */
+    private void actAsOperatorScopedTo(Long employerId) {
+        String username = "emp-scoped-" + java.util.UUID.randomUUID().toString().substring(0, 8);
+        users.save(com.waad.tba.modules.rbac.entity.User.builder()
+                .username(username).password("x").fullName("Scoped Operator")
+                .email(username + "@waad.ly").userType("EMPLOYER_ADMIN")
+                .employerId(employerId).active(true).build());
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+                new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                        username, "x", java.util.List.of()));
     }
 
     @Test

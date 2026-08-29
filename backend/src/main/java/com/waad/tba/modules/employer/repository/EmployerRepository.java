@@ -21,11 +21,22 @@ public interface EmployerRepository extends JpaRepository<Employer, Long> {
     Page<Employer> findByActiveTrue(Pageable pageable);
     Page<Employer> findByActiveFalse(Pageable pageable);
 
+    /**
+     * @param unscoped true only for a caller whose scope is GLOBAL. Every other
+     *                 caller passes false and the employers they may reach, so
+     *                 the narrowing happens in the query -- filtering the page
+     *                 afterwards would leave the total count describing
+     *                 somebody else's book
+     */
     @Query("SELECT e FROM Employer e WHERE (:active IS NULL OR e.active = :active) " +
+           "AND (:unscoped = true OR e.id IN :employerIds) " +
            "AND (:q = '' OR LOWER(e.name) LIKE LOWER(CONCAT('%', :q, '%')) " +
            "OR LOWER(e.code) LIKE LOWER(CONCAT('%', :q, '%')) " +
            "OR LOWER(COALESCE(e.email, '')) LIKE LOWER(CONCAT('%', :q, '%')))")
-    Page<Employer> searchPage(@Param("active") Boolean active, @Param("q") String q, Pageable pageable);
+    Page<Employer> searchPage(@Param("active") Boolean active, @Param("q") String q,
+            @Param("unscoped") boolean unscoped,
+            @Param("employerIds") java.util.Collection<Long> employerIds,
+            Pageable pageable);
 
     long countByActiveTrue();
 

@@ -13,6 +13,10 @@ import com.waad.tba.modules.employer.mapper.EmployerMapper;
 import com.waad.tba.modules.employer.repository.EmployerRepository;
 import com.waad.tba.modules.member.repository.MemberRepository;
 import com.waad.tba.modules.rbac.entity.User;
+import java.time.LocalDate;
+
+import com.waad.tba.modules.member.security.MemberAccessScope;
+import com.waad.tba.modules.member.security.MemberAccessScopeResolver;
 import com.waad.tba.security.AuthorizationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -54,6 +58,8 @@ public class EmployerService {
     private final MemberRepository memberRepository;
     private final BenefitPolicyRepository benefitPolicyRepository;
     private final AuthorizationService authorizationService;
+    private final MemberAccessScopeResolver scopeResolver;
+    private final com.waad.tba.modules.member.repository.MemberEmployerAssignmentRepository assignmentRepository;
 
     /**
      * Get all active, non-archived employers (paginated)
@@ -88,7 +94,14 @@ public class EmployerService {
 
     public Page<EmployerResponseDto> getPage(Boolean active, String query, Pageable pageable) {
         String normalizedQuery = query == null ? "" : query.trim();
-        return employerRepository.searchPage(active, normalizedQuery, pageable).map(mapper::toResponse);
+        MemberAccessScope scope = requireScope();
+        // A scoped caller's id set is never empty here: the resolver denies
+        // rather than returning an empty scope, and requireScope turns that
+        // into a refusal. An empty IN list would render as "no employers
+        // exist", which is a false statement rather than a refused one.
+        return employerRepository.searchPage(active, normalizedQuery,
+                scope.isGlobal(), scope.isGlobal() ? java.util.Set.of(-1L) : scope.employerIds(), pageable)
+                .map(mapper::toResponse);
     }
 
     /**
@@ -284,8 +297,11 @@ public class EmployerService {
         if (dto.getActive() != null && !dto.getActive().equals(employer.getActive())) {
             throw new BusinessRuleException("غيّر حالة جهة العمل عبر إجراء الأرشفة أو الاستعادة لضمان سلامة العلاقات");
         }
+        // The same count restore() checks, from the same source. Reading the
+        // pointer here and the assignments there would let one path accept a
+        // member cap the other refuses, for the same employer on the same day.
         validateEmployerTerms(dto.getContractStartDate(), dto.getContractEndDate(), dto.getMaxMemberLimit(),
-                memberRepository.countByEmployerIdAndActiveTrue(id));
+                assignmentRepository.countActiveMembersAssignedOn(id, LocalDate.now()));
         employer.setAddress(dto.getAddress());
         employer.setPhone(dto.getPhone());
         employer.setEmail(dto.getEmail());
@@ -345,12 +361,24 @@ public class EmployerService {
 
         Employer employer = findEmployerById(id);
 
-        // NOTE: only ACTIVE members/policies block archiving. Historical
-        // (already-inactive) members must never block it — otherwise any employer
-        // that ever had a member deactivated becomes permanently un-archivable
-        // even with zero active members, which was the actual bug reported.
+        // Only members who still BELONG to this employer today block archiving.
+        // Historical ones must never block it -- otherwise any employer that
+        // ever had a member becomes permanently un-archivable, which was the
+        // original bug.
+        //
+        // "Belong today" is read from member_employer_assignments, not from
+        // members.employer_id. The pointer is a denormalised current value
+        // maintained by MemberEmployerResolver; the assignments are what a
+        // dated question is answered from, and archiving is a dated question --
+        // it asks whether anyone is with this employer NOW.
+        //
+        // The two agree while the canonical writer is the only thing writing
+        // them. Reading the pointer here made that agreement load-bearing
+        // without anything enforcing it, which is a second source of truth
+        // whether or not it currently disagrees.
         DeletionGuard.of("جهة العمل")
-                .check("مستفيدون نشطون", memberRepository.countByEmployerIdAndActiveTrue(id))
+                .check("مستفيدون نشطون",
+                        assignmentRepository.countActiveMembersAssignedOn(id, LocalDate.now()))
                 .check("وثائق تأمين نشطة", benefitPolicyRepository.countByEmployerIdAndActiveTrue(id))
                 .throwIfBlocked("أوقف تفعيل المستفيدين وأنهِ الوثائق أولاً.");
 
@@ -381,7 +409,8 @@ public class EmployerService {
         // come back active with a contract end date before its start date,
         // or a member limit already exceeded by members added while archived.
         validateEmployerTerms(employer.getContractStartDate(), employer.getContractEndDate(),
-                employer.getMaxMemberLimit(), memberRepository.countByEmployerIdAndActiveTrue(id));
+                employer.getMaxMemberLimit(),
+                assignmentRepository.countActiveMembersAssignedOn(id, LocalDate.now()));
 
         // Restore by setting active=true
         employer.setActive(true);
@@ -460,9 +489,40 @@ public class EmployerService {
      * @return Employer entity
      * @throws ResourceNotFoundException if not found
      */
+    /**
+     * The single door to one employer, used by getById, update, archive and
+     * restore -- so the scope check belongs here rather than four times over.
+     *
+     * An employer outside the caller's scope is reported as NOT FOUND, not as
+     * forbidden. A 403 on a specific id confirms that id exists, which is a
+     * different answer from the one a tenant is entitled to.
+     */
     private Employer findEmployerById(Long id) {
-        return employerRepository.findById(id)
+        Employer employer = employerRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Employer not found with id: " + id));
+
+        MemberAccessScope scope = requireScope();
+        if (!scope.isGlobal() && !scope.covers(id)) {
+            throw new ResourceNotFoundException("Employer not found with id: " + id);
+        }
+        return employer;
+    }
+
+    /**
+     * The employers this caller may reach, or a refusal.
+     *
+     * Reuses MemberAccessScopeResolver rather than growing a second scope
+     * model. The question -- "which employers is this user allowed to touch?"
+     * -- is the same one, and two answers to it would eventually disagree;
+     * the resolver is only called "member" because that is where it was first
+     * needed.
+     */
+    private MemberAccessScope requireScope() {
+        MemberAccessScope scope = scopeResolver.resolve();
+        if (scope.isDenied()) {
+            throw new org.springframework.security.access.AccessDeniedException(scope.reason());
+        }
+        return scope;
     }
 
     /**

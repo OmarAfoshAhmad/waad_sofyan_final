@@ -27,13 +27,19 @@ class EmployerSelectorScopeTest {
     private final EmployerRepository employerRepository = mock(EmployerRepository.class);
     private final EmployerMapper mapper = mock(EmployerMapper.class);
     private final AuthorizationService authorizationService = mock(AuthorizationService.class);
+    private final com.waad.tba.modules.member.security.MemberAccessScopeResolver scopeResolver =
+            mock(com.waad.tba.modules.member.security.MemberAccessScopeResolver.class);
+    private final com.waad.tba.modules.member.repository.MemberEmployerAssignmentRepository assignmentRepository =
+            mock(com.waad.tba.modules.member.repository.MemberEmployerAssignmentRepository.class);
     private final EmployerService service = new EmployerService(
             employerRepository,
             mapper,
             mock(ProviderRepository.class),
             mock(MemberRepository.class),
             mock(BenefitPolicyRepository.class),
-            authorizationService);
+            authorizationService,
+            scopeResolver,
+            assignmentRepository);
 
     @Test
     void dataEntryReceivesOnlyItsConfiguredActiveEmployer() {

@@ -129,6 +129,37 @@ class MemberAccessScopeResolverIntegrationTest extends PostgresIntegrationTestBa
         assertThat(scope.covers(c)).isFalse();
     }
 
+    /**
+     * A provider's contract with an employer can be ended -- provider_allowed
+     * _employers.active -- and ending it has to end their reach.
+     *
+     * Provider.allowedEmployers is an unfiltered @OneToMany, so the scope
+     * included every employer this provider had EVER been contracted with. A
+     * closed contract left the provider's staff able to read that employer's
+     * members indefinitely, and nothing on any screen would have shown it:
+     * the link was correctly marked inactive, and the code that mattered did
+     * not read the mark.
+     *
+     * Found while auditing employers, in the members module. Fixed where it
+     * lives.
+     */
+    @Test
+    void anEndedContractEndsTheProvidersReach() {
+        long stillContracted = employer("STILL");
+        long contractEnded = employer("ENDED");
+        long providerId = provider(false, stillContracted, contractEnded);
+
+        jdbc.update("UPDATE provider_allowed_employers SET active = false"
+                + " WHERE provider_id = ? AND employer_id = ?", providerId, contractEnded);
+
+        MemberAccessScope scope = resolver.resolveFor(user("PROVIDER_STAFF", null, providerId));
+
+        assertThat(scope.employerIds()).containsExactly(stillContracted);
+        assertThat(scope.covers(contractEnded))
+                .as("the contract that put this employer in reach has been closed")
+                .isFalse();
+    }
+
     @Test
     void aClosedNetworkProviderWithAnEmptyAllowListIsDenied() {
         long providerId = provider(false);
