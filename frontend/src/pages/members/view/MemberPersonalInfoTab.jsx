@@ -27,7 +27,7 @@ const MemberPersonalInfoTab = ({ member, isPrincipal, onOpenPhoto, onOpenStatusM
       >
         <Tooltip title="اضغط لتكبير الصورة">
           <span>
-            <MemberAvatar member={member} size={110} onClick={onOpenPhoto} sx={{ mb: '0.75rem' }} />
+            <MemberAvatar member={member} size={110} variant="portrait" onClick={onOpenPhoto} sx={{ mb: '0.75rem' }} />
           </span>
         </Tooltip>
 

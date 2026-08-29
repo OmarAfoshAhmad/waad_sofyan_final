@@ -31,7 +31,7 @@ const MemberViewDialogs = ({
     <Dialog open={photoDialogOpen} onClose={onClosePhoto} maxWidth="xs" fullWidth>
       <DialogTitle sx={{ textAlign: 'center' }}>صورة المستفيد</DialogTitle>
       <DialogContent sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-        <MemberAvatar member={member} size={260} />
+        <MemberAvatar member={member} size={260} variant="portrait" />
       </DialogContent>
       <DialogActions sx={{ justifyContent: 'center', pb: 2 }}>
         <Button variant="contained" onClick={onClosePhoto}>

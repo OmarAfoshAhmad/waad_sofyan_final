@@ -866,7 +866,7 @@ const UnifiedMemberView = () => {
                   >
                     <Tooltip title="اضغط لتكبير الصورة">
                       <span>
-                        <MemberAvatar member={member} size={110} onClick={() => setPhotoDialogOpen(true)} sx={{ mb: '0.75rem' }} />
+                        <MemberAvatar member={member} size={110} variant="portrait" onClick={() => setPhotoDialogOpen(true)} sx={{ mb: '0.75rem' }} />
                       </span>
                     </Tooltip>
 
@@ -1182,8 +1182,7 @@ const UnifiedMemberView = () => {
                           <TableHead>
                             <TableRow>
                               <TableCell align="center">#</TableCell>
-                              <TableCell align="center">الصورة</TableCell>
-                              <TableCell align="center">الاسم</TableCell>
+                                        <TableCell align="center">الاسم</TableCell>
                               <TableCell align="center">القرابة</TableCell>
                               <TableCell align="center">رقم البطاقة</TableCell>
                               <TableCell align="center">الرقم الوطني</TableCell>
@@ -1206,9 +1205,6 @@ const UnifiedMemberView = () => {
                               .map((dep, index) => (
                                 <TableRow key={dep.id} hover>
                                   <TableCell align="center">{pg * rpp + index + 1}</TableCell>
-                                  <TableCell align="center">
-                                    <MemberAvatar member={dep} size={32} />
-                                  </TableCell>
                                   <TableCell align="right">
                                     <Typography variant="body2" fontWeight="medium">
                                       {dep.fullName}
@@ -1514,7 +1510,7 @@ const UnifiedMemberView = () => {
       <Dialog open={photoDialogOpen} onClose={() => setPhotoDialogOpen(false)} maxWidth="xs" fullWidth>
         <DialogTitle sx={{ textAlign: 'center' }}>صورة المستفيد</DialogTitle>
         <DialogContent sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-          <MemberAvatar member={member} size={260} />
+          <MemberAvatar member={member} size={260} variant="portrait" />
         </DialogContent>
         <DialogActions sx={{ justifyContent: 'center', pb: 2 }}>
           <Button variant="contained" onClick={() => setPhotoDialogOpen(false)}>

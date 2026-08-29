@@ -717,6 +717,7 @@ const UnifiedMemberEdit = () => {
                         <MemberAvatar
                           member={{ id: id, photoUrl: form.photoPreview, fullName: form.fullName }}
                           size={120}
+                          variant="portrait"
                           refreshTrigger={form.photoPreview}
                           sx={{
                             cursor: 'pointer',

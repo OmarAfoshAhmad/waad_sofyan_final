@@ -362,6 +362,7 @@ const AddDependent = () => {
                         photoUrl: form.photoPreview
                       }}
                       size={100}
+                      variant="portrait"
                       sx={{ mb: '1.0rem', cursor: 'pointer', border: '2px solid', borderColor: 'divider' }}
                       onClick={() => document.getElementById('dep-photo-upload').click()}
                     />

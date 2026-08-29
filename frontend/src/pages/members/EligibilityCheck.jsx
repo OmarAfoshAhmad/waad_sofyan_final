@@ -270,7 +270,7 @@ const EligibilityCheck = () => {
                   <Grid container spacing={3}>
                     <Grid size={12}>
                       <Stack direction="row" spacing={2} alignItems="center">
-                        <MemberAvatar member={familyData.principal} size={64} />
+                        <MemberAvatar member={familyData.principal} size={64} variant="portrait" />
                         <Box>
                           <Typography variant="h5" gutterBottom>
                             {familyData.principal?.fullName}

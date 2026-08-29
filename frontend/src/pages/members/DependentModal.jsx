@@ -275,6 +275,7 @@ const DependentModal = ({ open, onClose, dependent, principalId, onSave, existin
                     photoUrl: photoPreview
                   }}
                   size={120}
+                  variant="portrait"
                   sx={{
                     fontSize: '3rem',
                     border: '4px solid',

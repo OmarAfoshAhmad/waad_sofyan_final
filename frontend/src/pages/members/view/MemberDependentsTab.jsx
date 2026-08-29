@@ -84,7 +84,6 @@ const MemberDependentsTab = ({
                 <TableHead>
                   <TableRow>
                     <TableCell align="center">#</TableCell>
-                    <TableCell align="center">الصورة</TableCell>
                     <TableCell align="center">الاسم</TableCell>
                     <TableCell align="center">القرابة</TableCell>
                     <TableCell align="center">رقم البطاقة</TableCell>
@@ -99,9 +98,6 @@ const MemberDependentsTab = ({
                   {visibleDependents.slice(pg * rpp, pg * rpp + rpp).map((dep, index) => (
                     <TableRow key={dep.id} hover>
                       <TableCell align="center">{pg * rpp + index + 1}</TableCell>
-                      <TableCell align="center">
-                        <MemberAvatar member={dep} size={32} />
-                      </TableCell>
                       <TableCell align="right">
                         <Typography variant="body2" fontWeight="medium">
                           {dep.fullName}

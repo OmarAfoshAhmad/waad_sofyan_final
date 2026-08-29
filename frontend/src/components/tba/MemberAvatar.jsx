@@ -19,8 +19,18 @@ import axiosClient from 'utils/axios';
  * @param {number|string} [props.size=40] - Avatar size
  * @param {Object} [props.sx] - Additional MUI styles
  * @param {string} [props.refreshTrigger] - Optional seed to force refresh
+ * @param {'circular'|'portrait'} [props.variant='circular'] - 'portrait' is
+ *   the studio ID-photo shape (35x45mm), for the places that show a member's
+ *   actual photograph rather than an avatar in a row. The height stays equal
+ *   to `size` in both, so switching one does not move anything around it.
  */
-const MemberAvatar = ({ member, size = 40, sx = {}, refreshTrigger, onClick }) => {
+// 35x45mm, the studio personal-photo proportion. Applied to the width so the
+// row height a caller already reserved for `size` is unchanged.
+const PORTRAIT_RATIO = 7 / 9;
+
+const MemberAvatar = ({ member, size = 40, sx = {}, refreshTrigger, onClick, variant = 'circular' }) => {
+  const isPortrait = variant === 'portrait';
+  const width = isPortrait && typeof size === 'number' ? Math.round(size * PORTRAIT_RATIO) : size;
   const [imgError, setImgError] = useState(false);
   const [loading, setLoading] = useState(false);
   const [photoUrl, setPhotoUrl] = useState(null);
@@ -125,7 +135,7 @@ const MemberAvatar = ({ member, size = 40, sx = {}, refreshTrigger, onClick }) =
       onClick={onClick}
       sx={{
         position: 'relative',
-        width: size,
+        width,
         height: size,
         display: 'inline-flex',
         cursor: onClick ? 'pointer' : 'default'
@@ -136,8 +146,9 @@ const MemberAvatar = ({ member, size = 40, sx = {}, refreshTrigger, onClick }) =
         alt={member?.fullName}
         onError={handleImageError}
         onLoad={handleLoadEnd}
+        variant={isPortrait ? 'rounded' : 'circular'}
         sx={{
-          width: size,
+          width,
           height: size,
           fontSize: typeof size === 'number' ? size * 0.45 : '1rem',
           bgcolor: 'primary.lighter',
@@ -145,6 +156,9 @@ const MemberAvatar = ({ member, size = 40, sx = {}, refreshTrigger, onClick }) =
           fontWeight: 'bold',
           border: '2px solid',
           borderColor: 'primary.light',
+          // theme.shape.borderRadius, the same corner every card and field in
+          // the system uses -- the shape changes, the design language does not.
+          ...(isPortrait && { borderRadius: 1 }),
           ...sx
         }}
       >
@@ -153,7 +167,7 @@ const MemberAvatar = ({ member, size = 40, sx = {}, refreshTrigger, onClick }) =
 
       {loading && (
         <CircularProgress
-          size={size}
+          size={isPortrait ? width : size}
           thickness={2}
           sx={{
             position: 'absolute',
@@ -220,6 +234,7 @@ MemberAvatar.propTypes = {
     photoUrl: PropTypes.string
   }),
   size: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
+  variant: PropTypes.oneOf(['circular', 'portrait']),
   sx: PropTypes.object,
   refreshTrigger: PropTypes.string,
   onClick: PropTypes.func
