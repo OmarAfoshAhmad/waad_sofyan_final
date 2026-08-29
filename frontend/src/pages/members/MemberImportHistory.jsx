@@ -10,38 +10,39 @@ import {
   DialogTitle,
   Divider,
   IconButton,
-  Paper,
   Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TablePagination,
-  TableRow,
   TextField,
   Tooltip,
   Typography
 } from '@mui/material';
-import {
-  Download as DownloadIcon,
-  ErrorOutline as ErrorOutlineIcon,
-  Undo as UndoIcon,
-  Refresh as RefreshIcon
-} from '@mui/icons-material';
+import { Download as DownloadIcon, ErrorOutline as ErrorOutlineIcon, Undo as UndoIcon, Refresh as RefreshIcon } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
 import MainCard from 'components/MainCard';
+import UnifiedMedicalTable from 'components/common/UnifiedMedicalTable';
 import { ModernPageHeader } from 'components/tba';
 import useAuth from 'hooks/useAuth';
-import {
-  getImportLogs,
-  getImportErrors,
-  previewImportRollback,
-  executeImportRollback
-} from 'services/api/unified-members.service';
+import { getImportLogs, getImportErrors, previewImportRollback, executeImportRollback } from 'services/api/unified-members.service';
 
-const STATUS_LABEL = { COMPLETED: 'مكتمل', PARTIAL: 'مكتمل مع أخطاء', FAILED: 'فشل', PENDING: 'قيد الإعداد', VALIDATING: 'جارِ التحقق', PROCESSING: 'جارِ المعالجة' };
-const STATUS_COLOR = { COMPLETED: 'success', PARTIAL: 'warning', FAILED: 'error', PENDING: 'default', VALIDATING: 'info', PROCESSING: 'info' };
+const STATUS_LABEL = {
+  COMPLETED: 'مكتمل',
+  PARTIAL: 'مكتمل مع أخطاء',
+  FAILED: 'فشل',
+  PENDING: 'قيد الإعداد',
+  VALIDATING: 'جارِ التحقق',
+  PROCESSING: 'جارِ المعالجة',
+  // Added with V198. Without an entry here the chip fell through to the raw
+  // enum name, so a reverted batch announced itself in English.
+  ROLLED_BACK: 'مُتراجَع عنه'
+};
+const STATUS_COLOR = {
+  COMPLETED: 'success',
+  PARTIAL: 'warning',
+  FAILED: 'error',
+  PENDING: 'default',
+  VALIDATING: 'info',
+  PROCESSING: 'info',
+  ROLLED_BACK: 'default'
+};
 const ROLLBACK_SKIP_REASON = {
   HAS_PROTECTED_HISTORY: 'له سجل مالي أو طبي يجب الحفاظ عليه',
   MODIFIED_AFTER_IMPORT: 'عُدّلت بياناته بعد الاستيراد ولن تُكتب فوق التعديل اللاحق',
@@ -153,6 +154,81 @@ const MemberImportHistory = () => {
 
   const rows = useMemo(() => logs, [logs]);
 
+  const columns = [
+    { id: 'fileName', label: 'الملف', minWidth: '13.75rem', sortable: false },
+    { id: 'importedBy', label: 'المنفّذ', minWidth: '7.5rem', sortable: false, align: 'center' },
+    { id: 'createdAt', label: 'الوقت', minWidth: '10rem', sortable: false, align: 'center' },
+    { id: 'totalRows', label: 'إجمالي', minWidth: '5rem', sortable: false, align: 'center' },
+    { id: 'createdCount', label: 'جديد', minWidth: '5rem', sortable: false, align: 'center' },
+    { id: 'updatedCount', label: 'معدَّل', minWidth: '5rem', sortable: false, align: 'center' },
+    { id: 'errorCount', label: 'أخطاء', minWidth: '5rem', sortable: false, align: 'center' },
+    { id: 'status', label: 'الحالة', minWidth: '7.5rem', sortable: false, align: 'center' },
+    { id: 'actions', label: 'إجراءات', minWidth: '7.5rem', sortable: false, align: 'center' }
+  ];
+
+  const renderCell = (log, column) => {
+    switch (column.id) {
+      case 'fileName':
+        return (
+          <Typography variant="body2" noWrap sx={{ maxWidth: '13.75rem' }} title={log.fileName || ''}>
+            {log.fileName || '-'}
+          </Typography>
+        );
+
+      case 'importedBy':
+        return <Typography variant="body2">{log.importedByUsername || '-'}</Typography>;
+
+      case 'createdAt':
+        return <Typography variant="body2">{log.createdAt ? new Date(log.createdAt).toLocaleString('ar-EG') : '-'}</Typography>;
+
+      case 'totalRows':
+        return <Typography variant="body2">{log.totalRows ?? 0}</Typography>;
+
+      case 'createdCount':
+        return <Typography variant="body2">{log.createdCount ?? 0}</Typography>;
+
+      case 'updatedCount':
+        return <Typography variant="body2">{log.updatedCount ?? 0}</Typography>;
+
+      case 'errorCount':
+        return (log.errorCount ?? 0) > 0 ? (
+          <Chip size="small" color="error" icon={<ErrorOutlineIcon fontSize="small" />} label={log.errorCount} />
+        ) : (
+          <Typography variant="body2" color="text.secondary">
+            0
+          </Typography>
+        );
+
+      case 'status':
+        return <Chip size="small" color={STATUS_COLOR[log.status] || 'default'} label={STATUS_LABEL[log.status] || log.status} />;
+
+      case 'actions':
+        return (
+          <Stack direction="row" spacing={0.5} justifyContent="center">
+            {(log.errorCount ?? 0) > 0 && (
+              <Tooltip title="تصدير الأخطاء">
+                <IconButton size="small" onClick={() => handleExportErrors(log)}>
+                  <DownloadIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            )}
+            {/* A reverted batch has nothing left to revert, and a running one
+                has not finished producing what a revert would undo. */}
+            {canRollback && (log.status === 'COMPLETED' || log.status === 'PARTIAL') && (
+              <Tooltip title="تراجع عن هذا الاستيراد">
+                <IconButton size="small" color="warning" onClick={() => openRollbackDialog(log)}>
+                  <UndoIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            )}
+          </Stack>
+        );
+
+      default:
+        return log[column.id];
+    }
+  };
+
   return (
     <MainCard content={false}>
       <ModernPageHeader
@@ -164,99 +240,22 @@ const MemberImportHistory = () => {
           </IconButton>
         }
       />
-      <TableContainer sx={{ maxWidth: '100%', overflowX: 'auto' }}>
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell>الملف</TableCell>
-              <TableCell>المنفّذ</TableCell>
-              <TableCell>الوقت</TableCell>
-              <TableCell align="center">إجمالي</TableCell>
-              <TableCell align="center">جديد</TableCell>
-              <TableCell align="center">معدَّل</TableCell>
-              <TableCell align="center">أخطاء</TableCell>
-              <TableCell align="center">الحالة</TableCell>
-              <TableCell align="center">إجراءات</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {loading ? (
-              <TableRow>
-                <TableCell colSpan={9} align="center" sx={{ py: 4 }}>
-                  <CircularProgress size={28} />
-                </TableCell>
-              </TableRow>
-            ) : rows.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={9} align="center" sx={{ py: 4 }}>
-                  <Typography color="text.secondary">لا توجد عمليات استيراد مسجَّلة</Typography>
-                </TableCell>
-              </TableRow>
-            ) : (
-              rows.map((log) => (
-                <TableRow key={log.id} hover>
-                  <TableCell>
-                    <Typography variant="body2" noWrap sx={{ maxWidth: 220 }}>
-                      {log.fileName || '-'}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>{log.importedByUsername || '-'}</TableCell>
-                  <TableCell>
-                    {log.createdAt ? new Date(log.createdAt).toLocaleString('ar-EG') : '-'}
-                  </TableCell>
-                  <TableCell align="center">{log.totalRows ?? 0}</TableCell>
-                  <TableCell align="center">{log.createdCount ?? 0}</TableCell>
-                  <TableCell align="center">{log.updatedCount ?? 0}</TableCell>
-                  <TableCell align="center">
-                    {(log.errorCount ?? 0) > 0 ? (
-                      <Chip
-                        size="small"
-                        color="error"
-                        icon={<ErrorOutlineIcon fontSize="small" />}
-                        label={log.errorCount}
-                      />
-                    ) : (
-                      0
-                    )}
-                  </TableCell>
-                  <TableCell align="center">
-                    <Chip size="small" color={STATUS_COLOR[log.status] || 'default'} label={STATUS_LABEL[log.status] || log.status} />
-                  </TableCell>
-                  <TableCell align="center">
-                    <Stack direction="row" spacing={0.5} justifyContent="center">
-                      {(log.errorCount ?? 0) > 0 && (
-                        <Tooltip title="تصدير الأخطاء">
-                          <IconButton size="small" onClick={() => handleExportErrors(log)}>
-                            <DownloadIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                      )}
-                      {canRollback && (log.status === 'COMPLETED' || log.status === 'PARTIAL') && (
-                        <Tooltip title="تراجع عن هذا الاستيراد">
-                          <IconButton size="small" color="warning" onClick={() => openRollbackDialog(log)}>
-                            <UndoIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                      )}
-                    </Stack>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
-      <TablePagination
-        component="div"
-        count={totalElements}
+      <UnifiedMedicalTable
+        columns={columns}
+        rows={rows}
+        loading={loading}
+        totalCount={totalElements}
         page={page}
-        onPageChange={(e, newPage) => setPage(newPage)}
         rowsPerPage={pageSize}
-        onRowsPerPageChange={(e) => {
-          setPageSize(parseInt(e.target.value, 10));
+        onPageChange={(newPage) => setPage(newPage)}
+        onRowsPerPageChange={(newSize) => {
+          setPageSize(newSize);
           setPage(0);
         }}
-        labelRowsPerPage="عدد الصفوف"
+        renderCell={renderCell}
+        getRowKey={(log) => log.id}
+        emptyMessage="لا توجد عمليات استيراد مسجَّلة"
+        loadingMessage="جارِ التحميل..."
       />
 
       <Dialog open={Boolean(rollbackTarget)} onClose={() => (rollbackLoading ? null : setRollbackTarget(null))} maxWidth="sm" fullWidth>
@@ -274,8 +273,8 @@ const MemberImportHistory = () => {
                 هذه الدفعة أنشأت <b>{rollbackPreview.createdCount}</b> عضو وعدّلت <b>{rollbackPreview.updatedCount}</b> عضو.
               </Typography>
               <Typography variant="body2" color="success.main">
-                سيُحذف <b>{rollbackPreview.wouldRevertCreatedCount}</b> عضو أُنشئ حديثاً، وستُعاد <b>{rollbackPreview.wouldRevertUpdatedCount}</b>
-                {' '}عضو معدَّل إلى قيمها السابقة.
+                سيُحذف <b>{rollbackPreview.wouldRevertCreatedCount}</b> عضو أُنشئ حديثاً، وستُعاد{' '}
+                <b>{rollbackPreview.wouldRevertUpdatedCount}</b> عضو معدَّل إلى قيمها السابقة.
               </Typography>
               <Typography variant="caption" color="text.secondary">
                 التراجع لا يكتب فوق أي تعديل حدث بعد الاستيراد، ويحافظ على السجلات ذات الأثر المالي أو الطبي.
@@ -315,12 +314,7 @@ const MemberImportHistory = () => {
             إلغاء
           </Button>
           {rollbackPreview && !rollbackPreview.alreadyRolledBack && (
-            <Button
-              variant="contained"
-              color="warning"
-              disabled={rollbackLoading || !rollbackReason.trim()}
-              onClick={confirmRollback}
-            >
+            <Button variant="contained" color="warning" disabled={rollbackLoading || !rollbackReason.trim()} onClick={confirmRollback}>
               {rollbackLoading ? 'جارِ التراجع...' : 'تأكيد التراجع'}
             </Button>
           )}
