@@ -141,7 +141,18 @@ public class MemberImportLog {
         PROCESSING,     // Creating/updating members
         COMPLETED,      // All done successfully
         PARTIAL,        // Completed with some errors
-        FAILED          // Import failed completely
+        FAILED,         // Import failed completely
+        /**
+         * Completed, then reverted by an authorised rollback.
+         *
+         * A separate status rather than a flag beside COMPLETED, because
+         * everything that asks "did this import happen" means "is it still
+         * standing". The idempotency guard asked for COMPLETED and refused to
+         * re-run a file whose rows had been deleted an hour earlier, which
+         * turned rollback into a one-way door: revert once, and the same file
+         * could never be imported again.
+         */
+        ROLLED_BACK
     }
 
     /**
@@ -160,6 +171,18 @@ public class MemberImportLog {
     public void markStarted() {
         this.status = ImportStatus.PROCESSING;
         this.startedAt = LocalDateTime.now();
+    }
+
+    /**
+     * The batch was completed and has since been reverted in full.
+     *
+     * A method on the entity rather than a setter reached in from a service,
+     * matching markStarted and markCompleted beside it: the log owns which
+     * transitions of its own status are legal, and "reverted" is only ever
+     * reached from a batch that had completed.
+     */
+    public void markRolledBack() {
+        this.status = ImportStatus.ROLLED_BACK;
     }
 
     /**

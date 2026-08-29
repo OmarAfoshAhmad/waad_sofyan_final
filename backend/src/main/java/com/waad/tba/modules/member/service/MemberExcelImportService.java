@@ -327,6 +327,12 @@ public class MemberExcelImportService {
         // Idempotency fast-path: this exact logical import (same file AND
         // same employer/policy/header-row/clearOldMembers) already completed
         // -- don't re-process it.
+        //
+        // A batch that was rolled back is deliberately NOT found here: its
+        // status is ROLLED_BACK, so the same file can be imported again.
+        // Re-importing after a revert is the normal next step, and the guard
+        // used to make it impossible -- the rows were gone and the fingerprint
+        // still said "already done".
         Optional<MemberImportLog> alreadyCompleted =
                 importLogRepository.findByImportScopeHashAndStatus(importScopeHash, MemberImportLog.ImportStatus.COMPLETED);
         if (alreadyCompleted.isPresent()) {
@@ -341,8 +347,10 @@ public class MemberExcelImportService {
                     .errorCount(previous.getErrorCount() != null ? previous.getErrorCount() : 0)
                     .completedAt(previous.getCompletedAt())
                     .errors(new ArrayList<>())
-                    .message("هذا الاستيراد مطابق تماماً (نفس الملف وجهة العمل ووثيقة المنافع وخيارات الاستيراد) لعملية سابقة اكتملت بالكامل (الدفعة "
-                            + previous.getImportBatchId() + ") - لم تُعَد المعالجة")
+                    .alreadyImported(true)
+                    .message("هذا الملف مستورد سلفاً بنفس جهة العمل ووثيقة المنافع وخيارات الاستيراد، "
+                            + "في الدفعة " + previous.getImportBatchId() + ". لم تُعَد المعالجة ولم يقع أي خطأ. "
+                            + "للاستيراد من جديد تراجع عن تلك الدفعة أولاً.")
                     .build();
         }
 

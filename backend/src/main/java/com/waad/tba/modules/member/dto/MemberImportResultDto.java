@@ -16,6 +16,15 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 public class MemberImportResultDto {
+
+    /**
+     * True when nothing was processed because this exact file had already been
+     * imported. Not an error: the request was refused on purpose, and a screen
+     * that reports it as a failure sends someone hunting for a fault that does
+     * not exist.
+     */
+    private boolean alreadyImported;
+
     
     /**
      * Batch ID for tracking
