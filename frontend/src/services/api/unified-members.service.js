@@ -214,23 +214,6 @@ export const unifiedSearch = async (query, employerId = null) => {
   }
 };
 
-/**
- * Deterministic beneficiary search (explicit mode, no guessing).
- *
- * Endpoint: GET /api/beneficiaries?type=BY_NAME&value=...
- *
- * @param {Object} params
- * @param {'BY_ID'|'BY_NAME'|'BY_BARCODE'} params.type
- * @param {string} params.value
- * @param {number} [params.employerId]
- * @param {string} [params.status='ACTIVE']
- * @param {number} [params.size=20]
- * @returns {Promise<Array>} List<MemberViewDto>
- */
-export const searchBeneficiaries = async (params = {}) => {
-  const response = await api.get('/beneficiaries', { params });
-  return response?.data?.data || [];
-};
 
 /**
  * Check family eligibility by Principal's Barcode
@@ -320,21 +303,6 @@ export const bulkDeleteMembers = async (ids, reason) => {
   }
 };
 
-/**
- * Restore a deleted member
- *
- * @param {number} id - Member ID
- * @returns {Promise<Object>} Response
- */
-export const restoreMember = async (id, reason) => {
-  try {
-    const response = await api.put(`${UNIFIED_MEMBERS_BASE_URL}/${id}/restore`, { reason });
-    return response.data;
-  } catch (error) {
-    console.error('Error restoring member:', error);
-    throw error;
-  }
-};
 
 /**
  * Toggle active/inactive status for a member.
@@ -510,37 +478,7 @@ export const hardDeleteMember = async (id, reason) => {
   }
 };
 
-/**
- * Get dependents of a Principal member
- *
- * @param {number} principalId - Principal member ID
- * @returns {Promise<Array>} List of dependents
- */
-export const getDependents = async (principalId) => {
-  try {
-    const response = await api.get(`${UNIFIED_MEMBERS_BASE_URL}/${principalId}/dependents`);
-    return response.data;
-  } catch (error) {
-    console.error('Error fetching dependents:', error);
-    throw error;
-  }
-};
 
-/**
- * Count dependents of a Principal member
- *
- * @param {number} principalId - Principal member ID
- * @returns {Promise<number>} Count of dependents
- */
-export const countDependents = async (principalId) => {
-  try {
-    const response = await api.get(`${UNIFIED_MEMBERS_BASE_URL}/${principalId}/dependents/count`);
-    return response.data;
-  } catch (error) {
-    console.error('Error counting dependents:', error);
-    throw error;
-  }
-};
 
 /**
  * Detect Excel columns and suggest mappings
@@ -872,14 +810,10 @@ export default {
   unifiedSearch,
   searchMembers,
   countMembers,
-  searchBeneficiaries,
   checkEligibility,
   updateMember,
   deleteMember,
-  restoreMember,
   hardDeleteMember,
-  getDependents,
-  countDependents,
   detectColumns,
   previewImport,
   executeImport,

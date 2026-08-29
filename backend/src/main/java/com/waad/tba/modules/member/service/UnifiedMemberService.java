@@ -1201,29 +1201,6 @@ public class UnifiedMemberService {
 
     // ==================== RESTORE & HARD DELETE ====================
 
-    /**
-     * Restore a SUSPENDED (or PENDING) member to ACTIVE. Refuses a
-     * TERMINATED member -- reinstating one is a separate, elevated-privilege
-     * action, see {@link #reinstateTerminatedMember}.
-     *
-     * @param memberId Member ID
-     * @return Restored member view DTO
-     */
-    @Transactional
-    public MemberViewDto restoreMember(Long memberId, String reason) {
-        log.info("♻️ Restoring member: memberId={}", memberId);
-
-        Member stored = requireStoredMember(memberId);
-        commandAccessPolicy.require(MemberOperation.REINSTATE, employerIdOf(stored));
-        User currentUser = authorizationService.getCurrentUser();
-
-        Member saved = statusTransitionService.restoreFromSuspended(memberId, reason,
-                currentUser != null ? currentUser.getId() : null);
-
-        log.info("✅ Member restored to ACTIVE: memberId={}", memberId);
-
-        return mapper.toViewDto(saved);
-    }
 
     /**
      * Permanently delete a member (hard delete). Warning: this cannot be

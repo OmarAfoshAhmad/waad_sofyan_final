@@ -19,7 +19,7 @@ import {
   TableBody,
   Chip
 } from '@mui/material';
-import axios from 'utils/axios';
+import { getImportErrors, getImportStatus } from 'services/api/unified-members.service';
 
 const ImportProgressContext = createContext(null);
 
@@ -50,10 +50,10 @@ export const GlobalImportProgressProvider = ({ children }) => {
     if (!activeImport || activeImport.status === 'COMPLETED' || activeImport.status === 'FAILED') return;
 
     try {
-      // Using the endpoint we verified: MemberExcelTemplateController
-      // Using relative path since baseURL handles /api
-      const response = await axios.get(`unified-members/import/status/${activeImport.batchId}`);
-      const log = response.data?.data; // ApiResponse.data contains the MemberImportLog
+      // Through the service module, not around it: a second way of reaching
+      // this URL is a second place the path, the envelope and the auth
+      // handling can drift.
+      const log = (await getImportStatus(activeImport.batchId))?.data;
 
       if (log) {
         const total = log.totalRows || 0;
@@ -133,8 +133,8 @@ export const GlobalImportProgressProvider = ({ children }) => {
 
   const viewErrors = async (batchId) => {
     try {
-      const response = await axios.get(`unified-members/import/errors/${batchId}`);
-      const errors = response.data?.data || response.data?.result || [];
+      const response = await getImportErrors(batchId);
+      const errors = response?.data || response?.result || [];
       setErrorDetails({ batchId, errors });
       setIsErrorModalOpen(true);
     } catch (err) {

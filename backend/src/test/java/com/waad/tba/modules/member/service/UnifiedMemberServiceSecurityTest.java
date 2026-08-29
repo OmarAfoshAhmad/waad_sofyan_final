@@ -188,12 +188,21 @@ class UnifiedMemberServiceSecurityTest {
         assertThrows(AccessDeniedException.class, () -> service.countDependents(500L));
     }
 
+    /**
+     * The ownership check this guards used to sit on a second endpoint,
+     * PUT /{id}/restore, which reached the same transition through another
+     * URL. That endpoint is gone; the check it protected is not, so the test
+     * follows it to the path that survived.
+     */
     @Test
-    void restoreMemberDeniedWhenCallerCannotAccessMember() {
+    void restoringASuspendedMemberIsDeniedWhenCallerCannotAccessThem() {
         org.mockito.Mockito.doThrow(new AccessDeniedException("denied")).when(commandAccessPolicy)
                 .require(com.waad.tba.modules.member.security.MemberOperation.REINSTATE, null);
 
-        assertThrows(AccessDeniedException.class, () -> service.restoreMember(500L, "سبب الاستعادة"));
+        assertThrows(AccessDeniedException.class,
+                () -> service.changeStatus(500L,
+                        com.waad.tba.modules.member.entity.Member.MemberStatus.ACTIVE,
+                        "سبب الاستعادة"));
 
         verify(memberRepository, never()).save(org.mockito.ArgumentMatchers.any());
     }

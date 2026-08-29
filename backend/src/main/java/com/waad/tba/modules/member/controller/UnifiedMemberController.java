@@ -1500,26 +1500,6 @@ public class UnifiedMemberController {
         // ==================== RESTORE & HARD DELETE ====================
 
         /**
-         * Restore a soft-deleted member
-         * 
-         * @param id Member ID
-         * @return Restored member
-         */
-        @PutMapping("/{id}/restore")
-        @PreAuthorize("@permissionGuard.has('MEMBER_CHANGE_STATUS')")
-        @Operation(summary = "Reinstate Member", description = "Performs an audited status transition back to ACTIVE; a reason is mandatory")
-        public ResponseEntity<ApiResponse<MemberViewDto>> restoreMember(
-                        @PathVariable("id") Long id,
-                        @RequestBody ReasonRequest reasonRequest) {
-                String reason = ReasonRequest.reasonOf(reasonRequest);
-                log.info("♻️ Restore request: memberId={}", id);
-
-                MemberViewDto restored = unifiedMemberService.restoreMember(id, reason);
-                log.info("✅ Member restored: memberId={}", id);
-                return ResponseEntity.ok(ApiResponse.success("تم استعادة العضو بنجاح", restored));
-        }
-
-        /**
          * Permanently delete a member (hard delete)
          * 
          * @param id Member ID
@@ -1635,16 +1615,4 @@ public class UnifiedMemberController {
                 return ResponseEntity.ok(ApiResponse.success("Search completed", results));
         }
 
-        /**
-         * Get member details by ID - for detailed view after search
-         */
-        @GetMapping("/{id}/details")
-        @PreAuthorize("@permissionGuard.has('MEMBER_VIEW')")
-        @Operation(summary = "Get member details by ID", description = "Retrieve complete member info after search selection")
-        public ResponseEntity<ApiResponse<MemberSearchDto>> getMemberDetails(
-                        @PathVariable("id") Long id) {
-                return unifiedSearchService.getMemberById(id)
-                                .map(member -> ResponseEntity.ok(ApiResponse.success("Member found", member)))
-                                .orElseGet(() -> ResponseEntity.status(404).body(ApiResponse.error("Member not found")));
-        }
 }
