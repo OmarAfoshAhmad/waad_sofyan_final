@@ -36,6 +36,7 @@ import ModernPageHeader from 'components/tba/ModernPageHeader';
 import MemberAvatar from 'components/tba/MemberAvatar';
 import { getMember, addDependent, uploadPhoto, RELATIONSHIPS, GENDERS } from 'services/api/unified-members.service';
 import { openSnackbar } from 'api/snackbar';
+import { normalizeApiError } from 'utils/api-error';
 
 /**
  * Add Dependent Component
@@ -82,7 +83,7 @@ const AddDependent = () => {
       setPrincipal(data);
     } catch (error) {
       console.error('Error fetching principal:', error);
-      setFetchError(error.response?.data?.message || 'فشل في تحميل بيانات الموظف');
+      setFetchError(normalizeApiError(error).message || 'فشل في تحميل بيانات الموظف');
     } finally {
       setLoading(false);
     }
@@ -179,7 +180,7 @@ const AddDependent = () => {
     } catch (error) {
       console.error('Error adding dependent:', error);
 
-      const errorMessage = error.response?.data?.message || error.message || 'خطأ في إضافة التابع';
+      const errorMessage = normalizeApiError(error).message || error.message || 'خطأ في إضافة التابع';
 
       openSnackbar({
         open: true,

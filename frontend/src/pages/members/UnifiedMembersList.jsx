@@ -98,6 +98,7 @@ import { formatDate } from 'utils/formatters';
 import MemberLifecycleDialog from './MemberLifecycleDialog';
 import useAuth from 'hooks/useAuth';
 import { getMemberCapabilities } from './memberCapabilities';
+import { normalizeApiError } from 'utils/api-error';
 
 const MIN_MEMBER_SEARCH_LENGTH = 3;
 
@@ -223,11 +224,10 @@ const UnifiedMembersList = () => {
       fetchCeilings(pageMembers);
     } catch (error) {
       console.error('Error fetching members:', error);
-      const message = error?.response?.data?.messageAr
-        || error?.response?.data?.message
-        || error?.response?.data?.error
-        || error?.message
-        || 'تعذر جلب المستفيدين';
+      // normalizeApiError already picks the Arabic message over the English
+      // one and falls back on its own, so the chain that used to sit here is
+      // now its job rather than this call site's.
+      const message = normalizeApiError(error).message || 'تعذر جلب المستفيدين';
       setMembers([]);
       setTotalCount(0);
       setSelectedMembers([]);
@@ -353,7 +353,7 @@ const UnifiedMembersList = () => {
       window.URL.revokeObjectURL(url);
       enqueueSnackbar('تم إنشاء ملف صالح للمعاينة وإعادة الاستيراد', { variant: 'success' });
     } catch (error) {
-      enqueueSnackbar(error?.response?.data?.message || 'فشل إنشاء ملف إعادة الاستيراد', { variant: 'error' });
+      enqueueSnackbar(normalizeApiError(error).message || 'فشل إنشاء ملف إعادة الاستيراد', { variant: 'error' });
     }
   };
 
@@ -369,7 +369,7 @@ const UnifiedMembersList = () => {
       enqueueSnackbar(message, { variant: 'success' });
     } catch (error) {
       console.error('Action failed:', error);
-      const apiMessage = error?.response?.data?.message || error?.message;
+      const apiMessage = normalizeApiError(error).message;
       enqueueSnackbar(apiMessage || defaultErrorMessage || 'حدث خطأ غير متوقع', { variant: 'error' });
     } finally {
       await fetchMembers();
@@ -422,7 +422,7 @@ const UnifiedMembersList = () => {
       setBulkTerminateDialog(false);
       await fetchMembers();
     } catch (error) {
-      enqueueSnackbar(error?.response?.data?.message || 'فشل إنهاء عضوية المحدد', { variant: 'error' });
+      enqueueSnackbar(normalizeApiError(error).message || 'فشل إنهاء عضوية المحدد', { variant: 'error' });
     } finally {
       setBulkTerminateLoading(false);
     }
@@ -454,7 +454,7 @@ const UnifiedMembersList = () => {
       setLifecycleDialog((prev) => ({ ...prev, open: false }));
       await fetchMembers();
     } catch (error) {
-      enqueueSnackbar(error?.response?.data?.message || 'تعذر تنفيذ العملية', { variant: 'error' });
+      enqueueSnackbar(normalizeApiError(error).message || 'تعذر تنفيذ العملية', { variant: 'error' });
     } finally {
       setLifecycleLoading(false);
     }

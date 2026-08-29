@@ -61,6 +61,7 @@ import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import dayjs from 'dayjs';
 import chronicConditionsService from 'services/chronic-conditions.service';
 import { openSnackbar } from 'api/snackbar';
+import { normalizeApiError } from 'utils/api-error';
 
 // Coverage status colors and icons
 const COVERAGE_STATUS_CONFIG = {
@@ -246,7 +247,7 @@ const MemberChronicConditionsTab = ({ memberId, readOnly = false }) => {
       loadData();
     } catch (error) {
       console.error('Failed to save condition:', error);
-      showError(error.response?.data?.message || 'فشل حفظ المرض المزمن');
+      showError(normalizeApiError(error).message || 'فشل حفظ المرض المزمن');
     }
   };
 
@@ -276,7 +277,7 @@ const MemberChronicConditionsTab = ({ memberId, readOnly = false }) => {
       loadData();
     } catch (error) {
       console.error('Failed to update coverage status:', error);
-      showError(error.response?.data?.message || 'فشل تحديث حالة التغطية');
+      showError(normalizeApiError(error).message || 'فشل تحديث حالة التغطية');
     }
   };
 
@@ -288,7 +289,7 @@ const MemberChronicConditionsTab = ({ memberId, readOnly = false }) => {
       loadData();
     } catch (error) {
       console.error('Failed to verify documentation:', error);
-      showError(error.response?.data?.message || 'فشل التحقق من المستندات');
+      showError(normalizeApiError(error).message || 'فشل التحقق من المستندات');
     }
   };
 

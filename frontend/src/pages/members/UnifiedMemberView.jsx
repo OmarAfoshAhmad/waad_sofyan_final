@@ -109,6 +109,7 @@ import api from 'utils/axios';
 import MemberLifecycleDialog from './MemberLifecycleDialog';
 import useAuth from 'hooks/useAuth';
 import { getMemberCapabilities } from './memberCapabilities';
+import { normalizeApiError } from 'utils/api-error';
 
 const unwrapApi = (response) => response?.data?.data ?? response?.data ?? response;
 
@@ -290,7 +291,7 @@ const UnifiedMemberView = () => {
     } catch (err) {
       openSnackbar({
         open: true,
-        message: err?.response?.data?.message || 'تعذر تحديث حالة المستفيد',
+        message: normalizeApiError(err).message || 'تعذر تحديث حالة المستفيد',
         variant: 'alert',
         alert: { color: 'error' }
       });
@@ -316,7 +317,7 @@ const UnifiedMemberView = () => {
     } catch (err) {
       openSnackbar({
         open: true,
-        message: err?.response?.data?.message || 'تعذرت استعادة الأسرة',
+        message: normalizeApiError(err).message || 'تعذرت استعادة الأسرة',
         variant: 'alert',
         alert: { color: 'error' }
       });
@@ -345,7 +346,7 @@ const UnifiedMemberView = () => {
     } catch (err) {
       openSnackbar({
         open: true,
-        message: err?.response?.data?.message || 'تعذر تصحيح صلة القرابة',
+        message: normalizeApiError(err).message || 'تعذر تصحيح صلة القرابة',
         variant: 'alert',
         alert: { color: 'error' }
       });
@@ -403,7 +404,7 @@ const UnifiedMemberView = () => {
     } catch (err) {
       openSnackbar({
         open: true,
-        message: err?.response?.data?.message || 'تعذر نقل التابع',
+        message: normalizeApiError(err).message || 'تعذر نقل التابع',
         variant: 'alert',
         alert: { color: 'error' }
       });
@@ -444,7 +445,7 @@ const UnifiedMemberView = () => {
     } catch (err) {
       openSnackbar({
         open: true,
-        message: err?.response?.data?.message || 'تعذر تغيير وثيقة الأسرة -- تأكد أن بيانات الأسرة لم تتغير أثناء العملية',
+        message: normalizeApiError(err).message || 'تعذر تغيير وثيقة الأسرة -- تأكد أن بيانات الأسرة لم تتغير أثناء العملية',
         variant: 'alert',
         alert: { color: 'error' }
       });
@@ -482,7 +483,7 @@ const UnifiedMemberView = () => {
     } catch (err) {
       openSnackbar({
         open: true,
-        message: err?.response?.data?.message || 'تعذرت إعادة الترتيب -- تأكد أن بيانات الأسرة لم تتغير أثناء العملية',
+        message: normalizeApiError(err).message || 'تعذرت إعادة الترتيب -- تأكد أن بيانات الأسرة لم تتغير أثناء العملية',
         variant: 'alert',
         alert: { color: 'error' }
       });
@@ -709,7 +710,7 @@ const UnifiedMemberView = () => {
       console.error('Error hard-deleting dependent:', error);
       openSnackbar({
         open: true,
-        message: error.response?.data?.message || 'خطأ في الحذف النهائي',
+        message: normalizeApiError(error).message || 'خطأ في الحذف النهائي',
         variant: 'alert',
         alert: { color: 'error' }
       });
@@ -748,7 +749,7 @@ const UnifiedMemberView = () => {
       console.error('Error deleting member:', error);
       openSnackbar({
         open: true,
-        message: error.response?.data?.message || 'خطأ في حذف المنتفع',
+        message: normalizeApiError(error).message || 'خطأ في حذف المنتفع',
         variant: 'alert',
         alert: { color: 'error' }
       });

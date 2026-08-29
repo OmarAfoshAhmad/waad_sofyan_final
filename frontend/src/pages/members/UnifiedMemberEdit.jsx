@@ -71,6 +71,7 @@ import { openSnackbar } from 'api/snackbar';
 import { MemberAvatar } from '../../components/tba';
 import useAuth from 'hooks/useAuth';
 import { getMemberCapabilities } from './memberCapabilities';
+import { normalizeApiError } from 'utils/api-error';
 
 const RELATIONSHIP_LABELS = {
   WIFE: 'زوجة', HUSBAND: 'زوج', SON: 'ابن', DAUGHTER: 'ابنة',
@@ -269,7 +270,7 @@ const UnifiedMemberEdit = () => {
     } catch (err) {
       openSnackbar({
         open: true,
-        message: err?.response?.data?.message || 'تعذّر تحميل معاينة النقل',
+        message: normalizeApiError(err).message || 'تعذّر تحميل معاينة النقل',
         variant: 'alert',
         alert: { color: 'error' }
       });
@@ -307,7 +308,7 @@ const UnifiedMemberEdit = () => {
     } catch (err) {
       openSnackbar({
         open: true,
-        message: err?.response?.data?.message || 'تعذّر نقل الأسرة -- تأكد أن بيانات الأسرة لم تتغيّر أثناء المعاينة',
+        message: normalizeApiError(err).message || 'تعذّر نقل الأسرة -- تأكد أن بيانات الأسرة لم تتغيّر أثناء المعاينة',
         variant: 'alert',
         alert: { color: 'error' }
       });
@@ -460,7 +461,7 @@ const UnifiedMemberEdit = () => {
     } catch (error) {
       console.error('Error updating member:', error);
       openSnackbar({
-        message: error.response?.data?.message || 'خطأ في تحديث البيانات',
+        message: normalizeApiError(error).message || 'خطأ في تحديث البيانات',
         variant: 'alert',
         alert: { color: 'error' }
       });

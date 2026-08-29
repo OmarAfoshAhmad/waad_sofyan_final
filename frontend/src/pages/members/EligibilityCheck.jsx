@@ -56,6 +56,7 @@ import MemberAvatar from 'components/tba/MemberAvatar';
 import { checkEligibility, GENDERS } from 'services/api/unified-members.service';
 import { formatDate } from 'utils/formatters';
 import { openSnackbar } from 'api/snackbar';
+import { normalizeApiError } from 'utils/api-error';
 
 /**
  * Eligibility Check Component
@@ -114,7 +115,7 @@ const EligibilityCheck = () => {
     } catch (error) {
       console.error('Error checking eligibility:', error);
 
-      const errorMessage = error.response?.data?.message || 'خطأ في فحص الأهلية';
+      const errorMessage = normalizeApiError(error).message || 'خطأ في فحص الأهلية';
       setError(errorMessage);
 
       openSnackbar({

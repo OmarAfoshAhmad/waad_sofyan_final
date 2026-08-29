@@ -24,6 +24,7 @@ import { useSnackbar } from 'notistack';
 import { downloadTemplate, previewImport, executeImport } from 'services/api/unified-members.service';
 import EmployerFilterSelector from 'components/tba/EmployerFilterSelector';
 import useAuth from 'hooks/useAuth';
+import { normalizeApiError } from 'utils/api-error';
 
 // Static Arabic labels
 const LABELS = {
@@ -161,7 +162,7 @@ const MembersBulkUploadDialog = ({ open, onClose, onSuccess }) => {
     } catch (error) {
       stopProgressSimulation(0);
       console.error('Upload failed:', error.response?.data || error.message);
-      const errorMessage = error.response?.data?.message || error.message || LABELS.error;
+      const errorMessage = normalizeApiError(error).message || error.message || LABELS.error;
       // A failed import still carries its per-row reasons, and the panel is
       // the only place they can be read. Showing them is the difference
       // between "something went wrong" and "row 1 tried to move an existing

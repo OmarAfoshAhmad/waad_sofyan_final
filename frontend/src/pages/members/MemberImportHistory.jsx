@@ -22,6 +22,7 @@ import UnifiedMedicalTable from 'components/common/UnifiedMedicalTable';
 import { ModernPageHeader } from 'components/tba';
 import useAuth from 'hooks/useAuth';
 import { getImportLogs, getImportErrors, previewImportRollback, executeImportRollback } from 'services/api/unified-members.service';
+import { normalizeApiError } from 'utils/api-error';
 
 const STATUS_LABEL = {
   COMPLETED: 'مكتمل',
@@ -92,7 +93,7 @@ const MemberImportHistory = () => {
       setLogs(data?.content || []);
       setTotalElements(data?.totalElements || 0);
     } catch (err) {
-      enqueueSnackbar(err?.response?.data?.message || 'فشل تحميل سجل الاستيراد', { variant: 'error' });
+      enqueueSnackbar(normalizeApiError(err).message || 'فشل تحميل سجل الاستيراد', { variant: 'error' });
     } finally {
       setLoading(false);
     }
@@ -116,7 +117,7 @@ const MemberImportHistory = () => {
         errors.map((e) => [e.rowNumber, e.errorField || '-', e.errorMessage, e.rowData || '-'])
       );
     } catch (err) {
-      enqueueSnackbar(err?.response?.data?.message || 'فشل تصدير الأخطاء', { variant: 'error' });
+      enqueueSnackbar(normalizeApiError(err).message || 'فشل تصدير الأخطاء', { variant: 'error' });
     }
   };
 
@@ -128,7 +129,7 @@ const MemberImportHistory = () => {
       const response = await previewImportRollback(log.importBatchId);
       setRollbackPreview(response?.data || response);
     } catch (err) {
-      enqueueSnackbar(err?.response?.data?.message || 'فشل تحميل معاينة التراجع', { variant: 'error' });
+      enqueueSnackbar(normalizeApiError(err).message || 'فشل تحميل معاينة التراجع', { variant: 'error' });
       setRollbackTarget(null);
     }
   };
@@ -146,7 +147,7 @@ const MemberImportHistory = () => {
       setRollbackTarget(null);
       load();
     } catch (err) {
-      enqueueSnackbar(err?.response?.data?.message || 'فشل تنفيذ التراجع', { variant: 'error' });
+      enqueueSnackbar(normalizeApiError(err).message || 'فشل تنفيذ التراجع', { variant: 'error' });
     } finally {
       setRollbackLoading(false);
     }

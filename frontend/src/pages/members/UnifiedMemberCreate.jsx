@@ -60,6 +60,7 @@ import { createPrincipalMember, uploadPhoto, GENDERS } from 'services/api/unifie
 import { getEffectiveBenefitPolicy } from 'services/api/benefit-policies.service';
 import { openSnackbar } from 'api/snackbar';
 import { MEMBER_FORM_MENU_PROPS, sanitizeMemberFieldValue, validateNationalNumber, validateLibyanPhone } from './member.shared';
+import { normalizeApiError } from 'utils/api-error';
 
 /**
  * Unified Member Create Component
@@ -355,7 +356,7 @@ const UnifiedMemberCreate = () => {
     } catch (error) {
       console.error('Error creating member:', error);
 
-      const errorMessage = error.response?.data?.message || error.message || 'خطأ في إنشاء العضو';
+      const errorMessage = normalizeApiError(error).message || error.message || 'خطأ في إنشاء العضو';
 
       openSnackbar({
         open: true,
