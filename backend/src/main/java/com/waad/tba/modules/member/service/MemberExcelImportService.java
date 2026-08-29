@@ -79,6 +79,7 @@ public class MemberExcelImportService {
     private final MemberImportRowProcessor rowProcessor;
     private final BarcodeGeneratorService barcodeGeneratorService;
     private final MemberImportAuditRecorder auditRecorder;
+    private final MemberImportMetrics metrics;
     private final MemberStatusTransitionService statusTransitionService;
     private final MemberEmployerResolver memberEmployerResolver;
     private final com.waad.tba.modules.member.repository.MemberEmployerAssignmentRepository employerAssignmentRepository;
@@ -571,6 +572,10 @@ public class MemberExcelImportService {
             // back every member this transaction just wrote, together with it.
             importLogRepository.saveAndFlush(importLog);
 
+            metrics.recordOutcome(importLog.getStatus().name(),
+                    importLog.getProcessingTimeMs() == null ? null
+                            : java.time.Duration.ofMillis(importLog.getProcessingTimeMs()));
+
             return MemberImportResultDto.builder()
                     .batchId(batchId).status(importLog.getStatus().name()).totalProcessed(totalProcessed)
                     .createdCount(createdCount).updatedCount(updatedCount).skippedCount(skippedCount).errorCount(errorCount)
@@ -585,6 +590,7 @@ public class MemberExcelImportService {
             // method's own transaction is about to roll back every member it
             // wrote.
             auditRecorder.markFailed(importLogId, readableFailure(e));
+            metrics.recordOutcome(MemberImportLog.ImportStatus.FAILED.name(), null);
             throw e;
         }
     }

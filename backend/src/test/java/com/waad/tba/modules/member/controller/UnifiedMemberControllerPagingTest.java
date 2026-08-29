@@ -35,6 +35,7 @@ class UnifiedMemberControllerPagingTest {
             mock(MemberFinancialSummaryService.class),
             mock(com.waad.tba.modules.member.service.MemberLimitOverviewService.class),
             mock(com.waad.tba.modules.member.service.MemberLimitDetailService.class),
+            mock(com.waad.tba.modules.member.service.MemberLimitUpliftService.class),
             mock(PdfTemplateService.class),
             mock(HtmlToPdfService.class),
             mock(FileStorageService.class),

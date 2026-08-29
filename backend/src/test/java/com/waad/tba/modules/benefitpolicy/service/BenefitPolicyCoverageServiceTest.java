@@ -226,7 +226,7 @@ class BenefitPolicyCoverageServiceTest {
         // the ACTUAL (committed-only) axis for the claim path.
         when(limitBalanceReader.readGeneralCeiling(eq(1L), eq(1L), eq(new BigDecimal("10000.00")), any(), any(), isNull()))
                 .thenReturn(new LimitBalanceReader.GeneralCeilingBalance(
-                        new BigDecimal("10000.00"), new BigDecimal("9500.00"), BigDecimal.ZERO,
+                        new BigDecimal("10000.00"), new BigDecimal("10000.00"), BigDecimal.ZERO, new BigDecimal("9500.00"), BigDecimal.ZERO,
                         new BigDecimal("500.00"), new BigDecimal("500.00"))); // Consumed 9500 of 10000
 
         // Act & Assert
@@ -240,7 +240,7 @@ class BenefitPolicyCoverageServiceTest {
         // Nothing spent yet, but a prior pre-authorization already holds 9600 of 10000.
         when(limitBalanceReader.readGeneralCeiling(eq(1L), eq(1L), eq(new BigDecimal("10000.00")), any(), any(), isNull()))
                 .thenReturn(new LimitBalanceReader.GeneralCeilingBalance(
-                        new BigDecimal("10000.00"), BigDecimal.ZERO, new BigDecimal("9600.00"),
+                        new BigDecimal("10000.00"), new BigDecimal("10000.00"), BigDecimal.ZERO, BigDecimal.ZERO, new BigDecimal("9600.00"),
                         new BigDecimal("10000.00"), new BigDecimal("400.00")));
 
         assertThrows(BusinessRuleException.class, () -> coverageService.validateReservableAmountLimits(
@@ -252,7 +252,7 @@ class BenefitPolicyCoverageServiceTest {
     void validateAmountLimits_IgnoresReservations() {
         when(limitBalanceReader.readGeneralCeiling(eq(1L), eq(1L), eq(new BigDecimal("10000.00")), any(), any(), isNull()))
                 .thenReturn(new LimitBalanceReader.GeneralCeilingBalance(
-                        new BigDecimal("10000.00"), BigDecimal.ZERO, new BigDecimal("9600.00"),
+                        new BigDecimal("10000.00"), new BigDecimal("10000.00"), BigDecimal.ZERO, BigDecimal.ZERO, new BigDecimal("9600.00"),
                         new BigDecimal("10000.00"), new BigDecimal("400.00")));
 
         assertDoesNotThrow(() -> coverageService.validateAmountLimits(
@@ -276,7 +276,7 @@ class BenefitPolicyCoverageServiceTest {
     void validateAmountLimits_PassesExcludeClaimIdToAnnualQuery() {
         when(limitBalanceReader.readGeneralCeiling(eq(1L), eq(1L), eq(new BigDecimal("10000.00")), any(), any(), eq(42L)))
                 .thenReturn(new LimitBalanceReader.GeneralCeilingBalance(
-                        new BigDecimal("10000.00"), new BigDecimal("60.00"), BigDecimal.ZERO,
+                        new BigDecimal("10000.00"), new BigDecimal("10000.00"), BigDecimal.ZERO, new BigDecimal("60.00"), BigDecimal.ZERO,
                         new BigDecimal("9940.00"), new BigDecimal("9940.00")));
 
         assertDoesNotThrow(() -> coverageService.validateAmountLimits(
@@ -321,7 +321,7 @@ class BenefitPolicyCoverageServiceTest {
     void validateAmountLimits_LegacyOverload_PassesNullExclude() {
         when(limitBalanceReader.readGeneralCeiling(eq(1L), eq(1L), eq(new BigDecimal("10000.00")), any(), any(), isNull()))
                 .thenReturn(new LimitBalanceReader.GeneralCeilingBalance(
-                        new BigDecimal("10000.00"), new BigDecimal("100.00"), BigDecimal.ZERO,
+                        new BigDecimal("10000.00"), new BigDecimal("10000.00"), BigDecimal.ZERO, new BigDecimal("100.00"), BigDecimal.ZERO,
                         new BigDecimal("9900.00"), new BigDecimal("9900.00")));
 
         assertDoesNotThrow(() -> coverageService.validateAmountLimits(

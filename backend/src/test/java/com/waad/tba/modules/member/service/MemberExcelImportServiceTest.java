@@ -140,6 +140,7 @@ class MemberExcelImportServiceTest {
                 rowProcessor,
                 barcodeGeneratorService,
                 auditRecorder,
+                new MemberImportMetrics(new io.micrometer.core.instrument.simple.SimpleMeterRegistry()),
                 statusTransitionService,
                 memberEmployerResolver,
                 employerAssignmentRepository,

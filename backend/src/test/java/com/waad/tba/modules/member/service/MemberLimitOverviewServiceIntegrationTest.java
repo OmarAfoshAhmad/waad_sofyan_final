@@ -366,10 +366,10 @@ class MemberLimitOverviewServiceIntegrationTest extends PostgresIntegrationTestB
 
         assertThat(forFive)
                 .as("policy assignments, policies in force, employer assignments, "
-                        + "annual limits, committed, reserved")
-                .isEqualTo(6L);
+                        + "annual limits, committed, reserved, exceptional uplifts")
+                .isEqualTo(7L);
         assertThat(forThirty)
-                .as("six times the rows and six times the policies, the same six queries")
+                .as("six times the rows and six times the policies, the same seven queries")
                 .isEqualTo(forFive);
     }
 

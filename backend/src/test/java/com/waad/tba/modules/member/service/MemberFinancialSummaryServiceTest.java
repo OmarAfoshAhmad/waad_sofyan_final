@@ -92,7 +92,9 @@ class MemberFinancialSummaryServiceTest {
         BigDecimal actualRemaining = limit.subtract(committed);
         return new CurrentGeneralLimitSummary(
                 LocalDate.now(), LocalDateTime.now(), CurrentGeneralLimitSummary.Mode.FOUND,
-                POLICY_ID, limit, committed, reserved, actualRemaining,
+                // policyLimit equals limit and uplift is zero: these cases are
+                // about the financial summary, not about exceptions.
+                POLICY_ID, limit, limit, BigDecimal.ZERO, committed, reserved, actualRemaining,
                 actualRemaining.subtract(reserved),
                 committed.multiply(BigDecimal.valueOf(100)).divide(limit, 2, java.math.RoundingMode.HALF_UP),
                 CurrentGeneralLimitSummary.AlertStatus.NORMAL);
@@ -100,7 +102,7 @@ class MemberFinancialSummaryServiceTest {
 
     private CurrentGeneralLimitSummary noCeiling(CurrentGeneralLimitSummary.Mode mode) {
         return new CurrentGeneralLimitSummary(LocalDate.now(), LocalDateTime.now(), mode,
-                null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null,
                 CurrentGeneralLimitSummary.AlertStatus.UNAVAILABLE);
     }
 

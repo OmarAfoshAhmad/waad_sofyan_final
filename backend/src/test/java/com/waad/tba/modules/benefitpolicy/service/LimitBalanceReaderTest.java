@@ -41,7 +41,20 @@ class LimitBalanceReaderTest {
 
     @BeforeEach
     void setUp() {
-        reader = new LimitBalanceReader(consumptionRepository, claimRepository, bucketRepository);
+        // The uplift repository is mocked to return nothing: these cases are
+        // about committed and reserved against a policy ceiling, and an
+        // exceptional uplift is asserted where it belongs, in
+        // MemberLimitUpliftIntegrationTest.
+        var upliftRepository = org.mockito.Mockito.mock(
+                com.waad.tba.modules.member.repository.MemberGeneralLimitUpliftRepository.class);
+        // lenient: the empty-input case returns before any query is issued, so
+        // a strict stub here would be reported as unused by the very test that
+        // proves the early return works.
+        org.mockito.Mockito.lenient().when(upliftRepository.sumInForceByMember(
+                org.mockito.ArgumentMatchers.anyCollection(), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(java.util.List.of());
+        reader = new LimitBalanceReader(consumptionRepository, upliftRepository,
+                claimRepository, bucketRepository);
     }
 
     private record Row(Long memberId, Long policyId, BigDecimal amount) implements GeneralCeilingBulkProjection {

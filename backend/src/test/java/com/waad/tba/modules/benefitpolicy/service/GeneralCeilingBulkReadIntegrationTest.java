@@ -281,12 +281,16 @@ class GeneralCeilingBulkReadIntegrationTest extends PostgresIntegrationTestBase 
             forty.add(memberId);
         }
 
+        // Three now, not two: the exceptional uplift is resolved here as well,
+        // and it is resolved once for the page like the other two rather than
+        // once per member. The point of the assertion is unchanged -- the
+        // count must not move with the number of rows.
         assertThat(statementsReading(ten))
-                .as("one query for committed, one for reserved")
-                .isEqualTo(2L);
+                .as("one query for committed, one for reserved, one for uplifts")
+                .isEqualTo(3L);
         assertThat(statementsReading(forty))
-                .as("and the same two for four times the rows")
-                .isEqualTo(2L);
+                .as("and the same three for four times the rows")
+                .isEqualTo(3L);
     }
 
     private long statementsReading(List<Long> memberIds) {

@@ -212,7 +212,7 @@ class BenefitBucketLedgerServiceTest {
         when(benefitPolicyRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(policy));
         when(limitBalanceReader.readGeneralCeiling(eq(10L), eq(1L), eq(new BigDecimal("1000.00")), any(), any(), eq(20L)))
                 .thenReturn(new LimitBalanceReader.GeneralCeilingBalance(
-                        new BigDecimal("1000.00"), new BigDecimal("900.00"), BigDecimal.ZERO,
+                        new BigDecimal("1000.00"), new BigDecimal("1000.00"), BigDecimal.ZERO, new BigDecimal("900.00"), BigDecimal.ZERO,
                         new BigDecimal("100.00"), new BigDecimal("100.00")));
 
         // this claim's own line consumes 200, which added to the 900 already
