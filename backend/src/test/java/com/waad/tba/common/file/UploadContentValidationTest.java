@@ -127,4 +127,47 @@ class UploadContentValidationTest {
                 .as("the file must land inside the upload root, not above it")
                 .isTrue();
     }
+
+    // ---- WebP -------------------------------------------------------------
+    // Profile photos are re-encoded to WebP in the browser before upload, so
+    // the storage layer has to admit them -- and admit them for the right
+    // reason. WebP is a RIFF container, not a prefix signature: "RIFF" at 0,
+    // a per-file length, then "WEBP" at 8. A check that only matched "RIFF"
+    // would let a WAV file through as a photograph.
+
+    private static byte[] riff(String fourCcAtEight) {
+        byte[] bytes = new byte[16];
+        System.arraycopy(new byte[] { 0x52, 0x49, 0x46, 0x46 }, 0, bytes, 0, 4); // RIFF
+        bytes[4] = 0x08; // per-file length, deliberately not part of the check
+        System.arraycopy(fourCcAtEight.getBytes(java.nio.charset.StandardCharsets.US_ASCII), 0, bytes, 8, 4);
+        return bytes;
+    }
+
+    @Test
+    void aRealWebpIsAccepted() {
+        MockMultipartFile photo = new MockMultipartFile("file", "photo.webp", "image/webp", riff("WEBP"));
+
+        assertThatCode(() -> storage.upload(photo, "photos")).doesNotThrowAnyException();
+    }
+
+    @Test
+    void anotherRiffContainerIsNotAWebp() {
+        // A WAV file starts with the same four bytes. Rejecting it is the
+        // whole reason the second half of the header is read.
+        MockMultipartFile wav = new MockMultipartFile("file", "sound.webp", "image/webp", riff("WAVE"));
+
+        assertThatThrownBy(() -> storage.upload(wav, "photos"))
+                .isInstanceOf(FileStorageException.class)
+                .hasMessageContaining("does not match declared type");
+    }
+
+    @Test
+    void aFileTooShortToCarryTheContainerHeaderIsNotAWebp() {
+        MockMultipartFile truncated = new MockMultipartFile(
+                "file", "tiny.webp", "image/webp", new byte[] { 0x52, 0x49, 0x46, 0x46 });
+
+        assertThatThrownBy(() -> storage.upload(truncated, "photos"))
+                .isInstanceOf(FileStorageException.class)
+                .hasMessageContaining("does not match declared type");
+    }
 }

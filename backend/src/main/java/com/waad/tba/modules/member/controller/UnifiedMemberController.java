@@ -1368,6 +1368,18 @@ public class UnifiedMemberController {
         // ==================== PHOTO MANAGEMENT ====================
 
         /**
+         * A profile photo is displayed at avatar sizes on every list, card and
+         * header in the system. WebP is what the browser sends after
+         * converting, and JPEG/PNG stay accepted because the endpoint must
+         * still work for a client that cannot convert.
+         */
+        private static final java.util.Set<String> PHOTO_CONTENT_TYPES = java.util.Set.of(
+                        "image/jpeg", "image/jpg", "image/png", "image/webp");
+
+        /** Far below the general 50MB image ceiling, which is meant for clinical imaging. */
+        private static final long MAX_PHOTO_BYTES = 2L * 1024 * 1024;
+
+        /**
          * Upload member profile photo
          * 
          * @param id   Member ID
@@ -1395,12 +1407,20 @@ public class UnifiedMemberController {
                         }
 
                         String contentType = file.getContentType();
-                        if (contentType == null ||
-                                        (!contentType.equals("image/jpeg") &&
-                                                        !contentType.equals("image/png") &&
-                                                        !contentType.equals("image/jpg"))) {
+                        if (contentType == null || !PHOTO_CONTENT_TYPES.contains(contentType)) {
                                 return ResponseEntity.badRequest()
-                                                .body(ApiResponse.error("يجب رفع صورة بصيغة JPEG أو PNG"));
+                                                .body(ApiResponse.error("يجب رفع صورة بصيغة JPEG أو PNG أو WebP"));
+                        }
+
+                        // The browser converts and shrinks before sending, which
+                        // is an optimisation, not a control: this request can be
+                        // made by anything. A profile photo has no legitimate
+                        // reason to approach the general image ceiling, and every
+                        // byte over it is served back on every screen that shows
+                        // this member.
+                        if (file.getSize() > MAX_PHOTO_BYTES) {
+                                return ResponseEntity.badRequest()
+                                                .body(ApiResponse.error("حجم الصورة كبير. الحد الأقصى 2 ميجابايت."));
                         }
 
                         // Upload to storage
@@ -1432,7 +1452,8 @@ public class UnifiedMemberController {
          * @param id Member ID
          * @return Photo binary content
          */
-        @GetMapping(value = "/{id}/photo", produces = { MediaType.IMAGE_JPEG_VALUE, MediaType.IMAGE_PNG_VALUE })
+        @GetMapping(value = "/{id}/photo", produces = { MediaType.IMAGE_JPEG_VALUE, MediaType.IMAGE_PNG_VALUE,
+                        "image/webp" })
         @PreAuthorize("@permissionGuard.has('MEMBER_VIEW')")
         @Operation(summary = "Get Member Photo", description = "Retrieve member profile photo as image binary")
         public ResponseEntity<byte[]> getPhoto(@PathVariable("id") Long id) {
@@ -1447,9 +1468,17 @@ public class UnifiedMemberController {
 
                         byte[] photoData = fileStorageService.download(photoPath);
 
-                        // Determine content type from path
-                        String contentType = photoPath.endsWith(".png") ? MediaType.IMAGE_PNG_VALUE
-                                        : MediaType.IMAGE_JPEG_VALUE;
+                        // Determine content type from path. A photo served as
+                        // image/jpeg when it is really WebP renders in browsers
+                        // that sniff and breaks in the ones that do not.
+                        String contentType;
+                        if (photoPath.endsWith(".png")) {
+                                contentType = MediaType.IMAGE_PNG_VALUE;
+                        } else if (photoPath.endsWith(".webp")) {
+                                contentType = "image/webp";
+                        } else {
+                                contentType = MediaType.IMAGE_JPEG_VALUE;
+                        }
 
                         return ResponseEntity.ok()
                                         .contentType(MediaType.parseMediaType(contentType))

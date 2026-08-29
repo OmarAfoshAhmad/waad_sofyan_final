@@ -15,6 +15,7 @@
  */
 
 import api from '../../utils/axios';
+import { prepareProfilePhoto } from 'utils/profile-photo';
 
 const UNIFIED_MEMBERS_BASE_URL = '/unified-members';
 
@@ -570,8 +571,20 @@ export const executeImport = async (file, params) => {
   }
 };
 
-export const getImportLogs = async (page = 1, size = 20) => {
-  const response = await api.get(`${UNIFIED_MEMBERS_BASE_URL}/import/logs`, { params: { page, size } });
+/**
+ * @param {Object} [filters] status ('ALL' or an ImportStatus), search (file
+ *   name, batch id or who ran it), from/to as YYYY-MM-DD. Empty values are
+ *   dropped rather than sent as blanks, so the server sees "no filter" and
+ *   not "match the empty string".
+ */
+export const getImportLogs = async (page = 1, size = 20, filters = {}) => {
+  const params = { page, size };
+  if (filters.status && filters.status !== 'ALL') params.status = filters.status;
+  if (filters.search?.trim()) params.search = filters.search.trim();
+  if (filters.from) params.from = filters.from;
+  if (filters.to) params.to = filters.to;
+
+  const response = await api.get(`${UNIFIED_MEMBERS_BASE_URL}/import/logs`, { params });
   return response.data;
 };
 
@@ -720,14 +733,29 @@ export const MEMBER_TYPES = {
 /**
  * Upload Member Photo
  *
+ * The file is shrunk to avatar dimensions and re-encoded as WebP here rather
+ * than at each of the five screens that upload one, so no screen can forget
+ * and none of them can disagree about the size or the quality. If the
+ * browser cannot encode WebP the prepared file comes back as JPEG, which the
+ * server accepts too; if it cannot be read as an image at all, the original
+ * is sent and the server rejects it with its own message rather than this
+ * layer inventing one.
+ *
  * @param {number} id - Member ID
  * @param {File} file - Image file
  * @returns {Promise<Object>} Response
  */
 export const uploadPhoto = async (id, file) => {
   try {
+    let toSend = file;
+    try {
+      toSend = (await prepareProfilePhoto(file)).file;
+    } catch (conversionError) {
+      console.warn('Photo could not be re-encoded, sending as chosen:', conversionError?.message);
+    }
+
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append('file', toSend);
     const response = await api.post(`${UNIFIED_MEMBERS_BASE_URL}/${id}/photo`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     });

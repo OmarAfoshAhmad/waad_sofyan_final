@@ -63,7 +63,8 @@ public class LocalFileStorageService implements FileStorageService {
     private static final List<String> ALLOWED_IMAGE_TYPES = Arrays.asList(
             "image/jpeg",
             "image/png",
-            "image/jpg");
+            "image/jpg",
+            "image/webp");
 
     private static final List<String> ALLOWED_MEDICAL_TYPES = Arrays.asList(
             "application/dicom",
@@ -89,6 +90,17 @@ public class LocalFileStorageService implements FileStorageService {
             "image/jpeg", new byte[][] { { (byte) 0xFF, (byte) 0xD8, (byte) 0xFF } },
             "image/jpg", new byte[][] { { (byte) 0xFF, (byte) 0xD8, (byte) 0xFF } },
             "image/png", new byte[][] { { (byte) 0x89, 0x50, 0x4E, 0x47 } });
+
+    /**
+     * WebP is not a prefix signature and must not be added to MAGIC_BYTES as
+     * if it were. It is a RIFF container: "RIFF" at byte 0, then a four-byte
+     * length that differs per file, then "WEBP" at byte 8. Checking only the
+     * "RIFF" prefix would accept a WAV or an AVI as a profile photo, which is
+     * the exact confusion the byte check exists to prevent.
+     */
+    private static final byte[] RIFF_MAGIC = { 0x52, 0x49, 0x46, 0x46 };
+    private static final byte[] WEBP_MAGIC = { 0x57, 0x45, 0x42, 0x50 };
+    private static final int WEBP_MAGIC_OFFSET = 8;
 
     /** Bytes 128-131 of a DICOM file; anything shorter cannot be one. */
     private static final byte[] DICOM_MAGIC = { 0x44, 0x49, 0x43, 0x4D };
@@ -280,6 +292,10 @@ public class LocalFileStorageService implements FileStorageService {
      * plus the storage rules still apply to them.
      */
     private void verifyContentMatchesDeclaredType(MultipartFile file, String contentType) {
+        if ("image/webp".equals(contentType)) {
+            verifyWebpContainer(file);
+            return;
+        }
         byte[][] signatures = MAGIC_BYTES.get(contentType);
         if (signatures == null && !isMedicalType(contentType)) {
             return;
@@ -304,6 +320,20 @@ public class LocalFileStorageService implements FileStorageService {
                 }
             }
             throw new FileStorageException("File content does not match declared type: " + contentType);
+        } catch (IOException e) {
+            throw new FileStorageException("Could not read uploaded file for verification", e);
+        }
+    }
+
+    /** Both halves of the container header, or it is not a WebP. */
+    private void verifyWebpContainer(MultipartFile file) {
+        try {
+            byte[] head = readHead(file, WEBP_MAGIC_OFFSET + WEBP_MAGIC.length);
+            if (head.length < WEBP_MAGIC_OFFSET + WEBP_MAGIC.length
+                    || !startsWithAt(head, RIFF_MAGIC, 0)
+                    || !startsWithAt(head, WEBP_MAGIC, WEBP_MAGIC_OFFSET)) {
+                throw new FileStorageException("File content does not match declared type: image/webp");
+            }
         } catch (IOException e) {
             throw new FileStorageException("Could not read uploaded file for verification", e);
         }

@@ -194,6 +194,7 @@ waad:
       - image/jpeg
       - image/png
       - image/jpg
+      - image/webp
       - application/dicom
       - application/x-dicom
   member-import:
