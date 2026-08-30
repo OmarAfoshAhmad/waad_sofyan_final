@@ -84,7 +84,6 @@ import useLocale from 'hooks/useLocale';
 
 import unifiedMembersService from 'services/api/unified-members.service';
 import providersService from 'services/api/providers.service';
-import employersService from 'services/api/employers.service';
 import claimsService from 'services/api/claims.service';
 import * as medicalCategoriesService from 'services/api/medical-categories.service';
 import claimBatchesService from 'services/api/claim-batches.service';
@@ -254,7 +253,6 @@ export default function ClaimBatchEntry() {
   const [editHydrationVersion, setEditHydrationVersion] = useState(0);
   const [editCoverageLoading, setEditCoverageLoading] = useState(!!initialClaimId);
   const [preAuthId, setPreAuthId] = useState('');
-  const [preAuthSearch, setPreAuthSearch] = useState('');
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [confirmDeleteReason, setConfirmDeleteReason] = useState('');
   const [showValidationErrors, setShowValidationErrors] = useState(false);
@@ -516,11 +514,6 @@ export default function ClaimBatchEntry() {
   };
 
   // ── الاستعلامات ──────────────────────────────────────────────────────────
-  const { data: employer } = useQuery({
-    queryKey: ['employer', employerId],
-    queryFn: () => employersService.getById(employerId),
-    enabled: !!employerId
-  });
   const { data: provider } = useQuery({
     queryKey: ['provider', providerId],
     queryFn: () => providersService.getById(providerId),
@@ -2056,7 +2049,6 @@ export default function ClaimBatchEntry() {
                 searchingPreAuth={searchingPreAuth}
                 preAuthId={preAuthId}
                 setPreAuthId={setPreAuthId}
-                setPreAuthSearch={setPreAuthSearch}
                 serviceDate={serviceDate}
                 setServiceDate={setServiceDate}
                 setIsDirty={setIsDirty}

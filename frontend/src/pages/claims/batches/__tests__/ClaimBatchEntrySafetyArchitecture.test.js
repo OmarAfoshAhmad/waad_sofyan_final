@@ -50,4 +50,9 @@ describe('claim batch entry safety boundary', () => {
     expect(entrySource).toContain('لا يمكن الحفظ: الخدمات في البنود');
     expect(entrySource).not.toContain('وسيتم احتسابها حسب قواعد التغطية المطابقة فقط');
   });
+
+  it('does not fetch employer details or a second approval context that this screen does not consume', () => {
+    expect(entrySource).not.toContain('employersService.getById');
+    expect(entrySource).not.toContain("['eligible-claim-preauths'");
+  });
 });

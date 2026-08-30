@@ -29,7 +29,6 @@ export const ClaimHeaderFields = ({
   searchingPreAuth,
   preAuthId,
   setPreAuthId,
-  setPreAuthSearch,
   serviceDate,
   setServiceDate,
   setIsDirty,
@@ -91,7 +90,6 @@ export const ClaimHeaderFields = ({
             // hidden stale value because the Autocomplete can no longer
             // render it, while the submit payload would still send it.
             setPreAuthId('');
-            setPreAuthSearch('');
             setMember(v);
             setIsDirty(true);
             if (v?.id) {
@@ -182,7 +180,6 @@ export const ClaimHeaderFields = ({
           value={serviceDate ? dayjs(serviceDate) : null}
           onChange={(value) => {
             setPreAuthId('');
-            setPreAuthSearch('');
             setServiceDate(value?.isValid() ? value.format('YYYY-MM-DD') : '');
             setIsDirty(true);
           }}
@@ -287,7 +284,6 @@ export const ClaimHeaderFields = ({
             setPreAuthId(value?.id || '');
             setIsDirty(true);
           }}
-          onInputChange={(_, value) => setPreAuthSearch(value)}
           getOptionLabel={(item) => `${item.number || item.id} · ${item.serviceName || 'خدمة معتمدة'} · ${item.approvedAmount ?? '-'} د.ل`}
           isOptionEqualToValue={(option, value) => option.id === value?.id}
           renderInput={(params) => (
