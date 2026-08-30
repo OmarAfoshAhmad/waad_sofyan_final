@@ -6,6 +6,8 @@ import com.waad.tba.modules.member.repository.MemberRepository;
 import com.waad.tba.modules.employer.entity.Employer;
 import com.waad.tba.modules.employer.repository.EmployerRepository;
 import com.waad.tba.modules.employer.dto.EmployerSelectorDto;
+import com.waad.tba.modules.rbac.entity.User;
+import com.waad.tba.security.AuthorizationService;
 import com.waad.tba.modules.benefitpolicy.dto.*;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy.BenefitPolicyStatus;
@@ -44,6 +46,22 @@ public class BenefitPolicyService {
     private final BenefitLimitBucketRepository benefitLimitBucketRepository;
     private final com.waad.tba.modules.claim.repository.ClaimRepository claimRepository;
     private final com.waad.tba.modules.preauthorization.repository.PreAuthorizationRepository preAuthorizationRepository;
+    private final com.waad.tba.modules.systemadmin.service.AuditLogService auditLogService;
+    private final AuthorizationService authorizationService;
+
+    /**
+     * Lifecycle transitions here change what claims/preauth/coverage
+     * resolution sees for every member under this policy, but were not
+     * recorded anywhere a reviewer could query later -- only a log line.
+     * Reuses the same facade EmployerService audits through rather than
+     * growing a second audit call site.
+     */
+    private void audit(String action, Long policyId, String details) {
+        User actor = authorizationService.getCurrentUser();
+        auditLogService.createAuditLog(action, "BENEFIT_POLICY", policyId, details,
+                actor == null ? null : actor.getId(),
+                actor == null ? null : actor.getUsername(), null, null);
+    }
 
     // ═══════════════════════════════════════════════════════════════════════════
     // READ OPERATIONS
@@ -286,6 +304,8 @@ public class BenefitPolicyService {
 
         policy = benefitPolicyRepository.save(policy);
         log.info("✅ Created benefit policy: {} (ID: {})", policy.getName(), policy.getId());
+        audit("CREATED", policy.getId(), "إنشاء وثيقة تغطية جديدة: " + policy.getName()
+                + " لجهة العمل " + employer.getName());
 
         return BenefitPolicyResponseDto.fromEntity(policy);
     }
@@ -323,14 +343,17 @@ public class BenefitPolicyService {
 
         BenefitPolicy policy = benefitPolicyRepository.findById(id)
                 .orElseThrow(() -> new BusinessRuleException("Benefit policy not found: " + id));
-        
+
         if (!canPolicyBeEdited(id)) {
             throw new BusinessRuleException("لا يمكن تعديل بيانات هذه الوثيقة مباشرة لارتباطها بمطالبات أو موافقات مسبقة فعلية؛ يجب إنشاء إصدار جديد.");
         }
 
+        java.util.List<String> changedFields = new java.util.ArrayList<>();
+
         // Update fields if provided
         if (dto.getName() != null) {
             policy.setName(dto.getName().trim());
+            changedFields.add("الاسم");
         }
         if (dto.getPolicyCode() != null) {
             String normalizedCode = dto.getPolicyCode().trim().toUpperCase();
@@ -343,27 +366,35 @@ public class BenefitPolicyService {
                 }
             });
             policy.setPolicyCode(normalizedCode);
+            changedFields.add("رمز الوثيقة");
         }
         if (dto.getDescription() != null) {
             policy.setDescription(dto.getDescription());
+            changedFields.add("الوصف");
         }
         if (dto.getAnnualLimit() != null) {
             policy.setAnnualLimit(dto.getAnnualLimit());
+            changedFields.add("الحد السنوي");
         }
         if (dto.getDefaultCoveragePercent() != null) {
             policy.setDefaultCoveragePercent(dto.getDefaultCoveragePercent());
+            changedFields.add("نسبة التغطية الافتراضية");
         }
         if (dto.getPerMemberLimit() != null) {
             policy.setPerMemberLimit(dto.getPerMemberLimit());
+            changedFields.add("حد الفرد");
         }
         if (dto.getPerFamilyLimit() != null) {
             policy.setPerFamilyLimit(dto.getPerFamilyLimit());
+            changedFields.add("حد الأسرة");
         }
         if (dto.getNotes() != null) {
             policy.setNotes(dto.getNotes());
+            changedFields.add("الملاحظات");
         }
         if (dto.getExcludedCategoryCodes() != null) {
             policy.setExcludedCategoryCodes(dto.getExcludedCategoryCodes());
+            changedFields.add("الفئات المستثناة");
         }
         if (dto.getStatus() != null) {
             BenefitPolicyStatus requestedStatus;
@@ -399,10 +430,14 @@ public class BenefitPolicyService {
 
             policy.setStartDate(newStartDate);
             policy.setEndDate(newEndDate);
+            changedFields.add("تواريخ السريان");
         }
 
         policy = benefitPolicyRepository.save(policy);
         log.info("✅ Updated benefit policy: {}", id);
+        if (!changedFields.isEmpty()) {
+            audit("UPDATED", id, "تعديل وثيقة التغطية: " + String.join("، ", changedFields));
+        }
 
         return BenefitPolicyResponseDto.fromEntity(policy);
     }
@@ -433,6 +468,7 @@ public class BenefitPolicyService {
         policy.activate();
         policy = benefitPolicyRepository.save(policy);
         log.info("✅ Activated benefit policy: {}", id);
+        audit("ACTIVATED", id, "تفعيل وثيقة التغطية: " + policy.getName());
 
         return BenefitPolicyResponseDto.fromEntity(policy);
     }
@@ -454,6 +490,7 @@ public class BenefitPolicyService {
         policy.deactivate();
         policy = benefitPolicyRepository.save(policy);
         log.info("✅ Deactivated benefit policy: {}", id);
+        audit("UPDATED", id, "إنهاء (انتهاء) وثيقة التغطية: " + policy.getName());
 
         return BenefitPolicyResponseDto.fromEntity(policy);
     }
@@ -474,6 +511,7 @@ public class BenefitPolicyService {
         policy.suspend();
         policy = benefitPolicyRepository.save(policy);
         log.info("✅ Suspended benefit policy: {}", id);
+        audit("SUSPENDED", id, "إيقاف وثيقة التغطية مؤقتًا: " + policy.getName());
 
         return BenefitPolicyResponseDto.fromEntity(policy);
     }
@@ -511,6 +549,7 @@ public class BenefitPolicyService {
         policy.setStatus(BenefitPolicyStatus.DRAFT);
         policy = benefitPolicyRepository.save(policy);
         log.info("✅ Reverted benefit policy to draft: {}", id);
+        audit("UPDATED", id, "إرجاع وثيقة التغطية إلى مسودة: " + policy.getName());
 
         return BenefitPolicyResponseDto.fromEntity(policy);
     }
@@ -531,6 +570,7 @@ public class BenefitPolicyService {
         policy.setStatus(BenefitPolicyStatus.CANCELLED);
         policy = benefitPolicyRepository.save(policy);
         log.info("✅ Cancelled benefit policy: {}", id);
+        audit("UPDATED", id, "إلغاء وثيقة التغطية: " + policy.getName());
 
         return BenefitPolicyResponseDto.fromEntity(policy);
     }
@@ -559,6 +599,7 @@ public class BenefitPolicyService {
         benefitPolicyRepository.save(policy);
 
         log.info("✅ Soft deleted benefit policy: {}", id);
+        audit("DELETED", id, "حذف وثيقة التغطية (حذف ناعم): " + policy.getName());
     }
 
     /**
@@ -659,6 +700,7 @@ public class BenefitPolicyService {
         policy.setStatus(BenefitPolicyStatus.DRAFT);
         BenefitPolicy saved = benefitPolicyRepository.save(policy);
         log.info("✅ Restored benefit policy: {}", id);
+        audit("RESTORED", id, "استعادة وثيقة التغطية: " + saved.getName());
         return BenefitPolicyResponseDto.fromEntity(saved);
     }
 

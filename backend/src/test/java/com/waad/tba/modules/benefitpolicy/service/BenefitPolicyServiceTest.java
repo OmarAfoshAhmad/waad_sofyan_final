@@ -51,6 +51,10 @@ class BenefitPolicyServiceTest {
     private com.waad.tba.modules.claim.repository.ClaimRepository claimRepository;
     @Mock
     private com.waad.tba.modules.preauthorization.repository.PreAuthorizationRepository preAuthorizationRepository;
+    @Mock
+    private com.waad.tba.modules.systemadmin.service.AuditLogService auditLogService;
+    @Mock
+    private com.waad.tba.security.AuthorizationService authorizationService;
 
     @InjectMocks
     private BenefitPolicyService benefitPolicyService;
@@ -159,6 +163,52 @@ class BenefitPolicyServiceTest {
         // Assert
         assertThat(policy.getStatus()).isEqualTo(BenefitPolicyStatus.ACTIVE);
         verify(benefitPolicyRepository).save(policy);
+    }
+
+    /**
+     * Lifecycle transitions and the create/update paths change what claims and
+     * coverage resolution see for a policy's members, but were never recorded
+     * anywhere queryable -- only a log line. Proves each mutation actually
+     * reaches AuditLogService.createAuditLog, not merely that its own dependency
+     * exists (a stub with no assertion would pass even if the audit call were
+     * silently removed).
+     */
+    @Test
+    void create_activate_andDelete_eachWriteToTheAuditTrail() {
+        BenefitPolicyCreateDto createDto = BenefitPolicyCreateDto.builder()
+                .name("Audited Plan")
+                .employerOrgId(1L)
+                .startDate(LocalDate.of(2026, 1, 1))
+                .endDate(LocalDate.of(2026, 12, 31))
+                .annualLimit(new BigDecimal("5000"))
+                .status("DRAFT")
+                .build();
+        when(employerRepository.findById(1L)).thenReturn(Optional.of(employer));
+        when(benefitPolicyRepository.save(any(BenefitPolicy.class))).thenAnswer(i -> i.getArgument(0));
+
+        benefitPolicyService.create(createDto);
+
+        verify(auditLogService).createAuditLog(
+                eq("CREATED"), eq("BENEFIT_POLICY"), any(), any(), any(), any(), any(), any());
+
+        when(benefitPolicyRepository.findById(10L)).thenReturn(Optional.of(policy));
+        when(benefitPolicyRepository.existsOverlappingActivePolicy(eq(1L), any(), any(), eq(10L)))
+                .thenReturn(false);
+        when(benefitPolicyRuleRepository.countByBenefitPolicyIdAndDeletedFalseAndActiveTrue(10L))
+                .thenReturn(1L);
+        when(benefitLimitBucketRepository.findByPolicyIdOrderByCode(10L)).thenReturn(java.util.List.of());
+
+        benefitPolicyService.activate(10L);
+
+        verify(auditLogService).createAuditLog(
+                eq("ACTIVATED"), eq("BENEFIT_POLICY"), eq(10L), any(), any(), any(), any(), any());
+
+        when(memberRepository.countByBenefitPolicyIdAndActiveTrue(10L)).thenReturn(0L);
+
+        benefitPolicyService.delete(10L);
+
+        verify(auditLogService).createAuditLog(
+                eq("DELETED"), eq("BENEFIT_POLICY"), eq(10L), any(), any(), any(), any(), any());
     }
 
     @Test

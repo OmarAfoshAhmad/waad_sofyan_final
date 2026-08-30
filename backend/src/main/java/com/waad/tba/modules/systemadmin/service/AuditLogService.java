@@ -91,6 +91,7 @@ public class AuditLogService {
             case "FEATUREFLAG", "FEATURE_FLAG" -> EntityType.FEATURE_FLAG;
             case "EMPLOYER" -> EntityType.EMPLOYER;
             case "EMPLOYERCONTRACT", "EMPLOYER_CONTRACT" -> EntityType.EMPLOYER_CONTRACT;
+            case "BENEFITPOLICY", "BENEFIT_POLICY" -> EntityType.BENEFIT_POLICY;
             case "PRICELIST", "PRICE_LIST" -> EntityType.PRICE_LIST;
             case "MEDICALDICTIONARY", "MEDICAL_DICTIONARY" -> EntityType.MEDICAL_DICTIONARY;
             default -> EntityType.SYSTEM_SETTING;

@@ -591,9 +591,98 @@ window is not a foreign key. `Provider -> Employer` was one instance;
 `User -> Employer`, `Policy -> Employer` and `Member -> Employer` deserve the
 same question.
 
-## BENEFIT POLICIES — OPEN
+## BENEFIT POLICIES — PARTIALLY VERIFIED
 
-Not examined this round, except where the ceiling touches them (above).
+Following the same P-01..P-xx gate discipline used for Employers. Two gates
+closed this round; one P0 finding surfaced and is deliberately deferred
+rather than fixed blind.
+
+### P0 finding, deferred by decision: a second, parallel scope model — OPEN
+
+`BenefitPolicyController` enforces employer scope itself
+(`currentEmployerScope()`, `scopedEmployerId()`, `assertEmployerScope()`,
+lines 481-503), built on `authorizationService.isEmployerAdmin()` /
+`getEmployerFilterForUser()` -- not on `MemberAccessScopeResolver`, the
+canonical mechanism Employers and Members already unified onto. Two scope
+models for the same question ("which employers may this caller reach?")
+is exactly the duplication §2/§6 of the constitution forbid, and here it is
+not merely a style issue:
+
+**`currentEmployerScope()` returns `null` (= unscoped, see every employer's
+policies) for any caller that is not `isEmployerAdmin()`** -- which includes
+`ACCOUNTANT` and `MEDICAL_REVIEWER`, both `@PreAuthorize`d on nearly every
+read endpoint. Under the canonical `MemberAccessScopeResolver`, neither role
+is global by default: each is scoped to its own `employerId` if it has one,
+denied otherwise (`MemberAccessScopeResolver.java:64-72`, `"Reviewers and
+data-entry staff are NOT global by default"`). The controller's ad hoc check
+silently grants the wider of the two answers.
+
+**Deliberately not fixed blind.** Whether this is a live leak depends on
+data this environment cannot see: if some `ACCOUNTANT`/`MEDICAL_REVIEWER`
+accounts in production are legitimately central staff with no `employerId`
+recorded, applying the canonical resolver's deny-by-default today would lock
+out real users the moment it ships -- a production incident from an
+unaudited migration, not a security improvement. Decision recorded: the
+target architecture separates **role** from **scope** entirely -- no
+`if (role == ACCOUNTANT) return ALL`. A caller's reach is stated explicitly
+(a specific employer set, or an explicit system-wide grant), never inferred
+from their role name. Central staff get an explicit system-wide scope
+assignment as a deliberate, auditable administrative act, not an implicit
+side effect of `user_type`. Before that model replaces the controller's
+current check, production `users` data must be audited for `user_type IN
+('ACCOUNTANT','MEDICAL_REVIEWER')` crossed with `employer_id IS NULL`, and
+every account found migrated to an explicit scope. The local/dev database
+available in this environment has exactly one user (`SUPER_ADMIN`) and
+cannot answer this question, so the migration and the resolver change are
+`OPEN`, not assumed safe.
+
+### P-06 audit (create/update/lifecycle) — VERIFIED
+
+**CLAIM:** every action that changes what a benefit policy's members are
+covered for is recorded to the queryable audit trail, not only a log line.
+
+**BEFORE:** `BenefitPolicyService` had zero calls into `AuditLogService` --
+`create`, `update`, `activate`, `deactivate`, `suspend`, `revertToDraft`,
+`cancel`, soft `delete` and `restore` were all silent. This is the same gap
+Employers had before E-10, just never closed here.
+
+**FIX:** added the same facade call `EmployerService` already uses
+(`AuditLogService.createAuditLog`), reusing it rather than inventing a
+second audit call site. `EntityType.BENEFIT_POLICY` did not exist and was
+added (plain `VARCHAR(40)` column, no `CHECK` constraint on it anywhere in
+the migration history -- confirmed by grep -- so no migration was needed).
+`update()`'s audit reason names only the fields the caller actually changed
+(same pattern as `EmployerService.updateAuditReason`), not a generic
+"updated".
+
+**TEST RESULT** `BenefitPolicyServiceTest` -- 15 tests, including
+`create_activate_andDelete_eachWriteToTheAuditTrail`, added this round.
+Proved to bite: temporarily removing the `CREATED` audit call
+(`/tmp/bps_proof.bak` diff) failed the test (`Wanted but not invoked`);
+restoring it passed again.
+
+### P-03 source of truth for "policy currently active for a member" — VERIFIED (inherited)
+
+Not re-derived this round -- already the single reader used across
+claim/eligibility/preauth/coverage code: `MemberPolicyResolver.resolveFor
+(member, serviceDate)`, dated via `member_policy_assignments`
+(append-only history since `V171`). Proved under cross-module integration
+by `MemberMovesBetweenEmployersJointTemporalIntegrationTest` (Phase 8,
+documented under CROSS-MODULE INTEGRATION below), which exercises the
+sibling resolver (`MemberEmployerResolver`) the same way; `MemberPolicyResolver`
+follows the identical pattern and is called from the same call sites.
+
+`OPEN`: no dedicated policy-resolver test exists independent of the
+cross-module one; not falsified, but not directly proved either.
+
+`OPEN`, not examined this round: P-02 (archive/lifecycle transition
+guards beyond what `BenefitPolicyServiceTest` already covers), P-04/P-05
+(scope closure, blocked on the production audit above), P-07 (import),
+P-08 (concurrency -- `checkOverlappingActivePolicy` has no proven
+concurrent-activation test, only the sequential unit tests), P-09 (DB
+constraints -- migrations exist per the earlier survey but are untested
+across a live migration the way Employer's V200 was), P-10 (performance),
+P-11 (integration gate).
 
 ## COVERAGE RULES — PARTIALLY VERIFIED
 
