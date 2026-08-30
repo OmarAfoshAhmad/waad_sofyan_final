@@ -99,6 +99,7 @@ import { failedCoverageResult } from './hooks/coverageContract.mjs';
 
 import { ClaimHeaderFields } from './components/ClaimHeaderFields';
 import { ClaimEntryReadinessAlert } from './components/ClaimEntryReadinessAlert';
+import { ClaimAdditionalDetails } from './components/ClaimAdditionalDetails';
 import { invalidQuantityLineNumbers } from './claim-entry-validation';
 import { ClaimLineRow } from './components/ClaimLineRow';
 import { ClaimTotalsFooter } from './components/ClaimTotalsFooter';
@@ -2066,6 +2067,13 @@ export default function ClaimBatchEntry() {
                   context={entryContext}
                   error={entryContextFailure}
                   onRetry={refetchEntryContext}
+                />
+              </Box>
+              <Box sx={{ mt: 0.5 }}>
+                <ClaimAdditionalDetails
+                  complaint={complaint}
+                  setComplaint={setComplaint}
+                  setIsDirty={setIsDirty}
                 />
               </Box>
             </Box>
