@@ -467,7 +467,45 @@ before-and-after values in the reason text, and a phone-only update's reason
 contains neither an identity-change nor a contract-term-change phrase. Both
 audit calls proved to bite individually by removal.
 
-### E-11 performance, E-12 integration gate — OPEN
+### E-11 performance — VERIFIED
+
+**CLAIM:** the employer-facing query paths do not degrade as the book
+grows.
+
+**DATASET** "30,000 members" in the protocol is a MEMBERS-scale number;
+there are never 30,000 employers in this system. The dataset was shaped for
+what actually stresses the employer paths instead: 500 employers (a
+realistic upper bound for a TPA's book) and one carrying 5,000 members with
+a real dated assignment each -- the shape `archive()`'s count query and the
+scoped list query actually have to survive.
+
+**MEASURED, not guessed** (Hibernate `Statistics.getPrepareStatementCount()`):
+
+| path | result |
+|---|---|
+| `archive()` against 5,000 assigned members | 5 statements, 45 ms |
+| first page of 500 employers vs. the last page | 23 statements, both |
+| one tenant scoped to 1 of 500 vs. the global read | 3 statements vs. 23 |
+
+**A fixture bug caught itself.** The first version of this test seeded
+5,000 members with only the `employer_id` pointer, no
+`member_employer_assignments` row -- the exact mistake
+`EmployerArchiveFollowsTheDatedAssignmentIntegrationTest` (E-03) had already
+named. `countActiveMembersAssignedOn` reads the assignments, not the
+pointer, so it saw zero members; the test passed anyway because the
+employer's still-active benefit policy blocked archiving on its own, and the
+statement count being measured was never exercised against the roster it
+claimed to be. Caught by the coincidence of two runs reporting the identical
+"5 statements" before and after seeding assignments -- suspicious agreement,
+not proof -- and confirmed by removing the assignment writes and watching
+the test fail with "a 5,000-member roster must block archiving". The fixed
+fixture writes a real dated assignment per member and disables the policy so
+only the roster condition is under test.
+
+**REGRESSION TEST** `EmployerQueryScalePerformanceIntegrationTest` -- three
+cases, numbers above.
+
+### E-12 integration gate — OPEN
 
 Not examined.
 
