@@ -55,6 +55,8 @@ class BenefitPolicyServiceTest {
     private com.waad.tba.modules.systemadmin.service.AuditLogService auditLogService;
     @Mock
     private com.waad.tba.security.AuthorizationService authorizationService;
+    @Mock
+    private com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyStatusHistoryRepository statusHistoryRepository;
 
     @InjectMocks
     private BenefitPolicyService benefitPolicyService;

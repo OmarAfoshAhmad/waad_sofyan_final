@@ -31,4 +31,16 @@ public record PolicyInForceRow(
         return startDate != null && endDate != null
                 && !date.isBefore(startDate) && !date.isAfter(endDate);
     }
+
+    /**
+     * The date-range half of "in force" only -- mirrors
+     * {@code BenefitPolicy.coversDate(date)}. Deliberately excludes status:
+     * whether the policy was ACTIVE on {@code date} is a dated question
+     * answered by {@code BenefitPolicyStatusHistory}, not by this
+     * projection's (current) status column.
+     */
+    public boolean coversDate(LocalDate date) {
+        return startDate != null && endDate != null
+                && !date.isBefore(startDate) && !date.isAfter(endDate);
+    }
 }

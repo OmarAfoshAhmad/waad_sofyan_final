@@ -593,10 +593,12 @@ same question.
 
 ## BENEFIT POLICIES — PARTIALLY VERIFIED
 
-Following the same P-01..P-xx gate discipline used for Employers. Five
-gates closed this round (P-06 audit, P-08 concurrency, P-09 DB
-constraints, P-04 EMPLOYER_ADMIN isolation, P-03 inherited); one P0
-finding surfaced and is deliberately deferred rather than fixed blind.
+Following the same P-01..P-xx gate discipline used for Employers. Six
+gates closed this round (P-03 -- corrected mid-round after a real defect
+was found, not merely inherited as first assumed --, P-04 EMPLOYER_ADMIN
+isolation, P-06 audit, P-08 concurrency, P-09 DB constraints, P-11
+integration gate); one P0 finding surfaced and is deliberately deferred
+rather than fixed blind.
 
 ### P0 finding, deferred by decision: a second, parallel scope model — OPEN
 
@@ -662,19 +664,57 @@ Proved to bite: temporarily removing the `CREATED` audit call
 (`/tmp/bps_proof.bak` diff) failed the test (`Wanted but not invoked`);
 restoring it passed again.
 
-### P-03 source of truth for "policy currently active for a member" — VERIFIED (inherited)
+### P-03 source of truth for "policy currently active for a member" — VERIFIED, corrected mid-round
 
-Not re-derived this round -- already the single reader used across
-claim/eligibility/preauth/coverage code: `MemberPolicyResolver.resolveFor
-(member, serviceDate)`, dated via `member_policy_assignments`
-(append-only history since `V171`). Proved under cross-module integration
-by `MemberMovesBetweenEmployersJointTemporalIntegrationTest` (Phase 8,
-documented under CROSS-MODULE INTEGRATION below), which exercises the
-sibling resolver (`MemberEmployerResolver`) the same way; `MemberPolicyResolver`
-follows the identical pattern and is called from the same call sites.
+**The "inherited" verification recorded earlier this round was wrong, and
+the wrongness only surfaced while building P-11.** `MemberPolicyResolver
+.resolveFor(member, serviceDate)` was assumed to mirror
+`MemberEmployerResolver`'s dated-assignment pattern exactly, because it
+reads `member_policy_assignments` the same way. It does -- for WHICH
+policy a member was assigned to. It did NOT for WHETHER that policy was
+usable then: `resolved.isEffectiveOn(effectiveDate)` checked the policy's
+**current** `status` column, not its status *on `effectiveDate`*.
+Suspending, expiring or cancelling a policy today silently invalidated
+every past claim/eligibility read for a service date when the policy
+genuinely was ACTIVE -- the exact defect the E-12 policy decision
+(lifecycle ≠ history) already existed to rule out for employers, present
+here in the sibling resolver undetected.
 
-`OPEN`: no dedicated policy-resolver test exists independent of the
-cross-module one; not falsified, but not directly proved either.
+**FIX** New dated source of truth, `benefit_policy_status_history`
+(migration V201, half-open `[validFrom, validTo)` intervals), populated by
+`BenefitPolicyService.recordStatusHistory` at every transition (create,
+activate, deactivate, suspend, revertToDraft, cancel, delete, restore).
+`MemberPolicyResolver.resolveFor` and the bulk `resolveForMembers` now ask
+two separate questions where they asked one: `BenefitPolicy.coversDate
+(date)` (the policy's own configured window, status-independent) AND the
+dated history's status at that date -- never `isEffectiveOn`/`isInForceOn`,
+which remain current-status-only and stay correct for their existing
+"is it usable right now" callers.
+
+**Backward compatibility, deliberate, not a loophole:** a policy with NO
+history row at all (created outside `BenefitPolicyService` -- a fixture, a
+seed, a row from before V201's backfill) falls back to its current status
+column, exactly the same honest approximation V201's own migration
+backfill makes for every pre-existing row. A policy WITH history but no
+interval covering the date is a real, different answer: it genuinely was
+not ACTIVE then.
+
+**TEST RESULT** `MemberPolicyResolverStatusHistoryBoundaryIntegrationTest`
+(6 cases: suspended-window rejection, reactivation resolves again, both
+half-open boundary days, "changing today's status doesn't change
+yesterday's answer") and `BenefitPolicyLifecycleIntegrationGateTest`'s own
+chain (below) together. Proved to bite: temporarily restoring the old
+current-status-only check failed 5 of the 7 tests across both files;
+restoring the fix passed all of them again.
+
+**A second real bug found and fixed while implementing the fix itself:**
+Hibernate flushes all queued INSERTs before all queued DELETEs in one
+flush, regardless of code order. `recordStatusHistory` closing the
+previous open interval and then saving the new one hit
+`uk_policy_status_history_one_open` because the new row's INSERT reached
+Postgres before the old row's DELETE did. Fixed with an explicit
+`statusHistoryRepository.flush()` between the two -- caught immediately by
+the first real test run, not discovered later.
 
 ### P-08 concurrency (overlapping activation) — VERIFIED
 
@@ -770,11 +810,38 @@ is a separate, still-`OPEN` half of the same gate, blocked on the
 production data audit already recorded -- this test does not touch it and
 must not be read as having done so.
 
+### P-11 integration gate — VERIFIED
+
+**CLAIM:** lifecycle, historical resolution, audit and scope hold together
+across one chained scenario, not just in isolation -- the same discipline
+E-12 applied to Employers.
+
+**EVIDENCE** `BenefitPolicyLifecycleIntegrationGateTest`: employer + policy
+created and activated; a member enrolled with a dated policy assignment
+while the policy is ACTIVE; the policy's ACTIVE interval backdated 30 days
+(realistic -- the service always stamps "today", so proving anything about
+a genuinely PAST service date requires the interval to actually start in
+the past); the policy suspended; then:
+- the member's historical service date still resolves to the policy
+  (the P-03 fix, exercised end-to-end rather than through raw history rows),
+- the exact suspend day itself correctly resolves to nothing (proving the
+  fix does not just always return the historical answer regardless of date),
+- the audit trail shows `CREATED, ACTIVATED, SUSPENDED` in order,
+- `EMPLOYER_ADMIN` scoped to the employer still reads the policy after the
+  suspend (P-04's check does not key off policy status),
+- a second, non-overlapping-by-status policy for the same employer
+  activates cleanly while the first is SUSPENDED (`existsOverlappingActivePolicy`
+  checks `status = 'ACTIVE'` only; SUSPENDED intentionally frees the window).
+
+**This is where the P-03 defect (above) was actually discovered** -- the
+test's original, more naive form asserted the historical resolution and
+failed against real (not assumed) behavior, which is what triggered fixing
+`MemberPolicyResolver` rather than writing the test around the bug.
+
 `OPEN`, not examined this round: P-02 (archive/lifecycle transition
 guards beyond what `BenefitPolicyServiceTest` already covers), P-05
 (the ACCOUNTANT/MEDICAL_REVIEWER scope unification, blocked on the
-production audit above), P-07 (import), P-10 (performance), P-11
-(integration gate).
+production audit above), P-07 (import), P-10 (performance).
 
 ## COVERAGE RULES — PARTIALLY VERIFIED
 

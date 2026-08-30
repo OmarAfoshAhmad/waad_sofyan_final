@@ -48,6 +48,7 @@ public class BenefitPolicyService {
     private final com.waad.tba.modules.preauthorization.repository.PreAuthorizationRepository preAuthorizationRepository;
     private final com.waad.tba.modules.systemadmin.service.AuditLogService auditLogService;
     private final AuthorizationService authorizationService;
+    private final com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyStatusHistoryRepository statusHistoryRepository;
 
     /**
      * Lifecycle transitions here change what claims/preauth/coverage
@@ -61,6 +62,44 @@ public class BenefitPolicyService {
         auditLogService.createAuditLog(action, "BENEFIT_POLICY", policyId, details,
                 actor == null ? null : actor.getId(),
                 actor == null ? null : actor.getUsername(), null, null);
+    }
+
+    /**
+     * Closes the currently open status interval (if any) and opens a new one
+     * at {@code effectiveDate} -- the dated record MemberPolicyResolver reads
+     * to answer "was this policy ACTIVE on service date X" without letting
+     * today's status rewrite the answer for a past date. Half-open intervals:
+     * the closed row's {@code validTo} equals the new row's {@code validFrom},
+     * so a service on that exact day sees the NEW status, never both.
+     */
+    private void recordStatusHistory(Long policyId, BenefitPolicyStatus status, LocalDate effectiveDate) {
+        statusHistoryRepository.findByPolicyIdAndValidToIsNull(policyId).ifPresent(open -> {
+            if (open.getValidFrom().isEqual(effectiveDate)) {
+                // A second transition on the same calendar day: the open
+                // interval never covered a distinct day on its own, and the
+                // date-only model this table uses has no way to represent a
+                // zero-length [from, from) window. The whole day collapses
+                // to whichever status is the LAST one recorded for it,
+                // which is the only answer a date-only serviceDate could
+                // ever have distinguished anyway.
+                statusHistoryRepository.delete(open);
+            } else {
+                open.setValidTo(effectiveDate);
+                statusHistoryRepository.save(open);
+            }
+        });
+        // Hibernate's flush ordering runs ALL queued inserts before ALL
+        // queued deletes in one flush, regardless of code order -- without
+        // this, the new row's INSERT reaches Postgres before the old open
+        // row's DELETE/UPDATE does, and uk_policy_status_history_one_open
+        // rejects it as a second open row that, from the database's view,
+        // still exists at that instant.
+        statusHistoryRepository.flush();
+        statusHistoryRepository.save(com.waad.tba.modules.benefitpolicy.entity.BenefitPolicyStatusHistory.builder()
+                .policyId(policyId)
+                .status(status)
+                .validFrom(effectiveDate)
+                .build());
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -304,6 +343,7 @@ public class BenefitPolicyService {
 
         policy = benefitPolicyRepository.save(policy);
         log.info("✅ Created benefit policy: {} (ID: {})", policy.getName(), policy.getId());
+        recordStatusHistory(policy.getId(), policy.getStatus(), LocalDate.now());
         audit("CREATED", policy.getId(), "إنشاء وثيقة تغطية جديدة: " + policy.getName()
                 + " لجهة العمل " + employer.getName());
 
@@ -468,6 +508,7 @@ public class BenefitPolicyService {
         policy.activate();
         policy = benefitPolicyRepository.save(policy);
         log.info("✅ Activated benefit policy: {}", id);
+        recordStatusHistory(id, policy.getStatus(), LocalDate.now());
         audit("ACTIVATED", id, "تفعيل وثيقة التغطية: " + policy.getName());
 
         return BenefitPolicyResponseDto.fromEntity(policy);
@@ -490,6 +531,7 @@ public class BenefitPolicyService {
         policy.deactivate();
         policy = benefitPolicyRepository.save(policy);
         log.info("✅ Deactivated benefit policy: {}", id);
+        recordStatusHistory(id, policy.getStatus(), LocalDate.now());
         audit("UPDATED", id, "إنهاء (انتهاء) وثيقة التغطية: " + policy.getName());
 
         return BenefitPolicyResponseDto.fromEntity(policy);
@@ -511,6 +553,7 @@ public class BenefitPolicyService {
         policy.suspend();
         policy = benefitPolicyRepository.save(policy);
         log.info("✅ Suspended benefit policy: {}", id);
+        recordStatusHistory(id, policy.getStatus(), LocalDate.now());
         audit("SUSPENDED", id, "إيقاف وثيقة التغطية مؤقتًا: " + policy.getName());
 
         return BenefitPolicyResponseDto.fromEntity(policy);
@@ -549,6 +592,7 @@ public class BenefitPolicyService {
         policy.setStatus(BenefitPolicyStatus.DRAFT);
         policy = benefitPolicyRepository.save(policy);
         log.info("✅ Reverted benefit policy to draft: {}", id);
+        recordStatusHistory(id, policy.getStatus(), LocalDate.now());
         audit("UPDATED", id, "إرجاع وثيقة التغطية إلى مسودة: " + policy.getName());
 
         return BenefitPolicyResponseDto.fromEntity(policy);
@@ -570,6 +614,7 @@ public class BenefitPolicyService {
         policy.setStatus(BenefitPolicyStatus.CANCELLED);
         policy = benefitPolicyRepository.save(policy);
         log.info("✅ Cancelled benefit policy: {}", id);
+        recordStatusHistory(id, policy.getStatus(), LocalDate.now());
         audit("UPDATED", id, "إلغاء وثيقة التغطية: " + policy.getName());
 
         return BenefitPolicyResponseDto.fromEntity(policy);
@@ -599,6 +644,7 @@ public class BenefitPolicyService {
         benefitPolicyRepository.save(policy);
 
         log.info("✅ Soft deleted benefit policy: {}", id);
+        recordStatusHistory(id, BenefitPolicyStatus.CANCELLED, LocalDate.now());
         audit("DELETED", id, "حذف وثيقة التغطية (حذف ناعم): " + policy.getName());
     }
 
@@ -700,6 +746,7 @@ public class BenefitPolicyService {
         policy.setStatus(BenefitPolicyStatus.DRAFT);
         BenefitPolicy saved = benefitPolicyRepository.save(policy);
         log.info("✅ Restored benefit policy: {}", id);
+        recordStatusHistory(id, saved.getStatus(), LocalDate.now());
         audit("RESTORED", id, "استعادة وثيقة التغطية: " + saved.getName());
         return BenefitPolicyResponseDto.fromEntity(saved);
     }

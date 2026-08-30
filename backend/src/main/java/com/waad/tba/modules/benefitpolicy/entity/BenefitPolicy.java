@@ -156,6 +156,17 @@ public class BenefitPolicy {
         return !date.isBefore(startDate) && !date.isAfter(endDate);
     }
 
+    /**
+     * Whether {@code date} falls within this policy's configured start/end
+     * window -- independent of status. Resolving a past service date must
+     * ask "was this policy ACTIVE on that date" via
+     * {@code BenefitPolicyStatusHistory}, never "is it ACTIVE right now"
+     * ({@link #isEffectiveOn}), which only answers for the present moment.
+     */
+    public boolean coversDate(LocalDate date) {
+        return !date.isBefore(startDate) && !date.isAfter(endDate);
+    }
+
     public boolean overlaps(LocalDate otherStart, LocalDate otherEnd) {
         return !endDate.isBefore(otherStart) && !startDate.isAfter(otherEnd);
     }

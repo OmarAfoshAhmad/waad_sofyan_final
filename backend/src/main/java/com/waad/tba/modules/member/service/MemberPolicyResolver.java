@@ -51,6 +51,8 @@ public class MemberPolicyResolver {
     private final MemberEmployerResolver memberEmployerResolver;
     private final com.waad.tba.modules.member.repository.MemberEmployerAssignmentRepository
             employerAssignmentRepository;
+    private final com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyStatusHistoryRepository
+            statusHistoryRepository;
 
     /**
      * Walks the cause chain looking for the constraint name. Postgres reports
@@ -96,10 +98,44 @@ public class MemberPolicyResolver {
             // a new one starts -- would otherwise keep answering with a policy
             // that expired years ago, silently extending coverage nobody
             // granted.
-            if (!resolved.isEffectiveOn(effectiveDate)) {
-                log.debug("[MemberPolicy] Assignment covers memberId={} on {} but policy {} was not in force "
-                        + "(status={}, {}..{})", member.getId(), effectiveDate, resolved.getId(),
-                        resolved.getStatus(), resolved.getStartDate(), resolved.getEndDate());
+            //
+            // "In force" is answered in two parts, deliberately never by
+            // resolved.isEffectiveOn(date): that method reads the policy's
+            // CURRENT status, which only answers "is it ACTIVE right now".
+            // Suspending or cancelling a policy today must never change what
+            // a past service date resolves to -- exactly the mistake the
+            // employer/policy-assignment resolvers already exist to remove
+            // for "current employer" and "current assignment". The date
+            // range (coversDate) is a fixed property of the policy's own
+            // configuration; the status AT effectiveDate comes from the
+            // dated history table, never from the live column.
+            if (!resolved.coversDate(effectiveDate)) {
+                log.debug("[MemberPolicy] Assignment covers memberId={} on {} but policy {} is not configured "
+                        + "for that date ({}..{})", member.getId(), effectiveDate, resolved.getId(),
+                        resolved.getStartDate(), resolved.getEndDate());
+                return Optional.empty();
+            }
+            Optional<com.waad.tba.modules.benefitpolicy.entity.BenefitPolicyStatusHistory> historyAtDate =
+                    statusHistoryRepository.findCovering(resolved.getId(), effectiveDate);
+            boolean wasActiveOnDate;
+            if (historyAtDate.isPresent()) {
+                wasActiveOnDate = historyAtDate.get().getStatus() == BenefitPolicy.BenefitPolicyStatus.ACTIVE;
+            } else if (!statusHistoryRepository.existsByPolicyId(resolved.getId())) {
+                // This policy has never had a transition recorded -- created
+                // outside BenefitPolicyService (a fixture, a legacy row).
+                // Fall back to the current status, the same honest
+                // approximation V201's own backfill makes for pre-existing
+                // rows, rather than refusing every read for a policy this
+                // table was never told about.
+                wasActiveOnDate = resolved.getStatus() == BenefitPolicy.BenefitPolicyStatus.ACTIVE;
+            } else {
+                // Has history, but no interval covers this date: a real
+                // answer -- it genuinely was not ACTIVE then.
+                wasActiveOnDate = false;
+            }
+            if (!wasActiveOnDate) {
+                log.debug("[MemberPolicy] Assignment covers memberId={} on {} but policy {} was not ACTIVE "
+                        + "on that date per its status history", member.getId(), effectiveDate, resolved.getId());
                 return Optional.empty();
             }
 
@@ -235,12 +271,29 @@ public class MemberPolicyResolver {
             }
         }
         java.util.Map<Long, PolicyInForceRow> policyRows = new java.util.HashMap<>();
+        // The dated status at asOfDate, for every policy in this batch, in
+        // ONE query -- the bulk-safe form of the same history lookup
+        // resolveFor uses per member. Never policyRows' own (current)
+        // status field: that would reintroduce the exact defect this table
+        // exists to remove, just inside the batch path instead of the
+        // single-member one.
+        java.util.Map<Long, com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy.BenefitPolicyStatus>
+                statusAtDate = new java.util.HashMap<>();
+        // Policies with NO history at all -- created outside
+        // BenefitPolicyService -- fall back to their current status column,
+        // the same approximation resolveFor makes and V201's own backfill
+        // already makes for pre-existing rows.
+        java.util.Set<Long> policiesWithAnyHistory = new java.util.HashSet<>();
         java.util.Map<Long, Long> employerByMember = new java.util.HashMap<>();
         try {
             if (!policyIds.isEmpty()) {
                 for (PolicyInForceRow row : policyRepository.findInForceRows(policyIds)) {
                     policyRows.put(row.policyId(), row);
                 }
+                for (var history : statusHistoryRepository.findCoveringForPolicies(policyIds, asOfDate)) {
+                    statusAtDate.put(history.getPolicyId(), history.getStatus());
+                }
+                policiesWithAnyHistory.addAll(statusHistoryRepository.findPolicyIdsWithAnyHistory(policyIds));
             }
             for (var assignment : employerAssignmentRepository
                     .findCoveringForMembers(requested, asOfDate)) {
@@ -279,7 +332,17 @@ public class MemberPolicyResolver {
                         "الوثيقة المعيّنة غير موجودة"));
                 continue;
             }
-            if (!policy.isInForceOn(asOfDate)) {
+            boolean wasActiveOnDate;
+            if (statusAtDate.containsKey(policy.policyId())) {
+                wasActiveOnDate = statusAtDate.get(policy.policyId())
+                        == com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy.BenefitPolicyStatus.ACTIVE;
+            } else if (!policiesWithAnyHistory.contains(policy.policyId())) {
+                wasActiveOnDate = policy.status() == com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy
+                        .BenefitPolicyStatus.ACTIVE;
+            } else {
+                wasActiveOnDate = false;
+            }
+            if (!policy.coversDate(asOfDate) || !wasActiveOnDate) {
                 result.put(memberId, ResolvedMemberPolicy.policyNotInForce(
                         "الوثيقة غير سارية بتاريخ " + asOfDate));
                 continue;

@@ -128,20 +128,27 @@ class MemberLimitOverviewQueryCountIntegrationTest extends PostgresIntegrationTe
     /**
      * Constant is the claim, so state the constant AND vary the page. An upper
      * bound alone would keep passing at ten queries per page as easily as
-     * three; a single page size would not notice a per-row read at all.
+     * five; a single page size would not notice a per-row read at all.
+     *
+     * Five, not three: resolving "was this policy ACTIVE on this date" now
+     * reads BenefitPolicyStatusHistory instead of the policy's own (current)
+     * status column -- see CORE_DOMAIN_CLOSURE.md's P-03 correction. Two
+     * more bulk queries (the covering status per policy, and which policies
+     * have any history at all), both still one query for the WHOLE page,
+     * not one per row -- the property this test exists to protect.
      */
     @Test
     @Transactional
-    void resolvingCurrentPolicyForAPageCostsThreeQueriesWhateverThePageSize() {
+    void resolvingCurrentPolicyForAPageCostsFiveQueriesWhateverThePageSize() {
         long forTwelve = statementsResolving(seed(12).memberIds());
         long forThirtySix = statementsResolving(seed(36).memberIds());
 
         assertThat(forTwelve)
-                .as("covering assignments, whether those policies were in force, "
-                        + "and the employer each member sat with on the date")
-                .isEqualTo(3L);
+                .as("covering assignments, the dated status history (covering + any-history), "
+                        + "whether those policies were in force, and the employer each member sat with on the date")
+                .isEqualTo(5L);
         assertThat(forThirtySix)
-                .as("three times the rows, the same three queries")
+                .as("three times the rows, the same five queries")
                 .isEqualTo(forTwelve);
     }
 

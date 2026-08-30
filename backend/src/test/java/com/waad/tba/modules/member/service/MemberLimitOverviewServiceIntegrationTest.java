@@ -356,6 +356,13 @@ class MemberLimitOverviewServiceIntegrationTest extends PostgresIntegrationTestB
         assertThat(summary.asOfDate()).isEqualTo(LocalDate.now(ZoneId.systemDefault()));
     }
 
+    /**
+     * Nine, not seven: resolving "was this policy ACTIVE on this date" now
+     * reads BenefitPolicyStatusHistory instead of the policy's own (current)
+     * status column -- see CORE_DOMAIN_CLOSURE.md's P-03 correction. Two
+     * more bulk queries (the covering status per policy, and which policies
+     * have any history at all), both still one query for the WHOLE page.
+     */
     @Test
     void aPageCostsAFixedNumberOfQueriesWhateverItHoldsAndHoweverManyPoliciesItSpans() {
         List<Long> five = membersOnDistinctPolicies(5);
@@ -365,11 +372,12 @@ class MemberLimitOverviewServiceIntegrationTest extends PostgresIntegrationTestB
         long forThirty = statementsFor(thirty);
 
         assertThat(forFive)
-                .as("policy assignments, policies in force, employer assignments, "
+                .as("policy assignments, the dated status history (covering + any-history), "
+                        + "policies in force, employer assignments, "
                         + "annual limits, committed, reserved, exceptional uplifts")
-                .isEqualTo(7L);
+                .isEqualTo(9L);
         assertThat(forThirty)
-                .as("six times the rows and six times the policies, the same seven queries")
+                .as("six times the rows and six times the policies, the same nine queries")
                 .isEqualTo(forFive);
     }
 
