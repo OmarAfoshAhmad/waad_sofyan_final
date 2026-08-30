@@ -593,10 +593,10 @@ same question.
 
 ## BENEFIT POLICIES — PARTIALLY VERIFIED
 
-Following the same P-01..P-xx gate discipline used for Employers. Four
+Following the same P-01..P-xx gate discipline used for Employers. Five
 gates closed this round (P-06 audit, P-08 concurrency, P-09 DB
-constraints, P-03 inherited); one P0 finding surfaced and is deliberately
-deferred rather than fixed blind.
+constraints, P-04 EMPLOYER_ADMIN isolation, P-03 inherited); one P0
+finding surfaced and is deliberately deferred rather than fixed blind.
 
 ### P0 finding, deferred by decision: a second, parallel scope model — OPEN
 
@@ -742,10 +742,39 @@ V200 -- see `EmployerTermsConstraintsAcrossV200MigrationTest`), not a plain
 retested; it follows the same plain-`ADD CONSTRAINT` shape and carries the
 same latent risk, moot for the same reason.
 
+### P-04 EMPLOYER_ADMIN scope isolation — VERIFIED (the P0's OPEN half stays OPEN)
+
+**CLAIM:** for the one role `BenefitPolicyController`'s own scope check was
+explicitly written for (`EMPLOYER_ADMIN`), it actually holds -- id lookup,
+employer-scoped listing, and the requested-`employerId` override on the
+main paginated list.
+
+**Why this needed a test at all:** no test of any kind existed for
+`BenefitPolicyController` before this round. A check that has never been
+exercised is a claim, not a fact -- exactly the class of gap this project's
+closure protocol exists to catch (per §"لا تثق بأسماء الاختبارات").
+
+**TEST** `BenefitPolicyControllerEmployerScopeIsolationIntegrationTest`,
+calling the controller bean directly (so `@PreAuthorize` still applies)
+with a real `SecurityContextHolder` authentication carrying the matching
+role authority, plus a matching `User` row for `AuthorizationService
+.getCurrentUser()` to resolve -- four cases: `findById` across employers,
+`findByEmployer` across employers, the paginated list ignoring a
+caller-supplied foreign `employerId`, and `SUPER_ADMIN` reaching both.
+Proved to bite: temporarily removing `assertEmployerScope(...)` from
+`findById` failed the corresponding test; restoring it passed again.
+
+**Scope of this gate, precisely:** this closes the `EMPLOYER_ADMIN` half of
+P-04 only. The P0 above (ACCOUNTANT/MEDICAL_REVIEWER silently unscoped)
+is a separate, still-`OPEN` half of the same gate, blocked on the
+production data audit already recorded -- this test does not touch it and
+must not be read as having done so.
+
 `OPEN`, not examined this round: P-02 (archive/lifecycle transition
-guards beyond what `BenefitPolicyServiceTest` already covers), P-04/P-05
-(scope closure, blocked on the production audit above), P-07 (import),
-P-10 (performance), P-11 (integration gate).
+guards beyond what `BenefitPolicyServiceTest` already covers), P-05
+(the ACCOUNTANT/MEDICAL_REVIEWER scope unification, blocked on the
+production audit above), P-07 (import), P-10 (performance), P-11
+(integration gate).
 
 ## COVERAGE RULES — PARTIALLY VERIFIED
 
