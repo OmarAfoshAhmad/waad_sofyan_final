@@ -86,7 +86,6 @@ import unifiedMembersService from 'services/api/unified-members.service';
 import providersService from 'services/api/providers.service';
 import employersService from 'services/api/employers.service';
 import claimsService from 'services/api/claims.service';
-import preApprovalsService from 'services/api/pre-approvals.service';
 import * as medicalCategoriesService from 'services/api/medical-categories.service';
 import claimBatchesService from 'services/api/claim-batches.service';
 import medicalDictionaryService from 'services/api/medical-dictionary.service';
@@ -648,10 +647,12 @@ export default function ClaimBatchEntry() {
     return diff > allowedBackdatedMonths;
   }, [month, year, allowedBackdatedMonths]);
 
-  const { data: preAuthResults, isFetching: searchingPreAuth } = useQuery({
-    queryKey: ['preauth-search', preAuthSearch, member?.id],
-    queryFn: () => preApprovalsService.search({ q: preAuthSearch, size: 20 }),
-    enabled: preAuthSearch.length >= 1,
+  const { data: preAuthResults = [], isFetching: searchingPreAuth } = useQuery({
+    queryKey: ['eligible-claim-preauths', member?.id, providerId, employerId, serviceDate],
+    queryFn: () => claimsService.getEligiblePreAuthorizations({
+      memberId: member.id, providerId, employerId, serviceDate
+    }),
+    enabled: !!member?.id && !!providerId && !!employerId && !!serviceDate && !!entryContext,
     staleTime: 5000
   });
 

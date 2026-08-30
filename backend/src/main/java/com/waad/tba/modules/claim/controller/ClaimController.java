@@ -38,6 +38,7 @@ import com.waad.tba.modules.claim.dto.ClaimEntryContextDto;
 import com.waad.tba.modules.claim.dto.CostBreakdownDto;
 import com.waad.tba.modules.claim.dto.FinancialSummaryDto;
 import com.waad.tba.modules.providercontract.dto.ProviderContractPricingItemResponseDto;
+import com.waad.tba.modules.claim.dto.EligiblePreAuthorizationDto;
 import com.waad.tba.modules.claim.entity.ClaimStatus;
 import com.waad.tba.modules.claim.service.ClaimService;
 import com.waad.tba.modules.claim.service.ClaimEntryContextService;
@@ -126,6 +127,19 @@ public class ClaimController {
                 "تم تحميل خدمات العقد السارية",
                 claimEntryContextService.findEffectiveServices(
                         memberId, providerId, employerId, serviceDate, pageable)));
+    }
+
+    @GetMapping("/eligible-preauthorizations")
+    @PreAuthorize("@claimAccessGuard.canReadMemberFor('CLAIM_CREATE', #memberId) "
+            + "&& @claimAccessGuard.canAccessBatch('CLAIM_CREATE', #providerId, #employerId)")
+    public ResponseEntity<ApiResponse<List<EligiblePreAuthorizationDto>>> getEligiblePreAuthorizations(
+            @RequestParam("memberId") Long memberId,
+            @RequestParam("providerId") Long providerId,
+            @RequestParam("employerId") Long employerId,
+            @RequestParam("serviceDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate serviceDate) {
+        return ResponseEntity.ok(ApiResponse.success("الموافقات الصالحة للمطالبة",
+                claimEntryContextService.findEligiblePreAuthorizations(
+                        memberId, providerId, employerId, serviceDate)));
     }
 
     @PostMapping

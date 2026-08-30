@@ -29,6 +29,7 @@ import com.waad.tba.modules.providercontract.entity.ProviderContractTerm;
 import com.waad.tba.modules.providercontract.service.EffectiveProviderContractResolver;
 import com.waad.tba.modules.providercontract.service.ProviderContractPricingItemService;
 import com.waad.tba.modules.benefitpolicy.service.LimitBalanceReader;
+import com.waad.tba.modules.preauthorization.repository.PreAuthorizationRepository;
 
 @ExtendWith(MockitoExtension.class)
 class ClaimEntryContextServiceTest {
@@ -37,6 +38,7 @@ class ClaimEntryContextServiceTest {
     @Mock EffectiveProviderContractResolver contractResolver;
     @Mock ProviderContractPricingItemService pricingItemService;
     @Mock LimitBalanceReader limitBalanceReader;
+    @Mock PreAuthorizationRepository preAuthorizationRepository;
     @InjectMocks ClaimEntryContextService service;
 
     @Test

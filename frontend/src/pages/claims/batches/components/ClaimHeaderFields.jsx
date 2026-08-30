@@ -271,6 +271,24 @@ export const ClaimHeaderFields = ({
             </Stack>
           )}
         </Stack>
+        <Autocomplete
+          size="small"
+          sx={{ mt: 1 }}
+          options={Array.isArray(preAuthResults) ? preAuthResults : []}
+          loading={searchingPreAuth}
+          value={(Array.isArray(preAuthResults) ? preAuthResults : []).find((item) => String(item.id) === String(preAuthId)) || null}
+          onChange={(_, value) => {
+            setPreAuthId(value?.id || '');
+            setIsDirty(true);
+          }}
+          onInputChange={(_, value) => setPreAuthSearch(value)}
+          getOptionLabel={(item) => `${item.number || item.id} · ${item.serviceName || 'خدمة معتمدة'} · ${item.approvedAmount ?? '-'} د.ل`}
+          isOptionEqualToValue={(option, value) => option.id === value?.id}
+          renderInput={(params) => (
+            <TextField {...params} variant="standard" placeholder="ربط موافقة مسبقة صالحة (اختياري)" sx={inlineSx} />
+          )}
+          noOptionsText="لا توجد موافقة صالحة لهذا المستفيد والمزود في تاريخ الخدمة"
+        />
       </Box>
     </Box>
   );

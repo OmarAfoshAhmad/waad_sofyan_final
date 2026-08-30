@@ -120,6 +120,7 @@ public class ClaimService {
     private final ProviderRepository providerRepository;
     private final VisitRepository visitRepository;
     private final PreAuthorizationRepository preAuthorizationRepository;
+    private final PreAuthClaimLinkValidator preAuthClaimLinkValidator;
 
     // Phase 8: BenefitPolicy-based coverage validation (Single Source of Truth)
     private final BenefitPolicyCoverageService benefitPolicyCoverageService;
@@ -342,9 +343,14 @@ public class ClaimService {
 
         PreAuthorization preAuth = null;
         if (dto.getPreAuthorizationId() != null) {
-            preAuth = preAuthorizationRepository.findById(dto.getPreAuthorizationId())
+            // The lock is held until claim consumption posts and the reservation is
+            // released. Without it, two concurrent claims can both attach while the
+            // approval still looks usable.
+            preAuth = preAuthorizationRepository.findByIdForUpdate(dto.getPreAuthorizationId())
                     .orElseThrow(
                             () -> new ResourceNotFoundException("PreAuthorization", "id", dto.getPreAuthorizationId()));
+            preAuthClaimLinkValidator.validate(preAuth, visit.getMember().getId(), provider.getId(),
+                    datedMemberContext.policy().getId(), dto.getServiceDate());
         }
 
         // Resolve Claim Batch (Phase 11)

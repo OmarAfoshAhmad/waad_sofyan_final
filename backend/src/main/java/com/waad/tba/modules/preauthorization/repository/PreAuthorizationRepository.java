@@ -33,6 +33,18 @@ public interface PreAuthorizationRepository extends JpaRepository<PreAuthorizati
        java.util.Optional<PreAuthorization> findByIdForUpdate(
                @org.springframework.data.repository.query.Param("id") Long id);
 
+       @Query("SELECT pa FROM PreAuthorization pa WHERE pa.active = true " +
+                     "AND pa.memberId = :memberId AND pa.providerId = :providerId " +
+                     "AND pa.status IN ('APPROVED','PARTIALLY_APPROVED','ACKNOWLEDGED') " +
+                     "AND pa.expectedServiceDate IS NOT NULL " +
+                     "AND (pa.requestDate IS NULL OR pa.requestDate <= :serviceDate) " +
+                     "AND (pa.expiryDate IS NULL OR pa.expiryDate >= :serviceDate) " +
+                     "ORDER BY pa.expectedServiceDate DESC, pa.id DESC")
+       List<PreAuthorization> findEligibleForClaim(
+                     @Param("memberId") Long memberId,
+                     @Param("providerId") Long providerId,
+                     @Param("serviceDate") LocalDate serviceDate);
+
 
        // ==================== Find All Active ====================
 

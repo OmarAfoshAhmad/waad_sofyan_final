@@ -15,6 +15,9 @@ import com.waad.tba.modules.providercontract.service.EffectiveProviderContractRe
 import com.waad.tba.modules.providercontract.service.ProviderContractPricingItemService;
 import com.waad.tba.modules.providercontract.dto.ProviderContractPricingItemResponseDto;
 import com.waad.tba.modules.benefitpolicy.service.LimitBalanceReader;
+import com.waad.tba.modules.preauthorization.repository.PreAuthorizationRepository;
+import com.waad.tba.modules.claim.dto.EligiblePreAuthorizationDto;
+import java.util.List;
 
 import lombok.RequiredArgsConstructor;
 
@@ -31,6 +34,7 @@ public class ClaimEntryContextService {
     private final EffectiveProviderContractResolver contractResolver;
     private final ProviderContractPricingItemService pricingItemService;
     private final LimitBalanceReader limitBalanceReader;
+    private final PreAuthorizationRepository preAuthorizationRepository;
 
     @Transactional(readOnly = true)
     public ClaimEntryContextDto resolve(Long memberId, Long providerId,
@@ -89,5 +93,18 @@ public class ClaimEntryContextService {
             LocalDate serviceDate, Pageable pageable) {
         ClaimEntryContextDto context = resolve(memberId, providerId, requestedEmployerId, serviceDate);
         return pricingItemService.findEffectiveInContract(context.contractId(), serviceDate, pageable);
+    }
+
+    @Transactional(readOnly = true)
+    public List<EligiblePreAuthorizationDto> findEligiblePreAuthorizations(
+            Long memberId, Long providerId, Long requestedEmployerId, LocalDate serviceDate) {
+        ClaimEntryContextDto context = resolve(memberId, providerId, requestedEmployerId, serviceDate);
+        return preAuthorizationRepository.findEligibleForClaim(memberId, providerId, serviceDate).stream()
+                .filter(pa -> pa.getPolicyId() == null || pa.getPolicyId().equals(context.policyId()))
+                .map(pa -> new EligiblePreAuthorizationDto(pa.getId(),
+                        pa.getReferenceNumber() != null ? pa.getReferenceNumber() : pa.getPreAuthNumber(),
+                        pa.getStatus().name(), pa.getServiceName(), pa.getExpectedServiceDate(),
+                        pa.getExpiryDate(), pa.getApprovedAmount()))
+                .toList();
     }
 }
