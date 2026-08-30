@@ -1,6 +1,7 @@
 package com.waad.tba.modules.preauthorization.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
@@ -258,7 +259,7 @@ class PreAuthConversionHappensOnceIntegrationTest extends PostgresIntegrationTes
 
     @Test
     @WithMockUser(username = "admin", roles = {"SUPER_ADMIN"})
-    void aClaimStillPostsWhenItsApprovalWasCancelledFirst() {
+    void aCancelledApprovalCannotBeAttachedToANewClaim() {
         Scenario sc = scenario("1000.00", "300.00", 100);
         reservationLedger.approveAndReserve(sc.preauthId(), 0L, "reviewer");
 
@@ -268,12 +269,11 @@ class PreAuthConversionHappensOnceIntegrationTest extends PostgresIntegrationTes
         reservationLedger.cancelAndRelease(sc.preauthId(), "طلب المزود الإلغاء", "reviewer");
         assertThat(netReserved(sc.memberId(), sc.bucketId())).isEqualByComparingTo("0.00");
 
-        ClaimViewDto claim = claimAgainst(sc, new BigDecimal("300.00"));
-
-        // The claim posts on its own. Failing the whole approval here would
-        // protect no money -- there is no hold left to hand back -- and would
-        // leave a delivered service unpayable.
-        assertThat(claim.getStatus()).isEqualTo(ClaimStatus.APPROVED);
+        // A delivered service may still be submitted as an ordinary claim, but it
+        // must not retain a cancelled approval link and inherit authority that no
+        // longer exists. The caller has to remove the stale link explicitly.
+        assertThatThrownBy(() -> claimAgainst(sc, new BigDecimal("300.00")))
+                .hasMessageContaining("ليست في حالة صالحة");
         verify(reservationLedger, never()).releaseOnConversion(anyLong(), anyLong(), any());
         assertThat(preauthStatus(sc.preauthId())).isEqualTo("CANCELLED");
     }

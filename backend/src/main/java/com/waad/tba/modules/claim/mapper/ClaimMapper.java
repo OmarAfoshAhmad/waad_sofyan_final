@@ -97,7 +97,10 @@ public class ClaimMapper {
                                 // DRAFT, never APPROVED: the mapper only builds data. Financial approval
                                 // (amount limits, totalApproved > 0) is decided later by ClaimService via
                                 // ClaimStateMachine, after finalizeSnapshot has computed the real amount.
-                                .status(dto.getStatus() != null ? dto.getStatus() : ClaimStatus.DRAFT)
+                                // Creation always starts at DRAFT. ClaimService is the sole owner
+                                // of the audited transition requested by the caller; accepting a
+                                // terminal status here bypasses the state machine entirely.
+                                .status(ClaimStatus.DRAFT)
                                 .complaint(dto.getComplaint())
                                 .reviewerComment(dto.getRejectionReason())
                                 .preAuthorization(preAuth)

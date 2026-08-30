@@ -275,11 +275,10 @@ public class ClaimService {
         validateCreateDto(dto);
         validateAndEnforceProviderId(dto, currentUser);
 
-        // A provider submits evidence; it never adjudicates its own claim. Keep
-        // the internal direct-entry workflow unchanged for authorized company
-        // staff, while forcing portal submissions through DRAFT → SUBMITTED → review.
+        // A provider submits evidence; it never adjudicates its own claim. Force
+        // portal submissions through the audited DRAFT → SUBMITTED transition.
         if (currentUser != null && "PROVIDER_STAFF".equals(currentUser.getUserType())) {
-            dto.setStatus(ClaimStatus.DRAFT);
+            dto.setStatus(ClaimStatus.SUBMITTED);
             dto.setFullCoverage(false);
             if (dto.getLines() != null) {
                 dto.getLines().forEach(line -> {
@@ -380,22 +379,43 @@ public class ClaimService {
                     date.getMonthValue());
         }
 
+        ClaimStatus requestedInitialStatus = dto.getStatus();
+        if (requestedInitialStatus != null
+                && requestedInitialStatus != ClaimStatus.DRAFT
+                && requestedInitialStatus != ClaimStatus.SUBMITTED
+                && requestedInitialStatus != ClaimStatus.REJECTED) {
+            throw new BusinessRuleException(
+                    "لا يجوز إنشاء مطالبة مباشرة بالحالة " + requestedInitialStatus.getArabicLabel()
+                            + "؛ يجب أن تمر عبر دورة الاعتماد النظامية");
+        }
+
         Claim claim = claimMapper.toEntity(dto, visit, provider, preAuth, claimBatch);
         claim.setSubmissionSource(currentUser != null && "PROVIDER_STAFF".equals(currentUser.getUserType())
                 ? com.waad.tba.modules.claim.entity.ClaimSubmissionSource.PROVIDER_PORTAL
                 : com.waad.tba.modules.claim.entity.ClaimSubmissionSource.INTERNAL_DIRECT);
-        // dto.getStatus() == null is the direct-entry model (no review workflow): the
-        // mapper leaves the claim DRAFT, and it must be persisted BEFORE its financial
+        // A null requested status is the internal direct-entry model (no review
+        // workflow). Every path is persisted as DRAFT before its audited transition;
+        // no request-supplied final state is ever written directly.
+        // The claim must be persisted BEFORE its financial
         // amount is known — finalizeSnapshot must run against a row that is not yet
         // APPROVED, so validateAmountLimits' "previously used" aggregation (which only
         // counts APPROVED/SETTLED/BATCHED claims) cannot see and double-count this
         // claim against itself. Callers that explicitly requested a status (e.g.
         // SUBMITTED, to start the reviewed workflow) are untouched here — their
         // financial snapshot is finalized later by ClaimReviewService.
-        boolean isDirectEntry = claim.getStatus() == ClaimStatus.DRAFT;
+        boolean isDirectEntry = requestedInitialStatus == null;
         Claim savedClaim = claimRepository.save(claim);
 
-        if (isDirectEntry) {
+        if (requestedInitialStatus == ClaimStatus.REJECTED) {
+            if (savedClaim.getReviewerComment() == null || savedClaim.getReviewerComment().isBlank()) {
+                throw new BusinessRuleException("سبب رفض المطالبة مطلوب");
+            }
+            claimStateMachine.transition(savedClaim, ClaimStatus.REJECTED, currentUser);
+            savedClaim = claimRepository.save(savedClaim);
+        } else if (requestedInitialStatus == ClaimStatus.SUBMITTED) {
+            claimStateMachine.transition(savedClaim, ClaimStatus.SUBMITTED, currentUser);
+            savedClaim = claimRepository.save(savedClaim);
+        } else if (isDirectEntry) {
             BigDecimal payable = financialSnapshotService.finalizeSnapshot(savedClaim);
 
             // Never construct an APPROVED claim with a zero approved amount: a claim with
