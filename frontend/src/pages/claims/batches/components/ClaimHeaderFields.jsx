@@ -25,7 +25,6 @@ export const ClaimHeaderFields = ({
   fullCoverage,
   setFullCoverage,
   onRefetchAll,
-  linesRef,
   preAuthResults,
   searchingPreAuth,
   preAuthId,
@@ -37,7 +36,6 @@ export const ClaimHeaderFields = ({
   financialSummary,
   currentCompanyCommitment = 0,
   editingApprovedAmount = 0,
-  loadingSummary,
   t,
   showValidationErrors
 }) => {
@@ -88,6 +86,12 @@ export const ClaimHeaderFields = ({
           loading={searchingMember}
           value={member}
           onChange={(_, v) => {
+            // A pre-authorization is eligible for one member in one dated
+            // context. Keeping its id after changing the member leaves a
+            // hidden stale value because the Autocomplete can no longer
+            // render it, while the submit payload would still send it.
+            setPreAuthId('');
+            setPreAuthSearch('');
             setMember(v);
             setIsDirty(true);
             if (v?.id) {
@@ -177,6 +181,8 @@ export const ClaimHeaderFields = ({
         <DatePicker
           value={serviceDate ? dayjs(serviceDate) : null}
           onChange={(value) => {
+            setPreAuthId('');
+            setPreAuthSearch('');
             setServiceDate(value?.isValid() ? value.format('YYYY-MM-DD') : '');
             setIsDirty(true);
           }}

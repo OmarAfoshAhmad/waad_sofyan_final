@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 const entrySource = readFileSync('src/pages/claims/batches/ClaimBatchEntry.jsx', 'utf8');
 const lineSource = readFileSync('src/pages/claims/batches/components/ClaimLineRow.jsx', 'utf8');
+const headerSource = readFileSync('src/pages/claims/batches/components/ClaimHeaderFields.jsx', 'utf8');
 
 describe('claim batch entry safety boundary', () => {
   it('does not let the browser construct an approved claim', () => {
@@ -33,5 +34,19 @@ describe('claim batch entry safety boundary', () => {
   it('offers only server-qualified pre-authorizations for the dated claim context', () => {
     expect(entrySource).toContain('claimsService.getEligiblePreAuthorizations');
     expect(entrySource).not.toContain('preApprovalsService.search');
+  });
+
+  it('clears a dated pre-authorization when its member or service date changes', () => {
+    const memberChange = headerSource.match(/value=\{member\}[\s\S]*?onChange=\{\(_, v\) => \{([\s\S]*?)setMember\(v\)/)?.[1];
+    const dateChange = headerSource.match(/value=\{serviceDate \? dayjs\(serviceDate\) : null\}[\s\S]*?onChange=\{\(value\) => \{([\s\S]*?)setServiceDate/)?.[1];
+
+    expect(memberChange).toContain("setPreAuthId('')");
+    expect(dateChange).toContain("setPreAuthId('')");
+  });
+
+  it('blocks rather than merely warns about services from another claim context', () => {
+    expect(entrySource).toContain('if (incompatibleContextLines.length > 0)');
+    expect(entrySource).toContain('لا يمكن الحفظ: الخدمات في البنود');
+    expect(entrySource).not.toContain('وسيتم احتسابها حسب قواعد التغطية المطابقة فقط');
   });
 });

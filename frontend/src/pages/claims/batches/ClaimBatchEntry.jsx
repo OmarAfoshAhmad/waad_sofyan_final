@@ -99,6 +99,8 @@ import { useCoverageLogic } from './hooks/useCoverageLogic';
 import { failedCoverageResult } from './hooks/coverageContract.mjs';
 
 import { ClaimHeaderFields } from './components/ClaimHeaderFields';
+import { ClaimEntryReadinessAlert } from './components/ClaimEntryReadinessAlert';
+import { invalidQuantityLineNumbers } from './claim-entry-validation';
 import { ClaimLineRow } from './components/ClaimLineRow';
 import { ClaimTotalsFooter } from './components/ClaimTotalsFooter';
 import { RecoveryDialog } from './components/RecoveryDialog';
@@ -232,7 +234,6 @@ export default function ClaimBatchEntry() {
   const [isDirty, setIsDirty] = useState(false);
   const [policyId, setPolicyId] = useState(null);
   const [policyInfo, setPolicyInfo] = useState(null);
-  const [memberFinancialSummary, setMemberFinancialSummary] = useState(null);
 
   // Rejection State
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
@@ -708,17 +709,6 @@ export default function ClaimBatchEntry() {
     readAt: entryContext.balanceReadAt,
     ceilingMode: entryContext.ceilingMode
   } : null;
-  const loadingSummary = loadingEntryContext;
-  const financialSummaryError = entryContextError;
-  const financialSummaryFailure = entryContextFailure;
-  const refetchFinancialSummary = refetchEntryContext;
-
-  useEffect(() => {
-    // Never retain another member's figures while the new summary is loading
-    // or has failed. A stale balance is more dangerous than no balance.
-    setMemberFinancialSummary(financialSummary || null);
-  }, [member?.id, financialSummary]);
-
   // ── Load Existing Claim for Edit ───────────────────────────────────────
   const { data: editingClaim, isLoading: loadingClaim } = useQuery({
     queryKey: ['claim', editingClaimId],
@@ -1585,13 +1575,8 @@ export default function ClaimBatchEntry() {
   const handleSave = async (resetAfter = false) => {
     if (isSavingRef.current) return;
 
-    if (member?.id && (financialSummaryError || !memberFinancialSummary)) {
-      enqueueSnackbar('لا يمكن حفظ المطالبة قبل نجاح قراءة البيانات المالية للمستفيد.', { variant: 'error' });
-      return;
-    }
-
     if (member?.id && (!serviceDate || loadingEntryContext || entryContextError || !entryContext)) {
-      enqueueSnackbar('لا يمكن حفظ المطالبة قبل التحقق من وثيقة المستفيد والعقد في تاريخ الخدمة.', { variant: 'error' });
+      enqueueSnackbar('لا يمكن الحفظ قبل نجاح التحقق من الوثيقة والعقد والرصيد في تاريخ الخدمة.', { variant: 'error' });
       return;
     }
 
@@ -1612,6 +1597,24 @@ export default function ClaimBatchEntry() {
         variant: 'error',
         autoHideDuration: 5000
       });
+      return;
+    }
+
+    const invalidQuantityLines = invalidQuantityLineNumbers(lines);
+    if (invalidQuantityLines.length > 0) {
+      enqueueSnackbar(
+        `الكمية يجب أن تكون عدداً صحيحاً أكبر من صفر في البنود: ${invalidQuantityLines.join('، ')}`,
+        { variant: 'error', autoHideDuration: 6000 }
+      );
+      return;
+    }
+
+    if (incompatibleContextLines.length > 0) {
+      const lineNumbers = incompatibleContextLines.map(({ index }) => index + 1).join('، ');
+      enqueueSnackbar(
+        `لا يمكن الحفظ: الخدمات في البنود ${lineNumbers} لا تتوافق مع سياق المطالبة الحالي. احذفها أو أعد اختيار خدمات صالحة لهذا السياق.`,
+        { variant: 'error', autoHideDuration: 7000 }
+      );
       return;
     }
 
@@ -1741,7 +1744,7 @@ export default function ClaimBatchEntry() {
             l.service?.categoryName ??
             l.service?.medicalCategoryName ??
             null,
-          quantity: parseInt(l.quantity) || 1,
+          quantity: Number(l.quantity),
           unitPrice: parseFloat(l.unitPrice) || 0,
           refusedAmount: parseFloat(l.refusedAmount) || 0,
           rejected: isClaimRejected ? true : l.rejected || false,
@@ -2052,7 +2055,6 @@ export default function ClaimBatchEntry() {
                 fullCoverage={fullCoverage}
                 setFullCoverage={setFullCoverage}
                 onRefetchAll={refetchAllLinesCoverageCallback}
-                linesRef={linesRef}
                 preAuthResults={preAuthResults}
                 searchingPreAuth={searchingPreAuth}
                 preAuthId={preAuthId}
@@ -2061,33 +2063,29 @@ export default function ClaimBatchEntry() {
                 serviceDate={serviceDate}
                 setServiceDate={setServiceDate}
                 setIsDirty={setIsDirty}
-                financialSummary={memberFinancialSummary}
+                financialSummary={financialSummary}
                 currentCompanyCommitment={totals.company}
                 editingApprovedAmount={editingClaim?.approvedAmount || 0}
-                loadingSummary={loadingSummary}
                 t={t}
                 showValidationErrors={showValidationErrors}
               />
-              {member?.id && financialSummaryError && (
-                <Alert severity="error" sx={{ mt: 1 }}
-                  action={<Button color="inherit" size="small" onClick={() => refetchFinancialSummary()}>إعادة المحاولة</Button>}>
-                  تعذر تحميل الرصيد المالي للمستفيد. أُوقف الحفظ حتى تنجح القراءة
-                  {financialSummaryFailure?.response?.data?.message ? `: ${financialSummaryFailure.response.data.message}` : ''}
-                </Alert>
-              )}
-              {member?.id && serviceDate && entryContextError && (
-                <Alert severity="error" sx={{ mt: 1 }}
-                  action={<Button color="inherit" size="small" onClick={() => refetchEntryContext()}>إعادة التحقق</Button>}>
-                  {entryContextFailure?.message || 'لا توجد وثيقة وعقد صالحان للمستفيد في تاريخ الخدمة المحدد.'}
-                </Alert>
-              )}
+              <Box sx={{ mt: 1 }}>
+                <ClaimEntryReadinessAlert
+                  member={member}
+                  serviceDate={serviceDate}
+                  loading={loadingEntryContext}
+                  context={entryContext}
+                  error={entryContextFailure}
+                  onRetry={refetchEntryContext}
+                />
+              </Box>
             </Box>
 
             <Divider />
 
             {incompatibleContextLines.length > 0 && (
               <Alert
-                severity="warning"
+                severity="error"
                 sx={{
                   mx: '1.25rem',
                   mt: 1,
@@ -2096,7 +2094,9 @@ export default function ClaimBatchEntry() {
                   '& .MuiAlert-message': { width: '100%', textAlign: 'right' }
                 }}
               >
-                توجد {incompatibleContextLines.length} خدمة مختارة لا تتبع سياق المطالبة الحالي. لن تظهر هذه الخدمات ضمن قائمة الاختيار لهذا السياق، وسيتم احتسابها حسب قواعد التغطية المطابقة فقط.
+                لا يمكن الحفظ: الخدمات في البنود{' '}
+                {incompatibleContextLines.map(({ index }) => index + 1).join('، ')} لا تتوافق مع سياق المطالبة الحالي.
+                احذفها أو أعد اختيار خدمات صالحة لهذا السياق.
               </Alert>
             )}
 
@@ -2411,7 +2411,6 @@ export default function ClaimBatchEntry() {
               isDirty={isDirty}
               coveragePending={lines.some((line) => (line.service || line.serviceName) && !line.rejected && line.coveragePending)}
                 financialDataUnavailable={Boolean(member?.id) && (
-                  loadingSummary || financialSummaryError || !memberFinancialSummary ||
                   !serviceDate || loadingEntryContext || entryContextError || !entryContext
                 )}
               hasUncoveredLines={lines.some(

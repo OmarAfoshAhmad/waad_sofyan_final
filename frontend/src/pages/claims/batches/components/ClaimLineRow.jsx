@@ -30,6 +30,7 @@ import {
   MedicalServices as MedicalServicesIcon,
   MenuBook as DictionaryIcon
 } from '@mui/icons-material';
+import { isValidClaimQuantity } from '../claim-entry-validation';
 
 const inlineSx = {
   '& .MuiInputBase-root': { fontSize: '0.85rem', fontWeight: 400 },
@@ -89,6 +90,7 @@ export const ClaimLineRow = ({
     line.service?.medicalCategory?.code ||
     line.service?.effectiveCategory?.code ||
     '';
+  const quantityInvalid = Boolean(line.service || line.serviceName) && !isValidClaimQuantity(line.quantity);
 
   return (
     <Fragment>
@@ -209,7 +211,9 @@ export const ClaimLineRow = ({
               const v = e.target.value;
               if (v === '' || Number(v) >= 0) updateLine(idx, { quantity: v });
             }}
-            inputProps={{ min: 0 }}
+            error={quantityInvalid}
+            helperText={quantityInvalid ? 'عدد صحيح > 0' : null}
+            inputProps={{ min: 1, step: 1 }}
             sx={inlineSx}
           />
         </TableCell>
