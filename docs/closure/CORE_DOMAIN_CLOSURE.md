@@ -593,9 +593,10 @@ same question.
 
 ## BENEFIT POLICIES — PARTIALLY VERIFIED
 
-Following the same P-01..P-xx gate discipline used for Employers. Two gates
-closed this round; one P0 finding surfaced and is deliberately deferred
-rather than fixed blind.
+Following the same P-01..P-xx gate discipline used for Employers. Three
+gates closed this round (P-06 audit, P-08 concurrency, P-03 inherited);
+one P0 finding surfaced and is deliberately deferred rather than fixed
+blind.
 
 ### P0 finding, deferred by decision: a second, parallel scope model — OPEN
 
@@ -675,13 +676,40 @@ follows the identical pattern and is called from the same call sites.
 `OPEN`: no dedicated policy-resolver test exists independent of the
 cross-module one; not falsified, but not directly proved either.
 
+### P-08 concurrency (overlapping activation) — VERIFIED
+
+**CLAIM:** two DRAFT policies for the same employer, with overlapping
+date ranges, cannot both end up ACTIVE even when their `activate()` calls
+race at the same instant.
+
+**MECHANISM** `activate()` takes `pg_advisory_xact_lock` keyed on the
+employer id (`BenefitPolicyRepository.acquireTransactionLock`,
+`BenefitPolicyService.java:460`) *before* running
+`checkOverlappingActivePolicy` -- the same read-check-write hazard shape as
+Employer's E-08 (archive vs. assignment), just within one service instead
+of two.
+
+**TEST** `BenefitPolicyActivationConcurrencyIntegrationTest`, real threads
+via `TransactionTemplate` + `CountDownLatch` (not sequential/simulated
+calls -- those prove nothing about a race). `@RepeatedTest(20)`: 20/20
+trials land in a consistent state (exactly one policy ACTIVE, exactly one
+`activate()` call reporting success), ~39s total.
+
+**Proved to bite, and the failure mode differs from Employer's E-08.**
+Temporarily removing the advisory-lock call did not hang the JVM the way
+removing Employer's pessimistic row lock did -- `checkOverlappingActivePolicy`
+is a plain `SELECT count`, not a blocking row-level wait, so both threads
+simply read "no active overlap yet" concurrently and both committed.
+Result: both policies persisted as `ACTIVE` in the same run --
+`exactly one of the two overlapping policies may end up ACTIVE (A=ACTIVE,
+B=ACTIVE)` -- a real double-active-policy data corruption, not a liveness
+hazard. Restoring the lock made the same run pass again.
+
 `OPEN`, not examined this round: P-02 (archive/lifecycle transition
 guards beyond what `BenefitPolicyServiceTest` already covers), P-04/P-05
 (scope closure, blocked on the production audit above), P-07 (import),
-P-08 (concurrency -- `checkOverlappingActivePolicy` has no proven
-concurrent-activation test, only the sequential unit tests), P-09 (DB
-constraints -- migrations exist per the earlier survey but are untested
-across a live migration the way Employer's V200 was), P-10 (performance),
+P-09 (DB constraints -- migrations exist per the earlier survey but are
+untested across a live migration the way Employer's V200 was), P-10 (performance),
 P-11 (integration gate).
 
 ## COVERAGE RULES — PARTIALLY VERIFIED
