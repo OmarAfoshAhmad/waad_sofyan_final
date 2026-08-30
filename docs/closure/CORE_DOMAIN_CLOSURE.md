@@ -593,12 +593,12 @@ same question.
 
 ## BENEFIT POLICIES — PARTIALLY VERIFIED
 
-Following the same P-01..P-xx gate discipline used for Employers. Six
-gates closed this round (P-03 -- corrected mid-round after a real defect
-was found, not merely inherited as first assumed --, P-04 EMPLOYER_ADMIN
-isolation, P-06 audit, P-08 concurrency, P-09 DB constraints, P-11
-integration gate); one P0 finding surfaced and is deliberately deferred
-rather than fixed blind.
+Following the same P-01..P-xx gate discipline used for Employers. Seven
+gates closed this round (P-02 state transition matrix, P-03 -- corrected
+mid-round after a real defect was found, not merely inherited as first
+assumed --, P-04 EMPLOYER_ADMIN isolation, P-06 audit, P-08 concurrency,
+P-09 DB constraints, P-11 integration gate); one P0 finding surfaced and
+is deliberately deferred rather than fixed blind.
 
 ### P0 finding, deferred by decision: a second, parallel scope model — OPEN
 
@@ -838,10 +838,34 @@ test's original, more naive form asserted the historical resolution and
 failed against real (not assumed) behavior, which is what triggered fixing
 `MemberPolicyResolver` rather than writing the test around the bug.
 
-`OPEN`, not examined this round: P-02 (archive/lifecycle transition
-guards beyond what `BenefitPolicyServiceTest` already covers), P-05
-(the ACCOUNTANT/MEDICAL_REVIEWER scope unification, blocked on the
-production audit above), P-07 (import), P-10 (performance).
+### P-02 state transition matrix — VERIFIED
+
+**CLAIM:** every `{source status} x {action}` combination `BenefitPolicyService`
+implements behaves as the code actually specifies -- proved directly
+rather than inferred from the handful of transitions other tests happen
+to exercise in passing.
+
+**EVIDENCE** `BenefitPolicyStateTransitionMatrixTest`, 26 cases across all
+5 `BenefitPolicyStatus` values x the 5 transition methods:
+- `activate()`: allowed from every status except `CANCELLED`.
+- `deactivate()`: allowed only from `ACTIVE`/`SUSPENDED`.
+- `suspend()`: allowed only from `ACTIVE`.
+- `revertToDraft()`: allowed only from `ACTIVE`/`SUSPENDED`, and only with
+  no claim/pre-authorization ever linked (denied even from `ACTIVE` when
+  linked).
+- `cancel()`: allowed from every status except when already `CANCELLED`.
+
+**Deliberately not a judgment call.** This does not decide whether the
+current matrix is the *right* one -- e.g. whether `activate()` allowing a
+direct `EXPIRED -> ACTIVE` jump (skipping `DRAFT`) is an intended
+reinstatement path or an oversight is a product question outside this
+closure round's authority. It records the actual, current behavior
+precisely enough that any future change to it becomes a visible,
+intentional diff here rather than a silent regression.
+
+`OPEN`, not examined this round: P-05 (the ACCOUNTANT/MEDICAL_REVIEWER
+scope unification, blocked on the production audit above), P-07 (import),
+P-10 (performance).
 
 ## COVERAGE RULES — PARTIALLY VERIFIED
 
