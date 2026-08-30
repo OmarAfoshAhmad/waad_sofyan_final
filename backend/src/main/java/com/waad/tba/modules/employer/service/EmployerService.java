@@ -257,6 +257,7 @@ public class EmployerService {
 
         Employer saved = employerRepository.save(employer);
         log.info("[EmployerService] Created employer with ID: {} and code: {}", saved.getId(), saved.getCode());
+        audit("CREATED", saved.getId(), "إنشاء جهة عمل جديدة " + saved.getName() + " (" + saved.getCode() + ")");
 
         return mapper.toResponse(saved);
     }
@@ -281,6 +282,17 @@ public class EmployerService {
         log.info("[EmployerService] Updating employer ID: {}", id);
 
         Employer employer = findEmployerById(id);
+
+        // Captured before any field is mutated, so the audit entry names what
+        // actually changed rather than only the state it ended in. Identity
+        // (code, name) and contract terms are the fields worth distinguishing
+        // in the reason text -- the rest are contact details nobody has asked
+        // to trace changes to.
+        String previousCode = employer.getCode();
+        String previousName = employer.getName();
+        java.time.LocalDate previousContractStart = employer.getContractStartDate();
+        java.time.LocalDate previousContractEnd = employer.getContractEndDate();
+        Integer previousMaxMemberLimit = employer.getMaxMemberLimit();
 
         // Validate code uniqueness (exclude self)
         if (employerRepository.existsByCodeIgnoreCaseAndIdNot(dto.getCode().trim().toUpperCase(), id)) {
@@ -317,8 +329,40 @@ public class EmployerService {
 
         Employer updated = employerRepository.save(employer);
         log.info("[EmployerService] Updated employer ID: {}", id);
+        audit("UPDATED", id, updateAuditReason(previousCode, previousName, previousContractStart,
+                previousContractEnd, previousMaxMemberLimit, updated));
 
         return mapper.toResponse(updated);
+    }
+
+    /**
+     * Names what changed in an update -- identity and contract terms only,
+     * because those are the fields an administrator would ask "who changed
+     * this and when" about. Contact details changing is not silent (the row
+     * itself carries the new value); it is simply not what this reason text
+     * is for.
+     */
+    private String updateAuditReason(String previousCode, String previousName,
+            java.time.LocalDate previousContractStart, java.time.LocalDate previousContractEnd,
+            Integer previousMaxMemberLimit, Employer updated) {
+        StringBuilder changes = new StringBuilder("تعديل بيانات جهة العمل " + updated.getName());
+        if (!previousCode.equals(updated.getCode())) {
+            changes.append("، الرمز من ").append(previousCode).append(" إلى ").append(updated.getCode());
+        }
+        if (!previousName.equals(updated.getName())) {
+            changes.append("، الاسم من ").append(previousName).append(" إلى ").append(updated.getName());
+        }
+        if (!java.util.Objects.equals(previousContractStart, updated.getContractStartDate())
+                || !java.util.Objects.equals(previousContractEnd, updated.getContractEndDate())) {
+            changes.append("، مدة التعاقد من (").append(previousContractStart).append(" - ")
+                    .append(previousContractEnd).append(") إلى (").append(updated.getContractStartDate())
+                    .append(" - ").append(updated.getContractEndDate()).append(")");
+        }
+        if (!java.util.Objects.equals(previousMaxMemberLimit, updated.getMaxMemberLimit())) {
+            changes.append("، الحد الأقصى للمستفيدين من ").append(previousMaxMemberLimit)
+                    .append(" إلى ").append(updated.getMaxMemberLimit());
+        }
+        return changes.toString();
     }
 
     /**

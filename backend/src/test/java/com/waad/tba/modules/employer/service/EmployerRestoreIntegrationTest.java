@@ -196,4 +196,74 @@ class EmployerRestoreIntegrationTest extends PostgresIntegrationTestBase {
                 + " VALUES (?, ?, ?, 'تجهيز اختبار الاستعادة', 'MANUAL')",
                 memberId, employerId, LocalDate.now().minusDays(1));
     }
+
+    // ── E-10: create and update are audited too ─────────────────────────────
+
+    @Test
+    @DisplayName("creating an employer is recorded in the audit trail")
+    void creatingIsAudited() {
+        String s = suffix();
+        var dto = new com.waad.tba.modules.employer.dto.EmployerCreateDto();
+        dto.setCode("AUD-" + s);
+        dto.setName("جهة تدقيق الإنشاء " + s);
+
+        var created = employerService.create(dto);
+
+        var rows = jdbc.queryForList(
+                "SELECT reason FROM medical_audit_logs WHERE entity_type = 'EMPLOYER' AND entity_id = ?"
+                        + " AND action = 'CREATED'", String.valueOf(created.getId()));
+
+        assertThat(rows).hasSize(1);
+        assertThat(rows.get(0).get("reason")).asString().contains("إنشاء جهة عمل جديدة");
+    }
+
+    @Test
+    @DisplayName("updating identity or contract terms is recorded, and names what changed")
+    void updatingIdentityIsAuditedWithTheDiff() {
+        String s = suffix();
+        var createDto = new com.waad.tba.modules.employer.dto.EmployerCreateDto();
+        createDto.setCode("AUD2-" + s);
+        createDto.setName("جهة قبل التعديل " + s);
+        var created = employerService.create(createDto);
+
+        var updateDto = new com.waad.tba.modules.employer.dto.EmployerUpdateDto();
+        updateDto.setCode("AUD2-" + s);
+        updateDto.setName("جهة بعد التعديل " + s);
+        employerService.update(created.getId(), updateDto);
+
+        var rows = jdbc.queryForList(
+                "SELECT reason FROM medical_audit_logs WHERE entity_type = 'EMPLOYER' AND entity_id = ?"
+                        + " AND action = 'UPDATED' ORDER BY id DESC LIMIT 1", String.valueOf(created.getId()));
+
+        assertThat(rows).hasSize(1);
+        assertThat(rows.get(0).get("reason")).asString()
+                .as("the reason names the actual before and after, not just \"something changed\"")
+                .contains("جهة قبل التعديل " + s)
+                .contains("جهة بعد التعديل " + s);
+    }
+
+    @Test
+    @DisplayName("updating contact details only does not fabricate a name or code change in the reason")
+    void updatingOnlyContactDetailsNamesNoIdentityChange() {
+        String s = suffix();
+        var createDto = new com.waad.tba.modules.employer.dto.EmployerCreateDto();
+        createDto.setCode("AUD3-" + s);
+        createDto.setName("جهة بلا تغيير هوية " + s);
+        var created = employerService.create(createDto);
+
+        var updateDto = new com.waad.tba.modules.employer.dto.EmployerUpdateDto();
+        updateDto.setCode("AUD3-" + s);
+        updateDto.setName("جهة بلا تغيير هوية " + s);
+        updateDto.setPhone("0911111111");
+        employerService.update(created.getId(), updateDto);
+
+        var rows = jdbc.queryForList(
+                "SELECT reason FROM medical_audit_logs WHERE entity_type = 'EMPLOYER' AND entity_id = ?"
+                        + " AND action = 'UPDATED' ORDER BY id DESC LIMIT 1", String.valueOf(created.getId()));
+
+        assertThat(rows).hasSize(1);
+        assertThat(rows.get(0).get("reason")).asString()
+                .as("a phone-only update did not touch identity or contract terms, and must not claim it did")
+                .doesNotContain("الرمز من").doesNotContain("الاسم من").doesNotContain("مدة التعاقد");
+    }
 }

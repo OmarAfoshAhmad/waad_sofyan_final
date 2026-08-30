@@ -445,7 +445,29 @@ decision with no live risk to justify it today; left as an open observation
 rather than fixed speculatively. If a write path is ever added, this needs
 revisiting before it ships.
 
-### E-10 audit (beyond archive/restore), E-11 performance, E-12 integration gate — OPEN
+### E-10 audit (beyond archive/restore) — VERIFIED
+
+**CLAIM:** every significant employer write is auditable, with who did it
+and what actually changed.
+
+**FAILURE FOUND** `create()` and `update()` had zero audit signal.
+`update()` is the more serious gap: it can change the code, the name and the
+contract terms (dates, member cap) with nothing recording it. The import
+path writes through these same methods, so it inherited the gap too.
+
+**FIX** Both call through `AuditLogService`, matching archive/restore.
+`update()` captures the four fields worth distinguishing -- code, name,
+contract dates, member cap -- before mutating, and the reason text names the
+actual before and after only for what changed; a contact-detail-only update
+does not fabricate a claim that identity or terms moved.
+
+**REGRESSION TESTS** Three cases in `EmployerRestoreIntegrationTest`:
+creation is recorded, an identity/term change is recorded with the real
+before-and-after values in the reason text, and a phone-only update's reason
+contains neither an identity-change nor a contract-term-change phrase. Both
+audit calls proved to bite individually by removal.
+
+### E-11 performance, E-12 integration gate — OPEN
 
 Not examined.
 
