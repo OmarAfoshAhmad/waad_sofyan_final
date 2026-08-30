@@ -4,6 +4,9 @@ import java.util.List;
 import java.util.Set;
 
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -30,10 +33,13 @@ import com.waad.tba.modules.claim.api.request.UpdateClaimRequest;
 import com.waad.tba.modules.claim.api.response.ClaimListResponse;
 import com.waad.tba.modules.claim.api.response.ClaimResponse;
 import com.waad.tba.modules.claim.dto.ClaimViewDto;
+import com.waad.tba.modules.claim.dto.ClaimEntryContextDto;
 import com.waad.tba.modules.claim.dto.CostBreakdownDto;
 import com.waad.tba.modules.claim.dto.FinancialSummaryDto;
+import com.waad.tba.modules.providercontract.dto.ProviderContractPricingItemResponseDto;
 import com.waad.tba.modules.claim.entity.ClaimStatus;
 import com.waad.tba.modules.claim.service.ClaimService;
+import com.waad.tba.modules.claim.service.ClaimEntryContextService;
 import com.waad.tba.common.guard.FeatureGuard;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -74,6 +80,7 @@ import lombok.extern.slf4j.Slf4j;
 public class ClaimController {
 
     private final ClaimService claimService;
+    private final ClaimEntryContextService claimEntryContextService;
     private final ClaimApiMapper apiMapper;
     private final FeatureGuard featureGuard;
 
@@ -85,6 +92,38 @@ public class ClaimController {
             "id", "createdAt", "updatedAt", "status", "requestedAmount",
             "approvedAmount", "serviceDate", "providerName", "memberName",
             "encounterType", "categoryNameAr", "categoryNameEn");
+
+    @GetMapping("/entry-context")
+    @PreAuthorize("@claimAccessGuard.canReadMemberFor('CLAIM_CREATE', #memberId) "
+            + "&& @claimAccessGuard.canAccessBatch('CLAIM_CREATE', #providerId, #employerId)")
+    @Operation(summary = "Resolve dated claim-entry context",
+            description = "Returns the member employer, policy assignment and provider contract effective on the service date.")
+    public ResponseEntity<ApiResponse<ClaimEntryContextDto>> getEntryContext(
+            @RequestParam("memberId") Long memberId,
+            @RequestParam("providerId") Long providerId,
+            @RequestParam("employerId") Long employerId,
+            @RequestParam("serviceDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate serviceDate) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "تم التحقق من سياق المطالبة",
+                claimEntryContextService.resolve(memberId, providerId, employerId, serviceDate)));
+    }
+
+    @GetMapping("/entry-services")
+    @PreAuthorize("@claimAccessGuard.canReadMemberFor('CLAIM_CREATE', #memberId) "
+            + "&& @claimAccessGuard.canAccessBatch('CLAIM_CREATE', #providerId, #employerId)")
+    @Operation(summary = "List dated claim-entry services",
+            description = "Returns only pricing-item versions effective in the resolved contract on the service date.")
+    public ResponseEntity<ApiResponse<Page<ProviderContractPricingItemResponseDto>>> getEntryServices(
+            @RequestParam("memberId") Long memberId,
+            @RequestParam("providerId") Long providerId,
+            @RequestParam("employerId") Long employerId,
+            @RequestParam("serviceDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate serviceDate,
+            @PageableDefault(size = 500, sort = "serviceName", direction = Sort.Direction.ASC) Pageable pageable) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "تم تحميل خدمات العقد السارية",
+                claimEntryContextService.findEffectiveServices(
+                        memberId, providerId, employerId, serviceDate, pageable)));
+    }
 
     @PostMapping
     @PreAuthorize("@claimAccessGuard.canCreateFromVisit(#apiRequest.visitId)")

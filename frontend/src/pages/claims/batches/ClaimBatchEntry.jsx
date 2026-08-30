@@ -88,9 +88,7 @@ import employersService from 'services/api/employers.service';
 import claimsService from 'services/api/claims.service';
 import preApprovalsService from 'services/api/pre-approvals.service';
 import visitsService from 'services/api/visits.service';
-import benefitPoliciesService from 'services/api/benefit-policies.service';
 import * as medicalCategoriesService from 'services/api/medical-categories.service';
-import providerContractsService from 'services/api/provider-contracts.service';
 import claimBatchesService from 'services/api/claim-batches.service';
 import medicalDictionaryService from 'services/api/medical-dictionary.service';
 import { claimRejectionReasonsService } from 'services/api/claim-rejection-reasons.service';
@@ -310,10 +308,9 @@ export default function ClaimBatchEntry() {
   const [encounterType, setEncounterType] = useState('OUTPATIENT');
   const [fullCoverage, setFullCoverage] = useState(false);
 
-  const defaultDate = useMemo(
-    () => (month && year ? `${year}-${String(month).padStart(2, '0')}-01` : new Date().toISOString().split('T')[0]),
-    [month, year]
-  );
+  // A batch period is not a service date. Guessing the first day silently
+  // creates a financially valid claim on a date the operator never chose.
+  const defaultDate = '';
 
   const [serviceDate, setServiceDate] = useState(defaultDate);
 
@@ -530,6 +527,19 @@ export default function ClaimBatchEntry() {
     enabled: !!providerId
   });
   const {
+    data: entryContext,
+    isFetching: loadingEntryContext,
+    isError: entryContextError,
+    error: entryContextFailure,
+    refetch: refetchEntryContext
+  } = useQuery({
+    queryKey: ['claim-entry-context', member?.id, providerId, employerId, serviceDate],
+    queryFn: () => claimsService.getEntryContext({ memberId: member.id, providerId, employerId, serviceDate }),
+    enabled: !!member?.id && !!providerId && !!employerId && !!serviceDate,
+    retry: false,
+    staleTime: 30000
+  });
+  const {
     data: currentBatch,
     isLoading: loadingBatchMeta,
     error: batchError
@@ -566,14 +576,16 @@ export default function ClaimBatchEntry() {
     enabled: !!employerId && !!providerId
   });
   const { data: contractedRaw, isLoading: loadingServices } = useQuery({
-    queryKey: ['contracted-services', providerId],
-    queryFn: () => providerContractsService.getAllContractedServices(providerId),
-    enabled: !!providerId
-  });
-  const { data: activeContract, isLoading: loadingContract } = useQuery({
-    queryKey: ['provider-active-contract', providerId],
-    queryFn: () => providerContractsService.getActiveContractByProvider(providerId),
-    enabled: !!providerId
+    queryKey: ['claim-entry-contract-services', entryContext?.contractId, serviceDate],
+    queryFn: () => claimsService.getEntryServices({
+      memberId: selectedMemberId,
+      providerId: batch?.providerId,
+      employerId: batch?.employerId,
+      serviceDate,
+      size: 500,
+      sort: 'serviceName,asc'
+    }),
+    enabled: !!entryContext?.contractId && !!serviceDate
   });
   const normalizedMemberSearchValue = useMemo(() => debouncedMemberInput.trim(), [debouncedMemberInput]);
 
@@ -662,45 +674,43 @@ export default function ClaimBatchEntry() {
     queryClient.invalidateQueries({ queryKey: ['settlement-claims'] });
   }, [queryClient]);
 
-  // الوثيقة التأمينية والمنافع (PHASE 5.6 - Decoupled from Member)
+  // The dated context is the only source for the policy and contract shown by
+  // this screen. Employer-current/provider-current lookups are not equivalent
+  // to the member context on a historical service date.
   useEffect(() => {
-    if (!employerId) {
+    if (!entryContext?.policyId) {
       setPolicyId(null);
       setPolicyInfo(null);
       return;
     }
-    // Load the effective policy for this employer as soon as we have the ID
-    // This ensures the "Document" context is set before searching for members
-    benefitPoliciesService
-      .getEffectiveBenefitPolicy(employerId)
-      .then((p) => {
-        if (p) {
-          setPolicyId(p.id);
-          setPolicyInfo(p);
-        } else {
-          setPolicyId(null);
-          setPolicyInfo(null);
-        }
-      })
-      .catch(() => {
-        setPolicyId(null);
-        setPolicyInfo(null);
-      });
-  }, [employerId]);
+    setPolicyId(entryContext.policyId);
+    setPolicyInfo({
+      id: entryContext.policyId,
+      policyCode: entryContext.policyCode,
+      name: entryContext.policyName,
+      status: entryContext.policyStatus,
+      startDate: entryContext.policyStartDate,
+      endDate: entryContext.policyEndDate
+    });
+  }, [entryContext]);
 
-  // ── Member Financial Summary (PHASE 1 - Single Source of Truth) ──────
-  const {
-    data: financialSummary,
-    isFetching: loadingSummary,
-    isError: financialSummaryError,
-    error: financialSummaryFailure,
-    refetch: refetchFinancialSummary
-  } = useQuery({
-    queryKey: ['member-financial-summary', member?.id],
-    queryFn: () => unifiedMembersService.getFinancialSummary(member.id),
-    enabled: !!member?.id,
-    staleTime: 30000 // 30 seconds
-  });
+  // The claim header must use the same dated policy/balance snapshot as the
+  // contract and its prices. A separate "current summary" request would mix
+  // today's balance into a historical claim and add an unnecessary request.
+  const financialSummary = entryContext ? {
+    annualLimit: entryContext.annualLimit,
+    limitConsumedAmount: entryContext.committedAmount,
+    reservedAmount: entryContext.reservedAmount,
+    actualRemaining: entryContext.actualRemaining,
+    reservableAvailable: entryContext.reservableAvailable,
+    asOfDate: entryContext.serviceDate,
+    readAt: entryContext.balanceReadAt,
+    ceilingMode: entryContext.ceilingMode
+  } : null;
+  const loadingSummary = loadingEntryContext;
+  const financialSummaryError = entryContextError;
+  const financialSummaryFailure = entryContextFailure;
+  const refetchFinancialSummary = refetchEntryContext;
 
   useEffect(() => {
     // Never retain another member's figures while the new summary is loading
@@ -971,7 +981,7 @@ export default function ClaimBatchEntry() {
   }, [memberResults, member]);
 
   const contractedServiceOptionsRaw = useMemo(() => {
-    const items = Array.isArray(contractedRaw) ? contractedRaw : contractedRaw?.items || [];
+    const items = Array.isArray(contractedRaw) ? contractedRaw : contractedRaw?.content || contractedRaw?.items || [];
     return items.map((s) => {
       const code = s.serviceCode || s.code || '';
       const name = s.serviceName || s.name || '';
@@ -1005,7 +1015,7 @@ export default function ClaimBatchEntry() {
         categoryName: normalizedCategoryName,
         serviceCategoryName: normalizedCategoryName,
         medicalCategoryName: normalizedCategoryName,
-        pricingItemId: s.pricingItemId,
+        pricingItemId: s.pricingItemId ?? s.id,
         contractPrice: s.contractPrice || 0,
         maxContractPrice: s.maxContractPrice || s.contractPrice || 0
       };
@@ -1574,6 +1584,11 @@ export default function ClaimBatchEntry() {
       return;
     }
 
+    if (member?.id && (!serviceDate || loadingEntryContext || entryContextError || !entryContext)) {
+      enqueueSnackbar('لا يمكن حفظ المطالبة قبل التحقق من وثيقة المستفيد والعقد في تاريخ الخدمة.', { variant: 'error' });
+      return;
+    }
+
     // التحقق من الحقول المطلوبة بشكل احترافي
     const missingFields = [];
     if (!member) missingFields.push('المستفيد');
@@ -1687,7 +1702,10 @@ export default function ClaimBatchEntry() {
         diagnosisDescription: diagnosis,
         complaint,
         notes,
-        status: effectivelyRejected ? 'REJECTED' : 'APPROVED',
+        // Approval is a server-owned transition. The browser may explicitly
+        // request rejection, but a positive claim must enter through DRAFT so
+        // ClaimService finalizes the canonical snapshot and state transition.
+        status: effectivelyRejected ? 'REJECTED' : null,
         rejectionReason: effectivelyRejected ? effectiveRejectionReason : null,
         preAuthorizationId: preAuthId ? parseInt(preAuthId) : null,
         encounterType,
@@ -1909,11 +1927,11 @@ export default function ClaimBatchEntry() {
                 color={isDirty ? 'warning' : 'primary'}
                 sx={{ fontWeight: 600, fontSize: '0.85rem' }}
               />
-              {policyInfo && (
+              {entryContext && policyInfo && (
                 <Chip
                   icon={<PolicyIcon sx={{ fontSize: '0.85rem' }} />}
                   size="small"
-                  label={`${t('claimEntry.benefitPolicy')}: ${policyInfo.policyNumber || policyInfo.name || 'مفعّلة'}`}
+                  label={`${t('claimEntry.benefitPolicy')}: ${policyInfo.policyCode || policyInfo.name} (${policyInfo.startDate} — ${policyInfo.endDate || 'مفتوحة'})`}
                   color="success"
                   variant="outlined"
                   sx={{ fontWeight: 600, fontSize: '0.85rem', borderColor: 'success.main', color: 'success.main' }}
@@ -1931,7 +1949,7 @@ export default function ClaimBatchEntry() {
               )}
             </Stack>
           }
-          subtitle={`${t('providers.singular')}: ${provider?.name || '...'} | رقم العقد: ${activeContract?.contractNumber || '—'} | المؤمن عليه: ${member?.fullName || '...'} (${member?.cardNumber || '—'})`}
+          subtitle={`${t('providers.singular')}: ${provider?.name || '...'} | رقم العقد: ${entryContext?.contractNumber || 'بانتظار التحقق'} | المؤمن عليه: ${member?.fullName || '...'} (${member?.cardNumber || '—'})`}
           icon={<ReceiptIcon />}
           actions={
             <Stack direction="row" spacing={1} alignItems="center">
@@ -2067,6 +2085,12 @@ export default function ClaimBatchEntry() {
                   action={<Button color="inherit" size="small" onClick={() => refetchFinancialSummary()}>إعادة المحاولة</Button>}>
                   تعذر تحميل الرصيد المالي للمستفيد. أُوقف الحفظ حتى تنجح القراءة
                   {financialSummaryFailure?.response?.data?.message ? `: ${financialSummaryFailure.response.data.message}` : ''}
+                </Alert>
+              )}
+              {member?.id && serviceDate && entryContextError && (
+                <Alert severity="error" sx={{ mt: 1 }}
+                  action={<Button color="inherit" size="small" onClick={() => refetchEntryContext()}>إعادة التحقق</Button>}>
+                  {entryContextFailure?.message || 'لا توجد وثيقة وعقد صالحان للمستفيد في تاريخ الخدمة المحدد.'}
                 </Alert>
               )}
             </Box>
@@ -2398,7 +2422,10 @@ export default function ClaimBatchEntry() {
               saving={saving}
               isDirty={isDirty}
               coveragePending={lines.some((line) => (line.service || line.serviceName) && !line.rejected && line.coveragePending)}
-              financialDataUnavailable={Boolean(member?.id) && (loadingSummary || financialSummaryError || !memberFinancialSummary)}
+                financialDataUnavailable={Boolean(member?.id) && (
+                  loadingSummary || financialSummaryError || !memberFinancialSummary ||
+                  !serviceDate || loadingEntryContext || entryContextError || !entryContext
+                )}
               hasUncoveredLines={lines.some(
                 (line) => (line.service || line.serviceName) && !line.rejected && (line.notCovered || (Number(line.coveragePercent) || 0) <= 0)
               )}

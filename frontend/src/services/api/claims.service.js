@@ -24,6 +24,16 @@ const handleClaimErrors = createErrorHandler('المطالبة', {
 });
 
 export const claimsService = {
+  getEntryServices: async ({ memberId, providerId, employerId, serviceDate, ...pageable }) => {
+    try {
+      const response = await axiosClient.get(`${BASE_URL}/entry-services`, {
+        params: { memberId, providerId, employerId, serviceDate, ...pageable }
+      });
+      return unwrap(response);
+    } catch (error) {
+      throw handleClaimErrors(error);
+    }
+  },
   /**
    * Get all claims with pagination and filtering
    * @param {Object} params - Query parameters {page, size, employerId, sort, search}
@@ -141,6 +151,18 @@ export const claimsService = {
         validateAmount(data.requestedAmount, 'المبلغ المطلوب');
       }
       const response = await axiosClient.post(BASE_URL, data);
+      return unwrap(response);
+    } catch (error) {
+      throw handleClaimErrors(error);
+    }
+  },
+
+  /** Resolve the member, policy and contract effective on one service date. */
+  getEntryContext: async ({ memberId, providerId, employerId, serviceDate }) => {
+    try {
+      const response = await axiosClient.get(`${BASE_URL}/entry-context`, {
+        params: { memberId, providerId, employerId, serviceDate }
+      });
       return unwrap(response);
     } catch (error) {
       throw handleClaimErrors(error);

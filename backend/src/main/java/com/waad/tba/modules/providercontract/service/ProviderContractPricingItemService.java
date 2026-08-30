@@ -137,6 +137,20 @@ public class ProviderContractPricingItemService {
     }
 
     /**
+     * Lists only the price versions effective on the financial decision date.
+     * Claim entry must use this path, not the administrative contract catalogue.
+     */
+    @Transactional(readOnly = true)
+    public Page<ProviderContractPricingItemResponseDto> findEffectiveInContract(
+            Long contractId, java.time.LocalDate serviceDate, Pageable pageable) {
+        if (serviceDate == null) {
+            throw new BusinessRuleException("تاريخ الخدمة مطلوب لقراءة أسعار العقد");
+        }
+        return pricingRepository.findEffectiveByContractId(contractId, serviceDate, pageable)
+                .map(ProviderContractPricingItemResponseDto::fromEntity);
+    }
+
+    /**
      * Get effective pricing for a provider/service combination
      */
     @Transactional(readOnly = true)

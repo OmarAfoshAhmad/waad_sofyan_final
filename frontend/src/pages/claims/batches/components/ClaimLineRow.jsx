@@ -265,7 +265,7 @@ export const ClaimLineRow = ({
         {visibleColumns.coverage && (
           <TableCell align="center">
             <Typography variant="body2" sx={{ fontSize: '0.85rem', fontWeight: 400, color: 'text.secondary' }}>
-              {line.coveragePercent !== null ? `${line.coveragePercent}%` : `${policyInfo?.defaultCoveragePercent ?? 100}%`}
+              {line.coveragePercent !== null ? `${line.coveragePercent}%` : 'بانتظار الحساب'}
             </Typography>
           </TableCell>
         )}
