@@ -593,13 +593,14 @@ same question.
 
 ## BENEFIT POLICIES — PARTIALLY VERIFIED
 
-Following the same P-01..P-xx gate discipline used for Employers. Eight
+Following the same P-01..P-xx gate discipline used for Employers. Nine
 gates closed this round (P-02 state transition matrix, P-03 -- corrected
 mid-round after a real defect was found, not merely inherited as first
-assumed --, P-04 EMPLOYER_ADMIN isolation, P-06 audit, P-08 concurrency,
-P-09 DB constraints, P-10 performance -- two real N+1s found and fixed --,
-P-11 integration gate); one P0 finding surfaced and is deliberately
-deferred rather than fixed blind.
+assumed --, P-04 EMPLOYER_ADMIN isolation, P-06 audit, P-07 import
+atomicity, P-08 concurrency, P-09 DB constraints, P-10 performance -- two
+real N+1s found and fixed --, P-11 integration gate). Only P-05 remains
+`OPEN`, deliberately deferred rather than fixed blind pending a
+production data audit.
 
 ### P0 finding, deferred by decision: a second, parallel scope model — OPEN
 
@@ -910,8 +911,35 @@ N+1 would move that number by roughly the page size (20), not by two.
 **REGRESSION TEST** `BenefitPolicyQueryScalePerformanceIntegrationTest` --
 two cases, numbers above.
 
+### P-07 import atomicity — VERIFIED
+
+**CLAIM:** a workbook mixing one valid rule row with one row naming an
+unapproved medical category imports NOTHING -- not the valid row with the
+bad one merely reported as an error, which would be a silent partial
+import.
+
+**Shape of this gate, unlike Employer's E-07:** benefit-policy import
+(`BenefitStructureImportService`) writes rules/groups/buckets into an
+EXISTING policy, not new policies from a spreadsheet, and every write
+endpoint requires `SUPER_ADMIN` (global scope) -- so the "a scoped
+operator reactivates something via import" shape E-07 tested for
+Employers does not apply here. The open question for this service was
+atomicity: does a bad row anywhere in the workbook get silently dropped
+while the rest of the sheet commits?
+
+**EVIDENCE** `importWorkbook` already separates `validate()` (collects
+every row error) from `apply()` (writes rows), calling `apply()` only
+when `errors.isEmpty()` -- a validate-then-commit design, with
+`@Transactional` as a second layer in case `apply()` itself throws
+partway. `BenefitStructureImportAtomicityIntegrationTest` proves this
+holds against a real database, not just that the code reads that way:
+a two-row workbook (one valid, one naming `NOT-AN-APPROVED-CODE`) is
+rejected with `تصنيف غير معتمد`, and `countByBenefitPolicyId` afterward
+is exactly zero -- the valid row was never imported either. A companion
+case confirms the same fixture, minus the bad row, imports cleanly.
+
 `OPEN`, not examined this round: P-05 (the ACCOUNTANT/MEDICAL_REVIEWER
-scope unification, blocked on the production audit above), P-07 (import).
+scope unification, blocked on the production audit above).
 
 ## COVERAGE RULES — PARTIALLY VERIFIED
 
@@ -1011,7 +1039,7 @@ Tests       72 passed (72)
 ```
 MEMBERS                   = PARTIALLY VERIFIED
 EMPLOYERS                 = PARTIALLY VERIFIED
-BENEFIT_POLICIES          = OPEN
+BENEFIT_POLICIES          = PARTIALLY VERIFIED (9/10 gates VERIFIED; P-05 OPEN, blocked on production data)
 COVERAGE_RULES            = PARTIALLY VERIFIED
 CROSS_MODULE_INTEGRATION  = PARTIALLY VERIFIED
 
