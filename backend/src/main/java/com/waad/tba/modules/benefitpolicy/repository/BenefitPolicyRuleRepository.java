@@ -64,6 +64,17 @@ public interface BenefitPolicyRuleRepository extends JpaRepository<BenefitPolicy
   @Query("SELECT COUNT(r) FROM BenefitPolicyRule r WHERE r.benefitPolicy.id = :policyId AND r.active = true AND r.deleted = false")
   long countByBenefitPolicyIdAndActiveTrue(@Param("policyId") Long policyId);
 
+  /**
+   * Which of these policies have at least one active, non-deleted rule --
+   * the bulk form of {@link #countByBenefitPolicyIdAndDeletedFalseAndActiveTrue},
+   * for a selector list that needs "hasRules" for every row in ONE query
+   * instead of one COUNT per policy.
+   */
+  @Query("SELECT DISTINCT r.benefitPolicy.id FROM BenefitPolicyRule r"
+      + " WHERE r.benefitPolicy.id IN :policyIds AND r.active = true AND r.deleted = false")
+  java.util.List<Long> findPolicyIdsWithActiveUndeletedRules(
+      @Param("policyIds") java.util.Collection<Long> policyIds);
+
   // ═══════════════════════════════════════════════════════════════════════════
   // FIND BY CATEGORY
   // ═══════════════════════════════════════════════════════════════════════════

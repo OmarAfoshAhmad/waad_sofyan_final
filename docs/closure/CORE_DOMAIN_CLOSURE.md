@@ -593,12 +593,13 @@ same question.
 
 ## BENEFIT POLICIES — PARTIALLY VERIFIED
 
-Following the same P-01..P-xx gate discipline used for Employers. Seven
+Following the same P-01..P-xx gate discipline used for Employers. Eight
 gates closed this round (P-02 state transition matrix, P-03 -- corrected
 mid-round after a real defect was found, not merely inherited as first
 assumed --, P-04 EMPLOYER_ADMIN isolation, P-06 audit, P-08 concurrency,
-P-09 DB constraints, P-11 integration gate); one P0 finding surfaced and
-is deliberately deferred rather than fixed blind.
+P-09 DB constraints, P-10 performance -- two real N+1s found and fixed --,
+P-11 integration gate); one P0 finding surfaced and is deliberately
+deferred rather than fixed blind.
 
 ### P0 finding, deferred by decision: a second, parallel scope model — OPEN
 
@@ -863,9 +864,54 @@ closure round's authority. It records the actual, current behavior
 precisely enough that any future change to it becomes a visible,
 intentional diff here rather than a silent regression.
 
+### P-10 performance — VERIFIED
+
+**CLAIM under test:** the employer-facing policy list/selector paths do not
+degrade as the book grows -- 500 policies across 500 employers, the same
+scale reasoning as Employer's E-11 (there are never 30,000 policies; that
+number belongs to Members).
+
+**TWO real N+1s found and fixed, not merely confirmed absent:**
+
+1. `BenefitPolicyService.getSelectors()` / `getSelectorsForEmployer()`
+   called `benefitPolicyRuleRepository.countByBenefitPolicyIdAndDeletedFalseAndActiveTrue`
+   once **per policy** inside a `.map()` -- a plain N+1 that a small dev
+   dataset never surfaces. Fixed with one bulk query
+   (`findPolicyIdsWithActiveUndeletedRules`) returning every policy id with
+   an active rule in a single `IN (...)` statement.
+
+2. `BenefitPolicy.excludedCategoryCodes` is `@ElementCollection(fetch =
+   EAGER)` with no batching -- Hibernate issued one extra `SELECT` per
+   policy row for this collection alone, on every path that loads
+   `BenefitPolicy` entities (selectors AND the paginated management list).
+   Fixed with `@BatchSize(100)`: EAGER's semantics for a single load are
+   unchanged: the fetch, not the *shape* of the collection, batches.
+
+**MEASURED, not guessed** (Hibernate `Statistics.getPrepareStatementCount()`),
+the natural before/after sequence this round actually produced -- not a
+target invented in advance:
+
+| path | before any fix | after fix 1 only | after both fixes |
+|---|---|---|---|
+| `getSelectors()` / 500 policies | 502 statements | (not measured separately) | **7 statements**, 180 ms |
+| management list page (first vs. last of 500) | 62 vs. 62 | -- | **41 vs. 43** (both fixes touch every `BenefitPolicy` load, not just selectors) |
+
+The 502 → 7 jump on `getSelectors()` and the 62 → ~42 drop on the
+list page **is** the proof of bite here: the first number was measured,
+the fix applied, the second number measured immediately after, in the
+same test-writing session -- not asserted from a clean start and trusted.
+The list page's own regression test asserts a bounded difference (≤5
+statements) between the first and a late page, not exact equality: `
+@BatchSize(100)` groups the collection fetch by however many distinct
+not-yet-loaded policy ids are pending at flush time, which a page
+boundary can shift by one batch either way (observed 41 vs. 43); a real
+N+1 would move that number by roughly the page size (20), not by two.
+
+**REGRESSION TEST** `BenefitPolicyQueryScalePerformanceIntegrationTest` --
+two cases, numbers above.
+
 `OPEN`, not examined this round: P-05 (the ACCOUNTANT/MEDICAL_REVIEWER
-scope unification, blocked on the production audit above), P-07 (import),
-P-10 (performance).
+scope unification, blocked on the production audit above), P-07 (import).
 
 ## COVERAGE RULES — PARTIALLY VERIFIED
 

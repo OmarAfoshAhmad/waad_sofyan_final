@@ -135,9 +135,17 @@ public class BenefitPolicy {
     @Builder.Default
     private List<BenefitPolicyRule> rules = new ArrayList<>();
 
+    // EAGER because the entity's own excludedCategoryCodes must always be
+    // present for coverage decisions -- but EAGER + no batching means
+    // Hibernate issues ONE extra SELECT per policy row loaded, a real N+1
+    // that only shows up once a list query returns more than a handful of
+    // rows (see BenefitPolicyQueryScalePerformanceIntegrationTest, P-10).
+    // @BatchSize collapses that into one SELECT per N policies instead of
+    // one per policy, without changing EAGER's semantics for a single load.
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "benefit_policy_excluded_categories", joinColumns = @JoinColumn(name = "benefit_policy_id"))
     @Column(name = "category_code")
+    @org.hibernate.annotations.BatchSize(size = 100)
     @Builder.Default
     private Set<String> excludedCategoryCodes = new HashSet<>();
 

@@ -250,16 +250,31 @@ public class BenefitPolicyService {
     @Transactional(readOnly = true)
     public List<BenefitPolicySelectorDto> getSelectors() {
         log.debug("Getting benefit policy selectors");
-        return benefitPolicyRepository.findByActiveTrue()
-                .stream()
+        List<BenefitPolicy> activePolicies = benefitPolicyRepository.findByActiveTrue();
+        java.util.Set<Long> hasRulesIds = policyIdsWithRules(activePolicies);
+        return activePolicies.stream()
                 .map(bp -> BenefitPolicySelectorDto.builder()
                         .id(bp.getId())
                         .label(bp.getName())
                         .policyCode(bp.getPolicyCode())
                         .effective(bp.isEffective())
-                        .hasRules(benefitPolicyRuleRepository.countByBenefitPolicyIdAndDeletedFalseAndActiveTrue(bp.getId()) > 0)
+                        .hasRules(hasRulesIds.contains(bp.getId()))
                         .build())
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * One query for the whole selector list instead of one COUNT per policy
+     * -- the shape {@code countByBenefitPolicyIdAndDeletedFalseAndActiveTrue}
+     * had when called per row was a plain N+1 that only shows up once the
+     * book has enough policies to notice.
+     */
+    private java.util.Set<Long> policyIdsWithRules(List<BenefitPolicy> policies) {
+        if (policies.isEmpty()) {
+            return java.util.Set.of();
+        }
+        List<Long> policyIds = policies.stream().map(BenefitPolicy::getId).toList();
+        return new java.util.HashSet<>(benefitPolicyRuleRepository.findPolicyIdsWithActiveUndeletedRules(policyIds));
     }
 
     /**
@@ -268,14 +283,15 @@ public class BenefitPolicyService {
     @Transactional(readOnly = true)
     public List<BenefitPolicySelectorDto> getSelectorsForEmployer(Long employerOrgId) {
         log.debug("Getting benefit policy selectors for employer: {}", employerOrgId);
-        return benefitPolicyRepository.findByEmployerIdAndActiveTrue(employerOrgId)
-                .stream()
+        List<BenefitPolicy> policies = benefitPolicyRepository.findByEmployerIdAndActiveTrue(employerOrgId);
+        java.util.Set<Long> hasRulesIds = policyIdsWithRules(policies);
+        return policies.stream()
                 .map(bp -> BenefitPolicySelectorDto.builder()
                         .id(bp.getId())
                         .label(bp.getName())
                         .policyCode(bp.getPolicyCode())
                         .effective(bp.isEffective())
-                        .hasRules(benefitPolicyRuleRepository.countByBenefitPolicyIdAndDeletedFalseAndActiveTrue(bp.getId()) > 0)
+                        .hasRules(hasRulesIds.contains(bp.getId()))
                         .build())
                 .collect(Collectors.toList());
     }
