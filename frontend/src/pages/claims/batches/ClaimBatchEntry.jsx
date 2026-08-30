@@ -648,14 +648,11 @@ export default function ClaimBatchEntry() {
     return diff > allowedBackdatedMonths;
   }, [month, year, allowedBackdatedMonths]);
 
-  const { data: preAuthResults = [], isFetching: searchingPreAuth } = useQuery({
-    queryKey: ['eligible-claim-preauths', member?.id, providerId, employerId, serviceDate],
-    queryFn: () => claimsService.getEligiblePreAuthorizations({
-      memberId: member.id, providerId, employerId, serviceDate
-    }),
-    enabled: !!member?.id && !!providerId && !!employerId && !!serviceDate && !!entryContext,
-    staleTime: 5000
-  });
+  // Eligible pre-authorizations are part of the same dated context response.
+  // A separate request used to resolve the member, policy, contract and
+  // balance a second time whenever member/date changed.
+  const preAuthResults = entryContext?.eligiblePreAuthorizations || [];
+  const searchingPreAuth = loadingEntryContext;
 
   // ── Helper to refresh all batch related views ───────────────────────────
   const invalidateBatchData = useCallback(() => {

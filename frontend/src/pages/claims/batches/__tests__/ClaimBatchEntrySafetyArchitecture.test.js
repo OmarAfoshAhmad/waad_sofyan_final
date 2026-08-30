@@ -32,7 +32,8 @@ describe('claim batch entry safety boundary', () => {
   });
 
   it('offers only server-qualified pre-authorizations for the dated claim context', () => {
-    expect(entrySource).toContain('claimsService.getEligiblePreAuthorizations');
+    expect(entrySource).toContain('entryContext?.eligiblePreAuthorizations');
+    expect(entrySource).not.toContain('claimsService.getEligiblePreAuthorizations');
     expect(entrySource).not.toContain('preApprovalsService.search');
   });
 

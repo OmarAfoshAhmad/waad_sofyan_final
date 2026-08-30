@@ -30,6 +30,7 @@ import com.waad.tba.modules.providercontract.service.EffectiveProviderContractRe
 import com.waad.tba.modules.providercontract.service.ProviderContractPricingItemService;
 import com.waad.tba.modules.benefitpolicy.service.LimitBalanceReader;
 import com.waad.tba.modules.preauthorization.repository.PreAuthorizationRepository;
+import com.waad.tba.modules.preauthorization.entity.PreAuthorization;
 
 @ExtendWith(MockitoExtension.class)
 class ClaimEntryContextServiceTest {
@@ -65,6 +66,14 @@ class ClaimEntryContextServiceTest {
                 .thenReturn(new LimitBalanceReader.GeneralCeilingBalance(
                         new BigDecimal("60000"), new BigDecimal("10000"), new BigDecimal("5000"),
                         new BigDecimal("50000"), new BigDecimal("45000")));
+        when(preAuthorizationRepository.findEligibleForClaim(7L, 8L, date)).thenReturn(java.util.List.of(
+                PreAuthorization.builder().id(501L).policyId(31L)
+                        .referenceNumber("PA-501").status(PreAuthorization.PreAuthStatus.APPROVED)
+                        .serviceName("خدمة معتمدة").expectedServiceDate(date)
+                        .expiryDate(date.plusDays(10)).approvedAmount(new BigDecimal("800")).build(),
+                PreAuthorization.builder().id(502L).policyId(99L)
+                        .referenceNumber("PA-OTHER").status(PreAuthorization.PreAuthStatus.APPROVED)
+                        .expectedServiceDate(date).build()));
 
         var result = service.resolve(7L, 8L, 9L, date);
 
@@ -75,6 +84,9 @@ class ClaimEntryContextServiceTest {
         assertThat(result.serviceDate()).isEqualTo(date);
         assertThat(result.actualRemaining()).isEqualByComparingTo("50000");
         assertThat(result.reservableAvailable()).isEqualByComparingTo("45000");
+        assertThat(result.eligiblePreAuthorizations())
+                .extracting(com.waad.tba.modules.claim.dto.EligiblePreAuthorizationDto::id)
+                .containsExactly(501L);
         verify(contractResolver).resolve(8L, 9L, date);
     }
 

@@ -3,6 +3,7 @@ package com.waad.tba.modules.claim.dto;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
 /** Authoritative dated context shown before a claim can be calculated. */
 public record ClaimEntryContextDto(
@@ -30,5 +31,6 @@ public record ClaimEntryContextDto(
         BigDecimal reservedAmount,
         BigDecimal actualRemaining,
         BigDecimal reservableAvailable,
-        LocalDateTime balanceReadAt) {
+        LocalDateTime balanceReadAt,
+        List<EligiblePreAuthorizationDto> eligiblePreAuthorizations) {
 }

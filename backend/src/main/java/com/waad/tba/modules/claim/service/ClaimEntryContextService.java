@@ -84,7 +84,8 @@ public class ClaimEntryContextService {
                 ceiling == null ? null : ceiling.reserved(),
                 ceiling == null ? null : ceiling.actualRemaining(),
                 ceiling == null ? null : ceiling.reservableAvailable(),
-                LocalDateTime.now());
+                LocalDateTime.now(),
+                eligiblePreAuthorizations(memberId, providerId, serviceDate, policy.getId()));
     }
 
     @Transactional(readOnly = true)
@@ -99,8 +100,13 @@ public class ClaimEntryContextService {
     public List<EligiblePreAuthorizationDto> findEligiblePreAuthorizations(
             Long memberId, Long providerId, Long requestedEmployerId, LocalDate serviceDate) {
         ClaimEntryContextDto context = resolve(memberId, providerId, requestedEmployerId, serviceDate);
+        return context.eligiblePreAuthorizations();
+    }
+
+    private List<EligiblePreAuthorizationDto> eligiblePreAuthorizations(
+            Long memberId, Long providerId, LocalDate serviceDate, Long policyId) {
         return preAuthorizationRepository.findEligibleForClaim(memberId, providerId, serviceDate).stream()
-                .filter(pa -> pa.getPolicyId() == null || pa.getPolicyId().equals(context.policyId()))
+                .filter(pa -> pa.getPolicyId() == null || pa.getPolicyId().equals(policyId))
                 .map(pa -> new EligiblePreAuthorizationDto(pa.getId(),
                         pa.getReferenceNumber() != null ? pa.getReferenceNumber() : pa.getPreAuthNumber(),
                         pa.getStatus().name(), pa.getServiceName(), pa.getExpectedServiceDate(),

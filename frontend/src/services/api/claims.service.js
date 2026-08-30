@@ -34,16 +34,6 @@ export const claimsService = {
       throw handleClaimErrors(error);
     }
   },
-  getEligiblePreAuthorizations: async ({ memberId, providerId, employerId, serviceDate }) => {
-    try {
-      const response = await axiosClient.get(`${BASE_URL}/eligible-preauthorizations`, {
-        params: { memberId, providerId, employerId, serviceDate }
-      });
-      return unwrap(response);
-    } catch (error) {
-      throw handleClaimErrors(error);
-    }
-  },
   /**
    * Get all claims with pagination and filtering
    * @param {Object} params - Query parameters {page, size, employerId, sort, search}
