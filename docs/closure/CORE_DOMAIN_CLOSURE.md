@@ -219,8 +219,10 @@ count. The protocol's 30,000-member dataset gate was not run this round.
 
 ## EMPLOYERS — PARTIALLY VERIFIED
 
-Examined against the E-01..E-12 gate. Four of twelve are `VERIFIED`; the rest
-were not reached this round and are `OPEN`, not assumed.
+Examined against the E-01..E-12 gate. Ten of twelve (E-01, E-02, E-03, E-04,
+E-06, E-08, E-09, E-10, E-11, E-12) are `VERIFIED`. The remaining two
+(E-05 permission-not-role, E-07 import) are `PARTIALLY VERIFIED` -- not
+assumed closed.
 
 ### E-01 no delete erases history — VERIFIED
 
@@ -505,9 +507,56 @@ only the roster condition is under test.
 **REGRESSION TEST** `EmployerQueryScalePerformanceIntegrationTest` -- three
 cases, numbers above.
 
-### E-12 integration gate — OPEN
+### E-12 integration gate — VERIFIED
 
-Not examined.
+**CLAIM:** archiving an employer changes its lifecycle state only. It does
+not, by itself, withdraw a user's authorization scope. The two are separate
+mechanisms answering separate questions -- `Employer.active` (is this
+employer active?) vs. a user's `employerId`/scope (may this user reach it?).
+Folding the first into `MemberAccessScopeResolver` would make every
+historical record an archived employer ever produced invisible to the
+people authorized to audit it, contradicting the append-only history this
+system is built around. Withdrawing a user's own access is a separate
+administrative act, not a side effect of the employer's state.
+
+**EVIDENCE** `EmployerLifecycleIsSeparateFromAuthorizationIntegrationTest`
+— one chained scenario, not six isolated cases:
+
+1. Employer A active, a historical member already departed before archiving
+   (seeded with a closed dated assignment, respecting the append-only
+   trigger on `member_employer_assignments` rather than fighting it).
+2. Archiving A is blocked while its benefit policy is still active (E-02),
+   independent of the historical member (already departed, E-03); ending
+   the policy then lets archiving succeed.
+3. User A, scoped to A, still reads the historical member and A's audit
+   trail after A is archived.
+4. User A cannot enroll a new member or dependent under archived A. This
+   is **not new production code** -- it is the E-08 guard already living in
+   `MemberEmployerResolver.assignEmployer` (`if (!employer.getActive())
+   throw ...`), which both `createPrincipalMember` and dependent enrollment
+   already route through via `recordInitialEmployerAssignment`. Confirmed
+   by proof-of-bite: temporarily removing that check made this exact test
+   fail (`Tests run: 1, Failures: 1`); restoring it made it pass again.
+5. User B, scoped to employer B, is denied throughout -- A's archiving
+   changes nothing about B's exposure to it.
+6. Only when User A's own scope is reassigned (a separate administrative
+   act, unrelated to archiving) does User A lose the read.
+
+**A duplication mistake caught before it landed.** Implementing step 4, the
+first instinct was to add two new guards directly in
+`UnifiedMemberService` (`createPrincipalMember`, `createDependentInternal`).
+Proof-of-bite on the new `createPrincipalMember` guard alone still passed --
+because both paths already call
+`memberEmployerResolver.assignEmployer(...)`, which already refuses an
+archived employer as part of the E-08 concurrency fix from earlier in this
+closure round. The two new checks were live duplicated business logic, a
+direct violation of the constitution's "لا نسخ Business Logic إلى أكثر من
+مكان". Reverted via `git checkout`; no production code changed for E-12 --
+only the test.
+
+**TEST RESULT** 1 passed (`EmployerLifecycleIsSeparateFromAuthorizationIntegrationTest`).
+
+**REGRESSION TEST** `EmployerLifecycleIsSeparateFromAuthorizationIntegrationTest`.
 
 ### E-07 import — PARTIALLY VERIFIED
 
