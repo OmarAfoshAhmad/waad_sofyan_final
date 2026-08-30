@@ -23,4 +23,10 @@ describe('claim batch entry safety boundary', () => {
     expect(entrySource).not.toContain('unifiedMembersService.getFinancialSummary');
     expect(entrySource).toContain('reservableAvailable: entryContext.reservableAvailable');
   });
+
+  it('creates the visit and claim through one atomic backend command', () => {
+    expect(entrySource).toContain('claimsService.createDirectEntry');
+    expect(entrySource).not.toContain('visitsService.create');
+    expect(entrySource).not.toContain('visitsService.remove');
+  });
 });

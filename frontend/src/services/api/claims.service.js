@@ -157,6 +157,15 @@ export const claimsService = {
     }
   },
 
+  createDirectEntry: async (employerId, claim) => {
+    try {
+      const response = await axiosClient.post(`${BASE_URL}/direct-entry`, { employerId, claim });
+      return unwrap(response);
+    } catch (error) {
+      throw handleClaimErrors(error);
+    }
+  },
+
   /** Resolve the member, policy and contract effective on one service date. */
   getEntryContext: async ({ memberId, providerId, employerId, serviceDate }) => {
     try {

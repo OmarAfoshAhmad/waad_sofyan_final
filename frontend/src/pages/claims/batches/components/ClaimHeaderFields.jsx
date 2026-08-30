@@ -18,6 +18,8 @@ export const ClaimHeaderFields = ({
   memberRef,
   diagnosis,
   setDiagnosis,
+  doctorName,
+  setDoctorName,
   encounterType,
   setEncounterType,
   fullCoverage,
@@ -143,6 +145,23 @@ export const ClaimHeaderFields = ({
             setIsDirty(true);
           }}
           error={showValidationErrors && !diagnosis?.trim()}
+          sx={inlineSx}
+        />
+        <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 500, display: 'block', mt: 1.25, mb: 0.5, fontSize: '0.75rem' }}>
+          اسم الطبيب{' '}
+          <Typography component="span" color="error.main">*</Typography>
+        </Typography>
+        <TextField
+          fullWidth
+          size="small"
+          variant="standard"
+          value={doctorName}
+          placeholder="اسم الطبيب المعالج..."
+          onChange={(e) => {
+            setDoctorName(e.target.value);
+            setIsDirty(true);
+          }}
+          error={showValidationErrors && !doctorName?.trim()}
           sx={inlineSx}
         />
       </Box>

@@ -87,7 +87,6 @@ import providersService from 'services/api/providers.service';
 import employersService from 'services/api/employers.service';
 import claimsService from 'services/api/claims.service';
 import preApprovalsService from 'services/api/pre-approvals.service';
-import visitsService from 'services/api/visits.service';
 import * as medicalCategoriesService from 'services/api/medical-categories.service';
 import claimBatchesService from 'services/api/claim-batches.service';
 import medicalDictionaryService from 'services/api/medical-dictionary.service';
@@ -225,6 +224,7 @@ export default function ClaimBatchEntry() {
     return () => clearTimeout(t);
   }, [memberInput]);
   const [diagnosis, setDiagnosis] = useState('');
+  const [doctorName, setDoctorName] = useState('');
   const [complaint, setComplaint] = useState('');
   const [applyBenefits, setApplyBenefits] = useState(true);
   const [notes, setNotes] = useState('');
@@ -731,6 +731,7 @@ export default function ClaimBatchEntry() {
       setEditCoverageLoading(true);
       setMember({ id: editingClaim.memberId, fullName: editingClaim.memberName, cardNumber: editingClaim.memberNationalNumber });
       setDiagnosis(editingClaim.diagnosisDescription || editingClaim.diagnosisCode || '');
+      setDoctorName(editingClaim.doctorName || '');
       setComplaint(editingClaim.complaint || '');
       setIsClaimRejected(editingClaim.status === 'REJECTED');
       setRejectionInput(editingClaim.reviewerComment || '');
@@ -814,6 +815,7 @@ export default function ClaimBatchEntry() {
     () => ({
       member,
       diagnosis,
+      doctorName,
       complaint,
       notes,
       lines,
@@ -828,6 +830,7 @@ export default function ClaimBatchEntry() {
     [
       member,
       diagnosis,
+      doctorName,
       complaint,
       notes,
       lines,
@@ -846,6 +849,7 @@ export default function ClaimBatchEntry() {
       if (!payload) return;
       setMember(payload.member || null);
       setDiagnosis(payload.diagnosis || '');
+      setDoctorName(payload.doctorName || '');
       setComplaint(payload.complaint || '');
       setNotes(payload.notes || '');
       setLines(Array.isArray(payload.lines) && payload.lines.length ? payload.lines : [newLine()]);
@@ -1402,6 +1406,7 @@ export default function ClaimBatchEntry() {
     setMember(null);
     setMemberInput('');
     setDiagnosis('');
+    setDoctorName('');
     setComplaint('');
     setNotes('');
     setLines([newLine()]);
@@ -1593,6 +1598,7 @@ export default function ClaimBatchEntry() {
     const missingFields = [];
     if (!member) missingFields.push('المستفيد');
     if (!diagnosis?.trim()) missingFields.push('التشخيص الطبي');
+    if (!doctorName?.trim()) missingFields.push('اسم الطبيب');
     if (!serviceDate) missingFields.push('تاريخ الخدمة');
 
     // التحقق من وجود خدمات صحيحة
@@ -1700,6 +1706,7 @@ export default function ClaimBatchEntry() {
         claimBatchId: currentBatch?.id, // Phase 11 Link
         serviceDate: actualDate,
         diagnosisDescription: diagnosis,
+        doctorName: doctorName.trim(),
         complaint,
         notes,
         // Approval is a server-owned transition. The browser may explicitly
@@ -1764,32 +1771,10 @@ export default function ClaimBatchEntry() {
           claimData.claimBatchId = batchForSave?.id;
         }
 
-        // 1. Create a Visit automatically for this manual entry (Backlog Flow)
-        const visitData = {
-          memberId: member.id,
-          providerId: parseInt(providerId),
-          visitDate: actualDate,
-          doctorName: 'طبيب مناوب', // Mandatory for visit creation
-          visitType: 'LEGACY_BACKLOG', // Correct type for manual entry
-          notes: 'إنشاء تلقائي لمطالبة قديمة (Backlog)'
-        };
-
-        const visitResponse = await visitsService.create(visitData);
-        const visitId = visitResponse.id;
-
-        // 2. Link Claim to this Visit
-        claimData.visitId = visitId;
-
-        let claimResponse;
-        try {
-          claimResponse = await claimsService.create(claimData);
-        } catch (claimErr) {
-          // Rollback orphan visit if claim creation fails
-          try {
-            await visitsService.remove(visitId);
-          } catch (_) {}
-          throw claimErr;
-        }
+        // The backend owns the transaction: either both visit and claim exist,
+        // or neither does. Browser-side compensating DELETE was not atomic and
+        // could itself fail, leaving an orphan visit that blocks later care.
+        const claimResponse = await claimsService.createDirectEntry(parseInt(employerId), claimData);
         resultClaimId = claimResponse.id;
       }
 
@@ -2059,6 +2044,8 @@ export default function ClaimBatchEntry() {
                 memberRef={memberRef}
                 diagnosis={diagnosis}
                 setDiagnosis={setDiagnosis}
+                doctorName={doctorName}
+                setDoctorName={setDoctorName}
                 encounterType={encounterType}
                 setEncounterType={setEncounterType}
                 fullCoverage={fullCoverage}

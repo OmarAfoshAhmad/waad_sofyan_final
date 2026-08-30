@@ -26,6 +26,7 @@ import com.waad.tba.modules.claim.api.ClaimApiMapper;
 import com.waad.tba.modules.claim.api.request.ApproveClaimRequest;
 import com.waad.tba.modules.claim.api.request.PauseClaimReviewRequest;
 import com.waad.tba.modules.claim.api.request.CreateClaimRequest;
+import com.waad.tba.modules.claim.api.request.DirectClaimEntryRequest;
 import com.waad.tba.modules.claim.api.request.RejectClaimRequest;
 import com.waad.tba.modules.claim.api.request.ReturnForInfoClaimRequest;
 import com.waad.tba.modules.claim.api.request.UpdateClaimDataRequest;
@@ -40,6 +41,7 @@ import com.waad.tba.modules.providercontract.dto.ProviderContractPricingItemResp
 import com.waad.tba.modules.claim.entity.ClaimStatus;
 import com.waad.tba.modules.claim.service.ClaimService;
 import com.waad.tba.modules.claim.service.ClaimEntryContextService;
+import com.waad.tba.modules.claim.service.DirectClaimEntryService;
 import com.waad.tba.common.guard.FeatureGuard;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -81,6 +83,7 @@ public class ClaimController {
 
     private final ClaimService claimService;
     private final ClaimEntryContextService claimEntryContextService;
+    private final DirectClaimEntryService directClaimEntryService;
     private final ClaimApiMapper apiMapper;
     private final FeatureGuard featureGuard;
 
@@ -129,6 +132,10 @@ public class ClaimController {
     @PreAuthorize("@claimAccessGuard.canCreateFromVisit(#apiRequest.visitId)")
     @Operation(summary = "Create claim", description = "Create a new claim from visit. All amounts calculated by backend from provider contract.")
     public ResponseEntity<ApiResponse<ClaimResponse>> createClaim(@Valid @RequestBody CreateClaimRequest apiRequest) {
+        if (apiRequest.getVisitId() == null) {
+            throw new com.waad.tba.common.exception.BusinessRuleException(
+                    "معرف الزيارة مطلوب؛ استخدم مسار الإدخال المباشر لإنشاء الزيارة والمطالبة معاً");
+        }
         log.info("📥 [CLAIM-API] Incoming create request: visitId={}, lines={}",
                 apiRequest.getVisitId(),
                 apiRequest.getLines() != null ? apiRequest.getLines().size() : 0);
@@ -153,6 +160,18 @@ public class ClaimController {
                     apiRequest.getVisitId(), e.getMessage(), e);
             throw e;
         }
+    }
+
+    @PostMapping("/direct-entry")
+    @PreAuthorize("@claimAccessGuard.canReadMemberFor('CLAIM_CREATE', #request.claim.memberId) "
+            + "&& @claimAccessGuard.canAccessBatch('CLAIM_CREATE', #request.claim.providerId, #request.employerId)")
+    @Operation(summary = "Create an internal direct-entry claim atomically",
+            description = "Creates the required visit and its claim in one transaction.")
+    public ResponseEntity<ApiResponse<ClaimResponse>> createDirectEntry(
+            @Valid @RequestBody DirectClaimEntryRequest request) {
+        ClaimResponse response = apiMapper.toResponse(directClaimEntryService.create(request));
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success("تم إنشاء الزيارة والمطالبة بنجاح", response));
     }
 
     /**
