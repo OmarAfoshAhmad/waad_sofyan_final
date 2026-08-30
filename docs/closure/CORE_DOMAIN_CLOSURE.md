@@ -593,10 +593,10 @@ same question.
 
 ## BENEFIT POLICIES — PARTIALLY VERIFIED
 
-Following the same P-01..P-xx gate discipline used for Employers. Three
-gates closed this round (P-06 audit, P-08 concurrency, P-03 inherited);
-one P0 finding surfaced and is deliberately deferred rather than fixed
-blind.
+Following the same P-01..P-xx gate discipline used for Employers. Four
+gates closed this round (P-06 audit, P-08 concurrency, P-09 DB
+constraints, P-03 inherited); one P0 finding surfaced and is deliberately
+deferred rather than fixed blind.
 
 ### P0 finding, deferred by decision: a second, parallel scope model — OPEN
 
@@ -705,12 +705,47 @@ Result: both policies persisted as `ACTIVE` in the same run --
 B=ACTIVE)` -- a real double-active-policy data corruption, not a liveness
 hazard. Restoring the lock made the same run pass again.
 
+### P-09 DB constraints across a live migration — VERIFIED (finding recorded, not fixed)
+
+**CLAIM under test:** does `chk_policy_date_range` (V34, `CHECK (end_date >=
+start_date)`) survive being added over a `benefit_policies` table that
+already has rows, the way Employer's V200 constraints were proven to?
+
+**FINDING:** no -- and this is a genuine discovery, not a confirmation.
+V34 adds the CHECK with a plain `ALTER TABLE ... ADD CONSTRAINT`, no `NOT
+VALID` clause. Postgres validates every existing row as part of that same
+DDL statement, so a `benefit_policies` row written under V33's schema
+(which enforced no date-pair rule at all) with `end_date < start_date`
+makes the whole V34 migration **abort** --
+`BenefitPolicyDateRangeConstraintAcrossV34MigrationTest
+.v34FailsToApplyOverAnExistingReversedRow` reproduces this: migrate to
+V33, insert one such row, migrate to latest, and Flyway reports
+`Migration ... to version "34" failed! Changes successfully rolled back`
+with `chk_policy_date_range` in the error. A companion test
+(`v34AppliesAndThenRefusesNewReversedRows`) confirms the same migration
+applies cleanly, and the CHECK works exactly as intended, when no prior
+row violates it.
+
+**Why this is `VERIFIED` and not a bug to fix here:** V34 is already
+applied and checksummed in every environment currently at V34 or later --
+editing a shipped migration is forbidden by this constitution (§30) and
+would break Flyway's checksum validation everywhere it has already run.
+The absence of an incident means no environment held a violating row at
+the moment V34 actually ran there; this was correctness by luck, not by
+design, and the gate is closed by *proving and recording* that fact, not
+by silently declaring it safe. **Convention gap, recorded for future
+migrations:** any new CHECK constraint added to a table that may already
+hold rows in this codebase must use the `NOT VALID` + `VALIDATE
+CONSTRAINT` pattern already established for exactly this reason (Employer's
+V200 -- see `EmployerTermsConstraintsAcrossV200MigrationTest`), not a plain
+`ADD CONSTRAINT`. `chk_benefit_policy_status` (V33) was not separately
+retested; it follows the same plain-`ADD CONSTRAINT` shape and carries the
+same latent risk, moot for the same reason.
+
 `OPEN`, not examined this round: P-02 (archive/lifecycle transition
 guards beyond what `BenefitPolicyServiceTest` already covers), P-04/P-05
 (scope closure, blocked on the production audit above), P-07 (import),
-P-09 (DB constraints -- migrations exist per the earlier survey but are
-untested across a live migration the way Employer's V200 was), P-10 (performance),
-P-11 (integration gate).
+P-10 (performance), P-11 (integration gate).
 
 ## COVERAGE RULES — PARTIALLY VERIFIED
 
