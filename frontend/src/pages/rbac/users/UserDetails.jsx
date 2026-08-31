@@ -18,12 +18,11 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import MainCard from 'components/MainCard';
 import ModernPageHeader from 'components/tba/ModernPageHeader';
 import CircularLoader from 'components/CircularLoader';
+import useAuth from 'hooks/useAuth';
 
 // Services
 import usersService from 'services/rbac/users.service';
 import { SystemRole, RoleDisplayNames, getRoleDisplayName } from 'constants/rbac';
-
-// Hooks
 
 // ============================================================================
 // HELPER FUNCTIONS
