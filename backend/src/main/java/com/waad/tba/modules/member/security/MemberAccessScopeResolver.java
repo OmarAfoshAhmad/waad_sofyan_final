@@ -116,6 +116,12 @@ public class MemberAccessScopeResolver {
 
         Set<Long> employerIds = provider.getAllowedEmployers() == null ? Set.of()
                 : provider.getAllowedEmployers().stream()
+                        // A DEACTIVATED link is an ended commercial relationship,
+                        // and it was being counted as a live one. The list is an
+                        // unfiltered @OneToMany, so every employer this provider
+                        // was ever contracted with stayed inside its scope --
+                        // long after the contract that put it there was closed.
+                        .filter(link -> Boolean.TRUE.equals(link.getActive()))
                         .map(link -> link.getEmployer() == null ? null : link.getEmployer().getId())
                         .filter(java.util.Objects::nonNull)
                         .collect(Collectors.toCollection(java.util.LinkedHashSet::new));
