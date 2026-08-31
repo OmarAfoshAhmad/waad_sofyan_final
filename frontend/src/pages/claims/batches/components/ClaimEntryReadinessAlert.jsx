@@ -37,4 +37,3 @@ export const ClaimEntryReadinessAlert = ({ member, serviceDate, loading, context
     </Alert>
   );
 };
-

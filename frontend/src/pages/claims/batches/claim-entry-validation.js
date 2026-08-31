@@ -8,4 +8,3 @@ export const invalidQuantityLineNumbers = (lines = []) =>
     .map((line, index) => ({ line, number: index + 1 }))
     .filter(({ line }) => (line?.service || line?.serviceName) && !isValidClaimQuantity(line.quantity))
     .map(({ number }) => number);
-
