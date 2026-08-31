@@ -157,9 +157,9 @@ export const claimsService = {
     }
   },
 
-  createDirectEntry: async (employerId, claim) => {
+  createDirectEntry: async (employerId, claim, idempotencyKey) => {
     try {
-      const response = await axiosClient.post(`${BASE_URL}/direct-entry`, { employerId, claim });
+      const response = await axiosClient.post(`${BASE_URL}/direct-entry`, { employerId, claim, idempotencyKey });
       return unwrap(response);
     } catch (error) {
       throw handleClaimErrors(error);

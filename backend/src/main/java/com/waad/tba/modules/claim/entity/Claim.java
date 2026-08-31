@@ -91,6 +91,12 @@ public class Claim {
     @Column(name = "claim_number", length = 100, unique = true)
     private String claimNumber;
 
+    @Column(name = "direct_entry_idempotency_key", length = 120)
+    private String directEntryIdempotencyKey;
+
+    @Column(name = "direct_entry_request_fingerprint", length = 64)
+    private String directEntryRequestFingerprint;
+
     // ==================== CLAIM DETAILS ====================
 
     @OneToMany(mappedBy = "claim", cascade = CascadeType.ALL, orphanRemoval = false)

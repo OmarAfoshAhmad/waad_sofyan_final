@@ -24,6 +24,8 @@ import com.waad.tba.modules.claim.projection.FinancialSummaryByEmployerProjectio
 @Repository
 public interface ClaimRepository extends JpaRepository<Claim, Long> {
 
+        java.util.Optional<Claim> findByDirectEntryIdempotencyKey(String directEntryIdempotencyKey);
+
         /**
          * Count claims EVER linked to a specific benefit policy — including
          * cancelled/soft-deleted ones (c.active = false). Used to permanently

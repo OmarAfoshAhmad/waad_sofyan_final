@@ -157,6 +157,10 @@ const newLine = () => ({
   oldRejected: 0
 });
 
+const newDirectEntryKey = () =>
+  globalThis.crypto?.randomUUID?.() ||
+  `claim-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
 const hasMeaningfulDraftData = (draft) => {
   if (!draft) return false;
   if (draft.member?.id) return true;
@@ -254,6 +258,7 @@ export default function ClaimBatchEntry() {
   const [editHydrationVersion, setEditHydrationVersion] = useState(0);
   const [editCoverageLoading, setEditCoverageLoading] = useState(!!initialClaimId);
   const [preAuthId, setPreAuthId] = useState('');
+  const [directEntryKey, setDirectEntryKey] = useState(newDirectEntryKey);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [confirmDeleteReason, setConfirmDeleteReason] = useState('');
   const [showValidationErrors, setShowValidationErrors] = useState(false);
@@ -807,7 +812,8 @@ export default function ClaimBatchEntry() {
       fullCoverage,
       applyBenefits,
       isClaimRejected,
-      rejectionInput
+      rejectionInput,
+      directEntryKey
     }),
     [
       member,
@@ -822,7 +828,8 @@ export default function ClaimBatchEntry() {
       fullCoverage,
       applyBenefits,
       isClaimRejected,
-      rejectionInput
+      rejectionInput,
+      directEntryKey
     ]
   );
 
@@ -842,6 +849,7 @@ export default function ClaimBatchEntry() {
       setApplyBenefits(payload.applyBenefits ?? true);
       setIsClaimRejected(!!payload.isClaimRejected);
       setRejectionInput(payload.rejectionInput || '');
+      setDirectEntryKey(payload.directEntryKey || newDirectEntryKey());
       setIsDirty(true);
     },
     [defaultDate]
@@ -1400,6 +1408,7 @@ export default function ClaimBatchEntry() {
     setFullCoverage(false);
     setIsClaimRejected(false);
     setRejectionInput('');
+    setDirectEntryKey(newDirectEntryKey());
     setAttachments([]);
     // FIX: resetForm must also clear the editing state
     setEditingClaimId(null);
@@ -1769,7 +1778,7 @@ export default function ClaimBatchEntry() {
         // The backend owns the transaction: either both visit and claim exist,
         // or neither does. Browser-side compensating DELETE was not atomic and
         // could itself fail, leaving an orphan visit that blocks later care.
-        const claimResponse = await claimsService.createDirectEntry(parseInt(employerId), claimData);
+        const claimResponse = await claimsService.createDirectEntry(parseInt(employerId), claimData, directEntryKey);
         resultClaimId = claimResponse.id;
       }
 

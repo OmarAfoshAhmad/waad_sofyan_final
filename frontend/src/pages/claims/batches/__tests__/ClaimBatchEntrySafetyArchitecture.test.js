@@ -31,6 +31,12 @@ describe('claim batch entry safety boundary', () => {
     expect(entrySource).not.toContain('visitsService.remove');
   });
 
+  it('persists and reuses one direct-entry command key across response loss and draft recovery', () => {
+    expect(entrySource).toContain('directEntryKey');
+    expect(entrySource).toContain('setDirectEntryKey(payload.directEntryKey || newDirectEntryKey())');
+    expect(entrySource).toContain('claimsService.createDirectEntry(parseInt(employerId), claimData, directEntryKey)');
+  });
+
   it('offers only server-qualified pre-authorizations for the dated claim context', () => {
     expect(entrySource).toContain('entryContext?.eligiblePreAuthorizations');
     expect(entrySource).not.toContain('claimsService.getEligiblePreAuthorizations');
