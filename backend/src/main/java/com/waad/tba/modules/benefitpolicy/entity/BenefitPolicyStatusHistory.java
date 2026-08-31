@@ -26,7 +26,7 @@ import jakarta.persistence.EntityListeners;
  * One interval of {@code [validFrom, validTo)} during which a policy held a
  * given status. The dated source of truth for "was this policy ACTIVE on
  * service date X", kept separate from {@code BenefitPolicy.status}, which
- * only answers "is it ACTIVE right now". See V201.
+ * only answers "is it ACTIVE right now". See V210.
  */
 @Entity
 @Table(name = "benefit_policy_status_history", indexes = {

@@ -124,7 +124,7 @@ public class MemberPolicyResolver {
                 // This policy has never had a transition recorded -- created
                 // outside BenefitPolicyService (a fixture, a legacy row).
                 // Fall back to the current status, the same honest
-                // approximation V201's own backfill makes for pre-existing
+                // approximation V210's own backfill makes for pre-existing
                 // rows, rather than refusing every read for a policy this
                 // table was never told about.
                 wasActiveOnDate = resolved.getStatus() == BenefitPolicy.BenefitPolicyStatus.ACTIVE;
@@ -281,7 +281,7 @@ public class MemberPolicyResolver {
                 statusAtDate = new java.util.HashMap<>();
         // Policies with NO history at all -- created outside
         // BenefitPolicyService -- fall back to their current status column,
-        // the same approximation resolveFor makes and V201's own backfill
+        // the same approximation resolveFor makes and V210's own backfill
         // already makes for pre-existing rows.
         java.util.Set<Long> policiesWithAnyHistory = new java.util.HashSet<>();
         java.util.Map<Long, Long> employerByMember = new java.util.HashMap<>();

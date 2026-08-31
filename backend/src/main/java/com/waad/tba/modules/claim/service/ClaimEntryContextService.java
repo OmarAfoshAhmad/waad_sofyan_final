@@ -79,7 +79,7 @@ public class ClaimEntryContextService {
                 contract.getStartDate(),
                 contract.getEndDate(),
                 ceilingMode,
-                ceiling == null ? null : ceiling.limit(),
+                ceiling == null ? null : ceiling.annualLimit(),
                 ceiling == null ? null : ceiling.committed(),
                 ceiling == null ? null : ceiling.reserved(),
                 ceiling == null ? null : ceiling.actualRemaining(),

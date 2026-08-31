@@ -37,10 +37,10 @@ public interface BenefitPolicyStatusHistoryRepository extends JpaRepository<Bene
     /**
      * Whether this policy has EVER had a status transition recorded here.
      * A policy created outside {@code BenefitPolicyService} (a fixture, a
-     * legacy row predating V201's backfill window in a database this
+     * legacy row predating V210's backfill window in a database this
      * migration never ran against, a direct repository write) has none --
      * for exactly that case, {@code MemberPolicyResolver} falls back to
-     * the current status column, the same honest approximation V201's own
+     * the current status column, the same honest approximation V210's own
      * backfill uses for pre-existing rows, rather than refusing every
      * historical read for a policy this table was never told about.
      */

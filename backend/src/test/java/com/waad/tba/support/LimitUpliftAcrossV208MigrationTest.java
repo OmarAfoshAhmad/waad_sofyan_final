@@ -19,7 +19,7 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.containers.PostgreSQLContainer;
 
 /**
- * V199 lands on a database that is already carrying members, employers and a
+ * V208 lands on a database that is already carrying members, employers and a
  * permission catalogue -- not on an empty schema.
  *
  * A migration verified only against a fresh database proves the SQL parses. It
@@ -35,12 +35,12 @@ import org.testcontainers.containers.PostgreSQLContainer;
  * revocation without a reason is not a revocation -- and a CHECK nobody has
  * seen refuse anything is a CHECK that might be spelled wrong.
  */
-class LimitUpliftAcrossV199MigrationTest {
+class LimitUpliftAcrossV208MigrationTest {
 
     // Its own container: a migration checked against a database another test
     // already migrated is checking nothing.
     private static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine")
-            .withDatabaseName("migration_test_v199")
+            .withDatabaseName("migration_test_v208")
             .withUsername("test_user")
             .withPassword("test_password");
 
@@ -55,23 +55,23 @@ class LimitUpliftAcrossV199MigrationTest {
     }
 
     @Test
-    @DisplayName("V199 applies to a live V198 database and its constraints hold against real rows")
+    @DisplayName("V208 applies to a live V207 database and its constraints hold against real rows")
     void v199AppliesOverAnExistingDatabaseAndEnforcesEveryRule() throws Exception {
-        migrateTo("198");
+        migrateTo("207");
 
         long memberId;
         long employerId;
         try (Connection connection = connect(); Statement statement = connection.createStatement()) {
-            // The database is not empty when V199 arrives. These rows are what
+            // The database is not empty when V208 arrives. These rows are what
             // the new foreign keys will point at.
             employerId = insertEmployer(statement);
             memberId = insertMember(statement, employerId);
 
             // And an administrator has already made a decision about a
-            // permission, which V199's inserts must not overwrite.
+            // permission, which V208's inserts must not overwrite.
             // Marked rather than inserted: V191 already granted this pair, so
             // an insert would conflict and prove nothing. Stamping the row is
-            // what makes "V199 left it alone" checkable.
+            // what makes "V208 left it alone" checkable.
             statement.execute("update rbac_role_permissions set granted_by='قرار سابق'"
                     + " where role_code='SUPER_ADMIN' and permission_code='MEMBER_VIEW'");
         }
@@ -178,7 +178,7 @@ class LimitUpliftAcrossV199MigrationTest {
     }
 
     @Test
-    @DisplayName("running V199 twice changes nothing")
+    @DisplayName("running V208 twice changes nothing")
     void theMigrationIsRepeatable() {
         // Flyway will not re-run it, but the inserts inside are written with
         // ON CONFLICT DO NOTHING because a database restored from a backup

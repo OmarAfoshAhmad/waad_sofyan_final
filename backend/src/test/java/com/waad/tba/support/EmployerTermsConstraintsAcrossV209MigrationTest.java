@@ -23,16 +23,16 @@ import org.testcontainers.containers.PostgreSQLContainer;
  * negative -- had no CHECK behind them. Anything writing to this table
  * outside that one service passed with no rule applied at all.
  *
- * V200 lands on a database that already has employer rows (from V2's own
+ * V209 lands on a database that already has employer rows (from V2's own
  * seed data and anything created before this migration runs), which is the
  * only way this is a meaningful test: a CHECK verified only against an empty
  * schema proves the SQL parses, not that it validates against what is
  * already there.
  */
-class EmployerTermsConstraintsAcrossV200MigrationTest {
+class EmployerTermsConstraintsAcrossV209MigrationTest {
 
     private static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine")
-            .withDatabaseName("migration_test_v200")
+            .withDatabaseName("migration_test_v209")
             .withUsername("test_user")
             .withPassword("test_password");
 
@@ -47,16 +47,16 @@ class EmployerTermsConstraintsAcrossV200MigrationTest {
     }
 
     @Test
-    @DisplayName("V200 applies over a live V199 database and both CHECKs refuse what Java already refused")
+    @DisplayName("V209 applies over a live V208 database and both CHECKs refuse what Java already refused")
     void v200AppliesOverAnExistingDatabaseAndEnforcesBothRules() throws Exception {
-        migrateTo("199");
+        migrateTo("208");
 
         try (Connection connection = connect(); Statement statement = connection.createStatement()) {
-            // The database is not empty when V200 arrives -- an employer that
+            // The database is not empty when V209 arrives -- an employer that
             // predates this migration, with terms already inside the rule.
             statement.execute("insert into employers (code, name, active, contract_start_date,"
                     + " contract_end_date, max_member_limit)"
-                    + " values ('V200-PRE', 'جهة سابقة على الهجرة', true, '2026-01-01', '2026-12-31', 500)");
+                    + " values ('V209-PRE', 'جهة سابقة على الهجرة', true, '2026-01-01', '2026-12-31', 500)");
         }
 
         migrateTo(null);
@@ -65,56 +65,56 @@ class EmployerTermsConstraintsAcrossV200MigrationTest {
             // The pre-existing row is untouched -- VALIDATE CONSTRAINT does not
             // rewrite rows, and this one was compliant to begin with.
             assertThatCode(() -> statement.execute(
-                    "update employers set phone = '0900000000' where code = 'V200-PRE'"))
+                    "update employers set phone = '0900000000' where code = 'V209-PRE'"))
                     .doesNotThrowAnyException();
 
             // ── the contract period ─────────────────────────────────────────
             assertThatThrownBy(() -> statement.execute(
                     "insert into employers (code, name, active, contract_start_date, contract_end_date)"
-                            + " values ('V200-BADTERM', 'جهة بعقد مقلوب', true, '2026-06-01', '2026-01-01')"))
+                            + " values ('V209-BADTERM', 'جهة بعقد مقلوب', true, '2026-06-01', '2026-01-01')"))
                     .as("an end date before the start date is exactly what Java already refused")
                     .isInstanceOf(SQLException.class)
                     .hasMessageContaining("chk_employer_contract_period");
 
             assertThatCode(() -> statement.execute(
                     "insert into employers (code, name, active, contract_start_date, contract_end_date)"
-                            + " values ('V200-EQUALTERM', 'جهة عقد يوم واحد', true, '2026-06-01', '2026-06-01')"))
+                            + " values ('V209-EQUALTERM', 'جهة عقد يوم واحد', true, '2026-06-01', '2026-06-01')"))
                     .as("end equal to start is a same-day contract, not a reversed one")
                     .doesNotThrowAnyException();
 
             assertThatCode(() -> statement.execute(
                     "insert into employers (code, name, active, contract_start_date, contract_end_date)"
-                            + " values ('V200-OPENTERM', 'جهة بلا تاريخ نهاية', true, '2026-06-01', null)"))
+                            + " values ('V209-OPENTERM', 'جهة بلا تاريخ نهاية', true, '2026-06-01', null)"))
                     .as("an open-ended contract names no end to be before its start")
                     .doesNotThrowAnyException();
 
             // ── the member cap ──────────────────────────────────────────────
             assertThatThrownBy(() -> statement.execute(
                     "insert into employers (code, name, active, max_member_limit)"
-                            + " values ('V200-ZEROCAP', 'جهة بحد صفري', true, 0)"))
+                            + " values ('V209-ZEROCAP', 'جهة بحد صفري', true, 0)"))
                     .as("a cap of zero is not a limit an employer can operate under")
                     .isInstanceOf(SQLException.class)
                     .hasMessageContaining("chk_employer_max_member_limit_positive");
 
             assertThatThrownBy(() -> statement.execute(
                     "insert into employers (code, name, active, max_member_limit)"
-                            + " values ('V200-NEGCAP', 'جهة بحد سالب', true, -5)"))
+                            + " values ('V209-NEGCAP', 'جهة بحد سالب', true, -5)"))
                     .isInstanceOf(SQLException.class)
                     .hasMessageContaining("chk_employer_max_member_limit_positive");
 
             assertThatCode(() -> statement.execute(
                     "insert into employers (code, name, active, max_member_limit)"
-                            + " values ('V200-NOCAP', 'جهة بلا حد', true, null)"))
+                            + " values ('V209-NOCAP', 'جهة بلا حد', true, null)"))
                     .as("no cap configured is unlimited, not a violation of a positive cap")
                     .doesNotThrowAnyException();
 
-            assertThat(count(statement, "select count(*) from employers where code = 'V200-PRE'"))
+            assertThat(count(statement, "select count(*) from employers where code = 'V209-PRE'"))
                     .isEqualTo(1);
         }
     }
 
     @Test
-    @DisplayName("running V200 twice changes nothing")
+    @DisplayName("running V209 twice changes nothing")
     void theMigrationIsRepeatable() {
         assertThatCode(() -> {
             migrateTo(null);

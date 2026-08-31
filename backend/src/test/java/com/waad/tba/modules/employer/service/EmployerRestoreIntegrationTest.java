@@ -136,7 +136,7 @@ class EmployerRestoreIntegrationTest extends PostgresIntegrationTestBase {
      * An end-before-start contract used to be reachable only through
      * EmployerService, which refused it in Java (validateEmployerTerms) --
      * so the case this test modelled was "restore() catches what a direct
-     * write would have let through". V200 (E-09) closed that gap with
+     * write would have let through". V209 (E-09) closed that gap with
      * chk_employer_contract_period, which means the row this test used to
      * force into existence with a raw UPDATE can no longer exist at all: the
      * write itself is refused before restore() is ever reached.
@@ -144,7 +144,7 @@ class EmployerRestoreIntegrationTest extends PostgresIntegrationTestBase {
      * That is a stronger guarantee than the one being tested for, not a
      * different one -- both layers now agree, and this asserts exactly that
      * agreement rather than the Java-only version of it.
-     * EmployerTermsConstraintsAcrossV200MigrationTest covers the constraint
+     * EmployerTermsConstraintsAcrossV209MigrationTest covers the constraint
      * itself against a live database; this keeps the service-level case
      * honest about what can reach it.
      */

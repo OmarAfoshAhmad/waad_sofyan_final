@@ -49,7 +49,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
  * recorded here as a documented hazard and a convention gap -- new CHECK
  * constraints on a live table in this codebase should use the
  * NOT VALID + VALIDATE CONSTRAINT pattern this project already established
- * for exactly this reason (see Employer's V200 migration) -- not as
+ * for exactly this reason (see Employer's V209 migration) -- not as
  * something to retroactively edit, since V34 is already applied and
  * checksummed everywhere that matters.
  */

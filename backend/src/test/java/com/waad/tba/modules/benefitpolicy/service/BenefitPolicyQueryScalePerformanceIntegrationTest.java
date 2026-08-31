@@ -84,9 +84,9 @@ class BenefitPolicyQueryScalePerformanceIntegrationTest extends PostgresIntegrat
                         "INSERT INTO medical_categories (code, name, active) VALUES (?, ?, true) RETURNING id",
                         Long.class, "POLPERF-CAT-" + s + "-" + i, "فئة أداء " + i);
                 jdbc.update("INSERT INTO benefit_policy_rules (benefit_policy_id, medical_category_id,"
-                                + " encounter_type, coverage_percent, inheritance_enabled, priority,"
+                                + " encounter_type, claim_context_code, coverage_percent, inheritance_enabled, priority,"
                                 + " requires_pre_approval, active, deleted, version, created_at)"
-                                + " VALUES (?, ?, 'OUTPATIENT', 80, false, 100, false, true, false, 0, now())",
+                                + " VALUES (?, ?, 'OUTPATIENT', 'OUTPATIENT', 80, false, 100, false, true, false, 0, now())",
                         policyId, categoryId);
             }
         }

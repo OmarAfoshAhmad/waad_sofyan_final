@@ -82,7 +82,14 @@ class MemberCeilingComesFromOneReaderArchitectureTest {
             // decides on ceiling.reservableAvailable() and ProviderPortalService
             // displays ceiling.limit(). Neither computes a member ceiling.
             "ProviderClaimsService.java",
-            "ProviderPortalService.java");
+            "ProviderPortalService.java",
+            // Same category, and verified the same way rather than assumed:
+            // it reads the policy figure to hand to the reader and to answer
+            // "is there a ceiling at all?" (ceilingMode). Every figure it
+            // reports -- annualLimit, committed, reserved, actualRemaining,
+            // reservableAvailable -- is taken off the reader's result, so no
+            // member ceiling is computed here.
+            "ClaimEntryContextService.java");
 
     private static String codeOnly(String source) {
         return source.replaceAll("(?s)/\\*.*?\\*/", " ").replaceAll("(?m)//.*$", " ");

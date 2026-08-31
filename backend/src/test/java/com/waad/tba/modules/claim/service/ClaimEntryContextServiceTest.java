@@ -63,8 +63,13 @@ class ClaimEntryContextServiceTest {
                 .thenReturn(new EffectiveProviderContractResolver.ResolvedContract(contract, terms));
         when(limitBalanceReader.readGeneralCeiling(7L, 31L, new BigDecimal("60000"),
                 LocalDate.of(2025, 1, 1), LocalDate.of(2025, 12, 31), null))
+                // No exceptional uplift for this member, so the effective
+                // ceiling equals the policy's own: annualLimit == policyLimit
+                // and uplift is zero. The same five figures this asserted
+                // before the record split limit into those three components.
                 .thenReturn(new LimitBalanceReader.GeneralCeilingBalance(
-                        new BigDecimal("60000"), new BigDecimal("10000"), new BigDecimal("5000"),
+                        new BigDecimal("60000"), new BigDecimal("60000"), BigDecimal.ZERO,
+                        new BigDecimal("10000"), new BigDecimal("5000"),
                         new BigDecimal("50000"), new BigDecimal("45000")));
         when(preAuthorizationRepository.findEligibleForClaim(7L, 8L, date)).thenReturn(java.util.List.of(
                 PreAuthorization.builder().id(501L).policyId(31L)

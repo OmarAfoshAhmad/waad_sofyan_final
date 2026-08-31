@@ -112,9 +112,9 @@ class BenefitPolicyLifecycleIntegrationGateTest extends PostgresIntegrationTestB
         MedicalCategory category = categories.save(MedicalCategory.builder()
                 .code("P11-CAT-" + s).name("فئة بوابة التكامل").active(true).build());
         jdbc.update("INSERT INTO benefit_policy_rules (benefit_policy_id, medical_category_id,"
-                        + " encounter_type, coverage_percent, inheritance_enabled, priority,"
+                        + " encounter_type, claim_context_code, coverage_percent, inheritance_enabled, priority,"
                         + " requires_pre_approval, active, deleted, version, created_at)"
-                        + " VALUES (?, ?, 'OUTPATIENT', 80, false, 100, false, true, false, 0, now())",
+                        + " VALUES (?, ?, 'OUTPATIENT', 'OUTPATIENT', 80, false, 100, false, true, false, 0, now())",
                 policyId, category.getId());
 
         benefitPolicyService.activate(policyId);
@@ -198,9 +198,9 @@ class BenefitPolicyLifecycleIntegrationGateTest extends PostgresIntegrationTestB
         createDto2.setStatus("DRAFT");
         long secondPolicyId = benefitPolicyService.create(createDto2).getId();
         jdbc.update("INSERT INTO benefit_policy_rules (benefit_policy_id, medical_category_id,"
-                        + " encounter_type, coverage_percent, inheritance_enabled, priority,"
+                        + " encounter_type, claim_context_code, coverage_percent, inheritance_enabled, priority,"
                         + " requires_pre_approval, active, deleted, version, created_at)"
-                        + " VALUES (?, ?, 'OUTPATIENT', 80, false, 100, false, true, false, 0, now())",
+                        + " VALUES (?, ?, 'OUTPATIENT', 'OUTPATIENT', 80, false, 100, false, true, false, 0, now())",
                 secondPolicyId, category.getId());
 
         assertThatCode(() -> benefitPolicyService.activate(secondPolicyId))
