@@ -45,6 +45,7 @@ public class BenefitPolicyRuleResponseDto {
     private boolean requiresPreApproval;
 
     private String encounterType;
+    private String claimContextCode;
     private BigDecimal copayPercentage;
     private boolean inheritanceEnabled;
     private Integer priority;
@@ -84,6 +85,7 @@ public class BenefitPolicyRuleResponseDto {
                 .waitingPeriodDays(rule.getWaitingPeriodDays())
                 .requiresPreApproval(rule.isRequiresPreApproval())
                 .encounterType(rule.getEncounterType() != null ? rule.getEncounterType().name() : null)
+                .claimContextCode(rule.getClaimContextCode())
                 .copayPercentage(rule.getCopayPercentage())
                 .inheritanceEnabled(rule.isInheritanceEnabled())
                 .priority(rule.getPriority())

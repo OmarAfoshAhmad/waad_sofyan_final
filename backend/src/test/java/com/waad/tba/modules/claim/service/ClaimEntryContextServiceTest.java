@@ -123,11 +123,11 @@ class ClaimEntryContextServiceTest {
                         .status(BenefitPolicyStatus.ACTIVE).build()));
         when(contractResolver.resolve(8L, 9L, date))
                 .thenReturn(new EffectiveProviderContractResolver.ResolvedContract(contract, terms));
-        when(pricingItemService.findEffectiveInContract(41L, date, pageable))
+        when(pricingItemService.findEffectiveInContract(41L, date, null, pageable))
                 .thenReturn(new PageImpl<>(java.util.List.of()));
 
         service.findEffectiveServices(7L, 8L, 9L, date, pageable);
 
-        verify(pricingItemService).findEffectiveInContract(41L, date, pageable);
+        verify(pricingItemService).findEffectiveInContract(41L, date, null, pageable);
     }
 }

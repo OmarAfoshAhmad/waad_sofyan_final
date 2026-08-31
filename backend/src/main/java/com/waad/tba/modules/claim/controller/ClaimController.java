@@ -122,11 +122,12 @@ public class ClaimController {
             @RequestParam("providerId") Long providerId,
             @RequestParam("employerId") Long employerId,
             @RequestParam("serviceDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate serviceDate,
+            @RequestParam(value = "q", required = false) String query,
             @PageableDefault(size = 500, sort = "serviceName", direction = Sort.Direction.ASC) Pageable pageable) {
         return ResponseEntity.ok(ApiResponse.success(
                 "تم تحميل خدمات العقد السارية",
                 claimEntryContextService.findEffectiveServices(
-                        memberId, providerId, employerId, serviceDate, pageable)));
+                        memberId, providerId, employerId, serviceDate, query, pageable)));
     }
 
     @GetMapping("/eligible-preauthorizations")

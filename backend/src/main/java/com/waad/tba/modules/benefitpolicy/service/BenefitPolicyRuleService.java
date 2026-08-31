@@ -7,6 +7,7 @@ import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicyRule;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRuleRepository;
+import com.waad.tba.modules.claimcontext.repository.ClaimContextDefinitionRepository;
 import com.waad.tba.modules.medicaltaxonomy.entity.MedicalCategory;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalCategoryRepository;
 import lombok.RequiredArgsConstructor;
@@ -46,6 +47,7 @@ public class BenefitPolicyRuleService {
     private final BenefitPolicyRepository policyRepository;
     private final MedicalCategoryRepository categoryRepository;
     private final CoverageDecisionService coverageDecisionService;
+    private final ClaimContextDefinitionRepository claimContextRepository;
     private final jakarta.persistence.EntityManager em;
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -389,9 +391,12 @@ public class BenefitPolicyRuleService {
         validateTargetXor(dto.getMedicalCategoryId(), dto.getMedicalServiceId());
 
         // Build the rule
+        var encounterType = parseEncounterType(dto.getEncounterType());
+        String claimContextCode = resolveClaimContext(dto.getClaimContextCode(), encounterType);
         BenefitPolicyRule rule = BenefitPolicyRule.builder()
                 .benefitPolicy(policy)
-                .encounterType(parseEncounterType(dto.getEncounterType()))
+                .encounterType(encounterType)
+                .claimContextCode(claimContextCode)
                 .coveragePercent(dto.getCoveragePercent())
                 .copayPercentage(dto.getCopayPercentage())
                 .inheritanceEnabled(Boolean.TRUE.equals(dto.getInheritanceEnabled()))
@@ -412,14 +417,16 @@ public class BenefitPolicyRuleService {
             // - active existing rule: update it
             // - soft-deleted existing rule: restore and update it
             Optional<BenefitPolicyRule> existingRuleOpt = ruleRepository
-                    .findByBenefitPolicyIdAndMedicalCategoryIdAndEncounterType(
-                            policyId, dto.getMedicalCategoryId(), parseEncounterType(dto.getEncounterType()));
+                    .findFirstByBenefitPolicyIdAndMedicalCategoryIdAndClaimContextCodeOrderByIdDesc(
+                            policyId, dto.getMedicalCategoryId(), claimContextCode);
 
             if (existingRuleOpt.isPresent()) {
                 BenefitPolicyRule existingRule = existingRuleOpt.get();
                 boolean wasActive = existingRule.isActive();
 
                 existingRule.setCoveragePercent(dto.getCoveragePercent());
+                existingRule.setEncounterType(encounterType);
+                existingRule.setClaimContextCode(claimContextCode);
                 existingRule.setCopayPercentage(dto.getCopayPercentage());
                 existingRule.setInheritanceEnabled(Boolean.TRUE.equals(dto.getInheritanceEnabled()));
                 existingRule.setPriority(dto.getPriority() != null ? dto.getPriority() : 100);
@@ -698,6 +705,9 @@ public class BenefitPolicyRuleService {
         if (dto.getEncounterType() != null) {
             rule.setEncounterType(parseEncounterType(dto.getEncounterType()));
         }
+        if (dto.getEncounterType() != null || dto.getClaimContextCode() != null) {
+            rule.setClaimContextCode(resolveClaimContext(dto.getClaimContextCode(), rule.getEncounterType()));
+        }
         if (dto.getInheritanceEnabled() != null) {
             rule.setInheritanceEnabled(dto.getInheritanceEnabled());
         }
@@ -719,6 +729,20 @@ public class BenefitPolicyRuleService {
         log.info("Updated rule {}", ruleId);
 
         return BenefitPolicyRuleResponseDto.fromEntity(saved);
+    }
+
+    private String resolveClaimContext(String requestedCode,
+                                       com.waad.tba.modules.providercontract.enums.EncounterType encounterType) {
+        String code = requestedCode == null || requestedCode.isBlank()
+                ? encounterType.name()
+                : requestedCode.trim().toUpperCase(java.util.Locale.ROOT);
+        var definition = claimContextRepository.findById(code)
+                .filter(context -> context.isActive())
+                .orElseThrow(() -> new BusinessRuleException("سياق قرار المطالبة غير معتمد أو غير فعال: " + code));
+        if (definition.getBaseEncounterType() != encounterType) {
+            throw new BusinessRuleException("سياق القرار " + code + " لا يطابق نوع المقابلة " + encounterType);
+        }
+        return code;
     }
 
     /**

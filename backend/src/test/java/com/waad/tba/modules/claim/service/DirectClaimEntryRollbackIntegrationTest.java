@@ -160,8 +160,8 @@ class DirectClaimEntryRollbackIntegrationTest extends PostgresIntegrationTestBas
             claimCreates.incrementAndGet();
             ClaimCreateDto dto = invocation.getArgument(0);
             Long id = jdbc.queryForObject("INSERT INTO claims (claim_number, member_id, provider_id, visit_id, "
-                    + "service_date, requested_amount, patient_copay, status) "
-                    + "VALUES (?, ?, ?, ?, ?, 100, 100, 'DRAFT') RETURNING id",
+                    + "service_date, requested_amount, patient_copay, status, claim_context_code) "
+                    + "VALUES (?, ?, ?, ?, ?, 100, 100, 'DRAFT', 'OUTPATIENT') RETURNING id",
                     Long.class, "IDEM-CLM-" + suffix, memberId, providerId, dto.getVisitId(), date);
             return ClaimViewDto.builder().id(id).build();
         });

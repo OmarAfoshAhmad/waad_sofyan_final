@@ -51,6 +51,18 @@ public interface ProviderContractPricingItemRepository extends JpaRepository<Pro
                      @Param("date") LocalDate date,
                      Pageable pageable);
 
+       @Query("SELECT p FROM ProviderContractPricingItem p " +
+                     "WHERE p.contract.id = :contractId AND p.active = true " +
+                     "AND (p.effectiveFrom IS NULL OR p.effectiveFrom <= :date) " +
+                     "AND (p.effectiveTo IS NULL OR :date < p.effectiveTo) " +
+                     "AND (LOWER(p.serviceCode) LIKE LOWER(CONCAT('%', :query, '%')) " +
+                     "OR LOWER(p.serviceName) LIKE LOWER(CONCAT('%', :query, '%')))")
+       Page<ProviderContractPricingItem> searchEffectiveByContractId(
+                     @Param("contractId") Long contractId,
+                     @Param("date") LocalDate date,
+                     @Param("query") String query,
+                     Pageable pageable);
+
        /**
         * Count pricing items for a contract
         */

@@ -142,12 +142,21 @@ public class ProviderContractPricingItemService {
      */
     @Transactional(readOnly = true)
     public Page<ProviderContractPricingItemResponseDto> findEffectiveInContract(
-            Long contractId, java.time.LocalDate serviceDate, Pageable pageable) {
+            Long contractId, java.time.LocalDate serviceDate, String query, Pageable pageable) {
         if (serviceDate == null) {
             throw new BusinessRuleException("تاريخ الخدمة مطلوب لقراءة أسعار العقد");
         }
-        return pricingRepository.findEffectiveByContractId(contractId, serviceDate, pageable)
+        String normalizedQuery = query == null ? "" : query.trim();
+        var page = normalizedQuery.isEmpty()
+                ? pricingRepository.findEffectiveByContractId(contractId, serviceDate, pageable)
+                : pricingRepository.searchEffectiveByContractId(contractId, serviceDate, normalizedQuery, pageable);
+        return page
                 .map(ProviderContractPricingItemResponseDto::fromEntity);
+    }
+
+    public Page<ProviderContractPricingItemResponseDto> findEffectiveInContract(
+            Long contractId, java.time.LocalDate serviceDate, Pageable pageable) {
+        return findEffectiveInContract(contractId, serviceDate, null, pageable);
     }
 
     /**

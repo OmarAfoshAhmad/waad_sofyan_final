@@ -108,6 +108,7 @@ public class ClaimMapper {
                                 .encounterType(dto.getEncounterType() != null
                                                 ? dto.getEncounterType()
                                                 : com.waad.tba.modules.providercontract.enums.EncounterType.OUTPATIENT)
+                                .claimContextCode(dto.getClaimContextCode())
                                 .fullCoverage(dto.getFullCoverage() != null ? dto.getFullCoverage() : false)
                                 .isBacklog(visit.getVisitType() == com.waad.tba.modules.visit.entity.VisitType.LEGACY_BACKLOG)
                                 .build();
@@ -145,6 +146,7 @@ public class ClaimMapper {
                                 .serviceYear(claim.getServiceDate() != null ? claim.getServiceDate().getYear()
                                                 : LocalDate.now().getYear())
                                 .serviceDate(claim.getServiceDate())
+                                .claimContextCode(claim.getClaimContextCode())
                                 .fullCoverage(Boolean.TRUE.equals(claim.getFullCoverage()))
                                 .encounterType(claim.getEncounterType())
                                 .excludeClaimId(claim.getId())
@@ -599,6 +601,7 @@ public class ClaimMapper {
 
                 return ClaimViewDto.builder()
                                 .id(claim.getId())
+                                .claimContextCode(claim.getClaimContextCode())
                                 .claimNumber(claim.getClaimNumber() != null ? claim.getClaimNumber()
                                                 : "CLM-" + claim.getId())
                                 .memberId(member != null ? member.getId() : null)

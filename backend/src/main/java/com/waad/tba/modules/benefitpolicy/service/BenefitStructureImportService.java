@@ -9,6 +9,7 @@ import com.waad.tba.modules.benefitpolicy.repository.*;
 import com.waad.tba.modules.medicaltaxonomy.entity.MedicalCategory;
 import com.waad.tba.modules.medicaltaxonomy.enums.CategoryContext;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalCategoryRepository;
+import com.waad.tba.modules.claimcontext.repository.ClaimContextDefinitionRepository;
 import com.waad.tba.modules.providercontract.enums.EncounterType;
 import lombok.RequiredArgsConstructor;
 import org.apache.poi.ss.usermodel.*;
@@ -34,22 +35,27 @@ public class BenefitStructureImportService {
     private final BenefitLimitBucketRepository bucketRepository;
     private final BenefitRuleBucketRepository linkRepository;
     private final BenefitDefinitionRepository definitionRepository;
+    private final ClaimContextDefinitionRepository claimContextRepository;
 
     public byte[] createSimplifiedTemplate() {
         try (Workbook workbook = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             Sheet benefits = workbook.createSheet("المنافع");
             writeHeader(benefits, "كود التصنيف", "اسم المنفعة", "السياق", "نسبة التغطية", "نسبة التحمل",
-                    "موافقة مسبقة", "السقف المالي", "حد المرات", "حد الأيام", "الفترة", "قيمة الفترة", "طريقة العد", "نشط");
+                    "موافقة مسبقة", "السقف المالي", "حد المرات", "حد الأيام", "الفترة", "قيمة الفترة", "طريقة العد",
+                    "أساس احتساب السقف", "نشط", "سياق القرار");
             Sheet groups = workbook.createSheet("المجموعات");
             writeHeader(groups, "كود المجموعة", "اسم المجموعة", "السياق", "أكواد المنافع مفصولة بفاصلة",
-                    "السقف المالي", "حد المرات", "حد الأيام", "الفترة", "قيمة الفترة", "طريقة العد", "نشط");
+                    "السقف المالي", "حد المرات", "حد الأيام", "الفترة", "قيمة الفترة", "طريقة العد",
+                    "أساس احتساب السقف", "نشط", "سياق القرار");
             Sheet instructions = workbook.createSheet("تعليمات");
             String[][] notes = {
                     {"الحقل", "التوضيح"},
                     {"المنافع", "أدخل كود تصنيف معتمداً لكل منفعة. اترك السقف المالي وحد المرات والأيام فارغة إذا لم يوجد سقف فردي."},
                     {"المجموعات", "ضع أكواد منفعتين أو أكثر وافصل بينها بفاصلة. المجموعة قد تكون بلا سقف."},
                     {"نمط الاستيراد", "الاستيراد من الواجهة دمج آمن: يضيف ويحدث فقط ولا يعطل بيانات غير موجودة في الملف."},
-                    {"طريقة العد", "EACH_UNIT تحسب الكمية/الجلسات، وهي القيمة الموصى بها."}
+                    {"طريقة العد", "EACH_UNIT تحسب الكمية/الجلسات، وهي القيمة الموصى بها."},
+                    {"أساس احتساب السقف", "ELIGIBLE_AMOUNT يحد إجمالي الخدمة المقبول قبل توزيع التحمل؛ COMPANY_SHARE يحد التزام الشركة بعد التحمل. لا تتركه غامضاً عند وجود سقف مالي."}
+                    ,{"سياق القرار", "اختياري. اكتب MATERNITY أو PREGNANCY_COMPLICATIONS عند اختلاف القرار عن نوع الزيارة؛ الأدوية تصنيف منفعة وليست سياق مطالبة."}
             };
             for (int rowIndex = 0; rowIndex < notes.length; rowIndex++) {
                 Row row = instructions.createRow(rowIndex);
@@ -60,12 +66,16 @@ public class BenefitStructureImportService {
             addListValidation(benefits, 9, "PER_SERVICE", "PER_VISIT", "DAILY", "WEEKLY", "MONTHLY", "QUARTERLY",
                     "ANNUAL", "CUSTOM_DAYS", "CUSTOM_WEEKS", "CUSTOM_MONTHS", "CUSTOM_YEARS", "POLICY_PERIOD", "LIFETIME");
             addListValidation(benefits, 11, "EACH_UNIT", "EACH_LINE", "PER_DAY", "PER_VISIT");
-            addListValidation(benefits, 12, "نعم", "لا");
+            addListValidation(benefits, 12, "ELIGIBLE_AMOUNT", "COMPANY_SHARE");
+            addListValidation(benefits, 13, "نعم", "لا");
+            addListValidation(benefits, 14, "OUTPATIENT", "INPATIENT", "FULL_COVERAGE", "MATERNITY", "PREGNANCY_COMPLICATIONS");
             addListValidation(groups, 2, "OUTPATIENT", "INPATIENT", "ANY");
             addListValidation(groups, 7, "PER_SERVICE", "PER_VISIT", "DAILY", "WEEKLY", "MONTHLY", "QUARTERLY",
                     "ANNUAL", "CUSTOM_DAYS", "CUSTOM_WEEKS", "CUSTOM_MONTHS", "CUSTOM_YEARS", "POLICY_PERIOD", "LIFETIME");
             addListValidation(groups, 9, "EACH_UNIT", "EACH_LINE", "PER_DAY", "PER_VISIT");
-            addListValidation(groups, 10, "نعم", "لا");
+            addListValidation(groups, 10, "ELIGIBLE_AMOUNT", "COMPANY_SHARE");
+            addListValidation(groups, 11, "نعم", "لا");
+            addListValidation(groups, 12, "OUTPATIENT", "INPATIENT", "FULL_COVERAGE", "MATERNITY", "PREGNANCY_COMPLICATIONS");
             for (Sheet sheet : List.of(benefits, groups)) {
                 sheet.createFreezePane(0, 1);
                 for (int i = 0; i < sheet.getRow(0).getLastCellNum(); i++) sheet.autoSizeColumn(i);
@@ -123,8 +133,9 @@ public class BenefitStructureImportService {
         Counter c = new Counter();
         for (RuleRow row : p.rules) {
             MedicalCategory category = categoryRepository.findByCode(row.categoryCode).orElse(null);
-            boolean exists = category != null && ruleRepository.findByBenefitPolicyIdAndMedicalCategoryIdAndEncounterType(
-                    policyId, category.getId(), row.context).isPresent();
+            boolean exists = category != null && ruleRepository
+                    .findFirstByBenefitPolicyIdAndMedicalCategoryIdAndClaimContextCodeOrderByIdDesc(
+                            policyId, category.getId(), row.claimContextCode).isPresent();
             if (exists) c.updated++; else c.created++;
         }
         for (GroupRow row : p.groups) {
@@ -168,10 +179,12 @@ public class BenefitStructureImportService {
                 parseSimplified(workbook, p);
                 return p;
             }
-            read(workbook, "Rules", 10, (row, n) -> p.rules.add(new RuleRow(
-                    text(row, 0), text(row, 1), benefitContext(row, 2, n),
-                    integer(row, 3), decimal(row, 4), integer(row, 5), bool(row, 6, false),
-                    integer(row, 7, 100), text(row, 8), bool(row, 9, true), n)));
+            read(workbook, "Rules", 10, (row, n) -> {
+                EncounterType context = benefitContext(row, 2, n);
+                p.rules.add(new RuleRow(text(row, 0), text(row, 1), context, context.name(),
+                        integer(row, 3), decimal(row, 4), integer(row, 5), bool(row, 6, false),
+                        integer(row, 7, 100), text(row, 8), bool(row, 9, true), n));
+            });
             read(workbook, "Groups", 5, (row, n) -> p.groups.add(new GroupRow(
                     text(row, 0), text(row, 1), benefitContext(row, 2, n),
                     enumValue(AggregationMode.class, row, 3, n), bool(row, 4, true), n)));
@@ -181,9 +194,11 @@ public class BenefitStructureImportService {
                     enumValue(CountingMethod.class, row, 9, n), enumValue(ConsumptionBasis.class, row, 10, n),
                     enumValue(BenefitScopeType.class, row, 11, n), text(row, 12),
                     bool(row, 13, false), bool(row, 14, true), n)));
-            read(workbook, "Links", 6, (row, n) -> p.links.add(new LinkRow(
-                    text(row, 0), benefitContext(row, 1, n), text(row, 2),
-                    integer(row, 3, 1), enumValue(ConsumptionMode.class, row, 4, n), bool(row, 5, true), n)));
+            read(workbook, "Links", 6, (row, n) -> {
+                EncounterType context = benefitContext(row, 1, n);
+                p.links.add(new LinkRow(text(row, 0), context, context.name(), text(row, 2),
+                        integer(row, 3, 1), enumValue(ConsumptionMode.class, row, 4, n), bool(row, 5, true), n));
+            });
             Sheet special = workbook.getSheet("SpecialBenefits");
             if (special != null) read(workbook, "SpecialBenefits", 11, (row, n) -> p.specials.add(new SpecialRow(
                     text(row, 0), text(row, 1), integer(row, 2), decimal(row, 3), decimal(row, 4),
@@ -206,12 +221,16 @@ public class BenefitStructureImportService {
 
     private void parseSimplified(Workbook workbook, Parsed p) {
         boolean benefitsHasPeriodValue = "قيمة الفترة".equals(text(workbook.getSheet("المنافع").getRow(0), 10));
+        boolean benefitsHasBasis = "أساس احتساب السقف".equals(text(workbook.getSheet("المنافع").getRow(0), benefitsHasPeriodValue ? 12 : 11));
         read(workbook, "المنافع", 12, (row, n) -> {
             String category = text(row, 0);
             EncounterType context = benefitContext(row, 2, n);
             int countingColumn = benefitsHasPeriodValue ? 11 : 10;
-            int activeColumn = benefitsHasPeriodValue ? 12 : 11;
-            p.rules.add(new RuleRow(category, text(row, 1), context, integer(row, 3, 100), decimal(row, 4), 0,
+            int basisColumn = countingColumn + 1;
+            int activeColumn = basisColumn + (benefitsHasBasis ? 1 : 0);
+            int decisionContextColumn = activeColumn + 1;
+            String decisionContext = normalizedDecisionContext(text(row, decisionContextColumn), context);
+            p.rules.add(new RuleRow(category, text(row, 1), context, decisionContext, integer(row, 3, 100), decimal(row, 4), 0,
                     bool(row, 5, false), 100, "استيراد مبسط", bool(row, activeColumn, true), n));
             BigDecimal amount = decimal(row, 6); Integer times = integer(row, 7); Integer days = integer(row, 8);
             if (amount != null || times != null || days != null) {
@@ -223,27 +242,33 @@ public class BenefitStructureImportService {
                 p.buckets.add(new BucketRow(bucketCode, limitName, groupCode, context,
                         amount, times, days, enumOrDefault(LimitPeriodType.class, row, 9, n, LimitPeriodType.POLICY_PERIOD),
                         benefitsHasPeriodValue ? integer(row, 10, 1) : 1,
-                        enumOrDefault(CountingMethod.class, row, countingColumn, n, CountingMethod.EACH_UNIT), ConsumptionBasis.COMPANY_SHARE,
+                        enumOrDefault(CountingMethod.class, row, countingColumn, n, CountingMethod.EACH_UNIT),
+                        benefitsHasBasis ? enumValue(ConsumptionBasis.class, row, basisColumn, n) : ConsumptionBasis.COMPANY_SHARE,
                         BenefitScopeType.CATEGORY, null, false, bool(row, activeColumn, true), n));
-                p.links.add(new LinkRow(category, context, bucketCode, 1, ConsumptionMode.PRIMARY, true, n));
+                p.links.add(new LinkRow(category, context, decisionContext, bucketCode, 1, ConsumptionMode.PRIMARY, true, n));
             }
         });
         if (workbook.getSheet("المجموعات") != null) {
             boolean groupsHasPeriodValue = "قيمة الفترة".equals(text(workbook.getSheet("المجموعات").getRow(0), 8));
+            boolean groupsHasBasis = "أساس احتساب السقف".equals(text(workbook.getSheet("المجموعات").getRow(0), groupsHasPeriodValue ? 10 : 9));
             read(workbook, "المجموعات", 10, (row, n) -> {
                 String code = text(row, 0); EncounterType context = benefitContext(row, 2, n);
                 int countingColumn = groupsHasPeriodValue ? 9 : 8;
-                int activeColumn = groupsHasPeriodValue ? 10 : 9;
+                int basisColumn = countingColumn + 1;
+                int activeColumn = basisColumn + (groupsHasBasis ? 1 : 0);
+                int decisionContextColumn = activeColumn + 1;
+                String decisionContext = normalizedDecisionContext(text(row, decisionContextColumn), context);
                 boolean active = bool(row, activeColumn, true); String bucketCode = "AUTO-GRP-" + code;
                 p.groups.add(new GroupRow(code, text(row, 1), context, AggregationMode.SHARED, active, n));
                 p.buckets.add(new BucketRow(bucketCode, text(row, 1), code, context, decimal(row, 4), integer(row, 5), integer(row, 6),
                         enumOrDefault(LimitPeriodType.class, row, 7, n, LimitPeriodType.POLICY_PERIOD),
                         groupsHasPeriodValue ? integer(row, 8, 1) : 1,
-                        enumOrDefault(CountingMethod.class, row, countingColumn, n, CountingMethod.EACH_UNIT), ConsumptionBasis.COMPANY_SHARE,
+                        enumOrDefault(CountingMethod.class, row, countingColumn, n, CountingMethod.EACH_UNIT),
+                        groupsHasBasis ? enumValue(ConsumptionBasis.class, row, basisColumn, n) : ConsumptionBasis.COMPANY_SHARE,
                         BenefitScopeType.GROUP, null, true, active, n));
                 String members = text(row, 3);
                 if (members != null) for (String member : members.split("[,،]"))
-                    if (!member.isBlank()) p.links.add(new LinkRow(member.trim(), context, bucketCode, 1, ConsumptionMode.PRIMARY, true, n));
+                    if (!member.isBlank()) p.links.add(new LinkRow(member.trim(), context, decisionContext, bucketCode, 1, ConsumptionMode.PRIMARY, true, n));
             });
         }
     }
@@ -261,12 +286,20 @@ public class BenefitStructureImportService {
                         + ", encounter_type=" + r.context + ", coverage_percent=" + r.coverage);
                 continue;
             }
-            String key = r.categoryCode + "|" + r.context;
+            String key = r.categoryCode + "|" + r.claimContextCode;
             if (!ruleKeys.add(key)) errors.add("Rules صف " + r.row + ": قاعدة مكررة " + key);
             MedicalCategory category = categoryRepository.findByCode(r.categoryCode).orElse(null);
             if (category == null) errors.add("Rules صف " + r.row + ": تصنيف غير معتمد " + r.categoryCode);
             else if (!supports(category, r.context)) errors.add("Rules صف " + r.row + ": السياق " + r.context
                     + " غير مسموح للتصنيف " + r.categoryCode);
+            var claimContext = claimContextRepository.findById(r.claimContextCode).orElse(null);
+            if (claimContext == null || !claimContext.isActive()) {
+                errors.add("Rules صف " + r.row + ": سياق قرار غير معتمد أو غير فعال " + r.claimContextCode);
+            } else if (claimContext.getBaseEncounterType() != EncounterType.ANY
+                    && claimContext.getBaseEncounterType() != r.context) {
+                errors.add("Rules صف " + r.row + ": سياق القرار " + r.claimContextCode
+                        + " لا يطابق نوع الزيارة " + r.context);
+            }
             if (r.coverage < 0 || r.coverage > 100) errors.add("Rules صف " + r.row + ": نسبة تغطية خارج 0-100");
         }
         for (GroupRow g : p.groups) {
@@ -299,7 +332,7 @@ public class BenefitStructureImportService {
         }
         validateParentCycles(p.buckets, errors);
         for (LinkRow l : p.links) {
-            if (!ruleKeys.contains(l.categoryCode + "|" + l.context))
+            if (!ruleKeys.contains(l.categoryCode + "|" + l.claimContextCode))
                 errors.add("Links صف " + l.row + ": القاعدة غير موجودة في Rules");
             if (!bucketCodes.contains(l.bucketCode)) errors.add("Links صف " + l.row + ": bucket_code «" + l.bucketCode + "» غير موجود في ورقة Buckets");
         }
@@ -364,17 +397,20 @@ public class BenefitStructureImportService {
         Map<String, BenefitPolicyRule> rules = new HashMap<>();
         for (RuleRow row : p.rules) {
             MedicalCategory category = categoryRepository.findByCode(row.categoryCode).orElseThrow();
-            BenefitPolicyRule rule = ruleRepository.findByBenefitPolicyIdAndMedicalCategoryIdAndEncounterType(
-                    policy.getId(), category.getId(), row.context).orElse(null);
-            if (rule == null) { rule = new BenefitPolicyRule(); rule.setBenefitPolicy(policy); rule.setMedicalCategory(category); rule.setEncounterType(row.context); c.created++; }
+            BenefitPolicyRule rule = ruleRepository
+                    .findFirstByBenefitPolicyIdAndMedicalCategoryIdAndClaimContextCodeOrderByIdDesc(
+                            policy.getId(), category.getId(), row.claimContextCode).orElse(null);
+            if (rule == null) { rule = new BenefitPolicyRule(); rule.setBenefitPolicy(policy); rule.setMedicalCategory(category); c.created++; }
             else c.updated++;
+            rule.setEncounterType(row.context);
+            rule.setClaimContextCode(row.claimContextCode);
             rule.setCoveragePercent(row.coverage); rule.setCopayPercentage(row.copay); rule.setWaitingPeriodDays(row.waitingDays);
             rule.setRequiresPreApproval(row.preApproval); rule.setPriority(row.priority); rule.setNotes(row.notes);
             rule.setInheritanceEnabled(false); rule.setActive(row.active); rule.setDeleted(false);
-            rules.put(row.categoryCode + "|" + row.context, ruleRepository.save(rule));
+            rules.put(row.categoryCode + "|" + row.claimContextCode, ruleRepository.save(rule));
         }
         for (LinkRow row : p.links) {
-            BenefitPolicyRule rule = rules.get(row.categoryCode + "|" + row.context);
+            BenefitPolicyRule rule = rules.get(row.categoryCode + "|" + row.claimContextCode);
             BenefitLimitBucket bucket = buckets.get(row.bucketCode);
             BenefitRuleBucket link = linkRepository.findByRuleIdAndBucketId(rule.getId(), bucket.getId()).orElse(null);
             if (link == null) { link = new BenefitRuleBucket(); link.setRule(rule); link.setBucket(bucket); c.created++; }
@@ -420,9 +456,9 @@ public class BenefitStructureImportService {
 
     private void deactivateMissingConfiguration(Long policyId, Parsed p) {
         Set<String> ruleKeys = p.rules.stream()
-                .map(row -> normalizedCode(row.categoryCode) + "|" + row.context).collect(java.util.stream.Collectors.toSet());
+                .map(row -> normalizedCode(row.categoryCode) + "|" + row.claimContextCode).collect(java.util.stream.Collectors.toSet());
         for (BenefitPolicyRule rule : ruleRepository.findByBenefitPolicyId(policyId)) {
-            String key = normalizedCode(rule.getMedicalCategory().getCode()) + "|" + rule.getEncounterType();
+            String key = normalizedCode(rule.getMedicalCategory().getCode()) + "|" + rule.getClaimContextCode();
             if (!ruleKeys.contains(key)) { rule.setActive(false); ruleRepository.save(rule); }
         }
 
@@ -444,10 +480,10 @@ public class BenefitStructureImportService {
     }
 
     private int countMissingConfiguration(Long policyId, Parsed p) {
-        Set<String> ruleKeys = p.rules.stream().map(row -> normalizedCode(row.categoryCode) + "|" + row.context)
+        Set<String> ruleKeys = p.rules.stream().map(row -> normalizedCode(row.categoryCode) + "|" + row.claimContextCode)
                 .collect(java.util.stream.Collectors.toSet());
         int count = (int) ruleRepository.findByBenefitPolicyId(policyId).stream()
-                .filter(rule -> rule.isActive() && !ruleKeys.contains(normalizedCode(rule.getMedicalCategory().getCode()) + "|" + rule.getEncounterType()))
+                .filter(rule -> rule.isActive() && !ruleKeys.contains(normalizedCode(rule.getMedicalCategory().getCode()) + "|" + rule.getClaimContextCode()))
                 .count();
         Set<String> groupCodes = p.groups.stream().map(GroupRow::code).map(this::normalizedCode)
                 .collect(java.util.stream.Collectors.toSet());
@@ -493,6 +529,13 @@ public class BenefitStructureImportService {
     }
     private boolean blank(String value) { return value == null || value.isBlank(); }
     private String normalizedCode(String value) { return value == null ? null : value.trim().toLowerCase(Locale.ROOT); }
+    private String normalizedDecisionContext(String value, EncounterType fallback) {
+        String normalized = blank(value) ? fallback.name() : value.trim().toUpperCase(Locale.ROOT);
+        if (!normalized.matches("[A-Z][A-Z0-9_]{1,59}")) {
+            throw new BusinessRuleException("كود سياق القرار غير صالح: " + value);
+        }
+        return normalized;
+    }
     private boolean requiresPeriodValue(LimitPeriodType periodType) {
         if (periodType == null) return false;
         return switch (periodType) {
@@ -511,10 +554,10 @@ public class BenefitStructureImportService {
     }
 
     private interface RowConsumer { void accept(Row row, int number); }
-    private record RuleRow(String categoryCode,String categoryName,EncounterType context,Integer coverage,BigDecimal copay,Integer waitingDays,boolean preApproval,Integer priority,String notes,boolean active,int row){}
+    private record RuleRow(String categoryCode,String categoryName,EncounterType context,String claimContextCode,Integer coverage,BigDecimal copay,Integer waitingDays,boolean preApproval,Integer priority,String notes,boolean active,int row){}
     private record GroupRow(String code,String name,EncounterType context,AggregationMode mode,boolean active,int row){}
     private record BucketRow(String code,String name,String groupCode,EncounterType context,BigDecimal amount,Integer times,Integer days,LimitPeriodType period,Integer periodValue,CountingMethod counting,ConsumptionBasis basis,BenefitScopeType benefitScopeType,String parentCode,boolean shared,boolean active,int row){}
-    private record LinkRow(String categoryCode,EncounterType context,String bucketCode,Integer order,ConsumptionMode mode,boolean mandatory,int row){}
+    private record LinkRow(String categoryCode,EncounterType context,String claimContextCode,String bucketCode,Integer order,ConsumptionMode mode,boolean mandatory,int row){}
     private record SpecialRow(String definitionCode,String name,Integer coverage,BigDecimal copay,BigDecimal amount,Integer times,LimitPeriodType period,boolean preApproval,String notes,String sourceClause,boolean active,int row){}
     private static class Parsed { List<RuleRow> rules=new ArrayList<>(); List<GroupRow> groups=new ArrayList<>(); List<BucketRow> buckets=new ArrayList<>(); List<LinkRow> links=new ArrayList<>(); List<SpecialRow> specials=new ArrayList<>(); List<String> warnings=new ArrayList<>(); List<String> reviewErrors=new ArrayList<>(); }
     private static class Counter { int created; int updated; int deactivated; }

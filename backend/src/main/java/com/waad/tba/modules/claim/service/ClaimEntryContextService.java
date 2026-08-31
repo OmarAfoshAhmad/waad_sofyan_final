@@ -91,9 +91,15 @@ public class ClaimEntryContextService {
     @Transactional(readOnly = true)
     public Page<ProviderContractPricingItemResponseDto> findEffectiveServices(
             Long memberId, Long providerId, Long requestedEmployerId,
-            LocalDate serviceDate, Pageable pageable) {
+            LocalDate serviceDate, String query, Pageable pageable) {
         ClaimEntryContextDto context = resolve(memberId, providerId, requestedEmployerId, serviceDate);
-        return pricingItemService.findEffectiveInContract(context.contractId(), serviceDate, pageable);
+        return pricingItemService.findEffectiveInContract(context.contractId(), serviceDate, query, pageable);
+    }
+
+    public Page<ProviderContractPricingItemResponseDto> findEffectiveServices(
+            Long memberId, Long providerId, Long requestedEmployerId,
+            LocalDate serviceDate, Pageable pageable) {
+        return findEffectiveServices(memberId, providerId, requestedEmployerId, serviceDate, null, pageable);
     }
 
     @Transactional(readOnly = true)

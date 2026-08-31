@@ -86,6 +86,7 @@ import unifiedMembersService from 'services/api/unified-members.service';
 import providersService from 'services/api/providers.service';
 import claimsService from 'services/api/claims.service';
 import * as medicalCategoriesService from 'services/api/medical-categories.service';
+import { getActiveClaimContexts } from 'services/api/claim-contexts.service';
 import claimBatchesService from 'services/api/claim-batches.service';
 import medicalDictionaryService from 'services/api/medical-dictionary.service';
 import { claimRejectionReasonsService } from 'services/api/claim-rejection-reasons.service';
@@ -108,29 +109,7 @@ import { RejectClaimDialog } from './components/RejectClaimDialog';
 import { ConfirmDeleteClaimDialog } from './components/ConfirmDeleteClaimDialog';
 import { ActionConfirmDialog } from './components/ActionConfirmDialog';
 import { CustomServiceDialog } from './components/CustomServiceDialog';
-
-const CLAIM_SERVICE_CONTEXTS = new Set(['OUTPATIENT', 'INPATIENT', 'ANY']);
-
-const normalizeClaimServiceContext = (value) => {
-  const normalized = String(value || '').trim().toUpperCase();
-  return CLAIM_SERVICE_CONTEXTS.has(normalized) ? normalized : 'ANY';
-};
-
-const getServiceContext = (service) =>
-  normalizeClaimServiceContext(
-    service?.encounterType ??
-      service?.defaultEncounterType ??
-      service?.serviceEncounterType ??
-      service?.pricingEncounterType ??
-      service?.contextType ??
-      service?.context
-  );
-
-const isServiceAllowedForClaimContext = (service, claimEncounterType) => {
-  const claimContext = normalizeClaimServiceContext(claimEncounterType || 'OUTPATIENT');
-  const serviceContext = getServiceContext(service);
-  return serviceContext === 'ANY' || serviceContext === claimContext;
-};
+import { getServiceContext, isServiceAllowedForClaimContext } from './claim-context.mjs';
 
 // ── أسماء الشهور ─────────────────────────────────────────────────────────────
 const MONTHS_AR = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
@@ -224,10 +203,16 @@ export default function ClaimBatchEntry() {
   const [member, setMember] = useState(null);
   const [memberInput, setMemberInput] = useState('');
   const [debouncedMemberInput, setDebouncedMemberInput] = useState('');
+  const [serviceSearchInput, setServiceSearchInput] = useState('');
+  const [debouncedServiceSearch, setDebouncedServiceSearch] = useState('');
   useEffect(() => {
     const t = setTimeout(() => setDebouncedMemberInput(memberInput), 350);
     return () => clearTimeout(t);
   }, [memberInput]);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedServiceSearch(serviceSearchInput.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [serviceSearchInput]);
   const [diagnosis, setDiagnosis] = useState('');
   const [doctorName, setDoctorName] = useState('');
   const [complaint, setComplaint] = useState('');
@@ -310,6 +295,7 @@ export default function ClaimBatchEntry() {
   };
 
   const [encounterType, setEncounterType] = useState('OUTPATIENT');
+  const [claimContextCode, setClaimContextCode] = useState('OUTPATIENT');
   const [fullCoverage, setFullCoverage] = useState(false);
 
   // A batch period is not a service date. Guessing the first day silently
@@ -343,6 +329,11 @@ export default function ClaimBatchEntry() {
   });
 
   const medicalCategories = useMemo(() => allCategories || [], [allCategories]);
+  const { data: claimContexts = [] } = useQuery({
+    queryKey: ['claim-contexts'],
+    queryFn: getActiveClaimContexts,
+    staleTime: 5 * 60 * 1000
+  });
 
   const rootCategories = useMemo(() => {
     return medicalCategories.filter((c) => !c.parentId);
@@ -356,6 +347,7 @@ export default function ClaimBatchEntry() {
     member,
     medicalCategories,
     encounterType,
+    claimContextCode,
     setLines,
     recompute,
     serviceYear: serviceDate ? new Date(serviceDate).getFullYear() : year || new Date().getFullYear(),
@@ -366,8 +358,8 @@ export default function ClaimBatchEntry() {
   });
 
   const refetchAllLinesCoverageCallback = useCallback(
-    async (newEncounterType, newFullCoverage) => {
-      const updated = await refetchAllLinesCoverage(newEncounterType, linesRef.current, newFullCoverage);
+    async (newEncounterType, newFullCoverage, newClaimContextCode) => {
+      const updated = await refetchAllLinesCoverage(newEncounterType, linesRef.current, newFullCoverage, newClaimContextCode);
       if (updated) setLines(updated);
       return updated;
     },
@@ -574,17 +566,25 @@ export default function ClaimBatchEntry() {
     },
     enabled: !!employerId && !!providerId
   });
-  const { data: contractedRaw, isLoading: loadingServices } = useQuery({
-    queryKey: ['claim-entry-contract-services', entryContext?.contractId, serviceDate],
+  const {
+    data: contractedRaw,
+    isLoading: loadingServices,
+    isError: servicesError,
+    error: servicesFailure,
+    refetch: refetchServices
+  } = useQuery({
+    queryKey: ['claim-entry-contract-services', member?.id, providerId, employerId, entryContext?.contractId, serviceDate, debouncedServiceSearch],
     queryFn: () => claimsService.getEntryServices({
-      memberId: selectedMemberId,
-      providerId: batch?.providerId,
-      employerId: batch?.employerId,
+      memberId: member.id,
+      providerId,
+      employerId,
       serviceDate,
-      size: 500,
+      q: debouncedServiceSearch || undefined,
+      size: 100,
       sort: 'serviceName,asc'
     }),
-    enabled: !!entryContext?.contractId && !!serviceDate
+    enabled: !!member?.id && !!providerId && !!employerId && !!entryContext?.contractId && !!serviceDate,
+    retry: false
   });
   const normalizedMemberSearchValue = useMemo(() => debouncedMemberInput.trim(), [debouncedMemberInput]);
 
@@ -791,6 +791,9 @@ export default function ClaimBatchEntry() {
       setPreAuthId(editingClaim.preAuthorizationId || '');
       setEncounterType(editingClaim.encounterType || 'OUTPATIENT');
       setFullCoverage(!!editingClaim.fullCoverage);
+      setClaimContextCode(
+        editingClaim.claimContextCode || (editingClaim.fullCoverage ? 'FULL_COVERAGE' : editingClaim.encounterType || 'OUTPATIENT')
+      );
       setIsDirty(false);
       // Signal that edit fields and lines were committed. One dedicated effect
       // recalculates coverage after policy/member are ready as well.
@@ -809,6 +812,7 @@ export default function ClaimBatchEntry() {
       serviceDate,
       preAuthId,
       encounterType,
+      claimContextCode,
       fullCoverage,
       applyBenefits,
       isClaimRejected,
@@ -825,6 +829,7 @@ export default function ClaimBatchEntry() {
       serviceDate,
       preAuthId,
       encounterType,
+      claimContextCode,
       fullCoverage,
       applyBenefits,
       isClaimRejected,
@@ -846,6 +851,7 @@ export default function ClaimBatchEntry() {
       setPreAuthId(payload.preAuthId || '');
       setEncounterType(payload.encounterType || 'OUTPATIENT');
       setFullCoverage(!!payload.fullCoverage);
+      setClaimContextCode(payload.claimContextCode || (payload.fullCoverage ? 'FULL_COVERAGE' : payload.encounterType || 'OUTPATIENT'));
       setApplyBenefits(payload.applyBenefits ?? true);
       setIsClaimRejected(!!payload.isClaimRejected);
       setRejectionInput(payload.rejectionInput || '');
@@ -1017,38 +1023,10 @@ export default function ClaimBatchEntry() {
   }, [contractedRaw]);
 
   const serviceOptions = useMemo(() => {
-    const mappedCodes = new Set(contractedServiceOptionsRaw.map((item) => item.serviceCode).filter(Boolean));
-
-
-    const generalOptions = [
-      {
-        id: 'GEN-MEDICATION',
-        pricingItemId: null,
-        serviceCode: 'GEN-MEDICATION',
-        serviceName: 'دواء عام / General Medication',
-        label: '[GEN-MEDICATION] دواء عام / General Medication',
-        contractPrice: 0,
-        maxContractPrice: 0,
-        encounterType: 'OUTPATIENT',
-        defaultEncounterType: 'OUTPATIENT',
-        categoryId: null
-      },
-      {
-        id: 'GEN-MEDICAL-SERVICE',
-        pricingItemId: null,
-        serviceCode: 'GEN-MEDICAL-SERVICE',
-        serviceName: 'خدمة طبية عامة / General Medical Service',
-        label: '[GEN-MEDICAL-SERVICE] خدمة طبية عامة / General Medical Service',
-        contractPrice: 0,
-        maxContractPrice: 0,
-        encounterType: 'OUTPATIENT',
-        defaultEncounterType: 'OUTPATIENT',
-        categoryId: null
-      }
-    ].filter((item) => !mappedCodes.has(item.serviceCode));
-
-
-    return [...contractedServiceOptionsRaw, ...generalOptions].filter((item) => isServiceAllowedForClaimContext(item, encounterType));
+    // Claim entry is contract-priced and fail-closed. Synthetic generic items
+    // have neither a pricingItemId nor a classified coverage source and mask a
+    // failed contract-services request as if the contract contained services.
+    return contractedServiceOptionsRaw.filter((item) => isServiceAllowedForClaimContext(item, encounterType));
   }, [contractedServiceOptionsRaw, encounterType]);
 
   const batchContent = useMemo(
@@ -1184,11 +1162,11 @@ export default function ClaimBatchEntry() {
     if (editingClaimId) return;
 
     // Force refetch usage/limits for ALL lines when member or policy changes
-    refetchAllLinesCoverage(encounterType, linesRef.current).then((updated) => {
+    refetchAllLinesCoverage(encounterType, linesRef.current, fullCoverage, claimContextCode).then((updated) => {
       if (updated) setLines(updated);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [policyId, member?.id, encounterType]);
+  }, [policyId, member?.id, encounterType, fullCoverage, claimContextCode]);
 
   // Edit hydration barrier: run only after claim, policy, member, context, date
   // and mapped lines have all reached committed React state.
@@ -1720,6 +1698,7 @@ export default function ClaimBatchEntry() {
         rejectionReason: effectivelyRejected ? effectiveRejectionReason : null,
         preAuthorizationId: preAuthId ? parseInt(preAuthId) : null,
         encounterType,
+        claimContextCode,
         fullCoverage: fullCoverage,
         // لا ترسل صفوف الإدخال الفارغة التي يضيفها المستخدم ولم يختر لها خدمة.
         // التحقق أعلاه يعتمد activeLines، ويجب أن يستخدم الحفظ المصدر نفسه حتى
@@ -2051,6 +2030,9 @@ export default function ClaimBatchEntry() {
                 doctorName={doctorName}
                 setDoctorName={setDoctorName}
                 encounterType={encounterType}
+                claimContextCode={claimContextCode}
+                claimContexts={claimContexts}
+                setClaimContextCode={setClaimContextCode}
                 setEncounterType={setEncounterType}
                 fullCoverage={fullCoverage}
                 setFullCoverage={setFullCoverage}
@@ -2381,6 +2363,10 @@ export default function ClaimBatchEntry() {
                       theme={theme}
                       serviceOptions={serviceOptions}
                       loadingServices={loadingServices}
+                      servicesError={servicesError}
+                      servicesErrorMessage={servicesFailure?.userMessage || servicesFailure?.message}
+                      onRetryServices={refetchServices}
+                      onServiceSearchChange={setServiceSearchInput}
                       updateLine={updateLine}
                       handleServiceChange={handleServiceChange}
                       removeLine={removeLine}

@@ -5,6 +5,7 @@ import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicyRule;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRuleRepository;
+import com.waad.tba.modules.claimcontext.repository.ClaimContextDefinitionRepository;
 import com.waad.tba.modules.medicaltaxonomy.entity.MedicalCategory;
 import com.waad.tba.modules.medicaltaxonomy.enums.CategoryContext;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalCategoryRepository;
@@ -26,6 +27,7 @@ public class CoverageDecisionService {
     private final BenefitPolicyRuleRepository ruleRepository;
     private final MedicalCategoryRepository categoryRepository;
     private final BenefitBucketLimitService bucketLimitService;
+    private final ClaimContextDefinitionRepository claimContextRepository;
 
     @Transactional(readOnly = true)
     public CoverageDecision resolve(CoverageDecisionRequest request) {
@@ -61,8 +63,19 @@ public class CoverageDecisionService {
             return rejected(categoryId, CoverageDecisionSource.EXCLUDED_CATEGORY, "EXCLUDED_CATEGORY");
         }
 
-        BenefitPolicyRule rule = ruleRepository.findBestRuleForContext(
-                request.policyId(), category.getId(), category.getParentId(), context, EncounterType.ANY)
+        boolean explicitClaimContext = request.claimContextCode() != null && !request.claimContextCode().isBlank();
+        String exactContext = explicitClaimContext
+                ? request.claimContextCode().trim().toUpperCase(java.util.Locale.ROOT) : context.name();
+        if (explicitClaimContext) {
+            var definition = claimContextRepository.findById(exactContext).orElse(null);
+            if (definition == null || !definition.isActive()
+                    || (definition.getBaseEncounterType() != EncounterType.ANY
+                    && definition.getBaseEncounterType() != context)) {
+                return rejected(categoryId, CoverageDecisionSource.CONTEXT_MISMATCH, "CLAIM_CONTEXT_MISMATCH");
+            }
+        }
+        BenefitPolicyRule rule = ruleRepository.findBestRuleForClaimContext(
+                request.policyId(), category.getId(), category.getParentId(), exactContext)
                 .orElse(null);
         if (rule == null) {
             return rejected(categoryId, CoverageDecisionSource.NO_BENEFIT_RULE, "NO_BENEFIT_RULE");

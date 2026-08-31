@@ -44,211 +44,10 @@ import { getAllMedicalCategories } from 'services/api/medical-categories.service
 import providersService from 'services/api/providers.service';
 import { getActiveContractByProvider } from 'services/api/provider-contracts.service';
 import { useSnackbar } from 'notistack';
+import { extractRowsFromWorkbook } from './price-list-workbook.mjs';
 
 const loadXlsx = async () => import('xlsx');
-
 const normalizeText = (value) => (value == null ? '' : String(value).trim());
-const numericPattern = /^[\d\s.,]+$/;
-const letterPattern = /[A-Za-z\u0600-\u06FF]/;
-const headerOnlyWords = [
-  'service_name',
-  'اسم الخدمة',
-  'اسم الخدمة عربي',
-  'اسم الخدمة إنجليزي',
-  'medicalserviceslistemultinature',
-  'contract_price',
-  'service_code',
-  'medical_category_code',
-  'medical_category_name',
-  'السعر',
-  'الكود',
-  'التصنيف',
-  'الخدمات'
-];
-
-const parseNumber = (value) => {
-  if (typeof value === 'number' && Number.isFinite(value)) return value;
-  const text = normalizeText(value).replace(/,/g, '');
-  if (!text) return null;
-  const number = Number(text);
-  return Number.isFinite(number) ? number : null;
-};
-
-const parsePriceRange = (value) => {
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return { min: value, max: value, label: value };
-  }
-
-  const raw = normalizeText(value);
-  if (!raw) return { min: null, max: null, label: '' };
-
-  const normalized = raw
-    .replace(/,/g, '')
-    .replace(/[–—−]/g, '-')
-    .replace(/\b(to)\b/gi, '-')
-    .replace(/إلى|الى|لغاية|حتى|من/gi, '-')
-    .replace(/[^\d.\-\s]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-  const numbers = normalized
-    .split(/[\s-]+/)
-    .map((part) => Number(part))
-    .filter((number) => Number.isFinite(number) && number > 0);
-
-  if (!numbers.length) {
-    const single = parseNumber(raw);
-    return single == null ? { min: null, max: null, label: raw } : { min: single, max: single, label: single };
-  }
-
-  const min = Math.min(...numbers);
-  const max = Math.max(...numbers);
-  return {
-    min,
-    max,
-    label: min === max ? min : `${min}-${max}`
-  };
-};
-
-const isLikelyServiceName = (value) => {
-  const text = normalizeText(value);
-  if (text.length < 3) return false;
-  if (text.length > 220) return false;
-  if (!letterPattern.test(text)) return false;
-  if (numericPattern.test(text)) return false;
-  const lower = text.toLowerCase();
-  if (headerOnlyWords.some((word) => lower === word.toLowerCase() || lower.includes(`${word.toLowerCase()}:`))) return false;
-  if (lower.endsWith('.xlsx') || lower.endsWith('.xls')) return false;
-  if (lower.includes('خدمات ') && lower.includes('xlsx')) return false;
-  return true;
-};
-
-const detectColumns = (rows) => {
-  for (let r = 0; r < Math.min(rows.length, 80); r += 1) {
-    const normalizedRow = (rows[r] || []).map((value) => normalizeText(value).toLowerCase());
-    if (!normalizedRow.some(Boolean)) continue;
-
-    let serviceCol = -1;
-    let priceCol = -1;
-    let codeCol = -1;
-
-    normalizedRow.forEach((value, index) => {
-      if (!value) return;
-      if (
-        serviceCol === -1 &&
-        (value.includes('service_name') ||
-          value.includes('اسم الخدمة عربي') ||
-          value.includes('اسم الخدمة') ||
-          value === 'الخدمة' ||
-          value === 'البيان')
-      ) {
-        serviceCol = index;
-      } else if (
-        priceCol === -1 &&
-        (value.includes('contract_price') ||
-          value.includes('unit_price') ||
-          value.includes('سعر العقد') ||
-          value === 'السعر' ||
-          value.includes('السعر'))
-      ) {
-        priceCol = index;
-      } else if (codeCol === -1 && (value.includes('service_code') || value === 'الكود' || value.includes('الكود الأصلي'))) {
-        codeCol = index;
-      }
-    });
-
-    if (serviceCol !== -1) {
-      return { headerRow: r, serviceCol, priceCol, codeCol };
-    }
-  }
-
-  return null;
-};
-
-const extractRowsByDetectedColumns = (sheetRows, sheetName, columns) => {
-  const rows = [];
-  for (let rowIndex = columns.headerRow + 1; rowIndex < sheetRows.length; rowIndex += 1) {
-    const row = sheetRows[rowIndex] || [];
-    const serviceName = normalizeText(row[columns.serviceCol]);
-    if (!isLikelyServiceName(serviceName)) continue;
-
-    const priceRange = columns.priceCol >= 0 ? parsePriceRange(row[columns.priceCol]) : { min: null, max: null, label: '' };
-    const serviceCode = columns.codeCol >= 0 ? normalizeText(row[columns.codeCol]) : '';
-
-    rows.push({
-      rowNumber: rowIndex + 1,
-      sourceSheet: sheetName,
-      serviceName,
-      serviceCode,
-      price: priceRange.min,
-      minPrice: priceRange.min,
-      maxPrice: priceRange.max,
-      priceLabel: priceRange.label
-    });
-  }
-  return rows;
-};
-
-const extractRowsByConservativeFallback = (sheetRows, sheetName) => {
-  const rows = [];
-  sheetRows.forEach((row, rowIndex) => {
-    const cells = (row || []).map(normalizeText);
-    if (!cells.some(Boolean)) return;
-
-    const priceCandidates = cells
-      .map((value, index) => ({ value, index, range: parsePriceRange(value) }))
-      .filter((cell) => cell.range?.min != null && cell.range.min > 0);
-    if (!priceCandidates.length) return;
-
-    const serviceCandidates = cells.map((value, index) => ({ value, index })).filter((cell) => isLikelyServiceName(cell.value));
-    if (!serviceCandidates.length) return;
-
-    const service = serviceCandidates.reduce((best, current) => {
-      const nearestDistance = Math.min(...priceCandidates.map((price) => Math.abs(price.index - current.index)));
-      if (!best || nearestDistance < best.distance) return { ...current, distance: nearestDistance };
-      return best;
-    }, null);
-
-    const nearestPrice = priceCandidates.reduce((best, current) => {
-      const distance = Math.abs(current.index - service.index);
-      if (!best || distance < best.distance) return { ...current, distance };
-      return best;
-    }, null);
-
-    rows.push({
-      rowNumber: rowIndex + 1,
-      sourceSheet: sheetName,
-      serviceName: service.value,
-      serviceCode: '',
-      price: nearestPrice?.range?.min ?? null,
-      minPrice: nearestPrice?.range?.min ?? null,
-      maxPrice: nearestPrice?.range?.max ?? null,
-      priceLabel: nearestPrice?.range?.label ?? ''
-    });
-  });
-  return rows;
-};
-
-const extractRowsFromWorkbook = (workbook, XLSX) => {
-  const rows = [];
-
-  workbook.SheetNames.forEach((sheetName) => {
-    const sheetRows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: '' });
-    const columns = detectColumns(sheetRows);
-    const extracted = columns
-      ? extractRowsByDetectedColumns(sheetRows, sheetName, columns)
-      : extractRowsByConservativeFallback(sheetRows, sheetName);
-    rows.push(...extracted);
-  });
-
-  const seen = new Set();
-  return rows.filter((row) => {
-    const key = `${row.sourceSheet}-${row.rowNumber}-${row.serviceName}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-};
 
 const statusColor = {
   AUTO_APPROVED: 'success',
@@ -476,6 +275,7 @@ const mapBackendSessionItems = (session) =>
     id: item.id,
     rowNumber: item.rowNumber,
     sourceSheet: item.sourceSheet,
+    sourceClassification: item.sourceClassification,
     serviceCode: item.serviceCode,
     serviceName: item.serviceName,
     price: item.price ?? item.minPrice,
@@ -853,6 +653,7 @@ export default function PriceListClassifierPage() {
           mappedItems.map((item) => ({
             rowNumber: item.rowNumber,
             sourceSheet: item.sourceSheet,
+            sourceClassification: item.sourceClassification,
             serviceCode: item.serviceCode,
             serviceName: item.serviceName,
             price: item.price,
@@ -1053,6 +854,7 @@ export default function PriceListClassifierPage() {
       return {
         rowNumber: item.rowNumber,
         sourceSheet: item.sourceSheet,
+        sourceClassification: item.sourceClassification || item.sourceSheet || '',
         serviceCode: item.serviceCode || '',
         serviceName: item.serviceName,
         canonicalName: item.bestMatch?.canonicalName || '',

@@ -6,6 +6,8 @@ import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicyRule;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRuleRepository;
+import com.waad.tba.modules.claimcontext.entity.ClaimContextDefinition;
+import com.waad.tba.modules.claimcontext.repository.ClaimContextDefinitionRepository;
 import com.waad.tba.modules.medicaltaxonomy.entity.MedicalCategory;
 import com.waad.tba.modules.medicaltaxonomy.enums.CategoryContext;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalCategoryRepository;
@@ -32,6 +34,7 @@ class CoverageDecisionServiceTest {
     @Mock BenefitPolicyRuleRepository ruleRepository;
     @Mock MedicalCategoryRepository categoryRepository;
     @Mock BenefitBucketLimitService bucketLimitService;
+    @Mock ClaimContextDefinitionRepository claimContextRepository;
     @InjectMocks CoverageDecisionService service;
 
     @Test
@@ -43,7 +46,7 @@ class CoverageDecisionServiceTest {
                 .active(true).build();
         when(categoryRepository.findById(55L)).thenReturn(Optional.of(category));
         when(policyRepository.findById(1L)).thenReturn(Optional.of(policy));
-        when(ruleRepository.findBestRuleForContext(1L, 55L, null, EncounterType.OUTPATIENT, EncounterType.ANY))
+        when(ruleRepository.findBestRuleForClaimContext(1L, 55L, null, "OUTPATIENT"))
                 .thenReturn(Optional.of(rule));
 
         var decision = service.resolve(request(EncounterType.OUTPATIENT));
@@ -60,7 +63,7 @@ class CoverageDecisionServiceTest {
         when(categoryRepository.findById(55L)).thenReturn(Optional.of(category));
         when(policyRepository.findById(1L)).thenReturn(Optional.of(
                 BenefitPolicy.builder().id(1L).defaultCoveragePercent(80).build()));
-        when(ruleRepository.findBestRuleForContext(1L, 55L, null, EncounterType.OUTPATIENT, EncounterType.ANY))
+        when(ruleRepository.findBestRuleForClaimContext(1L, 55L, null, "OUTPATIENT"))
                 .thenReturn(Optional.empty());
 
         var decision = service.resolve(request(EncounterType.OUTPATIENT));
@@ -90,7 +93,7 @@ class CoverageDecisionServiceTest {
                 .active(true).build();
         when(categoryRepository.findById(55L)).thenReturn(Optional.of(category));
         when(policyRepository.findById(1L)).thenReturn(Optional.of(policy));
-        when(ruleRepository.findBestRuleForContext(1L, 55L, null, EncounterType.OUTPATIENT, EncounterType.ANY))
+        when(ruleRepository.findBestRuleForClaimContext(1L, 55L, null, "OUTPATIENT"))
                 .thenReturn(Optional.of(rule));
         when(bucketLimitService.findApplicable(10L, 7L, null, EncounterType.OUTPATIENT, 99L))
                 .thenReturn(List.of(new BenefitBucketLimitService.LimitSnapshot(
@@ -110,6 +113,44 @@ class CoverageDecisionServiceTest {
             assertThat(limit.daysLimit()).isEqualTo(10);
             assertThat(limit.usedDays()).isEqualTo(4);
         });
+    }
+
+    @Test
+    void maternityNeverFallsBackToTheGenericInpatientRule() {
+        MedicalCategory category = category(55L, null, Set.of(CategoryContext.INPATIENT));
+        BenefitPolicy policy = BenefitPolicy.builder().id(1L).build();
+        when(categoryRepository.findById(55L)).thenReturn(Optional.of(category));
+        when(policyRepository.findById(1L)).thenReturn(Optional.of(policy));
+        when(claimContextRepository.findById("MATERNITY")).thenReturn(Optional.of(
+                ClaimContextDefinition.builder().code("MATERNITY").nameAr("ولادة وحمل")
+                        .baseEncounterType(EncounterType.INPATIENT).active(true).build()));
+        when(ruleRepository.findBestRuleForClaimContext(1L, 55L, null, "MATERNITY"))
+                .thenReturn(Optional.empty());
+
+        var decision = service.resolve(CoverageDecisionRequest.builder().policyId(1L)
+                .serviceCategoryId(55L).memberId(7L)
+                .encounterType(EncounterType.INPATIENT).claimContextCode("MATERNITY").build());
+
+        assertThat(decision.covered()).isFalse();
+        assertThat(decision.reasonCode()).isEqualTo("NO_BENEFIT_RULE");
+    }
+
+    @Test
+    void explicitClaimContextMustBeActiveAndMatchItsBaseEncounter() {
+        MedicalCategory category = category(55L, null, Set.of(CategoryContext.ANY));
+        when(categoryRepository.findById(55L)).thenReturn(Optional.of(category));
+        when(policyRepository.findById(1L)).thenReturn(Optional.of(BenefitPolicy.builder().id(1L).build()));
+        when(claimContextRepository.findById("MATERNITY")).thenReturn(Optional.of(
+                ClaimContextDefinition.builder().code("MATERNITY").nameAr("ولادة وحمل")
+                        .baseEncounterType(EncounterType.INPATIENT).active(true).build()));
+
+        var decision = service.resolve(CoverageDecisionRequest.builder().policyId(1L)
+                .serviceCategoryId(55L).encounterType(EncounterType.OUTPATIENT)
+                .claimContextCode("MATERNITY").build());
+
+        assertThat(decision.covered()).isFalse();
+        assertThat(decision.source()).isEqualTo(CoverageDecisionSource.CONTEXT_MISMATCH);
+        assertThat(decision.reasonCode()).isEqualTo("CLAIM_CONTEXT_MISMATCH");
     }
 
     private CoverageDecisionRequest request(EncounterType context) {

@@ -61,6 +61,7 @@ public class ClaimApiMapper {
                                 .complaint(request.getComplaint())
                                 .rejectionReason(request.getRejectionReason())
                                 .encounterType(request.getEncounterType())
+                                .claimContextCode(request.getClaimContextCode())
                                 .fullCoverage(request.getFullCoverage())
                                 .build();
         }
@@ -207,6 +208,7 @@ public class ClaimApiMapper {
                 return ClaimResponse.builder()
                                 // Identification
                                 .id(dto.getId())
+                                .claimContextCode(dto.getClaimContextCode())
                                 .claimNumber(dto.getClaimNumber())
 
                                 // Related entities

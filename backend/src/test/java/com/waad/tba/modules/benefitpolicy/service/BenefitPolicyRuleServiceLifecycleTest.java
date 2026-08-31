@@ -6,6 +6,7 @@ import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicyRule;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRuleRepository;
+import com.waad.tba.modules.claimcontext.repository.ClaimContextDefinitionRepository;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalCategoryRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Query;
@@ -34,6 +35,7 @@ class BenefitPolicyRuleServiceLifecycleTest {
     @Mock BenefitPolicyRepository policyRepository;
     @Mock MedicalCategoryRepository categoryRepository;
     @Mock CoverageDecisionService coverageDecisionService;
+    @Mock ClaimContextDefinitionRepository claimContextRepository;
     @Mock EntityManager em;
     @Mock Query query;
 
@@ -133,7 +135,8 @@ class BenefitPolicyRuleServiceLifecycleTest {
     }
 
     private BenefitPolicyRuleService service() {
-        return new BenefitPolicyRuleService(ruleRepository, policyRepository, categoryRepository, coverageDecisionService, em);
+        return new BenefitPolicyRuleService(ruleRepository, policyRepository, categoryRepository,
+                coverageDecisionService, claimContextRepository, em);
     }
 
     private void financialReferenceCount(Long count) {

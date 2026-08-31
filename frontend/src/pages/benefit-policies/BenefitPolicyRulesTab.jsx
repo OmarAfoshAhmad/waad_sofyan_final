@@ -79,6 +79,7 @@ import {
 import { getMedicalCategories } from 'services/api/medical-categories.service';
 import { lookupMedicalServices } from 'services/api/medical-services.service';
 import { getBenefitPoliciesSelector, checkPolicyEditability } from 'services/api/benefit-policies.service';
+import { getActiveClaimContexts } from 'services/api/claim-contexts.service';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // RULE FORM COMPONENT
@@ -89,6 +90,7 @@ const INITIAL_FORM_STATE = {
   childMedicalCategoryId: '',
   serviceName: '',
   encounterType: 'OUTPATIENT',
+  claimContextCode: 'OUTPATIENT',
   coveragePercent: '',
   waitingPeriodDays: '0',
   requiresPreApproval: false,
@@ -170,6 +172,12 @@ const RuleFormModal = ({
     staleTime: 15000
   });
 
+  const { data: claimContexts = [] } = useQuery({
+    queryKey: ['active-claim-contexts'],
+    queryFn: getActiveClaimContexts,
+    staleTime: 300000
+  });
+
   const exactNameMatch = useMemo(() => {
     const term = (formData.serviceName || '').trim().toLowerCase();
     if (!term) return null;
@@ -195,6 +203,7 @@ const RuleFormModal = ({
           childMedicalCategoryId: childId,
           serviceName: initialData.medicalServiceName || '',
           encounterType: initialData.encounterType || 'OUTPATIENT',
+          claimContextCode: initialData.claimContextCode || initialData.encounterType || 'OUTPATIENT',
           coveragePercent: initialData.coveragePercent ?? '',
           waitingPeriodDays: initialData.waitingPeriodDays ?? '0',
           requiresPreApproval: initialData.requiresPreApproval || false,
@@ -281,6 +290,7 @@ const RuleFormModal = ({
       medicalCategoryId: Number(selectedTargetCategoryId),
       medicalServiceId: null,
       encounterType: formData.encounterType || 'OUTPATIENT',
+      claimContextCode: formData.claimContextCode || formData.encounterType || 'OUTPATIENT',
       coveragePercent: formData.coveragePercent !== '' ? Number(formData.coveragePercent) : null,
       amountLimit: null,
       timesLimit: null,
@@ -401,14 +411,23 @@ const RuleFormModal = ({
             <TextField
               select
               fullWidth
-              label="سياق القاعدة"
-              value={formData.encounterType}
-              onChange={handleChange('encounterType')}
-              helperText="السياق يحدد القاعدة ولا يغيّر تصنيف الخدمة"
+              label="سياق قرار المطالبة"
+              value={formData.claimContextCode}
+              onChange={(event) => {
+                const selected = claimContexts.find((context) => context.code === event.target.value);
+                setFormData((previous) => ({
+                  ...previous,
+                  claimContextCode: event.target.value,
+                  encounterType: selected?.baseEncounterType || previous.encounterType
+                }));
+              }}
+              helperText="مستقل عن تصنيف الخدمة؛ الرنين والعلاج الطبيعي تصنيفات وليسا سياقات"
             >
-              <MenuItem value="OUTPATIENT">عيادات خارجية</MenuItem>
-              <MenuItem value="INPATIENT">إيواء</MenuItem>
-              <MenuItem value="ANY">عام (ANY)</MenuItem>
+              {claimContexts.map((context) => (
+                <MenuItem key={context.code} value={context.code}>
+                  {context.nameAr} ({context.baseEncounterType === 'INPATIENT' ? 'إيواء' : 'عيادات خارجية'})
+                </MenuItem>
+              ))}
             </TextField>
           </Grid>
 

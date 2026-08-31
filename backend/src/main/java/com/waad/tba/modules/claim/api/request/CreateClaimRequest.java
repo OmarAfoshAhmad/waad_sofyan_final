@@ -138,6 +138,9 @@ public class CreateClaimRequest {
     private com.waad.tba.modules.providercontract.enums.EncounterType encounterType =
             com.waad.tba.modules.providercontract.enums.EncounterType.OUTPATIENT;
 
+    @jakarta.validation.constraints.Size(max = 60)
+    private String claimContextCode;
+
     /**
      * Full coverage override: 100% coverage, bypasses all limits.
      */

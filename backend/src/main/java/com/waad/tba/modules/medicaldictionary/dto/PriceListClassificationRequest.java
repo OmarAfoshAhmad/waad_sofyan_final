@@ -12,6 +12,7 @@ import java.util.List;
 @Data
 public class PriceListClassificationRequest {
 
+    private Long providerId;
     private String providerName;
 
     @NotEmpty(message = "قائمة الخدمات مطلوبة")
@@ -33,6 +34,7 @@ public class PriceListClassificationRequest {
         private BigDecimal maxPrice;
         private String priceLabel;
         private String sourceSheet;
+        private String sourceClassification;
         private String secondaryName;
         private List<String> alternateNames;
         private String sectionName;

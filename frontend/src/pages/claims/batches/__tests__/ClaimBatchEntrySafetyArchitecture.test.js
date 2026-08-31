@@ -6,6 +6,16 @@ const lineSource = readFileSync('src/pages/claims/batches/components/ClaimLineRo
 const headerSource = readFileSync('src/pages/claims/batches/components/ClaimHeaderFields.jsx', 'utf8');
 
 describe('claim batch entry safety boundary', () => {
+  it('loads dated contract services with the selected member identity, never an undefined alias', () => {
+    expect(entrySource).toContain('memberId: member.id');
+    expect(entrySource).toContain('providerId,');
+    expect(entrySource).toContain('employerId,');
+    expect(entrySource).not.toContain('selectedMemberId');
+    expect(entrySource).not.toContain('const generalOptions =');
+    expect(entrySource).toContain('q: debouncedServiceSearch || undefined');
+    expect(lineSource).toContain('onServiceSearchChange?.(value)');
+  });
+
   it('does not let the browser construct an approved claim', () => {
     expect(entrySource).not.toMatch(/status:\s*effectivelyRejected\s*\?\s*['"]REJECTED['"]\s*:\s*['"]APPROVED['"]/);
   });

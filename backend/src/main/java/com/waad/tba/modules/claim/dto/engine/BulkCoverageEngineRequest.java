@@ -71,6 +71,9 @@ public class BulkCoverageEngineRequest {
     private com.waad.tba.modules.providercontract.enums.EncounterType encounterType =
             com.waad.tba.modules.providercontract.enums.EncounterType.OUTPATIENT;
 
+    /** Exact business decision context (for example MATERNITY). */
+    private String claimContextCode;
+
     /**
      * قائمة أسطر الخدمات المطلوب حسابها.
      * الترتيب مهم — الأسطر تُحسب بالتسلسل لضمان صحة تراكم السقوف.

@@ -17,6 +17,7 @@ public record CoverageDecisionRequest(
         LocalDate serviceDate,
         Long excludeClaimId,
         EncounterType encounterType,
+        String claimContextCode,
         Double classificationConfidence,
         BigDecimal requestedAmount) {
 }

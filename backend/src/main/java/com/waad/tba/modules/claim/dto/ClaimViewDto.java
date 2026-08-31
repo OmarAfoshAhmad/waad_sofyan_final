@@ -17,6 +17,7 @@ import java.util.List;
 @AllArgsConstructor
 public class ClaimViewDto {
     private Long id;
+    private String claimContextCode;
 
     /**
      * Claim Number (formatted reference: CLM-YYYYMMDD-XXXX or just ID)

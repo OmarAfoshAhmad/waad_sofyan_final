@@ -71,6 +71,17 @@ class DirectClaimIdentityAcrossV199MigrationTest {
                 + tag + "','LIC-" + tag + "','CLINIC') RETURNING id");
         long visit = id(statement, "INSERT INTO visits(member_id,provider_id,visit_date) VALUES(" + member + ","
                 + provider + ",CURRENT_DATE) RETURNING id");
+        boolean hasContext;
+        try (ResultSet columns = statement.executeQuery("SELECT EXISTS (SELECT 1 FROM information_schema.columns "
+                + "WHERE table_name='claims' AND column_name='claim_context_code')")) {
+            columns.next();
+            hasContext = columns.getBoolean(1);
+        }
+        if (hasContext) {
+            return id(statement, "INSERT INTO claims(claim_number,member_id,provider_id,visit_id,service_date,"
+                    + "requested_amount,status,claim_context_code) VALUES('CLM-V199-" + tag + "'," + member + "," + provider + ","
+                    + visit + ",CURRENT_DATE,100,'DRAFT','OUTPATIENT') RETURNING id");
+        }
         return id(statement, "INSERT INTO claims(claim_number,member_id,provider_id,visit_id,service_date,"
                 + "requested_amount,status) VALUES('CLM-V199-" + tag + "'," + member + "," + provider + ","
                 + visit + ",CURRENT_DATE,100,'DRAFT') RETURNING id");

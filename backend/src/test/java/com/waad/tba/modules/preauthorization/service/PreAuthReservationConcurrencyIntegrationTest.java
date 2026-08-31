@@ -72,8 +72,8 @@ class PreAuthReservationConcurrencyIntegrationTest extends PostgresIntegrationTe
                 + "VALUES ('CSRV-" + s + "', 'Concurrent Service', " + categoryId + ", true) RETURNING id",
                 Long.class);
         Long ruleId = jdbc.queryForObject("INSERT INTO benefit_policy_rules (benefit_policy_id, "
-                + "medical_category_id, encounter_type, coverage_percent, active, deleted) VALUES ("
-                + policyId + ", " + categoryId + ", 'OUTPATIENT', " + coveragePercent
+                + "medical_category_id, encounter_type, claim_context_code, coverage_percent, active, deleted) VALUES ("
+                + policyId + ", " + categoryId + ", 'OUTPATIENT', 'OUTPATIENT', " + coveragePercent
                 + ", true, false) RETURNING id", Long.class);
         Long groupId = jdbc.queryForObject("INSERT INTO benefit_groups (policy_id, code, name_ar, "
                 + "context_type, aggregation_mode) VALUES (" + policyId + ", 'CG-" + s

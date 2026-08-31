@@ -108,12 +108,18 @@ public class CoverageEngineService {
         // 2) Coverage Lookup
         // Full coverage is a co-pay exception, not a benefit-limit bypass. Keep
         // resolving the rule so amount/times/day buckets remain enforceable.
+        // FULL_COVERAGE changes the co-pay split only. Its limits still come from
+        // the underlying OUTPATIENT/INPATIENT rule; looking up a synthetic
+        // FULL_COVERAGE rule would turn a missing configuration into a limit bypass.
+        String decisionContextCode = request.isFullCoverage()
+                ? request.getEncounterType().name() : request.getClaimContextCode();
         var coverageDecision = coverageDecisionService.resolve(CoverageDecisionRequest.builder()
                 .policyId(request.getPolicyId()).memberId(request.getMemberId())
                 .serviceId(line.getServiceId())
                 .serviceCategoryId(line.getServiceCategoryId() != null
                         ? line.getServiceCategoryId() : line.getCategoryId())
                 .serviceDate(request.getServiceDate()).encounterType(request.getEncounterType())
+                .claimContextCode(decisionContextCode)
                 .excludeClaimId(request.getExcludeClaimId())
                 .requestedAmount(effectiveTotal).build());
         Optional<BenefitPolicyRuleResponseDto> ruleOpt = coverageDecision.appliedRuleOptional();
@@ -281,6 +287,8 @@ public class CoverageEngineService {
         boolean amountExceeded = false;
         boolean daysExceeded = false;
         CoverageLimitSnapshot constraining = limits.get(0);
+        BigDecimal constrainingUsedBefore = ZERO;
+        BigDecimal constrainingRequestedBasis = ZERO;
 
         for (CoverageLimitSnapshot limit : limits) {
             BatchUsageAccumulator acc = batchUsageContext.computeIfAbsent(bucketAccumulatorKey(limit.bucketId()),
@@ -311,6 +319,8 @@ public class CoverageEngineService {
                 timesExceeded = thisTimesExceeded;
                 amountExceeded = thisAmountExceeded;
                 daysExceeded = thisDaysExceeded;
+                constrainingUsedBefore = usedAmount;
+                constrainingRequestedBasis = requestedBasis;
             }
         }
 
@@ -362,6 +372,11 @@ public class CoverageEngineService {
                 .amountLimit(amountDisplay == null ? null : amountDisplay.amountLimit())
                 .daysLimit(daysDisplay == null ? null : daysDisplay.daysLimit())
                 .usedCount((int) Math.min(Integer.MAX_VALUE, finalTimes)).usedAmount(finalAmount)
+                .consumptionBasis(constraining.consumptionBasis() == null
+                        ? null : constraining.consumptionBasis().name())
+                .usedAmountBeforeLine(constrainingUsedBefore)
+                .requestedAmountForLimit(constrainingRequestedBasis)
+                .approvedAmountForLimit(basisAmount(constraining.consumptionBasis(), approvedGross, coveragePercent))
                 .usedDays(daysDisplay == null ? 0 : daysDisplay.usedDays()
                         + (batchUsageContext.get(bucketAccumulatorKey(daysDisplay.bucketId())).addedDay ? 1 : 0))
                 .remainingAmount(amountDisplay == null ? null
