@@ -113,6 +113,7 @@ public class ClaimCreateDto {
     // ==================== COVERAGE CONTEXT ====================
     @Builder.Default
     private EncounterType encounterType = EncounterType.OUTPATIENT;
+    private String claimContextCode;
     private Boolean fullCoverage;
 
     /**

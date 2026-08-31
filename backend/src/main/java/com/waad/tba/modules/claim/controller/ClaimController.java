@@ -4,6 +4,9 @@ import java.util.List;
 import java.util.Set;
 
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -23,6 +26,7 @@ import com.waad.tba.modules.claim.api.ClaimApiMapper;
 import com.waad.tba.modules.claim.api.request.ApproveClaimRequest;
 import com.waad.tba.modules.claim.api.request.PauseClaimReviewRequest;
 import com.waad.tba.modules.claim.api.request.CreateClaimRequest;
+import com.waad.tba.modules.claim.api.request.DirectClaimEntryRequest;
 import com.waad.tba.modules.claim.api.request.RejectClaimRequest;
 import com.waad.tba.modules.claim.api.request.ReturnForInfoClaimRequest;
 import com.waad.tba.modules.claim.api.request.UpdateClaimDataRequest;
@@ -30,10 +34,15 @@ import com.waad.tba.modules.claim.api.request.UpdateClaimRequest;
 import com.waad.tba.modules.claim.api.response.ClaimListResponse;
 import com.waad.tba.modules.claim.api.response.ClaimResponse;
 import com.waad.tba.modules.claim.dto.ClaimViewDto;
+import com.waad.tba.modules.claim.dto.ClaimEntryContextDto;
 import com.waad.tba.modules.claim.dto.CostBreakdownDto;
 import com.waad.tba.modules.claim.dto.FinancialSummaryDto;
+import com.waad.tba.modules.providercontract.dto.ProviderContractPricingItemResponseDto;
+import com.waad.tba.modules.claim.dto.EligiblePreAuthorizationDto;
 import com.waad.tba.modules.claim.entity.ClaimStatus;
 import com.waad.tba.modules.claim.service.ClaimService;
+import com.waad.tba.modules.claim.service.ClaimEntryContextService;
+import com.waad.tba.modules.claim.service.DirectClaimEntryService;
 import com.waad.tba.common.guard.FeatureGuard;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -74,6 +83,8 @@ import lombok.extern.slf4j.Slf4j;
 public class ClaimController {
 
     private final ClaimService claimService;
+    private final ClaimEntryContextService claimEntryContextService;
+    private final DirectClaimEntryService directClaimEntryService;
     private final ClaimApiMapper apiMapper;
     private final FeatureGuard featureGuard;
 
@@ -86,10 +97,60 @@ public class ClaimController {
             "approvedAmount", "serviceDate", "providerName", "memberName",
             "encounterType", "categoryNameAr", "categoryNameEn");
 
+    @GetMapping("/entry-context")
+    @PreAuthorize("@claimAccessGuard.canReadMemberFor('CLAIM_CREATE', #memberId) "
+            + "&& @claimAccessGuard.canAccessBatch('CLAIM_CREATE', #providerId, #employerId)")
+    @Operation(summary = "Resolve dated claim-entry context",
+            description = "Returns the member employer, policy assignment and provider contract effective on the service date.")
+    public ResponseEntity<ApiResponse<ClaimEntryContextDto>> getEntryContext(
+            @RequestParam("memberId") Long memberId,
+            @RequestParam("providerId") Long providerId,
+            @RequestParam("employerId") Long employerId,
+            @RequestParam("serviceDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate serviceDate) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "تم التحقق من سياق المطالبة",
+                claimEntryContextService.resolve(memberId, providerId, employerId, serviceDate)));
+    }
+
+    @GetMapping("/entry-services")
+    @PreAuthorize("@claimAccessGuard.canReadMemberFor('CLAIM_CREATE', #memberId) "
+            + "&& @claimAccessGuard.canAccessBatch('CLAIM_CREATE', #providerId, #employerId)")
+    @Operation(summary = "List dated claim-entry services",
+            description = "Returns only pricing-item versions effective in the resolved contract on the service date.")
+    public ResponseEntity<ApiResponse<Page<ProviderContractPricingItemResponseDto>>> getEntryServices(
+            @RequestParam("memberId") Long memberId,
+            @RequestParam("providerId") Long providerId,
+            @RequestParam("employerId") Long employerId,
+            @RequestParam("serviceDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate serviceDate,
+            @RequestParam(value = "q", required = false) String query,
+            @PageableDefault(size = 500, sort = "serviceName", direction = Sort.Direction.ASC) Pageable pageable) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "تم تحميل خدمات العقد السارية",
+                claimEntryContextService.findEffectiveServices(
+                        memberId, providerId, employerId, serviceDate, query, pageable)));
+    }
+
+    @GetMapping("/eligible-preauthorizations")
+    @PreAuthorize("@claimAccessGuard.canReadMemberFor('CLAIM_CREATE', #memberId) "
+            + "&& @claimAccessGuard.canAccessBatch('CLAIM_CREATE', #providerId, #employerId)")
+    public ResponseEntity<ApiResponse<List<EligiblePreAuthorizationDto>>> getEligiblePreAuthorizations(
+            @RequestParam("memberId") Long memberId,
+            @RequestParam("providerId") Long providerId,
+            @RequestParam("employerId") Long employerId,
+            @RequestParam("serviceDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate serviceDate) {
+        return ResponseEntity.ok(ApiResponse.success("الموافقات الصالحة للمطالبة",
+                claimEntryContextService.findEligiblePreAuthorizations(
+                        memberId, providerId, employerId, serviceDate)));
+    }
+
     @PostMapping
     @PreAuthorize("@claimAccessGuard.canCreateFromVisit(#apiRequest.visitId)")
     @Operation(summary = "Create claim", description = "Create a new claim from visit. All amounts calculated by backend from provider contract.")
     public ResponseEntity<ApiResponse<ClaimResponse>> createClaim(@Valid @RequestBody CreateClaimRequest apiRequest) {
+        if (apiRequest.getVisitId() == null) {
+            throw new com.waad.tba.common.exception.BusinessRuleException(
+                    "معرف الزيارة مطلوب؛ استخدم مسار الإدخال المباشر لإنشاء الزيارة والمطالبة معاً");
+        }
         log.info("📥 [CLAIM-API] Incoming create request: visitId={}, lines={}",
                 apiRequest.getVisitId(),
                 apiRequest.getLines() != null ? apiRequest.getLines().size() : 0);
@@ -114,6 +175,18 @@ public class ClaimController {
                     apiRequest.getVisitId(), e.getMessage(), e);
             throw e;
         }
+    }
+
+    @PostMapping("/direct-entry")
+    @PreAuthorize("@claimAccessGuard.canReadMemberFor('CLAIM_CREATE', #request.claim.memberId) "
+            + "&& @claimAccessGuard.canAccessBatch('CLAIM_CREATE', #request.claim.providerId, #request.employerId)")
+    @Operation(summary = "Create an internal direct-entry claim atomically",
+            description = "Creates the required visit and its claim in one transaction.")
+    public ResponseEntity<ApiResponse<ClaimResponse>> createDirectEntry(
+            @Valid @RequestBody DirectClaimEntryRequest request) {
+        ClaimResponse response = apiMapper.toResponse(directClaimEntryService.create(request));
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success("تم إنشاء الزيارة والمطالبة بنجاح", response));
     }
 
     /**

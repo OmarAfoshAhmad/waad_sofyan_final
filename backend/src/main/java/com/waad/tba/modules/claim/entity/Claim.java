@@ -91,6 +91,12 @@ public class Claim {
     @Column(name = "claim_number", length = 100, unique = true)
     private String claimNumber;
 
+    @Column(name = "direct_entry_idempotency_key", length = 120)
+    private String directEntryIdempotencyKey;
+
+    @Column(name = "direct_entry_request_fingerprint", length = 64)
+    private String directEntryRequestFingerprint;
+
     // ==================== CLAIM DETAILS ====================
 
     @OneToMany(mappedBy = "claim", cascade = CascadeType.ALL, orphanRemoval = false)
@@ -219,6 +225,9 @@ public class Claim {
     @Column(name = "encounter_type", length = 20, nullable = false)
     @Builder.Default
     private EncounterType encounterType = EncounterType.OUTPATIENT;
+
+    @Column(name = "claim_context_code", nullable = false, length = 60)
+    private String claimContextCode;
 
     /**
      * Full coverage override: 100% coverage, no limits.
@@ -442,6 +451,7 @@ public class Claim {
     protected void onCreate() {
         createdAt = LocalDateTime.now();
         updatedAt = LocalDateTime.now();
+        synchronizeClaimContext();
         validateArchitecturalRules();
         validateBusinessRules();
     }
@@ -449,7 +459,15 @@ public class Claim {
     @PreUpdate
     protected void onUpdate() {
         updatedAt = LocalDateTime.now();
+        synchronizeClaimContext();
         validateBusinessRules();
+    }
+
+    private void synchronizeClaimContext() {
+        if (claimContextCode == null || claimContextCode.isBlank()) {
+            if (encounterType == null) throw new IllegalStateException("Claim context is required");
+            claimContextCode = encounterType.name();
+        }
     }
 
     /**

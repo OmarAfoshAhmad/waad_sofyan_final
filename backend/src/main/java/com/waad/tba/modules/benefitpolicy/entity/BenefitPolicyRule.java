@@ -36,7 +36,7 @@ import java.time.LocalDateTime;
         @Index(name = "idx_bpr_deleted", columnList = "deleted")
 }, uniqueConstraints = {
         // Prevent duplicate category rules within same policy and context
-        @UniqueConstraint(name = "uk_bpr_policy_category_context", columnNames = { "benefit_policy_id", "medical_category_id", "encounter_type" })
+        @UniqueConstraint(name = "uk_bpr_policy_category_claim_context", columnNames = { "benefit_policy_id", "medical_category_id", "claim_context_code" })
 })
 @Data
 @Builder
@@ -81,6 +81,9 @@ public class BenefitPolicyRule {
     @Column(name = "encounter_type", length = 20)
     @Builder.Default
     private com.waad.tba.modules.providercontract.enums.EncounterType encounterType = com.waad.tba.modules.providercontract.enums.EncounterType.OUTPATIENT;
+
+    @Column(name = "claim_context_code", nullable = false, length = 60)
+    private String claimContextCode;
 
     @DecimalMin(value = "0.00", message = "Copay percentage must be >= 0")
     @DecimalMax(value = "100.00", message = "Copay percentage must be <= 100")
@@ -221,6 +224,12 @@ public class BenefitPolicyRule {
     @PrePersist
     @PreUpdate
     public void validateTarget() {
+        if (claimContextCode == null || claimContextCode.isBlank()) {
+            if (encounterType == null) {
+                throw new IllegalStateException("Claim context is required");
+            }
+            claimContextCode = encounterType.name();
+        }
         if (medicalCategory == null) {
             throw new IllegalStateException(
                     "Rule must target a medical category (service-level rules removed in V228)");

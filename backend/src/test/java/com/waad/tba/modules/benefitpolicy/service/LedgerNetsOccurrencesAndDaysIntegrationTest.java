@@ -87,9 +87,9 @@ class LedgerNetsOccurrencesAndDaysIntegrationTest extends PostgresIntegrationTes
                 + w.memberId() + ", " + w.providerId() + ", DATE '" + serviceDate + "') RETURNING id",
                 Long.class);
         Long claimId = jdbc.queryForObject("INSERT INTO claims (claim_number, member_id, provider_id, "
-                + "visit_id, service_date, requested_amount, status) VALUES ('NTC-" + s + "', "
+                + "visit_id, service_date, requested_amount, status, claim_context_code) VALUES ('NTC-" + s + "', "
                 + w.memberId() + ", " + w.providerId() + ", " + visitId + ", DATE '" + serviceDate
-                + "', " + amount + ", 'APPROVED') RETURNING id", Long.class);
+                + "', " + amount + ", 'APPROVED', 'OUTPATIENT') RETURNING id", Long.class);
         Long lineId = jdbc.queryForObject("INSERT INTO claim_lines (claim_id, service_code, quantity, "
                 + "unit_price, total_price) VALUES (" + claimId + ", 'NTS-" + s + "', 1, " + amount
                 + ", " + amount + ") RETURNING id", Long.class);
@@ -330,9 +330,9 @@ class LedgerNetsOccurrencesAndDaysIntegrationTest extends PostgresIntegrationTes
         Long visitId = jdbc.queryForObject("INSERT INTO visits (member_id, provider_id, visit_date) VALUES ("
                 + w.memberId() + ", " + w.providerId() + ", DATE '" + day + "') RETURNING id", Long.class);
         Long claimId = jdbc.queryForObject("INSERT INTO claims (claim_number, member_id, provider_id, "
-                + "visit_id, service_date, requested_amount, status) VALUES ('NTX-" + s + "', "
+                + "visit_id, service_date, requested_amount, status, claim_context_code) VALUES ('NTX-" + s + "', "
                 + w.memberId() + ", " + w.providerId() + ", " + visitId + ", DATE '" + day
-                + "', 100.00, 'APPROVED') RETURNING id", Long.class);
+                + "', 100.00, 'APPROVED', 'OUTPATIENT') RETURNING id", Long.class);
         Long lineId = jdbc.queryForObject("INSERT INTO claim_lines (claim_id, service_code, quantity, "
                 + "unit_price, total_price) VALUES (" + claimId + ", 'NTXS-" + s
                 + "', 1, 100.00, 100.00) RETURNING id", Long.class);

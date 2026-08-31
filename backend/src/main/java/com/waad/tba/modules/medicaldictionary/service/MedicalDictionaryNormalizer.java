@@ -13,6 +13,7 @@ public class MedicalDictionaryNormalizer {
         String normalized = Normalizer.normalize(value, Normalizer.Form.NFKC)
                 .toLowerCase(Locale.ROOT)
                 .replaceAll("[\\u064B-\\u065F\\u0670]", "")
+                .replace("\u0640", "")
                 .replace('أ', 'ا')
                 .replace('إ', 'ا')
                 .replace('آ', 'ا')

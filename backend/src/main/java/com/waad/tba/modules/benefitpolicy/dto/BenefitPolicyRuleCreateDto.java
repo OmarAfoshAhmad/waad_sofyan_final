@@ -68,6 +68,9 @@ public class BenefitPolicyRuleCreateDto {
     @Builder.Default
     private String encounterType = "OUTPATIENT";
 
+    /** Exact decision context; defaults to encounterType for backward compatibility. */
+    private String claimContextCode;
+
     @DecimalMin(value = "0.00", message = "Copay percentage must be >= 0")
     @DecimalMax(value = "100.00", message = "Copay percentage must be <= 100")
     private BigDecimal copayPercentage;

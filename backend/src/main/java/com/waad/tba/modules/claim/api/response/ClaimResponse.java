@@ -43,6 +43,7 @@ public class ClaimResponse {
     // ═══════════════════════════════════════════════════════════════════════════
 
     private Long id;
+    private String claimContextCode;
 
     /**
      * Claim Number (formatted reference: CLM-YYYYMMDD-XXXX)

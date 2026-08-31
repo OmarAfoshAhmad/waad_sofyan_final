@@ -44,6 +44,8 @@ public class PriceListSessionResponse {
         private Long id;
         private Integer rowNumber;
         private String sourceSheet;
+        private String sourceClassification;
+        private String claimContextCode;
         private String serviceCode;
         private String serviceName;
         private String canonicalName;

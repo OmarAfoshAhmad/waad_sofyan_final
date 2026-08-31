@@ -18,6 +18,8 @@ import com.waad.tba.modules.providercontract.enums.EncounterType;
  */
 @Repository
 public interface BenefitPolicyRuleRepository extends JpaRepository<BenefitPolicyRule, Long> {
+    Optional<BenefitPolicyRule> findFirstByBenefitPolicyIdAndMedicalCategoryIdAndClaimContextCodeOrderByIdDesc(
+            Long benefitPolicyId, Long medicalCategoryId, String claimContextCode);
 
   // ═══════════════════════════════════════════════════════════════════════════
   // FIND BY POLICY
@@ -115,6 +117,30 @@ public interface BenefitPolicyRuleRepository extends JpaRepository<BenefitPolicy
       @Param("parentCategoryId") Long parentCategoryId,
       @Param("encounterType") EncounterType encounterType,
       @Param("anyContext") EncounterType anyContext);
+
+  @Query("""
+      SELECT r FROM BenefitPolicyRule r
+      WHERE r.benefitPolicy.id = :policyId
+        AND r.active = true
+        AND r.deleted = false
+        AND r.claimContextCode = :claimContextCode
+        AND (
+          r.medicalCategory.id = :categoryId
+          OR (:parentCategoryId IS NOT NULL
+              AND r.medicalCategory.id = :parentCategoryId
+              AND r.inheritanceEnabled = true)
+        )
+      ORDER BY
+        CASE WHEN r.medicalCategory.id = :categoryId THEN 0 ELSE 1 END,
+        r.priority ASC,
+        r.id ASC
+      LIMIT 1
+      """)
+  Optional<BenefitPolicyRule> findBestRuleForClaimContext(
+      @Param("policyId") Long policyId,
+      @Param("categoryId") Long categoryId,
+      @Param("parentCategoryId") Long parentCategoryId,
+      @Param("claimContextCode") String claimContextCode);
 
   /**
    * Find active rule for a specific category within a policy

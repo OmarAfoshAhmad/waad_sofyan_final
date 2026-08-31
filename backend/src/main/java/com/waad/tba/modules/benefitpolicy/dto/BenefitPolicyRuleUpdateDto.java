@@ -51,6 +51,8 @@ public class BenefitPolicyRuleUpdateDto {
 
     private String encounterType;
 
+    private String claimContextCode;
+
     private Boolean inheritanceEnabled;
 
     @Min(value = 0, message = "Priority must be >= 0")

@@ -36,6 +36,12 @@ public class PriceListClassificationItem {
     @Column(name = "source_sheet", length = 255)
     private String sourceSheet;
 
+    @Column(name = "source_classification", length = 255)
+    private String sourceClassification;
+
+    @Column(name = "claim_context_code", length = 60)
+    private String claimContextCode;
+
     @Column(name = "provider_service_code", length = 100)
     private String providerServiceCode;
 

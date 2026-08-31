@@ -93,11 +93,11 @@ class OutstandingPeriodsBackdatedPaymentTest extends PostgresIntegrationTestBase
         jdbc.update("""
                 INSERT INTO claims (member_id, visit_id, provider_id, service_date, requested_amount,
                                     approved_amount, net_provider_amount, patient_copay, refused_amount,
-                                    company_discount_amount, status, submission_source, encounter_type,
+                                company_discount_amount, status, submission_source, encounter_type, claim_context_code,
                                     review_paused, pending_recalculation, coverage_version, active,
                                     created_at, updated_at)
                 VALUES (?, ?, ?, ?, 1000.00, 1000.00, 1000.00, 0.00, 0.00, 0.00,
-                        'APPROVED', 'INTERNAL_DIRECT', 'OUTPATIENT', false, false, 1, true, now(), now())
+                    'APPROVED', 'INTERNAL_DIRECT', 'OUTPATIENT', 'OUTPATIENT', false, false, 1, true, now(), now())
                 """, memberId, visitId, providerId, SERVICE_DATE);
     }
 

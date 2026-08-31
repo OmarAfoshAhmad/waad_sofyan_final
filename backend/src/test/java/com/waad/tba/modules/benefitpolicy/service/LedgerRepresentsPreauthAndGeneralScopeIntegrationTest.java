@@ -93,8 +93,8 @@ class LedgerRepresentsPreauthAndGeneralScopeIntegrationTest extends PostgresInte
             long visitId = insert(c, "INSERT INTO visits (member_id, provider_id, visit_date) VALUES ("
                     + memberId + ", " + providerId + ", CURRENT_DATE - 5) RETURNING id");
             long claimId = insert(c, "INSERT INTO claims (claim_number, member_id, provider_id, visit_id, "
-                    + "service_date, requested_amount, status) VALUES ('CLM-" + s + "', " + memberId
-                    + ", " + providerId + ", " + visitId + ", CURRENT_DATE - 5, 100.00, 'APPROVED') RETURNING id");
+                    + "service_date, requested_amount, status, claim_context_code) VALUES ('CLM-" + s + "', " + memberId
+                    + ", " + providerId + ", " + visitId + ", CURRENT_DATE - 5, 100.00, 'APPROVED', 'OUTPATIENT') RETURNING id");
             long claimLineId = insert(c, "INSERT INTO claim_lines (claim_id, service_code, quantity, "
                     + "unit_price, total_price) VALUES (" + claimId + ", 'SVC-" + s
                     + "', 1, 100.00, 100.00) RETURNING id");

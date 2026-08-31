@@ -139,6 +139,10 @@ public class ProviderContractPricingItem {
     @Column(name = "encounter_type", length = 20)
     private EncounterType encounterType;
 
+    @Size(max = 60)
+    @Column(name = "claim_context_code", length = 60)
+    private String claimContextCode;
+
     @Column(name = "requires_review", nullable = false)
     @Builder.Default
     private Boolean requiresReview = false;

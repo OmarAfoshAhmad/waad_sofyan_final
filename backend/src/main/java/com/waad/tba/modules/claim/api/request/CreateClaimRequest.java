@@ -46,7 +46,6 @@ public class CreateClaimRequest {
      * REQUIRED: Visit ID that this claim is linked to.
      * ARCHITECTURAL LAW: Claims can ONLY be created from an existing Visit.
      */
-    @NotNull(message = "Visit ID is required - Claims must originate from a Visit")
     @Positive(message = "Visit ID must be positive")
     private Long visitId;
 
@@ -138,6 +137,9 @@ public class CreateClaimRequest {
     @Builder.Default
     private com.waad.tba.modules.providercontract.enums.EncounterType encounterType =
             com.waad.tba.modules.providercontract.enums.EncounterType.OUTPATIENT;
+
+    @jakarta.validation.constraints.Size(max = 60)
+    private String claimContextCode;
 
     /**
      * Full coverage override: 100% coverage, bypasses all limits.

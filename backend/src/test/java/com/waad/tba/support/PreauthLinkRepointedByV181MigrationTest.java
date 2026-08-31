@@ -126,9 +126,9 @@ class PreauthLinkRepointedByV181MigrationTest {
 
             // The link conversion needs, which was impossible before V181.
             long claimId = id(c, "INSERT INTO claims (claim_number, member_id, provider_id, visit_id, "
-                    + "service_date, requested_amount, status, pre_authorization_id) VALUES ('LCLM-" + s
+                    + "service_date, requested_amount, status, pre_authorization_id, claim_context_code) VALUES ('LCLM-" + s
                     + "', " + memberId + ", " + providerId + ", " + visitId
-                    + ", CURRENT_DATE, 100.00, 'APPROVED', " + preauthId + ") RETURNING id");
+                    + ", CURRENT_DATE, 100.00, 'APPROVED', " + preauthId + ", 'OUTPATIENT') RETURNING id");
             assertThat(claimId).isPositive();
 
             exec("INSERT INTO pre_authorization_attachments (pre_authorization_id, file_name, "
@@ -160,9 +160,9 @@ class PreauthLinkRepointedByV181MigrationTest {
                     + memberId + ", " + providerId + ", CURRENT_DATE) RETURNING id");
 
             assertThatThrownBy(() -> exec("INSERT INTO claims (claim_number, member_id, provider_id, "
-                    + "visit_id, service_date, requested_amount, status, pre_authorization_id) VALUES "
+                    + "visit_id, service_date, requested_amount, status, pre_authorization_id, claim_context_code) VALUES "
                     + "('L2CLM-" + s + "', " + memberId + ", " + providerId + ", " + visitId
-                    + ", CURRENT_DATE, 100.00, 'APPROVED', 987654321)"))
+                    + ", CURRENT_DATE, 100.00, 'APPROVED', 987654321, 'OUTPATIENT')"))
                     .hasMessageContaining("fk_claim_preauth");
         }
 

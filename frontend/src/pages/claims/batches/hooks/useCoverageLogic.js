@@ -7,6 +7,7 @@ export function useCoverageLogic({
   member,
   medicalCategories,
   encounterType,
+  claimContextCode,
   recompute,
   currentClaimId,
   serviceYear,
@@ -128,6 +129,7 @@ export function useCoverageLogic({
           excludeClaimId: currentClaimId || null,
           fullCoverage,
           encounterType: encounterOverride || encounterType || 'OUTPATIENT',
+          claimContextCode,
           lines: [
             {
               lineId: lineId || 'single',
@@ -190,13 +192,14 @@ export function useCoverageLogic({
       serviceDate,
       fullCoverage,
       encounterType,
+      claimContextCode,
       onCoverageError,
       medicalCategories
     ]
   );
 
   const refetchAllLinesCoverage = useCallback(
-    async (newEncounterType, currentLines, newFullCoverage) => {
+    async (newEncounterType, currentLines, newFullCoverage, newClaimContextCode) => {
       if (!policyId || !member?.id) {
         return currentLines.map((line, i, all) =>
           recompute(
@@ -210,6 +213,7 @@ export function useCoverageLogic({
       }
 
       const effectiveEncounterType = newEncounterType || encounterType || 'OUTPATIENT';
+      const effectiveClaimContextCode = newClaimContextCode || claimContextCode || effectiveEncounterType;
       const isFull = newFullCoverage !== undefined ? newFullCoverage : fullCoverage;
 
       const linesToCheck = currentLines.filter((l) => l.service);
@@ -223,6 +227,7 @@ export function useCoverageLogic({
         excludeClaimId: currentClaimId || null,
         fullCoverage: isFull,
         encounterType: effectiveEncounterType,
+        claimContextCode: effectiveClaimContextCode,
         lines: linesToCheck.map((line, idx) => buildEngineLineInput(line, idx))
       };
 
@@ -291,6 +296,7 @@ export function useCoverageLogic({
       policyId,
       member?.id,
       encounterType,
+      claimContextCode,
       serviceYear,
       serviceDate,
       currentClaimId,

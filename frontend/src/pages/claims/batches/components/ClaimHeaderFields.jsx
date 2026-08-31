@@ -1,6 +1,7 @@
-import { Typography, Autocomplete, TextField, Stack, FormControlLabel, Checkbox, Box, Alert, Button, Chip, Select, MenuItem } from '@mui/material';
+import { Typography, Autocomplete, TextField, Stack, Box, Alert, Button, Chip, Select, MenuItem } from '@mui/material';
 import dayjs from 'dayjs';
 import DatePicker from 'components/common/SystemDatePicker';
+import { resolveClaimContextSelection } from '../claim-context.mjs';
 
 const inlineSx = {
   '& .MuiInputBase-root': { fontSize: '0.9rem' },
@@ -18,29 +19,29 @@ export const ClaimHeaderFields = ({
   memberRef,
   diagnosis,
   setDiagnosis,
+  doctorName,
+  setDoctorName,
   encounterType,
+  claimContextCode,
+  claimContexts = [],
+  setClaimContextCode,
   setEncounterType,
   fullCoverage,
   setFullCoverage,
   onRefetchAll,
-  linesRef,
   preAuthResults,
   searchingPreAuth,
   preAuthId,
   setPreAuthId,
-  setPreAuthSearch,
   serviceDate,
   setServiceDate,
   setIsDirty,
   financialSummary,
   currentCompanyCommitment = 0,
   editingApprovedAmount = 0,
-  loadingSummary,
   t,
   showValidationErrors
 }) => {
-  const isOutpatient = encounterType === 'OUTPATIENT' && !fullCoverage;
-  const alternativeContext = fullCoverage ? 'FULL_COVERAGE' : 'INPATIENT';
   // Header badges are policy-wide totals. Service/category ceilings belong only
   // in the corresponding claim-line column.
   const amountLimit = Number(financialSummary?.annualLimit || 0);
@@ -86,6 +87,11 @@ export const ClaimHeaderFields = ({
           loading={searchingMember}
           value={member}
           onChange={(_, v) => {
+            // A pre-authorization is eligible for one member in one dated
+            // context. Keeping its id after changing the member leaves a
+            // hidden stale value because the Autocomplete can no longer
+            // render it, while the submit payload would still send it.
+            setPreAuthId('');
             setMember(v);
             setIsDirty(true);
             if (v?.id) {
@@ -145,6 +151,23 @@ export const ClaimHeaderFields = ({
           error={showValidationErrors && !diagnosis?.trim()}
           sx={inlineSx}
         />
+        <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 500, display: 'block', mt: 1.25, mb: 0.5, fontSize: '0.75rem' }}>
+          اسم الطبيب{' '}
+          <Typography component="span" color="error.main">*</Typography>
+        </Typography>
+        <TextField
+          fullWidth
+          size="small"
+          variant="standard"
+          value={doctorName}
+          placeholder="اسم الطبيب المعالج..."
+          onChange={(e) => {
+            setDoctorName(e.target.value);
+            setIsDirty(true);
+          }}
+          error={showValidationErrors && !doctorName?.trim()}
+          sx={inlineSx}
+        />
       </Box>
 
       {/* Column 3: Service Date */}
@@ -158,6 +181,7 @@ export const ClaimHeaderFields = ({
         <DatePicker
           value={serviceDate ? dayjs(serviceDate) : null}
           onChange={(value) => {
+            setPreAuthId('');
             setServiceDate(value?.isValid() ? value.format('YYYY-MM-DD') : '');
             setIsDirty(true);
           }}
@@ -192,42 +216,25 @@ export const ClaimHeaderFields = ({
             '& .MuiFormControlLabel-label': { lineHeight: 1 }
           }}
         >
-          <FormControlLabel
-            control={
-              <Checkbox
-                size="small"
-                checked={isOutpatient}
-                onChange={(e) => {
-                  const newEncounterType = e.target.checked ? 'OUTPATIENT' : 'INPATIENT';
-                  setFullCoverage(false);
-                  setEncounterType(newEncounterType);
-                  setIsDirty(true);
-                  onRefetchAll(newEncounterType, false);
-                }}
-                sx={{ p: 0.5 }}
-              />
-            }
-            label={<Typography sx={{ fontSize: '0.75rem', fontWeight: 600 }}>عيادات خارجية</Typography>}
-          />
-          {!isOutpatient && (
-            <Select
-              size="small"
-              variant="standard"
-              value={alternativeContext}
-              onChange={(e) => {
-                const isFullCoverage = e.target.value === 'FULL_COVERAGE';
-                const newEncounterType = isFullCoverage ? 'OUTPATIENT' : e.target.value;
-                setEncounterType(newEncounterType);
-                setFullCoverage(isFullCoverage);
-                setIsDirty(true);
-                onRefetchAll(newEncounterType, isFullCoverage);
-              }}
-              sx={{ minWidth: 96, fontSize: '0.72rem', mt: 0 }}
-            >
-              <MenuItem value="INPATIENT">إيواء</MenuItem>
-              <MenuItem value="FULL_COVERAGE">تغطية كاملة</MenuItem>
-            </Select>
-          )}
+          <Select
+            size="small"
+            variant="standard"
+            value={claimContextCode}
+            onChange={(e) => {
+              const selection = resolveClaimContextSelection(claimContexts, e.target.value);
+              if (!selection) return;
+              setClaimContextCode(selection.claimContextCode);
+              setEncounterType(selection.encounterType);
+              setFullCoverage(selection.fullCoverage);
+              setIsDirty(true);
+              onRefetchAll(selection.encounterType, selection.fullCoverage, selection.claimContextCode);
+            }}
+            sx={{ minWidth: 180, fontSize: '0.78rem', mt: 0 }}
+          >
+            {claimContexts.map((context) => (
+              <MenuItem key={context.code} value={context.code}>{context.nameAr}</MenuItem>
+            ))}
+          </Select>
           {hasCeiling && amountLimit > 0 && (
             <Stack
               direction="column"
@@ -252,6 +259,23 @@ export const ClaimHeaderFields = ({
             </Stack>
           )}
         </Stack>
+        <Autocomplete
+          size="small"
+          sx={{ mt: 1 }}
+          options={Array.isArray(preAuthResults) ? preAuthResults : []}
+          loading={searchingPreAuth}
+          value={(Array.isArray(preAuthResults) ? preAuthResults : []).find((item) => String(item.id) === String(preAuthId)) || null}
+          onChange={(_, value) => {
+            setPreAuthId(value?.id || '');
+            setIsDirty(true);
+          }}
+          getOptionLabel={(item) => `${item.number || item.id} · ${item.serviceName || 'خدمة معتمدة'} · ${item.approvedAmount ?? '-'} د.ل`}
+          isOptionEqualToValue={(option, value) => option.id === value?.id}
+          renderInput={(params) => (
+            <TextField {...params} variant="standard" placeholder="ربط موافقة مسبقة صالحة (اختياري)" sx={inlineSx} />
+          )}
+          noOptionsText="لا توجد موافقة صالحة لهذا المستفيد والمزود في تاريخ الخدمة"
+        />
       </Box>
     </Box>
   );

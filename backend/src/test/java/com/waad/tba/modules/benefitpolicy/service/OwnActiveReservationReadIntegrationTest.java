@@ -70,8 +70,8 @@ class OwnActiveReservationReadIntegrationTest extends PostgresIntegrationTestBas
         Long categoryId = jdbc.queryForObject("INSERT INTO medical_categories (code, name, active) "
                 + "VALUES ('ORCAT-" + s + "', 'Own Category', true) RETURNING id", Long.class);
         Long ruleId = jdbc.queryForObject("INSERT INTO benefit_policy_rules (benefit_policy_id, "
-                + "medical_category_id, encounter_type, coverage_percent, active, deleted) VALUES ("
-                + policyId + ", " + categoryId + ", 'OUTPATIENT', 80, true, false) RETURNING id", Long.class);
+                + "medical_category_id, encounter_type, claim_context_code, coverage_percent, active, deleted) VALUES ("
+                + policyId + ", " + categoryId + ", 'OUTPATIENT', 'OUTPATIENT', 80, true, false) RETURNING id", Long.class);
         Long groupId = jdbc.queryForObject("INSERT INTO benefit_groups (policy_id, code, name_ar, "
                 + "context_type, aggregation_mode) VALUES (" + policyId + ", 'ORG-" + s
                 + "', 'مجموعة', 'OUTPATIENT', 'INDIVIDUAL') RETURNING id", Long.class);

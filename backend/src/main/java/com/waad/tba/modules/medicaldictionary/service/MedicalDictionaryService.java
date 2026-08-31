@@ -17,6 +17,9 @@ import com.waad.tba.modules.medicaldictionary.repository.PriceListClassification
 import com.waad.tba.modules.medicaldictionary.repository.PriceListClassificationSessionRepository;
 import com.waad.tba.modules.medicaltaxonomy.entity.MedicalCategory;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalCategoryRepository;
+import com.waad.tba.modules.claimcontext.repository.ClaimContextDefinitionRepository;
+import com.waad.tba.modules.claimcontext.service.ClaimContextSourceResolver;
+import com.waad.tba.modules.claimcontext.entity.ClaimContextDefinition;
 import com.waad.tba.modules.audit.enums.AuditAction;
 import com.waad.tba.modules.audit.enums.AuditSource;
 import com.waad.tba.modules.audit.enums.EntityType;
@@ -70,6 +73,8 @@ public class MedicalDictionaryService {
     private final MedicalDictionaryNormalizer normalizer;
     private final V50MedicalClassificationEngine v50ClassificationEngine;
     private final AuthorizationService authorizationService;
+    private final ClaimContextSourceResolver claimContextSourceResolver;
+    private final ClaimContextDefinitionRepository claimContextDefinitionRepository;
 
     @Transactional
     public MedicalDictionaryEntryResponse createEntry(MedicalDictionaryEntryRequest request) {
@@ -175,11 +180,17 @@ public class MedicalDictionaryService {
                 .filter(value -> !value.isBlank())
                 .collect(Collectors.groupingBy(Function.identity(), Collectors.counting()));
 
+        Map<String, ClaimContextSourceResolver.Resolution> sourceResolutions = claimContextSourceResolver.resolveAll(
+                rows.stream().map(PriceListClassificationRequest.Row::getSourceClassification).toList(),
+                request.getProviderId());
+        Map<String, MedicalCategory> coverageCategories = medicalCategoryRepository.findByActiveTrue().stream()
+                .collect(Collectors.toMap(MedicalCategory::getCode, Function.identity()));
+
         List<PriceListClassificationResponse.Item> items = rows.stream()
-                .map(row -> classifyPriceListRow(row, request.getProviderName(), normalizedCounts))
+                .map(row -> classifyPriceListRow(row, normalizedCounts, sourceResolutions, coverageCategories))
                 .toList();
 
-        int highConfidence = (int) items.stream().filter(item -> "AUTO_APPROVED".equals(item.getStatus())).count();
+        int highConfidence = (int) items.stream().filter(item -> Set.of("AUTO_APPROVED", "READY_TO_POST").contains(item.getStatus())).count();
         int needsReview = (int) items.stream().filter(item -> Set.of(
                 "STRONG_SUGGESTION", "REVIEW_REQUIRED", "SPLIT_REQUIRED").contains(item.getStatus())).count();
         int unknown = (int) items.stream().filter(item -> Set.of(
@@ -267,6 +278,8 @@ public class MedicalDictionaryService {
                         .append(normalizer.normalize(item.getServiceName())).append('~')
                         .append(item.getMinPrice()).append('~')
                         .append(item.getMaxPrice()).append('~')
+                        .append(normalizer.normalize(item.getSourceClassification())).append('~')
+                        .append(normalizer.normalize(item.getClaimContextCode())).append('~')
                         .append(item.getMedicalCategoryId()).append(';'));
 
         try {
@@ -341,6 +354,7 @@ public class MedicalDictionaryService {
         ProviderContract contract = resolveAndValidateTargetContract(session, request.getContractId());
 
         List<PriceListClassificationItem> items = resolveRequestedSessionItems(session.getId(), request);
+        Map<String, ClaimContextDefinition> claimContexts = resolveClaimContexts(items);
         List<PriceListSessionDiffResponse.ItemDiff> diffs = new ArrayList<>();
         int createCount = 0;
         int updateCount = 0;
@@ -356,7 +370,8 @@ public class MedicalDictionaryService {
                 continue;
             }
             PriceListSessionDiffResponse.ItemDiff diff = buildPriceListDiffItem(
-                    contract, item, request.isOnlyReviewedItems(), request.isReplaceEffectivePrices(), effectiveFrom);
+                    contract, item, request.isOnlyReviewedItems(), request.isReplaceEffectivePrices(), effectiveFrom,
+                    claimContexts.get(item.getClaimContextCode()));
             diffs.add(diff);
             switch (diff.getAction()) {
                 case "CREATE" -> createCount++;
@@ -393,6 +408,20 @@ public class MedicalDictionaryService {
         var currentUser = authorizationService.getCurrentUser();
         Long actorId = currentUser == null ? null : currentUser.getId();
         List<PriceListClassificationItem> items = resolveRequestedSessionItems(sessionId, request);
+        Map<String, ClaimContextDefinition> claimContexts = resolveClaimContexts(items);
+        Map<Long, MedicalCategory> coverageCategories = medicalCategoryRepository.findAllById(items.stream()
+                        .map(PriceListClassificationItem::getMedicalCategoryId)
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toSet())).stream()
+                .filter(MedicalCategory::isActive)
+                .collect(Collectors.toMap(MedicalCategory::getId, Function.identity()));
+        Map<String, ProviderContractPricingItem> existingByCode = new java.util.HashMap<>();
+        Map<String, ProviderContractPricingItem> existingByName = new java.util.HashMap<>();
+        Map<Long, ProviderContractPricingItem> existingById = new java.util.HashMap<>();
+        providerContractPricingItemRepository.findByContractIdAndActiveTrue(contract.getId()).forEach(price -> {
+            indexExistingPrice(price, existingByCode, existingByName);
+            existingById.put(price.getId(), price);
+        });
         List<PriceListSessionPostResponse.ItemResult> results = new ArrayList<>();
         int created = 0;
         int updated = 0;
@@ -414,18 +443,24 @@ public class MedicalDictionaryService {
                 continue;
             }
 
-            MedicalCategory category = medicalCategoryRepository.findActiveById(item.getMedicalCategoryId())
-                    .orElse(null);
+            MedicalCategory category = coverageCategories.get(item.getMedicalCategoryId());
             if (category == null) {
                 rejected++;
                 results.add(postResult(item, "REJECTED", "التصنيف الطبي غير موجود أو غير نشط", null));
                 continue;
             }
+            ClaimContextDefinition claimContext = claimContexts.get(item.getClaimContextCode());
+            if (claimContext == null) {
+                rejected++;
+                results.add(postResult(item, "REJECTED", "سياق المطالبة غير موجود أو غير نشط", null));
+                continue;
+            }
 
             if (item.getPostedPricingItemId() != null || item.getStatus() == PriceListItemStatus.POSTED_TO_CONTRACT) {
-                Optional<ProviderContractPricingItem> postedPricingItem = findOwnedActivePostedPricingItem(item, contract.getId());
+                Optional<ProviderContractPricingItem> postedPricingItem = findOwnedActivePostedPricingItem(
+                        item, contract.getId(), existingById);
                 if (postedPricingItem.isPresent()) {
-                    if (pricingItemMatches(postedPricingItem.get(), item, category)) {
+                    if (pricingItemMatches(postedPricingItem.get(), item, category, claimContext)) {
                         skipped++;
                         results.add(postResult(item, "IDENTICAL", "لا يوجد تغيير؛ السعر والتصنيف مطابقان لقائمة التنظيم", postedPricingItem.get().getId()));
                         continue;
@@ -435,7 +470,7 @@ public class MedicalDictionaryService {
                         results.add(postResult(item, "REJECTED", "الخدمة مرحلة سابقاً وتغيّرت؛ راجع الفرق وأنشئ نسخة سعر مؤرخة صراحة", postedPricingItem.get().getId()));
                         continue;
                     }
-                    applyPricingItemValues(postedPricingItem.get(), contract, category, item, actorId);
+                    applyPricingItemValues(postedPricingItem.get(), contract, category, item, claimContext, actorId);
                     providerContractPricingItemRepository.save(postedPricingItem.get());
                     updated++;
                     results.add(postResult(item, "UPDATED", "تم تحديث سعر العقد من نسخة قائمة التنظيم", postedPricingItem.get().getId()));
@@ -447,8 +482,8 @@ public class MedicalDictionaryService {
             }
 
             Optional<ProviderContractPricingItem> effectiveExisting = findExistingPrice(
-                    contract.getId(), item, effectiveFrom);
-            if (effectiveExisting.isPresent() && pricingItemMatches(effectiveExisting.get(), item, category)) {
+                    existingByCode, existingByName, item, effectiveFrom);
+            if (effectiveExisting.isPresent() && pricingItemMatches(effectiveExisting.get(), item, category, claimContext)) {
                 ProviderContractPricingItem current = effectiveExisting.get();
                 boolean extendedToContractStart = current.getEffectiveFrom() != null
                         && current.getEffectiveFrom().isAfter(effectiveFrom);
@@ -493,8 +528,10 @@ public class MedicalDictionaryService {
                 }
             }
 
-            ProviderContractPricingItem pricingItem = buildPricingItem(contract, category, item, effectiveFrom, actorId);
+            ProviderContractPricingItem pricingItem = buildPricingItem(contract, category, item, claimContext, effectiveFrom, actorId);
             ProviderContractPricingItem savedPricingItem = providerContractPricingItemRepository.save(pricingItem);
+            indexExistingPrice(savedPricingItem, existingByCode, existingByName);
+            existingById.put(savedPricingItem.getId(), savedPricingItem);
 
             item.setStatus(PriceListItemStatus.POSTED_TO_CONTRACT);
             item.setPostedPricingItemId(savedPricingItem.getId());
@@ -599,6 +636,9 @@ public class MedicalDictionaryService {
         if (item.getMedicalCategoryId() == null) {
             return "لا يمكن الترحيل دون تصنيف طبي موحد";
         }
+        if (item.getClaimContextCode() == null || item.getClaimContextCode().isBlank()) {
+            return "لا يمكن الترحيل دون سياق مطالبة معتمد";
+        }
         if (resolveContractPrice(item) == null) {
             return "لا يمكن الترحيل دون سعر تعاقدي";
         }
@@ -625,6 +665,17 @@ public class MedicalDictionaryService {
             return "سبب الاعتماد اليدوي مطلوب قبل الترحيل";
         }
         return null;
+    }
+
+    private Map<String, ClaimContextDefinition> resolveClaimContexts(List<PriceListClassificationItem> items) {
+        Set<String> codes = items.stream()
+                .map(PriceListClassificationItem::getClaimContextCode)
+                .filter(Objects::nonNull)
+                .filter(code -> !code.isBlank())
+                .collect(Collectors.toSet());
+        return claimContextDefinitionRepository.findAllById(codes).stream()
+                .filter(ClaimContextDefinition::isActive)
+                .collect(Collectors.toMap(ClaimContextDefinition::getCode, Function.identity()));
     }
 
     private Optional<ProviderContractPricingItem> findExistingPrice(Long contractId,
@@ -666,7 +717,8 @@ public class MedicalDictionaryService {
                                                                          PriceListClassificationItem item,
                                                                          boolean onlyReviewedItems,
                                                                          boolean replaceEffectivePrices,
-                                                                         LocalDate effectiveDate) {
+                                                                         LocalDate effectiveDate,
+                                                                         ClaimContextDefinition claimContext) {
         String validationError = validatePostableItem(item, onlyReviewedItems);
         if (validationError != null) {
             return priceListDiff(item, "REJECTED", validationError, null, null);
@@ -675,6 +727,9 @@ public class MedicalDictionaryService {
         MedicalCategory category = medicalCategoryRepository.findActiveById(item.getMedicalCategoryId()).orElse(null);
         if (category == null) {
             return priceListDiff(item, "REJECTED", "التصنيف الطبي غير موجود أو غير نشط", null, null);
+        }
+        if (claimContext == null) {
+            return priceListDiff(item, "REJECTED", "سياق المطالبة غير موجود أو غير نشط", null, category);
         }
 
         Optional<ProviderContractPricingItem> postedPricingItem = findOwnedActivePostedPricingItem(item, contract.getId());
@@ -692,10 +747,10 @@ public class MedicalDictionaryService {
 
         ProviderContractPricingItem current = existing.get();
         if (current.getEffectiveFrom() != null && current.getEffectiveFrom().isAfter(effectiveDate)
-                && pricingItemMatches(current, item, category)) {
+                && pricingItemMatches(current, item, category, claimContext)) {
             return priceListDiff(item, "UPDATE", "سيُمدد سريان السعر المطابق إلى بداية العقد", current, category);
         }
-        if (pricingItemMatches(current, item, category)) {
+        if (pricingItemMatches(current, item, category, claimContext)) {
             return priceListDiff(item, "IDENTICAL", "لا يوجد تغيير؛ السعر والتصنيف مطابقان لقائمة التنظيم", current, category);
         }
 
@@ -708,14 +763,17 @@ public class MedicalDictionaryService {
 
     private boolean pricingItemMatches(ProviderContractPricingItem current,
                                        PriceListClassificationItem item,
-                                       MedicalCategory category) {
+                                       MedicalCategory category,
+                                       ClaimContextDefinition claimContext) {
         return sameAmount(current.getContractPrice(), resolveContractPrice(item))
                 && sameAmount(current.getMaxContractPrice(), resolveMaxContractPrice(item))
                 && sameText(current.getServiceName(), item.getProviderServiceName())
                 && sameText(current.getServiceCode(), blankToNull(item.getProviderServiceCode()))
                 && current.getMedicalCategory() != null
                 && current.getMedicalCategory().getId() != null
-                && current.getMedicalCategory().getId().equals(category.getId());
+                && current.getMedicalCategory().getId().equals(category.getId())
+                && sameText(current.getClaimContextCode(), claimContext.getCode())
+                && current.getEncounterType() == claimContext.getBaseEncounterType();
     }
 
     private PriceListSessionDiffResponse.ItemDiff priceListDiff(PriceListClassificationItem item,
@@ -743,6 +801,7 @@ public class MedicalDictionaryService {
     private ProviderContractPricingItem buildPricingItem(ProviderContract contract,
                                                          MedicalCategory category,
                                                          PriceListClassificationItem item,
+                                                         ClaimContextDefinition claimContext,
                                                          LocalDate effectiveFrom,
                                                          Long actorId) {
         BigDecimal minPrice = resolveContractPrice(item);
@@ -756,6 +815,8 @@ public class MedicalDictionaryService {
                 .serviceName(item.getProviderServiceName())
                 .serviceCode(blankToNull(item.getProviderServiceCode()))
                 .medicalCategory(category)
+                .claimContextCode(claimContext.getCode())
+                .encounterType(claimContext.getBaseEncounterType())
                 .categoryName(categoryName(category))
                 .basePrice(minPrice)
                 .contractPrice(minPrice)
@@ -787,6 +848,7 @@ public class MedicalDictionaryService {
                                         ProviderContract contract,
                                         MedicalCategory category,
                                         PriceListClassificationItem item,
+                                        ClaimContextDefinition claimContext,
                                         Long actorId) {
         BigDecimal minPrice = resolveContractPrice(item);
         BigDecimal maxPrice = item.getMaxPrice() != null && item.getMaxPrice().compareTo(minPrice) >= 0
@@ -797,6 +859,8 @@ public class MedicalDictionaryService {
         pricingItem.setServiceName(item.getProviderServiceName());
         pricingItem.setServiceCode(blankToNull(item.getProviderServiceCode()));
         pricingItem.setMedicalCategory(category);
+        pricingItem.setClaimContextCode(claimContext.getCode());
+        pricingItem.setEncounterType(claimContext.getBaseEncounterType());
         pricingItem.setCategoryName(categoryName(category));
         pricingItem.setBasePrice(minPrice);
         pricingItem.setContractPrice(minPrice);
@@ -883,32 +947,46 @@ public class MedicalDictionaryService {
     private PriceListClassificationItem toPriceListItem(PriceListClassificationSession session, PriceListSessionSaveRequest.Item request) {
         PriceListItemStatus status = resolveItemStatus(request.getStatus(), request.getMedicalCategoryId(), request.getCanonicalName());
         boolean manual = status == PriceListItemStatus.MANUALLY_REVIEWED;
-        V50ClassificationResult classified = manual ? null : v50ClassificationEngine.classify(new V50ClassificationInput(
-                request.getServiceName(), null, List.of(), request.getServiceCode(), request.getSourceSheet(),
-                List.of(), request.getMergeNotes(), session.getProviderName()));
-        MedicalCategory resolvedCategory = classified == null || classified.categoryCode().isBlank()
-                ? null : medicalCategoryRepository.findActiveByCode(classified.categoryCode()).orElse(null);
-        PriceListItemStatus persistedStatus = manual ? status : PriceListItemStatus.valueOf(classified.status().name());
+        var sourceResolution = claimContextSourceResolver
+                .resolve(request.getSourceClassification(), session.getProviderId())
+                .orElse(null);
+        String claimContextCode = manual
+                ? validateManualClaimContext(request.getClaimContextCode())
+                : sourceResolution == null ? null : sourceResolution.claimContextCode();
+        String mappedCategoryCode = sourceResolution == null ? null : sourceResolution.medicalCategoryCode();
+        String resolvedCategoryCode = mappedCategoryCode;
+        MedicalCategory resolvedCategory = resolvedCategoryCode == null || resolvedCategoryCode.isBlank()
+                ? null : medicalCategoryRepository.findActiveByCode(resolvedCategoryCode).orElse(null);
+        PriceListItemStatus persistedStatus = manual ? status
+                : claimContextCode == null || resolvedCategory == null || sourceResolution.requiresReview()
+                    ? PriceListItemStatus.NEEDS_REVIEW
+                    : PriceListItemStatus.READY_TO_POST;
         return PriceListClassificationItem.builder()
                 .session(session)
                 .rowNumber(request.getRowNumber())
                 .sourceSheet(blankToNull(request.getSourceSheet()))
+                .sourceClassification(blankToNull(request.getSourceClassification()))
+                .claimContextCode(claimContextCode)
                 .providerServiceCode(blankToNull(request.getServiceCode()))
                 .providerServiceName(request.getServiceName().trim())
-                .canonicalName(manual ? blankToNull(request.getCanonicalName()) : blankToNull(classified.unifiedAr().isBlank() ? classified.unifiedEn() : classified.unifiedAr()))
+                .canonicalName(manual ? blankToNull(request.getCanonicalName()) : request.getServiceName().trim())
                 .dictionaryEntryId(manual ? request.getDictionaryEntryId() : null)
                 .medicalCategoryId(manual ? request.getMedicalCategoryId() : resolvedCategory == null ? null : resolvedCategory.getId())
-                .medicalCategoryCode(manual ? blankToNull(request.getMedicalCategoryCode()) : blankToNull(classified.categoryCode()))
-                .medicalCategoryName(manual ? blankToNull(request.getMedicalCategoryName()) : blankToNull(classified.categoryName()))
-                .confidence(manual ? request.getConfidence() : classified.confidence().movePointRight(2).intValue())
-                .dictionaryReleaseId(manual ? request.getDictionaryReleaseId() : classified.releaseId())
-                .dictionaryVersion(manual ? blankToNull(request.getDictionaryVersion()) : classified.dictionaryVersion())
-                .dictionaryConceptCode(manual ? blankToNull(request.getDictionaryConceptCode()) : blankToNull(classified.conceptCode()))
-                .classificationMethod(manual ? "MANUAL_REVIEW" : classified.matchMethod())
-                .classificationReason(manual ? blankToNull(request.getManualReviewNote()) : classified.reason())
-                .classificationExceptionType(manual ? blankToNull(request.getClassificationExceptionType()) : blankToNull(classified.exceptionType()))
-                .classificationEvidenceId(manual ? request.getClassificationEvidenceId() : classified.evidenceId())
-                .classificationExcludePrecision(manual ? Boolean.TRUE : classified.excludeFromPrecision())
+                .medicalCategoryCode(manual ? blankToNull(request.getMedicalCategoryCode()) : blankToNull(resolvedCategoryCode))
+                .medicalCategoryName(manual ? blankToNull(request.getMedicalCategoryName())
+                        : resolvedCategory == null ? null : categoryName(resolvedCategory))
+                .confidence(manual ? request.getConfidence() : persistedStatus == PriceListItemStatus.READY_TO_POST ? 100 : 0)
+                .dictionaryReleaseId(manual ? request.getDictionaryReleaseId() : null)
+                .dictionaryVersion(manual ? blankToNull(request.getDictionaryVersion()) : null)
+                .dictionaryConceptCode(manual ? blankToNull(request.getDictionaryConceptCode()) : null)
+                .classificationMethod(manual ? "MANUAL_REVIEW" : "SOURCE_CLASSIFICATION_MAP")
+                .classificationReason(manual ? blankToNull(request.getManualReviewNote())
+                        : sourceResolution == null ? "تصنيف المصدر غير مسجل في طبقة المطابقة"
+                        : sourceResolution.requiresReview() ? "المطابقة تتطلب مراجعة بشرية"
+                        : "مطابقة مباشرة من تصنيف قائمة مقدم الخدمة")
+                .classificationExceptionType(manual ? blankToNull(request.getClassificationExceptionType()) : null)
+                .classificationEvidenceId(manual ? request.getClassificationEvidenceId() : null)
+                .classificationExcludePrecision(manual ? Boolean.TRUE : Boolean.FALSE)
                 .status(persistedStatus)
                 .price(request.getPrice())
                 .minPrice(request.getMinPrice() != null ? request.getMinPrice() : request.getPrice())
@@ -920,6 +998,54 @@ public class MedicalDictionaryService {
                 .mergeNotes(blankToNull(request.getMergeNotes()))
                 .manualReviewNote(blankToNull(request.getManualReviewNote()))
                 .build();
+    }
+
+    private Optional<ProviderContractPricingItem> findOwnedActivePostedPricingItem(
+            PriceListClassificationItem item,
+            Long contractId,
+            Map<Long, ProviderContractPricingItem> existingById) {
+        ProviderContractPricingItem price = existingById.get(item.getPostedPricingItemId());
+        if (price == null || !Boolean.TRUE.equals(price.getActive()) || price.getContract() == null
+                || !contractId.equals(price.getContract().getId())) return Optional.empty();
+        return Optional.of(price);
+    }
+
+    private Optional<ProviderContractPricingItem> findExistingPrice(
+            Map<String, ProviderContractPricingItem> existingByCode,
+            Map<String, ProviderContractPricingItem> existingByName,
+            PriceListClassificationItem item,
+            LocalDate effectiveDate) {
+        String code = normalizedServiceCode(item.getProviderServiceCode());
+        ProviderContractPricingItem candidate = code == null ? null : existingByCode.get(code);
+        if (candidate == null) candidate = existingByName.get(normalizer.normalize(item.getProviderServiceName()));
+        if (candidate == null || !Boolean.TRUE.equals(candidate.getActive())) return Optional.empty();
+        boolean effective = (candidate.getEffectiveFrom() == null || !candidate.getEffectiveFrom().isAfter(effectiveDate))
+                && (candidate.getEffectiveTo() == null || effectiveDate.isBefore(candidate.getEffectiveTo()));
+        boolean future = candidate.getEffectiveFrom() != null && candidate.getEffectiveFrom().isAfter(effectiveDate);
+        return effective || future ? Optional.of(candidate) : Optional.empty();
+    }
+
+    private void indexExistingPrice(ProviderContractPricingItem price,
+                                    Map<String, ProviderContractPricingItem> existingByCode,
+                                    Map<String, ProviderContractPricingItem> existingByName) {
+        String code = normalizedServiceCode(price.getServiceCode());
+        if (code != null) existingByCode.putIfAbsent(code, price);
+        String name = normalizer.normalize(price.getServiceName());
+        if (!name.isBlank()) existingByName.putIfAbsent(name, price);
+    }
+
+    private String normalizedServiceCode(String code) {
+        String value = blankToNull(code);
+        return value == null ? null : value.toUpperCase(java.util.Locale.ROOT);
+    }
+
+    private String validateManualClaimContext(String code) {
+        String normalized = blankToNull(code);
+        if (normalized == null) throw new IllegalArgumentException("سياق المطالبة مطلوب عند المراجعة اليدوية");
+        return claimContextDefinitionRepository.findById(normalized)
+                .filter(context -> context.isActive())
+                .map(context -> context.getCode())
+                .orElseThrow(() -> new IllegalArgumentException("سياق المطالبة غير موجود أو غير نشط"));
     }
 
     private PriceListItemStatus resolveItemStatus(String status, Long categoryId, String canonicalName) {
@@ -1113,6 +1239,8 @@ public class MedicalDictionaryService {
                 .id(item.getId())
                 .rowNumber(item.getRowNumber())
                 .sourceSheet(item.getSourceSheet())
+                .sourceClassification(item.getSourceClassification())
+                .claimContextCode(item.getClaimContextCode())
                 .serviceCode(item.getProviderServiceCode())
                 .serviceName(item.getProviderServiceName())
                 .canonicalName(item.getCanonicalName())
@@ -1144,31 +1272,33 @@ public class MedicalDictionaryService {
                 .build();
     }
 
-    private PriceListClassificationResponse.Item classifyPriceListRow(PriceListClassificationRequest.Row row,
-                                                                       String requestProviderName,
-                                                                       Map<String, Long> normalizedCounts) {
+    private PriceListClassificationResponse.Item classifyPriceListRow(
+            PriceListClassificationRequest.Row row,
+            Map<String, Long> normalizedCounts,
+            Map<String, ClaimContextSourceResolver.Resolution> sourceResolutions,
+            Map<String, MedicalCategory> coverageCategories) {
         String normalized = normalizer.normalize(row.getServiceName());
-        V50ClassificationResult result = v50ClassificationEngine.classify(new V50ClassificationInput(
-                row.getServiceName(), row.getSecondaryName(), row.getAlternateNames(), row.getServiceCode(),
-                row.getSectionName(), row.getSectionNames(), row.getNotes(),
-                row.getFacilityName() == null || row.getFacilityName().isBlank() ? requestProviderName : row.getFacilityName()));
-        String status = result.status().name();
-        MedicalCategory category = result.categoryCode().isBlank()
-                ? null : medicalCategoryRepository.findActiveByCode(result.categoryCode()).orElse(null);
+        String normalizedSource = normalizer.normalize(row.getSourceClassification());
+        ClaimContextSourceResolver.Resolution resolution = sourceResolutions.get(normalizedSource);
+        MedicalCategory category = resolution == null || resolution.medicalCategoryCode() == null
+                ? null : coverageCategories.get(resolution.medicalCategoryCode());
+        boolean postable = resolution != null && !resolution.requiresReview() && category != null;
+        String status = postable ? "READY_TO_POST" : "NEEDS_REVIEW";
         MedicalDictionaryMatchResponse bestMatch = category == null ? null : MedicalDictionaryMatchResponse.builder()
                 .entryId(null)
-                .canonicalName(result.unifiedAr().isBlank() ? result.unifiedEn() : result.unifiedAr())
+                .canonicalName(row.getServiceName())
                 .medicalCategoryId(category.getId())
                 .medicalCategoryCode(category.getCode())
                 .medicalCategoryName(categoryName(category))
-                .matchedText(row.getServiceName())
-                .matchType(result.matchMethod())
-                .confidence(result.confidence().movePointRight(2).intValue())
+                .matchedText(row.getSourceClassification())
+                .matchType("SOURCE_CLASSIFICATION_MAP")
+                .confidence(postable ? 100 : 0)
                 .build();
 
         return PriceListClassificationResponse.Item.builder()
                 .rowNumber(row.getRowNumber())
                 .sourceSheet(row.getSourceSheet())
+                .sourceClassification(row.getSourceClassification())
                 .serviceCode(row.getServiceCode())
                 .serviceName(row.getServiceName())
                 .price(row.getPrice())
@@ -1180,19 +1310,22 @@ public class MedicalDictionaryService {
                 .bestMatch(bestMatch)
                 .matches(bestMatch == null ? List.of() : List.of(bestMatch))
                 .duplicateName(normalizedCounts.getOrDefault(normalized, 0L) > 1)
-                .dictionaryReleaseId(result.releaseId())
-                .dictionaryVersion(result.dictionaryVersion())
-                .conceptCode(result.conceptCode())
-                .categoryCode(result.categoryCode())
-                .categoryName(result.categoryName())
-                .canonicalName(result.unifiedAr().isBlank() ? result.unifiedEn() : result.unifiedAr())
-                .matchMethod(result.matchMethod())
-                .confidenceValue(result.confidence())
-                .reason(result.reason())
-                .exceptionType(result.exceptionType())
-                .excludeFromPrecision(result.excludeFromPrecision())
-                .evidenceId(result.evidenceId())
-                .postable(result.mayPostToContract())
+                .dictionaryReleaseId(null)
+                .dictionaryVersion(null)
+                .conceptCode(null)
+                .categoryCode(category == null ? null : category.getCode())
+                .categoryName(category == null ? null : categoryName(category))
+                .canonicalName(row.getServiceName())
+                .matchMethod("SOURCE_CLASSIFICATION_MAP")
+                .confidenceValue(postable ? BigDecimal.ONE : BigDecimal.ZERO)
+                .reason(resolution == null ? "تصنيف المصدر غير مسجل في طبقة المطابقة"
+                        : resolution.requiresReview() ? "المطابقة تتطلب مراجعة بشرية"
+                        : category == null ? "تصنيف التغطية غير موجود أو غير نشط"
+                        : "مطابقة مباشرة من تصنيف قائمة مقدم الخدمة")
+                .exceptionType(null)
+                .excludeFromPrecision(false)
+                .evidenceId(null)
+                .postable(postable)
                 .build();
     }
 

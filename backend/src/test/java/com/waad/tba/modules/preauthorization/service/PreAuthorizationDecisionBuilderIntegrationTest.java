@@ -79,8 +79,8 @@ class PreAuthorizationDecisionBuilderIntegrationTest extends PostgresIntegration
                 + "VALUES ('DSRV-" + s + "', 'Decision Service', " + categoryId + ", true) RETURNING id",
                 Long.class);
         Long ruleId = jdbc.queryForObject("INSERT INTO benefit_policy_rules (benefit_policy_id, "
-                + "medical_category_id, encounter_type, coverage_percent, active, deleted) VALUES ("
-                + policyId + ", " + categoryId + ", 'OUTPATIENT', " + coveragePercent
+                + "medical_category_id, encounter_type, claim_context_code, coverage_percent, active, deleted) VALUES ("
+                + policyId + ", " + categoryId + ", 'OUTPATIENT', 'OUTPATIENT', " + coveragePercent
                 + ", true, false) RETURNING id", Long.class);
 
         Long groupId = jdbc.queryForObject("INSERT INTO benefit_groups (policy_id, code, name_ar, "
@@ -501,8 +501,8 @@ class PreAuthorizationDecisionBuilderIntegrationTest extends PostgresIntegration
                 + "VALUES ('DSRV2-" + s2 + "', 'Other Service', " + otherCategory + ", true) RETURNING id",
                 Long.class);
         Long otherRule = jdbc.queryForObject("INSERT INTO benefit_policy_rules (benefit_policy_id, "
-                + "medical_category_id, encounter_type, coverage_percent, active, deleted) VALUES ("
-                + sc.policyId() + ", " + otherCategory + ", 'OUTPATIENT', 50, true, false) RETURNING id",
+                + "medical_category_id, encounter_type, claim_context_code, coverage_percent, active, deleted) VALUES ("
+                + sc.policyId() + ", " + otherCategory + ", 'OUTPATIENT', 'OUTPATIENT', 50, true, false) RETURNING id",
                 Long.class);
         Long otherGroup = jdbc.queryForObject("INSERT INTO benefit_groups (policy_id, code, name_ar, "
                 + "context_type, aggregation_mode) VALUES (" + sc.policyId() + ", 'DG2-" + s2

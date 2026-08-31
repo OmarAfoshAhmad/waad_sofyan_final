@@ -90,8 +90,8 @@ public class CoverageResult {
     // ══════════════════════════════════════════════════════
 
     /**
-     * المبلغ المعتمد للتوزيع (بعد حسم المرفوض بسبب السقوف والسعر).
-     * = effectiveTotal - limitRefused
+     * حصة الشركة المعتمدة بعد السقف والتحمل والرفض اليدوي.
+     * اسم الحقل تاريخي؛ القيمة مساوية لـ companyShare ولا تمثل إجمالي السطر المؤهل.
      */
     private BigDecimal approvedTotal;
 
@@ -195,6 +195,18 @@ public class CoverageResult {
 
         /** المبلغ المستخدم سابقاً من السقف */
         private BigDecimal usedAmount;
+
+        /** محور قياس السقف المالي: إجمالي مؤهل أو حصة الشركة. */
+        private String consumptionBasis;
+
+        /** صافي الاستخدام قبل هذا السطر، شاملاً الأسطر السابقة في نفس الطلب الجماعي. */
+        private BigDecimal usedAmountBeforeLine;
+
+        /** ما طلبه هذا السطر على محور السقف قبل تطبيق الحد. */
+        private BigDecimal requestedAmountForLimit;
+
+        /** ما قبله السقف من هذا السطر على المحور نفسه. */
+        private BigDecimal approvedAmountForLimit;
 
         /** عدد أيام الاستفادة المحتسبة داخل الدورة */
         private Integer usedDays;

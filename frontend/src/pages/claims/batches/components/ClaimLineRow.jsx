@@ -30,6 +30,7 @@ import {
   MedicalServices as MedicalServicesIcon,
   MenuBook as DictionaryIcon
 } from '@mui/icons-material';
+import { isValidClaimQuantity } from '../claim-entry-validation';
 
 const inlineSx = {
   '& .MuiInputBase-root': { fontSize: '0.85rem', fontWeight: 400 },
@@ -42,6 +43,10 @@ export const ClaimLineRow = ({
   theme,
   serviceOptions,
   loadingServices,
+  servicesError,
+  servicesErrorMessage,
+  onRetryServices,
+  onServiceSearchChange,
   updateLine,
   handleServiceChange,
   removeLine,
@@ -89,6 +94,7 @@ export const ClaimLineRow = ({
     line.service?.medicalCategory?.code ||
     line.service?.effectiveCategory?.code ||
     '';
+  const quantityInvalid = Boolean(line.service || line.serviceName) && !isValidClaimQuantity(line.quantity);
 
   return (
     <Fragment>
@@ -116,6 +122,9 @@ export const ClaimLineRow = ({
               loading={loadingServices}
               value={line.service || null}
               onChange={(_, val) => handleServiceChange(idx, val)}
+              onInputChange={(_, value, reason) => {
+                if (reason === 'input' || reason === 'clear') onServiceSearchChange?.(value);
+              }}
               filterOptions={serviceFilter}
               getOptionLabel={(o) => {
                 const name = o.label || o.serviceName || '';
@@ -139,9 +148,18 @@ export const ClaimLineRow = ({
               noOptionsText={
                 <Stack spacing={1} alignItems="center" sx={{ py: 1 }}>
                   <Typography variant="body2">
-                    {loadingServices ? 'جاري تحميل خدمات العقد...' : 'لم يتم العثور على خدمات في العقد'}
+                    {loadingServices
+                      ? 'جاري تحميل خدمات العقد...'
+                      : servicesError
+                        ? servicesErrorMessage || 'تعذر تحميل خدمات العقد'
+                        : 'لم يتم العثور على خدمات في العقد'}
                   </Typography>
-                  {!loadingServices && onOpenCustomServiceDialog && (
+                  {servicesError && onRetryServices && (
+                    <Button size="small" onClick={() => onRetryServices()}>
+                      إعادة المحاولة
+                    </Button>
+                  )}
+                  {!loadingServices && !servicesError && onOpenCustomServiceDialog && (
                     <Button
                       size="small"
                       variant="contained"
@@ -209,7 +227,9 @@ export const ClaimLineRow = ({
               const v = e.target.value;
               if (v === '' || Number(v) >= 0) updateLine(idx, { quantity: v });
             }}
-            inputProps={{ min: 0 }}
+            error={quantityInvalid}
+            helperText={quantityInvalid ? 'عدد صحيح > 0' : null}
+            inputProps={{ min: 1, step: 1 }}
             sx={inlineSx}
           />
         </TableCell>
@@ -265,7 +285,7 @@ export const ClaimLineRow = ({
         {visibleColumns.coverage && (
           <TableCell align="center">
             <Typography variant="body2" sx={{ fontSize: '0.85rem', fontWeight: 400, color: 'text.secondary' }}>
-              {line.coveragePercent !== null ? `${line.coveragePercent}%` : `${policyInfo?.defaultCoveragePercent ?? 100}%`}
+              {line.coveragePercent !== null ? `${line.coveragePercent}%` : 'بانتظار الحساب'}
             </Typography>
           </TableCell>
         )}
@@ -497,11 +517,16 @@ export const ClaimLineRow = ({
                 `(سيُّسجَّل ${(line.usageDetails.totalUsedCount || 0) + 1} من أصل ${line.usageDetails.timesLimit} مرّة/سنة)`}
               {line.usageDetails?.amountLimit > 0 &&
                 (() => {
-                  const prev = parseFloat(line.usageDetails.totalUsedAmount || 0);
-                  const curr = parseFloat(line.usageDetails.currentRequestedAmount || 0);
+                  const prev = parseFloat(line.usageDetails.usedAmountBeforeLine || 0);
+                  const curr = parseFloat(line.usageDetails.requestedAmountForLimit || 0);
+                  const accepted = parseFloat(line.usageDetails.approvedAmountForLimit || 0);
                   const limit = parseFloat(line.usageDetails.amountLimit || 0);
                   const total = parseFloat((prev + curr).toFixed(2));
-                  return ` (مستخدم مسبقاً: ${prev.toFixed(2)} + المطلوب حالياً: ${curr.toFixed(2)} = ${total} د.ل يتجاوز الحد ${limit.toFixed(2)} د.ل)`;
+                  const basis =
+                    line.usageDetails.consumptionBasis === 'ELIGIBLE_AMOUNT'
+                      ? 'إجمالي الخدمة المؤهلة قبل التحمل'
+                      : 'حصة الشركة بعد التحمل';
+                  return ` (${basis}: مستخدم قبل السطر ${prev.toFixed(2)} + مطلوب ${curr.toFixed(2)} = ${total.toFixed(2)}؛ المقبول ${accepted.toFixed(2)} من حد ${limit.toFixed(2)} د.ل)`;
                 })()}
             </Typography>
           </TableCell>

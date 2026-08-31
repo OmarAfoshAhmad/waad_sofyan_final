@@ -27,6 +27,7 @@ public class PriceListClassificationResponse {
     public static class Item {
         private Integer rowNumber;
         private String sourceSheet;
+        private String sourceClassification;
         private String serviceCode;
         private String serviceName;
         private BigDecimal price;

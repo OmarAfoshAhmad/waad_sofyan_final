@@ -25,6 +25,10 @@ import com.waad.tba.modules.providercontract.event.ProviderPricingItemsDeactivat
 import com.waad.tba.modules.providercontract.repository.ProviderContractPricingItemRepository;
 import com.waad.tba.modules.providercontract.repository.ProviderContractRepository;
 import com.waad.tba.security.AuthorizationService;
+import com.waad.tba.modules.claimcontext.repository.ClaimContextDefinitionRepository;
+import com.waad.tba.modules.claimcontext.entity.ClaimContextDefinition;
+import com.waad.tba.modules.claimcontext.service.ClaimContextSourceResolver;
+import com.waad.tba.modules.providercontract.enums.EncounterType;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -44,6 +48,7 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -71,6 +76,10 @@ class MedicalDictionaryServiceTest {
     private AuthorizationService authorizationService;
     @Mock
     private V50MedicalClassificationEngine v50ClassificationEngine;
+    @Mock
+    private ClaimContextSourceResolver claimContextSourceResolver;
+    @Mock
+    private ClaimContextDefinitionRepository claimContextDefinitionRepository;
 
     @Test
     void searchEntries_doesNotFailWhenLegacyEntryHasNoCategory() {
@@ -98,7 +107,9 @@ class MedicalDictionaryServiceTest {
                 medicalAuditLogService,
                 new MedicalDictionaryNormalizer(),
                 v50ClassificationEngine,
-                authorizationService
+                authorizationService,
+                claimContextSourceResolver,
+                claimContextDefinitionRepository
         );
 
         Page<MedicalDictionaryEntryResponse> result = service.searchEntries(null, null, Pageable.ofSize(25));
@@ -223,11 +234,10 @@ class MedicalDictionaryServiceTest {
         when(priceListSessionRepository.findById(100L)).thenReturn(Optional.of(session));
         when(providerContractRepository.findById(200L)).thenReturn(Optional.of(contract));
         when(priceListItemRepository.findBySession_IdOrderByRowNumberAscIdAsc(100L)).thenReturn(List.of(item));
-        when(medicalCategoryRepository.findActiveById(10L)).thenReturn(Optional.of(category));
-        when(providerContractPricingItemRepository
-                .findFirstByContractIdAndActiveTrueAndServiceNameIgnoreCaseAndEffectiveFromAfterOrderByEffectiveFromAsc(
-                        200L, "كشف طبي", contract.getStartDate())).thenReturn(Optional.of(futurePrice));
-        when(providerContractPricingItemRepository.save(futurePrice)).thenReturn(futurePrice);
+        when(providerContractPricingItemRepository.findByContractIdAndActiveTrue(200L))
+                .thenReturn(List.of(futurePrice));
+        when(providerContractPricingItemRepository.save(any(ProviderContractPricingItem.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
         when(priceListSessionRepository.save(session)).thenReturn(session);
 
         PriceListSessionPostResponse response = service.postPriceListSessionToContract(100L, request);
@@ -347,7 +357,6 @@ class MedicalDictionaryServiceTest {
         when(priceListSessionRepository.findById(100L)).thenReturn(Optional.of(session));
         when(providerContractRepository.findById(200L)).thenReturn(Optional.of(contract()));
         when(priceListItemRepository.findBySession_IdOrderByRowNumberAscIdAsc(100L)).thenReturn(List.of(approved, review));
-        when(medicalCategoryRepository.findActiveById(10L)).thenReturn(Optional.of(category()));
         when(providerContractPricingItemRepository.save(any(ProviderContractPricingItem.class))).thenAnswer(invocation -> {
             ProviderContractPricingItem saved = invocation.getArgument(0);
             saved.setId(301L);
@@ -367,6 +376,15 @@ class MedicalDictionaryServiceTest {
     }
 
     private MedicalDictionaryService newService() {
+        lenient().when(medicalCategoryRepository.findAllById(Set.of(10L)))
+                .thenReturn(List.of(category()));
+        lenient().when(claimContextDefinitionRepository.findAllById(Set.of("OUTPATIENT")))
+                .thenReturn(List.of(ClaimContextDefinition.builder()
+                        .code("OUTPATIENT")
+                        .nameAr("عيادات خارجية")
+                        .baseEncounterType(EncounterType.OUTPATIENT)
+                        .active(true)
+                        .build()));
         return new MedicalDictionaryService(
                 entryRepository,
                 synonymRepository,
@@ -379,7 +397,9 @@ class MedicalDictionaryServiceTest {
                 medicalAuditLogService,
                 new MedicalDictionaryNormalizer(),
                 v50ClassificationEngine,
-                authorizationService
+                authorizationService,
+                claimContextSourceResolver,
+                claimContextDefinitionRepository
         );
     }
 
@@ -409,6 +429,8 @@ class MedicalDictionaryServiceTest {
                 .medicalCategoryId(10L)
                 .medicalCategoryCode("CAT-DIAGNOSTIC")
                 .medicalCategoryName("الكشوفات الطبية")
+                .claimContextCode("OUTPATIENT")
+                .sourceClassification("عيادات خارجية")
                 .canonicalName(serviceName)
                 .confidence(95)
                 .status(PriceListItemStatus.AUTO_APPROVED)
@@ -451,6 +473,8 @@ class MedicalDictionaryServiceTest {
                 .contract(contract)
                 .serviceName(serviceName)
                 .medicalCategory(category)
+                .claimContextCode("OUTPATIENT")
+                .encounterType(EncounterType.OUTPATIENT)
                 .contractPrice(price)
                 .basePrice(price)
                 .active(true)

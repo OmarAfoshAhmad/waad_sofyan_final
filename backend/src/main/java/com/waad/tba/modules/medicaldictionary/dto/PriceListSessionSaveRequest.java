@@ -38,6 +38,10 @@ public class PriceListSessionSaveRequest {
     public static class Item {
         private Integer rowNumber;
         private String sourceSheet;
+        @Size(max = 255)
+        private String sourceClassification;
+        @Size(max = 60)
+        private String claimContextCode;
         private String serviceCode;
 
         @NotBlank(message = "اسم خدمة المرفق مطلوب")

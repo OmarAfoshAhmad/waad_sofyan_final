@@ -3,6 +3,7 @@ package com.waad.tba.modules.claim.service;
 import com.waad.tba.modules.benefitpolicy.dto.BenefitPolicyRuleResponseDto;
 import com.waad.tba.modules.benefitpolicy.dto.CoverageDecision;
 import com.waad.tba.modules.benefitpolicy.dto.CoverageDecisionSource;
+import com.waad.tba.modules.benefitpolicy.dto.CoverageDecisionRequest;
 import com.waad.tba.modules.benefitpolicy.dto.CoverageLimitSnapshot;
 import com.waad.tba.modules.benefitpolicy.enums.ConsumptionBasis;
 import com.waad.tba.modules.benefitpolicy.enums.CountingMethod;
@@ -19,6 +20,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
@@ -28,6 +30,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
 
 /**
  * Acceptance scenarios derived from the July 2026 field observations.
@@ -186,6 +189,29 @@ class CoverageEngineServiceTest {
     }
 
     @Test
+    @DisplayName("الولادة: سقف 4000 على إجمالي الخدمة يسبق تحمل 25% في مثال دار الشفاء")
+    void darAlShifaMaternityExampleCapsEligibleAmountBeforeCopay() {
+        coveredByRule(61L, 75, false);
+        useLimits(limit(602L, "سقف الولادة", "4000.00", "0.00"));
+
+        List<CoverageResult> results = calculateBulk(List.of(
+                line("F-006", "1650.00"),
+                line("WE-001-X10", "3000.00")), EncounterType.INPATIENT);
+
+        assertMoney("1237.50", results.get(0).getCompanyShare());
+        assertMoney("412.50", results.get(0).getPatientShare());
+        assertMoney("1762.50", results.get(1).getCompanyShare());
+        assertMoney("587.50", results.get(1).getPatientShare());
+        assertMoney("650.00", results.get(1).getLimitRefused());
+        assertMoney("3000.00", results.stream().map(CoverageResult::getCompanyShare)
+                .reduce(BigDecimal.ZERO, BigDecimal::add));
+        assertEquals("ELIGIBLE_AMOUNT", results.get(1).getUsageDetails().getConsumptionBasis());
+        assertMoney("1650.00", results.get(1).getUsageDetails().getUsedAmountBeforeLine());
+        assertMoney("3000.00", results.get(1).getUsageDetails().getRequestedAmountForLimit());
+        assertMoney("2350.00", results.get(1).getUsageDetails().getApprovedAmountForLimit());
+    }
+
+    @Test
     @DisplayName("العمليات والإيواء: مثال سقف 15000 يمنع التجاوز")
     void inpatientAndSurgeryLimitStopsExcess() {
         coveredByRule(70L, 100, false);
@@ -222,12 +248,16 @@ class CoverageEngineServiceTest {
         BulkCoverageEngineRequest request = request(
                 List.of(line("FULL-COVERAGE", "200.00")), EncounterType.INPATIENT);
         request.setFullCoverage(true);
+        request.setClaimContextCode("FULL_COVERAGE");
 
         CoverageResult result = engine.calculateBulk(request).get(0);
 
         assertMoney("100.00", result.getCompanyShare());
         assertMoney("0.00", result.getPatientShare());
         assertMoney("100.00", result.getLimitRefused());
+        ArgumentCaptor<CoverageDecisionRequest> decisionRequest = ArgumentCaptor.forClass(CoverageDecisionRequest.class);
+        verify(decisionService).resolve(decisionRequest.capture());
+        assertEquals("INPATIENT", decisionRequest.getValue().claimContextCode());
     }
 
     @Test
@@ -244,6 +274,42 @@ class CoverageEngineServiceTest {
         assertMoney("0.00", result.getCompanyShare());
         assertMoney("120.00", result.getLimitRefused());
         assertTrue(result.getUsageDetails().isTimesExceeded());
+    }
+
+    @Test
+    @DisplayName("بنود العلاج الطبيعي المتعددة في المطالبة الواحدة تستهلك زيارة واحدة")
+    void perVisitCountsTheWholeClaimOnce() {
+        coveredByRule(96L, 75, false);
+        useLimits(new LimitSnapshot(
+                961L, "العلاج الطبيعي", null, 20, null,
+                BigDecimal.ZERO, 0, 0, false,
+                CountingMethod.PER_VISIT, ConsumptionBasis.COMPANY_SHARE));
+        BulkCoverageEngineRequest request = request(
+                java.util.stream.IntStream.range(0, 21)
+                        .mapToObj(index -> line("PHYSIO-" + index, "160.00"))
+                        .toList(), EncounterType.OUTPATIENT);
+
+        List<CoverageResult> results = engine.calculateBulk(request);
+
+        assertEquals(1, results.get(20).getUsageDetails().getUsedCount());
+        assertFalse(results.get(20).getUsageDetails().isTimesExceeded());
+        assertMoney("120.00", results.get(20).getCompanyShare());
+    }
+
+    @Test
+    @DisplayName("الزيارة الحادية والعشرون للعلاج الطبيعي تُرفض بعد عشرين زيارة سابقة")
+    void perVisitRejectsTheTwentyFirstHistoricalVisit() {
+        coveredByRule(97L, 75, false);
+        useLimits(new LimitSnapshot(
+                971L, "العلاج الطبيعي", null, 20, null,
+                BigDecimal.ZERO, 20, 0, false,
+                CountingMethod.PER_VISIT, ConsumptionBasis.COMPANY_SHARE));
+
+        CoverageResult result = calculate(line("PHYSIO-21", "160.00"), EncounterType.OUTPATIENT);
+
+        assertTrue(result.getUsageDetails().isTimesExceeded());
+        assertMoney("0.00", result.getCompanyShare());
+        assertMoney("160.00", result.getLimitRefused());
     }
 
     @Test

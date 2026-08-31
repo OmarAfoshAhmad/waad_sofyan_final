@@ -97,7 +97,10 @@ public class ClaimMapper {
                                 // DRAFT, never APPROVED: the mapper only builds data. Financial approval
                                 // (amount limits, totalApproved > 0) is decided later by ClaimService via
                                 // ClaimStateMachine, after finalizeSnapshot has computed the real amount.
-                                .status(dto.getStatus() != null ? dto.getStatus() : ClaimStatus.DRAFT)
+                                // Creation always starts at DRAFT. ClaimService is the sole owner
+                                // of the audited transition requested by the caller; accepting a
+                                // terminal status here bypasses the state machine entirely.
+                                .status(ClaimStatus.DRAFT)
                                 .complaint(dto.getComplaint())
                                 .reviewerComment(dto.getRejectionReason())
                                 .preAuthorization(preAuth)
@@ -105,6 +108,7 @@ public class ClaimMapper {
                                 .encounterType(dto.getEncounterType() != null
                                                 ? dto.getEncounterType()
                                                 : com.waad.tba.modules.providercontract.enums.EncounterType.OUTPATIENT)
+                                .claimContextCode(dto.getClaimContextCode())
                                 .fullCoverage(dto.getFullCoverage() != null ? dto.getFullCoverage() : false)
                                 .isBacklog(visit.getVisitType() == com.waad.tba.modules.visit.entity.VisitType.LEGACY_BACKLOG)
                                 .build();
@@ -142,6 +146,7 @@ public class ClaimMapper {
                                 .serviceYear(claim.getServiceDate() != null ? claim.getServiceDate().getYear()
                                                 : LocalDate.now().getYear())
                                 .serviceDate(claim.getServiceDate())
+                                .claimContextCode(claim.getClaimContextCode())
                                 .fullCoverage(Boolean.TRUE.equals(claim.getFullCoverage()))
                                 .encounterType(claim.getEncounterType())
                                 .excludeClaimId(claim.getId())
@@ -596,6 +601,7 @@ public class ClaimMapper {
 
                 return ClaimViewDto.builder()
                                 .id(claim.getId())
+                                .claimContextCode(claim.getClaimContextCode())
                                 .claimNumber(claim.getClaimNumber() != null ? claim.getClaimNumber()
                                                 : "CLM-" + claim.getId())
                                 .memberId(member != null ? member.getId() : null)
