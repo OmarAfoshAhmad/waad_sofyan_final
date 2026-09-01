@@ -111,6 +111,7 @@ import lombok.extern.slf4j.Slf4j;
 public class ClaimService {
 
     private final ClaimRepository claimRepository;
+    private final com.waad.tba.modules.settlement.repository.ProviderPaymentAllocationRepository allocationRepository;
     private final ClaimMapper claimMapper;
     private final AuthorizationService authorizationService;
     private final ProviderContextGuard providerContextGuard;
@@ -1682,7 +1683,9 @@ public class ClaimService {
 
         // Read through the same mapper the grouped path uses, at offset 0 because
         // this row carries no provider id. One reading of these columns, not two.
-        return toFinancialSummary(queryResult.get(0), 0);
+        return toFinancialSummary(queryResult.get(0), 0,
+                allocationRepository.sumPostedAllocations(
+                        employerId, providerId, monthOrdinal(dateFrom), monthOrdinal(dateTo)));
     }
 
     /**
@@ -1735,6 +1738,17 @@ public class ClaimService {
 
         List<Object[]> rows = claimRepository.getFinancialSummaryGroupedByProvider(
                 employerId, status, dateFrom, dateTo);
+
+        // One query for every provider's disbursements, not one per row: the
+        // same shape of defect that took the batches screen down with a request
+        // per provider.
+        java.util.Map<Long, BigDecimal> paidByProvider = allocationRepository
+                .sumPostedAllocationsGroupedByProvider(
+                        employerId, monthOrdinal(dateFrom), monthOrdinal(dateTo))
+                .stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        com.waad.tba.modules.settlement.repository.ProviderPaymentAllocationRepository.PaidByProvider::getProviderId,
+                        com.waad.tba.modules.settlement.repository.ProviderPaymentAllocationRepository.PaidByProvider::getPaidAmount));
         if (rows == null || rows.isEmpty()) {
             return java.util.Map.of();
         }
@@ -1748,7 +1762,8 @@ public class ClaimService {
             if (visibleProviderIds != null && !visibleProviderIds.contains(providerId)) {
                 continue;
             }
-            byProvider.put(providerId, toFinancialSummary(row, 1));
+            byProvider.put(providerId, toFinancialSummary(row, 1,
+                    paidByProvider.getOrDefault(providerId, BigDecimal.ZERO)));
         }
         return byProvider;
     }
@@ -1759,31 +1774,49 @@ public class ClaimService {
      * columns; {@code offset} is where the aggregates start, since the grouped
      * row carries the provider id first.
      */
-    private FinancialSummaryDto toFinancialSummary(Object[] result, int offset) {
+    private FinancialSummaryDto toFinancialSummary(Object[] result, int offset, BigDecimal paid) {
         int len = result.length;
         long claimsCount = (len > offset && result[offset] != null)
                 ? ((Number) result[offset]).longValue() : 0L;
         BigDecimal requested = decimalAt(result, offset + 1);
         BigDecimal approved = decimalAt(result, offset + 2);
         BigDecimal refused = decimalAt(result, offset + 3);
-        BigDecimal paid = decimalAt(result, offset + 4);
+        // offset + 4 is the net provider amount, kept in the projection because
+        // the discount figure below is derived beside it. It is deliberately NOT
+        // read as "paid": it counts APPROVED and BATCHED claims, which is money
+        // committed, not money disbursed. What was paid comes from posted
+        // payments, the definition the settlement module already owns.
         BigDecimal companyDiscount = decimalAt(result, offset + 5);
         long approvedCount = (len > offset + 6 && result[offset + 6] != null)
                 ? ((Number) result[offset + 6]).longValue() : 0L;
         long settledCount = (len > offset + 7 && result[offset + 7] != null)
                 ? ((Number) result[offset + 7]).longValue() : 0L;
 
+        BigDecimal disbursed = paid == null ? BigDecimal.ZERO : paid;
         return FinancialSummaryDto.builder()
                 .claimsCount(claimsCount)
                 .totalClaimsAmount(requested)
                 .totalApprovedAmount(approved)
                 .totalRefusedAmount(refused)
-                .totalPaidAmount(paid)
-                .outstandingAmount(approved.subtract(paid))
+                .totalPaidAmount(disbursed)
+                // Approved minus disbursed is now a real balance. It used to
+                // subtract a figure derived from the same status set as approved,
+                // so it collapsed to zero -- or to the discount -- and never
+                // showed anything owed.
+                .outstandingAmount(approved.subtract(disbursed))
                 .totalCompanyDiscountAmount(companyDiscount)
                 .approvedCount(approvedCount)
                 .settledCount(settledCount)
                 .build();
+    }
+
+    /**
+     * A date expressed as the year/month ordinal allocations are recorded against.
+     * Payments settle whole months, so a service-date range is matched on the
+     * months it touches, inclusive at both ends.
+     */
+    private static Integer monthOrdinal(LocalDate date) {
+        return date == null ? null : date.getYear() * 100 + date.getMonthValue();
     }
 
     private static BigDecimal decimalAt(Object[] result, int index) {

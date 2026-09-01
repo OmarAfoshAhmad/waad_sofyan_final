@@ -179,6 +179,112 @@ class FinancialSummaryPerProviderParityIntegrationTest extends PostgresIntegrati
                 .isZero();
     }
 
+    /**
+     * Approving a claim commits money; it does not disburse it. The summary used
+     * to sum the same status set for both figures, so "paid" tracked "approved"
+     * and the balance owed collapsed to zero -- on a screen an accountant reads
+     * to decide what to transfer.
+     */
+    @Test
+    @DisplayName("an approved claim with no payment posted is owed, not paid")
+    void approvedWithoutAPostedPaymentIsOutstanding() {
+        LocalDate from = serviceDate.minusDays(1);
+        LocalDate to = serviceDate.plusDays(1);
+
+        FinancialSummaryDto summary =
+                claimService.getFinancialSummary(employerId, providerA, null, from, to);
+
+        assertThat(summary.getTotalApprovedAmount()).isEqualByComparingTo("700");
+        assertThat(summary.getTotalPaidAmount())
+                .as("nothing has been transferred to this provider")
+                .isEqualByComparingTo("0");
+        assertThat(summary.getOutstandingAmount())
+                .as("so the whole approved amount is still owed")
+                .isEqualByComparingTo("700");
+    }
+
+    @Test
+    @DisplayName("only a posted payment counts as paid; a draft does not")
+    void onlyPostedPaymentsReduceWhatIsOwed() {
+        long draftPayment = draftPaymentAllocating(providerA, 200);
+
+        FinancialSummaryDto beforePosting = claimService.getFinancialSummary(
+                employerId, providerA, null, serviceDate.minusDays(1), serviceDate.plusDays(1));
+        assertThat(beforePosting.getTotalPaidAmount())
+                .as("a draft transfer has left no account")
+                .isEqualByComparingTo("0");
+
+        postAllocated(draftPaymentAllocating(providerA, 250), providerA, 250);
+
+        FinancialSummaryDto afterPosting = claimService.getFinancialSummary(
+                employerId, providerA, null, serviceDate.minusDays(1), serviceDate.plusDays(1));
+        assertThat(afterPosting.getTotalPaidAmount()).isEqualByComparingTo("250");
+        assertThat(afterPosting.getOutstandingAmount())
+                .as("700 approved less 250 actually transferred")
+                .isEqualByComparingTo("450");
+    }
+
+    @Test
+    @DisplayName("the grouped path reports the same disbursement as the single-provider path")
+    void groupedPathReadsTheSameDisbursement() {
+        postAllocated(draftPaymentAllocating(providerA, 300), providerA, 300);
+
+        Map<Long, FinancialSummaryDto> grouped = claimService.getFinancialSummaryByProvider(
+                employerId, null, serviceDate.minusDays(1), serviceDate.plusDays(1));
+
+        assertThat(grouped.get(providerA).getTotalPaidAmount()).isEqualByComparingTo("300");
+        assertThat(grouped.get(providerB).getTotalPaidAmount())
+                .as("a provider with no payment is not credited with someone else's")
+                .isEqualByComparingTo("0");
+    }
+
+    /**
+     * A transfer is written in the order the database insists on, and each step
+     * is a rule worth keeping: allocations freeze at posting, so they are
+     * recorded while the payment is still a draft; and
+     * assert_provider_payment_ledger_matches requires the ledger entry to point
+     * back at the payment, name the same account, carry the same amount and be a
+     * PROVIDER_PAYMENT debit -- so the entry can only be written once the
+     * payment has an id.
+     */
+    private long draftPaymentAllocating(long providerId, int amount) {
+        long paymentId = jdbc.queryForObject(
+                "INSERT INTO provider_payments (provider_id, amount, payment_date, payment_method,"
+                        + " status, idempotency_key)"
+                        + " VALUES (?, ?, ?, 'BANK_TRANSFER', 'DRAFT', ?) RETURNING id",
+                Long.class, providerId, amount, serviceDate, "IDK-" + UUID.randomUUID());
+        jdbc.update("INSERT INTO provider_payment_allocations (payment_id, employer_id, target_year,"
+                        + " target_month, amount, allocation_method)"
+                        + " VALUES (?, ?, ?, ?, ?, 'AUTO_FIFO')",
+                paymentId, employerId, serviceDate.getYear(), serviceDate.getMonthValue(), amount);
+        return paymentId;
+    }
+
+    private void postAllocated(long paymentId, long providerId, int amount) {
+        long ledgerId = jdbc.queryForObject(
+                "INSERT INTO account_transactions (provider_account_id, transaction_type, amount,"
+                        + " balance_before, balance_after, reference_type, reference_id,"
+                        + " transaction_date, description)"
+                        + " VALUES (?, 'DEBIT', ?, ?, 0, 'PROVIDER_PAYMENT', ?, ?, 'parity test')"
+                        + " RETURNING id",
+                Long.class, providerAccount(providerId), amount, amount, paymentId, serviceDate);
+        jdbc.update("UPDATE provider_payments SET status = 'POSTED', ledger_transaction_id = ?,"
+                        + " posted_at = NOW() WHERE id = ?",
+                ledgerId, paymentId);
+    }
+
+    private long providerAccount(long providerId) {
+        Long accountId = jdbc.query("SELECT id FROM provider_accounts WHERE provider_id = ?",
+                rs -> rs.next() ? rs.getLong(1) : null, providerId);
+        if (accountId != null) {
+            return accountId;
+        }
+        return jdbc.queryForObject(
+                "INSERT INTO provider_accounts (provider_id, running_balance, total_approved,"
+                        + " total_paid, status, version) VALUES (?, 0, 0, 0, 'ACTIVE', 0) RETURNING id",
+                Long.class, providerId);
+    }
+
     @Test
     @DisplayName("one call carries every provider that has claims in the window")
     void oneCallCarriesEveryProviderInTheWindow() {
