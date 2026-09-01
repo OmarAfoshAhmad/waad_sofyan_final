@@ -3,26 +3,38 @@ import dayjs from 'dayjs';
 import DatePicker from 'components/common/SystemDatePicker';
 import { resolveClaimContextSelection } from '../claim-context.mjs';
 
+// Every control in the header row is pinned to one height. Two earlier attempts
+// aligned the date field by reasoning about padding -- first through class names
+// that x-date-pickers v8 does not emit (it renders an accessible field, so there
+// is no `.MuiInput-input` and no plain `<input>`), then through the calendar
+// button, which was only part of the difference. Both left the underline sitting
+// below its neighbours.
+//
+// The columns are top-aligned and their captions share one margin, so the inputs
+// all begin at the same y. Fixing the input rows to the same height is therefore
+// what actually puts the underlines on one line, whatever padding each component
+// applies internally.
+const FIELD_HEIGHT = 32;
+
 const inlineSx = {
-  '& .MuiInputBase-root': { fontSize: '0.9rem' },
+  '& .MuiInputBase-root': { fontSize: '0.9rem', height: FIELD_HEIGHT },
   '& .MuiInput-input': { fontSize: '0.9rem' }
 };
 
-// The date field sat lower than every other field in the row, and the first
-// attempt to fix it did nothing: x-date-pickers v8 renders an accessible field,
-// so there is no `.MuiInput-input` and no plain `<input>` to style -- the
-// visible value lives in `.MuiPickersInputBase-*` and inherits body1 (1rem),
-// while its neighbours here run at 0.9rem.
-//
-// The drop itself comes from the calendar button. A default IconButton is 40px
-// tall and the field root centres on it, so the underline lands ~10px below a
-// plain standard input. The button is therefore sized through the picker's own
-// `openPickerButton` slot rather than by guessing at a class name, which is
-// what failed the first time.
 const dateFieldSx = {
-  '& .MuiPickersInputBase-root': { fontSize: '0.9rem', mt: 0 },
-  '& .MuiPickersInputBase-sectionsContainer': { fontSize: '0.9rem' },
+  '& .MuiPickersInputBase-root': { fontSize: '0.9rem', height: FIELD_HEIGHT, mt: 0 },
+  '& .MuiPickersInputBase-sectionsContainer': { fontSize: '0.9rem', py: 0 },
   '& .MuiInputAdornment-root': { ml: 0, mr: -0.5, height: 'auto', maxHeight: 'none' }
+};
+
+// The Select takes its sx on the input root itself, not on a TextField wrapping
+// one. `inlineSx` addresses `.MuiInputBase-root` as a descendant, and a
+// descendant selector never matches the element it is applied to -- which is
+// why this field alone kept its default height while the rest of the row moved.
+const selectSx = {
+  fontSize: '0.9rem',
+  height: FIELD_HEIGHT,
+  '& .MuiSelect-select': { display: 'flex', alignItems: 'center', py: 0, minHeight: 0 }
 };
 
 export const ClaimHeaderFields = ({
@@ -243,7 +255,7 @@ export const ClaimHeaderFields = ({
             setIsDirty(true);
             onRefetchAll(selection.encounterType, selection.fullCoverage, selection.claimContextCode);
           }}
-          sx={{ ...inlineSx, fontSize: '0.9rem' }}
+          sx={selectSx}
         >
           {claimContexts.map((context) => (
             <MenuItem key={context.code} value={context.code}>{context.nameAr}</MenuItem>
