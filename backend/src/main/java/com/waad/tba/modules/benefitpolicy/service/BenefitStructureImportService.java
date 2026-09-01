@@ -235,9 +235,15 @@ public class BenefitStructureImportService {
             BigDecimal amount = decimal(row, 6); Integer times = integer(row, 7); Integer days = integer(row, 8);
             if (amount != null || times != null || days != null) {
                 String safe = category == null ? "ROW" + n : category.trim();
-                String groupCode = "AUTO-BEN-" + safe + "-" + context;
-                String bucketCode = "AUTO-BEN-LIMIT-" + safe + "-" + context;
-                String limitName = autoLimitName(text(row, 1), safe, context);
+                // Keyed by the decision context, not the encounter type. A
+                // benefit may carry one ceiling under INPATIENT and another
+                // under MATERNITY, and both rows are INPATIENT encounters -- so
+                // naming the generated group after the encounter type alone made
+                // the two collide and the whole file was refused as duplicate.
+                String scope = safe + "-" + decisionContext;
+                String groupCode = "AUTO-BEN-" + scope;
+                String bucketCode = "AUTO-BEN-LIMIT-" + scope;
+                String limitName = autoLimitName(text(row, 1), safe, decisionContext);
                 p.groups.add(new GroupRow(groupCode, limitName, context, AggregationMode.INDIVIDUAL, bool(row, activeColumn, true), n));
                 p.buckets.add(new BucketRow(bucketCode, limitName, groupCode, context,
                         amount, times, days, enumOrDefault(LimitPeriodType.class, row, 9, n, LimitPeriodType.POLICY_PERIOD),
@@ -543,14 +549,23 @@ public class BenefitStructureImportService {
             default -> false;
         };
     }
-    private String autoLimitName(String name, String fallback, EncounterType context) {
+    /**
+     * Names the generated ceiling after the decision context rather than the
+     * encounter type, so two ceilings on the same benefit -- one for ordinary
+     * admission and one for childbirth -- read differently in the policy screen
+     * instead of sharing a name and colliding on import.
+     */
+    private String autoLimitName(String name, String fallback, String decisionContext) {
         String base = blank(name) ? fallback : name;
-        return base + " - " + switch (context) {
-            case INPATIENT -> "إيواء";
-            case OUTPATIENT -> "عيادات خارجية";
-            case ANY -> "عام";
-            default -> "عام";
-        };
+        String label = claimContextRepository.findById(decisionContext)
+                .map(context -> context.getNameAr())
+                .filter(nameAr -> !blank(nameAr))
+                .orElse(switch (decisionContext == null ? "" : decisionContext) {
+                    case "INPATIENT" -> "إيواء";
+                    case "OUTPATIENT" -> "عيادات خارجية";
+                    default -> "عام";
+                });
+        return base + " - " + label;
     }
 
     private interface RowConsumer { void accept(Row row, int number); }

@@ -162,8 +162,13 @@ public class CoverageEngineService {
         }
         String refusalReason = reasons.isEmpty() ? usageComputation.refusalReason() : String.join(" و ", reasons);
         if (notCovered && (refusalReason == null || refusalReason.isBlank())) {
-            refusalReason = "لا توجد قاعدة تغطية فعالة للتصنيف في سياق المطالبة "
-                    + request.getEncounterType();
+            // The context the rule was actually looked up under, not the encounter
+            // type behind it. Those differ for every context that is not
+            // OUTPATIENT or INPATIENT: a claim entered under MATERNITY was refused
+            // with the word INPATIENT, which sends whoever reads it looking for a
+            // rule that was never searched for.
+            refusalReason = "لا توجد قاعدة تغطية فعالة لهذا التصنيف في سياق المطالبة "
+                    + decisionContextCode;
         }
 
         // 4) Financial Split (Strict sequence)

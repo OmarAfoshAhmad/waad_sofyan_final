@@ -102,6 +102,22 @@ class ApprovedClassificationCoverageIntegrationTest extends PostgresIntegrationT
     }
 
     /**
+     * Oncology is an approved classification in its own right, carrying its own
+     * percentage. Folding it into the inpatient bucket would cost the member the
+     * difference between 100% and 75% on cancer treatment, which is a financial
+     * error rather than a naming one. Providers write the heading three ways.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"علاج الأورام", "الأورام", "أورام"})
+    void resolvesOncologyToItsOwnClassification(String heading) {
+        var resolution = resolver.resolve(heading, null);
+
+        assertThat(resolution).as("«%s» must be understood", heading).isPresent();
+        assertThat(resolution.get().medicalCategoryCode()).isEqualTo("CAT-ONCOLOGY");
+        assertThat(resolution.get().requiresReview()).isFalse();
+    }
+
+    /**
      * Psychiatry is deferred by decision until sessions and drugs are separated.
      * Pinned so that no future edit quietly picks one of the two halves: a
      * provisional alias would be recording a decision nobody has taken.

@@ -14,7 +14,11 @@ spring:
         generate_statistics: true
 
   flyway:
-    validate-on-migrate: false
+    # true, like production. With this off, a database carrying a migration
+    # version whose content has since changed passes silently and fails much
+    # later as a missing table -- a diagnosis far from its cause. The difference
+    # between the two environments bought nothing but a misleading error.
+    validate-on-migrate: true
     clean-disabled: false
     out-of-order: false
 

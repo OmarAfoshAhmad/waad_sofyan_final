@@ -53,6 +53,9 @@ public class ProviderContractPricingExcelService {
     private final PricingImportSessionCache sessionCache;
     private final ServiceSpecialtyInsuranceMapRepository mapRepository;
 
+    /** Upper bound on rows in one price-list file. See where it is enforced. */
+    private static final int MAX_IMPORT_ROWS = 20_000;
+
     private static final String TEMPLATE_REQUIRED_COLS = "service_name / اسم الخدمة ★";
     private static final String TEMPLATE_OPTIONAL_COLS = "service_code / الكود | unit_price / السعر | category / التصنيف | specialty / التخصص | notes / ملاحظات";
 
@@ -168,6 +171,16 @@ public class ProviderContractPricingExcelService {
 
             if (!columnIndices.containsKey("serviceName") && !columnIndices.containsKey("serviceCode")) {
                 throw new IllegalArgumentException("❌ الملف لا يطابق القالب المطلوب. يجب توفر اسم الخدمة أو الكود.");
+            }
+
+            // Refused before a single row is read, not after the memory is gone.
+            // The whole workbook is parsed in memory and every row is held for
+            // the preview, so an unbounded file is an unbounded allocation. The
+            // largest approved price list runs to a few thousand rows; this
+            // ceiling is far above that and still finite.
+            if (sheet.getLastRowNum() > MAX_IMPORT_ROWS) {
+                throw new IllegalArgumentException("❌ الملف يحتوي على " + sheet.getLastRowNum()
+                        + " صفاً، والحد الأقصى " + MAX_IMPORT_ROWS + " صف. قسّم الملف إلى ملفات أصغر.");
             }
 
             for (int rowNum = 1; rowNum <= sheet.getLastRowNum(); rowNum++) {

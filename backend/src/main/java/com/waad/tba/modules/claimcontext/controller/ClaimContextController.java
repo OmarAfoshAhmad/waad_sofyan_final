@@ -1,7 +1,7 @@
 package com.waad.tba.modules.claimcontext.controller;
 
 import com.waad.tba.common.dto.ApiResponse;
-import com.waad.tba.modules.claimcontext.repository.ClaimContextDefinitionRepository;
+import com.waad.tba.modules.claimcontext.service.ClaimContextQueryService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -12,16 +12,12 @@ import java.util.List;
 @RequestMapping("/api/v1/claim-contexts")
 @RequiredArgsConstructor
 public class ClaimContextController {
-    private final ClaimContextDefinitionRepository repository;
+
+    private final ClaimContextQueryService queryService;
 
     @GetMapping
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<ApiResponse<List<Item>>> listActive() {
-        List<Item> items = repository.findByActiveTrueOrderByDisplayOrderAscCodeAsc().stream()
-                .map(context -> new Item(context.getCode(), context.getNameAr(), context.getBaseEncounterType().name()))
-                .toList();
-        return ResponseEntity.ok(ApiResponse.success(items));
+    public ResponseEntity<ApiResponse<List<ClaimContextQueryService.ClaimContextView>>> listActive() {
+        return ResponseEntity.ok(ApiResponse.success(queryService.listActive()));
     }
-
-    public record Item(String code, String nameAr, String baseEncounterType) {}
 }
