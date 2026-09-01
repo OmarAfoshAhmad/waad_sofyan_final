@@ -10,8 +10,11 @@ import com.waad.tba.modules.providercontract.entity.ProviderContract;
 import com.waad.tba.modules.providercontract.entity.ProviderContract.ContractStatus;
 import com.waad.tba.modules.providercontract.entity.ProviderContract.PricingModel;
 import com.waad.tba.modules.providercontract.entity.ProviderContract.PricingScope;
+import com.waad.tba.modules.claim.repository.ClaimRepository;
 import com.waad.tba.modules.providercontract.repository.ProviderContractPricingItemRepository;
 import com.waad.tba.modules.providercontract.repository.ProviderContractRepository;
+import com.waad.tba.modules.providercontract.repository.ProviderContractTermRepository;
+import com.waad.tba.modules.providercontract.repository.ServiceSpecialtyInsuranceMapRepository;
 import com.waad.tba.modules.systemadmin.service.AuditLogService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
@@ -56,6 +59,9 @@ public class ProviderContractService {
     private final EmployerRepository employerRepository;
     private final AuditLogService auditLogService;
     private final ProviderContractTermsService termsService;
+    private final ProviderContractTermRepository termRepository;
+    private final ServiceSpecialtyInsuranceMapRepository specialtyMapRepository;
+    private final ClaimRepository claimRepository;
 
     // ═══════════════════════════════════════════════════════════════════════════
     // READ OPERATIONS
@@ -577,7 +583,26 @@ public class ProviderContractService {
     }
 
     /**
-     * Permanently delete a soft-deleted contract and all of its pricing items.
+     * Permanently delete a soft-deleted contract together with the records that
+     * belong to it and nothing else: its pricing items, its dated terms, and its
+     * specialty-mapping rows. None of the three means anything once the contract
+     * is gone.
+     *
+     * <p>This used to remove the pricing items alone, which made permanent
+     * deletion impossible for <em>every</em> contract rather than merely
+     * difficult. A row exists in {@code provider_contract_terms} for every
+     * contract that has ever existed -- {@code createInitial} writes one at
+     * creation, and V136 backfilled one for each pre-existing contract -- behind
+     * an {@code ON DELETE RESTRICT} foreign key. The user was then told "related
+     * data exists" about a row the system had written for itself, on a contract
+     * whose services and claims both read zero.
+     *
+     * <p>What legitimately blocks deletion stays blocking: a claim or a
+     * pre-authorization decision snapshot pointing at the contract holds a
+     * financial history that must outlive any cleanup, and the database refuses
+     * those on its own. Those refusals are now named rather than reported as an
+     * unspecified integrity failure, and the underlying violation is logged so a
+     * new reference can be identified instead of guessed at.
      */
     @Transactional
     public void hardDelete(Long id) {
@@ -590,15 +615,32 @@ public class ProviderContractService {
             throw new BusinessRuleException("لا يمكن الحذف النهائي قبل النقل إلى سجل المحذوفات أولاً.");
         }
 
+        // Checked before touching anything, so the refusal names the real reason
+        // instead of surfacing whichever constraint the database happened to hit
+        // first once the owned rows were already deleted.
+        long claimsOnContract = claimRepository.countByProviderContractId(id);
+        if (claimsOnContract > 0) {
+            throw new BusinessRuleException(
+                    "تعذر الحذف النهائي: العقد مرتبط بـ " + claimsOnContract
+                            + " مطالبة. السجل المالي للمطالبات لا يجوز فقدان عقده.");
+        }
+
         try {
             String contractCode = contract.getContractCode();
             pricingItemRepository.hardDeleteByContractId(id);
+            specialtyMapRepository.hardDeleteByContractId(id);
+            termRepository.hardDeleteByContractId(id);
             contractRepository.delete(contract);
             contractRepository.flush();
             log.info("Hard deleted provider contract: {}", contractCode);
             logAudit("HARD_DELETE", id, "Permanently deleted contract " + contractCode);
         } catch (DataIntegrityViolationException ex) {
-            throw new BusinessRuleException("تعذر الحذف النهائي للعقد لوجود بيانات مرتبطة به.");
+            // Logged with the violation attached: without it the refusal named no
+            // table and no constraint, and nothing in the logs could tell an
+            // operator which reference had blocked the delete.
+            log.error("Hard delete of contract {} blocked by a remaining reference", id, ex);
+            throw new BusinessRuleException(
+                    "تعذر الحذف النهائي للعقد لارتباطه بسجلات أخرى في النظام.");
         } catch (RuntimeException ex) {
             log.error("Unexpected hard delete failure for contract {}", id, ex);
             throw new BusinessRuleException(

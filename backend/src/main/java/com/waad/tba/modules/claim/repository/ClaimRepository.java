@@ -1604,4 +1604,12 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
                @Param("providerId") Long providerId,
                @Param("statuses") java.util.Collection<com.waad.tba.modules.claim.entity.ClaimStatus> statuses);
 
+        /**
+         * Every claim bound to a contract, including soft-deleted ones. A claim
+         * that was withdrawn still recorded which contract priced it, and that
+         * history is the reason the contract may not be erased.
+         */
+        @Query("SELECT COUNT(c) FROM Claim c WHERE c.providerContractId = :contractId")
+        long countByProviderContractId(@Param("contractId") Long contractId);
+
 }
