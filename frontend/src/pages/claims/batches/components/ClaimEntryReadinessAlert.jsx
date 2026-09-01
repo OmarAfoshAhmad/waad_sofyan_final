@@ -5,35 +5,36 @@ const apiMessage = (error) =>
   error?.response?.data?.message ||
   error?.message;
 
-/** One truthful readiness message for the dated policy/contract/balance gate. */
+/**
+ * Reports only the failure of the dated policy/contract/balance gate.
+ *
+ * Everything else this component used to say has an owner elsewhere on the
+ * screen. "Pick a member, then a service date" repeats two required fields that
+ * already carry their own markers and their own submit-time errors. The success
+ * line -- policy, contract, and the date they were verified on -- is already in
+ * the page subtitle, permanently and in its proper place; saying it a second
+ * time in a banner underneath is the same fact twice.
+ *
+ * A failure has no other owner: it stops the claim, and the retry belongs with
+ * it. That is what stays.
+ */
 export const ClaimEntryReadinessAlert = ({ member, serviceDate, loading, context, error, onRetry }) => {
-  if (!member?.id) {
-    return <Alert severity="info">اختر المستفيد أولاً، ثم حدّد تاريخ الخدمة للتحقق من الوثيقة والعقد والسقف.</Alert>;
+  if (!member?.id || !serviceDate || loading) {
+    return null;
   }
-  if (!serviceDate) {
-    return <Alert severity="warning">حدّد تاريخ الخدمة؛ صلاحية الوثيقة والعقد والأسعار تُحسم في هذا التاريخ.</Alert>;
-  }
-  if (loading) {
-    return <Alert severity="info">جارٍ التحقق من جهة العمل والوثيقة والعقد والرصيد في تاريخ الخدمة…</Alert>;
-  }
-  if (error || !context) {
-    return (
-      <Alert
-        severity="error"
-        action={
-          <Button color="inherit" size="small" onClick={onRetry}>
-            إعادة التحقق
-          </Button>
-        }
-      >
-        {apiMessage(error) || 'لا توجد وثيقة وعقد صالحان للمستفيد في تاريخ الخدمة المحدد.'}
-      </Alert>
-    );
+  if (!error && context) {
+    return null;
   }
   return (
-    <Alert severity="success">
-      تم التحقق: الوثيقة {context.policyCode || context.policyName || 'المؤرخة'} والعقد {context.contractNumber || 'الساري'} صالحان
-      بتاريخ {context.serviceDate}.
+    <Alert
+      severity="error"
+      action={
+        <Button color="inherit" size="small" onClick={onRetry}>
+          إعادة التحقق
+        </Button>
+      }
+    >
+      {apiMessage(error) || 'لا توجد وثيقة وعقد صالحان للمستفيد في تاريخ الخدمة المحدد.'}
     </Alert>
   );
 };

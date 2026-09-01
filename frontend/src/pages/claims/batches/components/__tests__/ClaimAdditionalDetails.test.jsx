@@ -15,6 +15,8 @@ const props = (overrides = {}) => ({
   searchingPreAuth: false,
   preAuthId: '',
   setPreAuthId: vi.fn(),
+  doctorName: '',
+  setDoctorName: vi.fn(),
   ...overrides
 });
 
@@ -47,6 +49,25 @@ describe('ClaimAdditionalDetails', () => {
   it('names what is recorded on the collapsed toggle', () => {
     render(<ClaimAdditionalDetails {...props({ complaint: 'ألم', preAuthResults: PRE_AUTHS, preAuthId: 7 })} />);
     expect(toggle()).toHaveTextContent('موافقة مسبقة وشكوى');
+  });
+
+  // The doctor is recorded on most claims even though the server never required
+  // it, so a saved claim must not hide it behind a closed panel either.
+  it('opens automatically when a doctor is already recorded', () => {
+    render(<ClaimAdditionalDetails {...props({ doctorName: 'د. سالم' })} />);
+    expect(toggle()).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByDisplayValue('د. سالم')).toBeInTheDocument();
+  });
+
+  it('reports the doctor to the parent without demanding one', () => {
+    const callbacks = props();
+    render(<ClaimAdditionalDetails {...callbacks} />);
+    fireEvent.click(toggle());
+    const field = screen.getByLabelText('اسم الطبيب المعالج');
+    expect(field).not.toBeRequired();
+    fireEvent.change(field, { target: { value: 'د. سالم' } });
+    expect(callbacks.setDoctorName).toHaveBeenCalledWith('د. سالم');
+    expect(callbacks.setIsDirty).toHaveBeenCalledWith(true);
   });
 
   it('marks the draft dirty when a visible detail is edited', () => {

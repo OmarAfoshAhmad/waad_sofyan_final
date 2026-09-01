@@ -8,6 +8,20 @@ const inlineSx = {
   '& .MuiInput-input': { fontSize: '0.9rem' }
 };
 
+// The date field sat lower than every other field in the row. The cause is its
+// calendar button: a default IconButton is 40px tall, so the input row it lives
+// in is taller than a plain standard input and its underline lands further
+// down. Shrinking the button to the height of the text it sits beside puts the
+// four underlines back on one line -- the field is not moved, the button stops
+// inflating it.
+const dateFieldSx = {
+  ...inlineSx,
+  '& input': { fontSize: '0.9rem' },
+  '& .MuiInputAdornment-root': { ml: 0, mr: -0.5 },
+  '& .MuiIconButton-root': { p: 0.25 },
+  '& .MuiIconButton-root .MuiSvgIcon-root': { fontSize: '1.15rem' }
+};
+
 export const ClaimHeaderFields = ({
   member,
   setMember,
@@ -19,8 +33,6 @@ export const ClaimHeaderFields = ({
   memberRef,
   diagnosis,
   setDiagnosis,
-  doctorName,
-  setDoctorName,
   encounterType,
   claimContextCode,
   claimContexts = [],
@@ -64,12 +76,30 @@ export const ClaimHeaderFields = ({
     <Box
       sx={{
         display: 'grid',
-        // Order follows what the coverage engine needs before it can answer:
-        // who, when, and under which context -- those three first and adjacent,
-        // then the clinical description, which describes the encounter but
-        // changes no ceiling. Entering left to right no longer means jumping
-        // back over the diagnosis to reach the date the whole answer hangs on.
-        gridTemplateColumns: { xs: '1fr', md: '1.05fr 0.72fr minmax(430px, 1.55fr) 1.15fr' },
+        // Order: who, when, what was treated, under which context, and the
+        // ceilings that context resolves to. The context sits directly beside
+        // the figures it governs, so the cause and the number it changes are
+        // read together rather than at opposite ends of the row.
+        //
+        // Every column starts on the same line -- labels aligned, inputs
+        // aligned -- because the row is top-aligned; the ceilings column is
+        // taller than an input and must not drag the fields down with it.
+        //
+        // One row, each track sized to what it actually holds: a member name
+        // with a card number is long, a date is a fixed ten characters, a
+        // context is one of a short list, a diagnosis is free text. The
+        // ceilings close the row on `auto` -- they are read, not filled, and
+        // they take exactly their own width, collapsing when absent.
+        //
+        // minmax(0, …) on every flexible track is what keeps a long member name
+        // from widening its column and pushing the rest of the row out of
+        // alignment; without it a grid track refuses to shrink below its
+        // content.
+        gridTemplateColumns: {
+          xs: '1fr',
+          sm: 'repeat(2, minmax(0, 1fr))',
+          md: 'minmax(0, 1.3fr) 150px minmax(0, 1.3fr) minmax(0, 0.95fr) auto'
+        },
         gap: 2,
         alignItems: 'flex-start',
         width: '100%',
@@ -156,94 +186,13 @@ export const ClaimHeaderFields = ({
               size: 'small',
               variant: 'standard',
               error: showValidationErrors && !serviceDate,
-              sx: { ...inlineSx, '& input': { fontSize: '0.9rem' } }
+              sx: dateFieldSx
             }
           }}
         />
       </Box>
 
-      {/* Column 3: Coverage Context */}
-      <Box sx={{ position: 'relative', minHeight: 58 }}>
-        <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 500, display: 'block', mb: 0.5, fontSize: '0.75rem' }}>
-          سياق المطالبة
-        </Typography>
-        <Stack
-          direction="row"
-          spacing={1.1}
-          alignItems="flex-start"
-          flexWrap="nowrap"
-          justifyContent="space-between"
-          sx={{
-            whiteSpace: 'nowrap',
-            minWidth: 0,
-            width: '100%',
-            '& .MuiFormControlLabel-root': { mr: 0, ml: 0.25 },
-            '& .MuiFormControlLabel-label': { lineHeight: 1 }
-          }}
-        >
-          <Select
-            size="small"
-            variant="standard"
-            value={claimContextCode}
-            onChange={(e) => {
-              const selection = resolveClaimContextSelection(claimContexts, e.target.value);
-              if (!selection) return;
-              setClaimContextCode(selection.claimContextCode);
-              setEncounterType(selection.encounterType);
-              setFullCoverage(selection.fullCoverage);
-              setIsDirty(true);
-              onRefetchAll(selection.encounterType, selection.fullCoverage, selection.claimContextCode);
-            }}
-            sx={{ minWidth: 180, fontSize: '0.78rem', mt: 0 }}
-          >
-            {claimContexts.map((context) => (
-              <MenuItem key={context.code} value={context.code}>{context.nameAr}</MenuItem>
-            ))}
-          </Select>
-          {hasCeiling && amountLimit > 0 && (
-            <Stack
-              direction="column"
-              spacing={0.35}
-              alignItems="stretch"
-              flexWrap="nowrap"
-              sx={{ flexShrink: 0 }}
-            >
-              {/* These two carry the money a clerk decides against, and sat at
-                  0.68rem -- smaller than every form label around them. The
-                  remaining figure is filled rather than outlined because it is
-                  the one that moves as lines are entered, and tabular-nums stops
-                  the digits shifting while it does. */}
-              <Chip
-                size="small"
-                variant="outlined"
-                label={`السقف العام: ${amountLimit.toFixed(2)} د.ل`}
-                sx={{
-                  height: 28,
-                  '& .MuiChip-label': {
-                    px: 1, fontSize: '0.82rem', fontWeight: 600,
-                    fontVariantNumeric: 'tabular-nums'
-                  }
-                }}
-              />
-              <Chip
-                size="small"
-                color={remainingAmount <= 0 ? 'error' : 'success'}
-                variant="filled"
-                label={`المتاح لالتزام جديد: ${remainingAmount.toFixed(2)} د.ل`}
-                sx={{
-                  height: 28,
-                  '& .MuiChip-label': {
-                    px: 1, fontSize: '0.82rem', fontWeight: 700,
-                    fontVariantNumeric: 'tabular-nums'
-                  }
-                }}
-              />
-            </Stack>
-          )}
-        </Stack>
-      </Box>
-
-      {/* Column 4: Clinical description */}
+      {/* Column 3: Clinical description */}
       <Box>
         <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 500, display: 'block', mb: 0.5, fontSize: '0.75rem' }}>
           {t('claimEntry.diagnosis')}{' '}
@@ -264,23 +213,80 @@ export const ClaimHeaderFields = ({
           error={showValidationErrors && !diagnosis?.trim()}
           sx={inlineSx}
         />
-        <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 500, display: 'block', mt: 1.25, mb: 0.5, fontSize: '0.75rem' }}>
-          اسم الطبيب{' '}
-          <Typography component="span" color="error.main">*</Typography>
+      </Box>
+
+      {/* Column 4: Coverage Context -- immediately before the ceilings it
+          governs, since changing it is what re-reads them. */}
+      <Box>
+        <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 500, display: 'block', mb: 0.5, fontSize: '0.75rem' }}>
+          سياق المطالبة
         </Typography>
-        <TextField
-          fullWidth
+        <Select
           size="small"
+          fullWidth
           variant="standard"
-          value={doctorName}
-          placeholder="اسم الطبيب المعالج..."
+          value={claimContextCode}
           onChange={(e) => {
-            setDoctorName(e.target.value);
+            const selection = resolveClaimContextSelection(claimContexts, e.target.value);
+            if (!selection) return;
+            setClaimContextCode(selection.claimContextCode);
+            setEncounterType(selection.encounterType);
+            setFullCoverage(selection.fullCoverage);
             setIsDirty(true);
+            onRefetchAll(selection.encounterType, selection.fullCoverage, selection.claimContextCode);
           }}
-          error={showValidationErrors && !doctorName?.trim()}
-          sx={inlineSx}
-        />
+          sx={{ ...inlineSx, fontSize: '0.9rem' }}
+        >
+          {claimContexts.map((context) => (
+            <MenuItem key={context.code} value={context.code}>{context.nameAr}</MenuItem>
+          ))}
+        </Select>
+      </Box>
+
+      {/* Column 5: Ceilings -- last, and sized to their own content.
+          They are a reading, not an input: nothing here is typed, so they end
+          the row rather than interrupting the fields that are filled in order.
+          The column takes only the width its two figures need, which is why the
+          track is `auto` and collapses entirely when there is no ceiling to
+          report. */}
+      <Box>
+        <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 500, display: 'block', mb: 0.5, fontSize: '0.75rem' }}>
+          {hasCeiling && amountLimit > 0 ? 'السقف والمتاح' : ' '}
+        </Typography>
+        {hasCeiling && amountLimit > 0 && (
+          <Stack direction="column" spacing={0.5} alignItems="stretch" flexWrap="nowrap">
+            {/* These two carry the money a clerk decides against, and sat at
+                0.68rem -- smaller than every form label around them. The
+                remaining figure is filled rather than outlined because it is
+                the one that moves as lines are entered, and tabular-nums stops
+                the digits shifting while it does. */}
+            <Chip
+              size="small"
+              variant="outlined"
+              label={`السقف العام: ${amountLimit.toFixed(2)} د.ل`}
+              sx={{
+                height: 28,
+                '& .MuiChip-label': {
+                  px: 1, fontSize: '0.82rem', fontWeight: 600,
+                  fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap'
+                }
+              }}
+            />
+            <Chip
+              size="small"
+              color={remainingAmount <= 0 ? 'error' : 'success'}
+              variant="filled"
+              label={`المتاح لالتزام جديد: ${remainingAmount.toFixed(2)} د.ل`}
+              sx={{
+                height: 28,
+                '& .MuiChip-label': {
+                  px: 1, fontSize: '0.82rem', fontWeight: 700,
+                  fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap'
+                }
+              }}
+            />
+          </Stack>
+        )}
       </Box>
     </Box>
   );

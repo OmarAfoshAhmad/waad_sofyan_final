@@ -17,19 +17,34 @@ const renderGate = (props = {}) =>
   );
 
 describe('ClaimEntryReadinessAlert', () => {
-  it('guides the user through the prerequisites in order', () => {
-    const { rerender } = renderGate();
-    expect(screen.getByText(/اختر المستفيد أولاً/)).toBeInTheDocument();
+  // Every non-failure state has an owner elsewhere on the screen: the required
+  // markers on the two fields, and the page subtitle that names the verified
+  // policy and contract permanently. This component repeats none of them.
+  it('says nothing while there is no failure to report', () => {
+    const { container, rerender } = renderGate();
+    expect(container).toBeEmptyDOMElement();
 
     rerender(
       <ClaimEntryReadinessAlert member={{ id: 7 }} serviceDate="" loading={false} context={null} error={null} onRetry={vi.fn()} />
     );
-    expect(screen.getByText(/حدّد تاريخ الخدمة/)).toBeInTheDocument();
+    expect(container).toBeEmptyDOMElement();
 
     rerender(
       <ClaimEntryReadinessAlert member={{ id: 7 }} serviceDate="2026-08-20" loading context={null} error={null} onRetry={vi.fn()} />
     );
-    expect(screen.getByText(/جارٍ التحقق/)).toBeInTheDocument();
+    expect(container).toBeEmptyDOMElement();
+
+    rerender(
+      <ClaimEntryReadinessAlert
+        member={{ id: 7 }}
+        serviceDate="2026-08-20"
+        loading={false}
+        context={{ policyCode: 'POL-7', contractNumber: 'CON-9', serviceDate: '2026-08-20' }}
+        error={null}
+        onRetry={vi.fn()}
+      />
+    );
+    expect(container).toBeEmptyDOMElement();
   });
 
   it('shows one actionable server error rather than two competing messages', () => {
@@ -46,15 +61,9 @@ describe('ClaimEntryReadinessAlert', () => {
     expect(onRetry).toHaveBeenCalledTimes(1);
   });
 
-  it('names the dated policy and contract when the gate is ready', () => {
-    renderGate({
-      member: { id: 7 },
-      serviceDate: '2026-08-20',
-      context: { policyCode: 'POL-7', contractNumber: 'CON-9', serviceDate: '2026-08-20' }
-    });
-
-    expect(screen.getByText(/POL-7/)).toBeInTheDocument();
-    expect(screen.getByText(/CON-9/)).toBeInTheDocument();
-    expect(screen.getByText(/2026-08-20/)).toBeInTheDocument();
+  it('still reports a missing dated policy, which nothing else on the screen does', () => {
+    renderGate({ member: { id: 7 }, serviceDate: '2026-08-20', context: null, error: null });
+    expect(screen.getByText(/لا توجد وثيقة وعقد صالحان/)).toBeInTheDocument();
   });
+
 });

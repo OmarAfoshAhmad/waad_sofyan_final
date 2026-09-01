@@ -22,11 +22,14 @@ export const ClaimAdditionalDetails = ({
   preAuthResults,
   searchingPreAuth,
   preAuthId,
-  setPreAuthId
+  setPreAuthId,
+  doctorName,
+  setDoctorName
 }) => {
   const hasComplaint = Boolean(complaint?.trim());
   const hasPreAuth = Boolean(preAuthId);
-  const hasDetails = hasComplaint || hasPreAuth;
+  const hasDoctor = Boolean(doctorName?.trim());
+  const hasDetails = hasComplaint || hasPreAuth || hasDoctor;
   const [open, setOpen] = useState(hasDetails);
 
   // Existing claim/draft data is hydrated after the first render. Never leave
@@ -41,7 +44,11 @@ export const ClaimAdditionalDetails = ({
   };
 
   const options = Array.isArray(preAuthResults) ? preAuthResults : [];
-  const recorded = [hasPreAuth ? 'موافقة مسبقة' : null, hasComplaint ? 'شكوى' : null]
+  const recorded = [
+    hasPreAuth ? 'موافقة مسبقة' : null,
+    hasDoctor ? 'طبيب' : null,
+    hasComplaint ? 'شكوى' : null
+  ]
     .filter(Boolean)
     .join(' و');
 
@@ -74,6 +81,18 @@ export const ClaimAdditionalDetails = ({
             isOptionEqualToValue={(option, value) => option.id === value?.id}
             renderInput={(params) => <TextField {...params} size="small" label="ربط موافقة مسبقة صالحة" />}
             noOptionsText="لا توجد موافقة صالحة لهذا المستفيد والمزود في تاريخ الخدمة"
+          />
+          {/* Optional here and optional on the server: ClaimCreateDto declares
+              doctorName under OPTIONAL FIELDS with only a length bound, and the
+              column is nullable. The required marker it carried in the header
+              row was a front-end invention that blocked submission over a field
+              the system never needed. */}
+          <TextField
+            size="small"
+            label="اسم الطبيب المعالج"
+            value={doctorName}
+            onChange={update(setDoctorName)}
+            inputProps={{ maxLength: 255 }}
           />
           <TextField
             size="small"

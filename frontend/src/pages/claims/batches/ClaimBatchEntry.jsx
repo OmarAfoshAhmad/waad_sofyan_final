@@ -1562,7 +1562,9 @@ export default function ClaimBatchEntry() {
     const missingFields = [];
     if (!member) missingFields.push('المستفيد');
     if (!diagnosis?.trim()) missingFields.push('التشخيص الطبي');
-    if (!doctorName?.trim()) missingFields.push('اسم الطبيب');
+    // doctorName is deliberately absent: the server accepts a claim without it
+    // (ClaimCreateDto lists it under optional fields, the column is nullable),
+    // so blocking submission on it here invented a rule the system does not have.
     if (!serviceDate) missingFields.push('تاريخ الخدمة');
 
     // التحقق من وجود خدمات صحيحة
@@ -2036,8 +2038,6 @@ export default function ClaimBatchEntry() {
                 memberRef={memberRef}
                 diagnosis={diagnosis}
                 setDiagnosis={setDiagnosis}
-                doctorName={doctorName}
-                setDoctorName={setDoctorName}
                 encounterType={encounterType}
                 claimContextCode={claimContextCode}
                 claimContexts={claimContexts}
@@ -2075,6 +2075,8 @@ export default function ClaimBatchEntry() {
                   searchingPreAuth={searchingPreAuth}
                   preAuthId={preAuthId}
                   setPreAuthId={setPreAuthId}
+                  doctorName={doctorName}
+                  setDoctorName={setDoctorName}
                 />
               </Box>
             </Box>
@@ -2274,31 +2276,12 @@ export default function ClaimBatchEntry() {
                   transition: 'opacity 120ms ease-out'
                 }}
               >
-                {!editCoverageLoading && lines.some((line) => line.coveragePending && !line.rejected) && (
-                  <Alert
-                    severity="info"
-                    role="status"
-                    aria-live="polite"
-                    sx={{
-                      position: 'absolute',
-                      top: 8,
-                      left: 12,
-                      zIndex: 4,
-                      width: 'auto',
-                      maxWidth: 'min(28rem, calc(100% - 24px))',
-                      py: 0,
-                      px: 0.75,
-                      borderRadius: 1.5,
-                      boxShadow: 2,
-                      bgcolor: alpha(theme.palette.info.light, 0.96),
-                      pointerEvents: 'none',
-                      '& .MuiAlert-icon': { py: 0.5, mr: 0.75 },
-                      '& .MuiAlert-message': { py: 0.5, fontSize: '0.75rem', whiteSpace: 'nowrap' }
-                    }}
-                  >
-                    جارٍ تحديث الحساب المالي…
-                  </Alert>
-                )}
+                {/* The per-line recalculation used to announce itself with a
+                    floating banner over the service column -- covering the very
+                    field being typed into, on every keystroke that changed an
+                    amount. The pending state still lives on each line, so a
+                    line that has not settled is visible where it happens rather
+                    than through a notice parked on top of the table. */}
                 <TableContainer dir="rtl" sx={{ flex: 1, overflow: 'auto' }}>
               <Table
                 dir="rtl"
