@@ -656,4 +656,30 @@ public class ClaimController {
                 dateTo);
         return ResponseEntity.ok(ApiResponse.success("Financial summary retrieved successfully", summary));
     }
+
+    /**
+     * Every provider's summary for one employer and period, keyed by provider id.
+     *
+     * Exists because the batches screen needs all of them at once: it draws a card
+     * per provider, and asking per card meant 146 simultaneous calls, of which
+     * nginx refused everything past the first burst with 503.
+     *
+     * Same guard as the single-provider read above. The scope narrowing lives in
+     * the service, which routes a provider caller back through the single-provider
+     * path so the binding check keeps exactly one implementation.
+     */
+    @GetMapping("/financial-summary/by-provider")
+    @PreAuthorize("@claimAccessGuard.canList('CLAIM_VIEW')")
+    @Operation(summary = "Get financial summary per provider",
+            description = "Aggregated financial KPIs for every provider in one call, keyed by provider id.")
+    public ResponseEntity<ApiResponse<java.util.Map<Long, FinancialSummaryDto>>> getFinancialSummaryByProvider(
+            @RequestParam(name = "employerId", required = false) Long employerId,
+            @RequestParam(name = "status", required = false) ClaimStatus status,
+            @RequestParam(name = "dateFrom", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFrom,
+            @RequestParam(name = "dateTo", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateTo) {
+
+        java.util.Map<Long, FinancialSummaryDto> summaries =
+                claimService.getFinancialSummaryByProvider(employerId, status, dateFrom, dateTo);
+        return ResponseEntity.ok(ApiResponse.success("Financial summaries retrieved successfully", summaries));
+    }
 }

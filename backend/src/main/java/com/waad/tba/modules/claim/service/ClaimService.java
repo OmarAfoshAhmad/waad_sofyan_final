@@ -1680,34 +1680,116 @@ public class ClaimService {
                     .build();
         }
 
-        Object[] result = queryResult.get(0);
-        int len = result.length;
+        // Read through the same mapper the grouped path uses, at offset 0 because
+        // this row carries no provider id. One reading of these columns, not two.
+        return toFinancialSummary(queryResult.get(0), 0);
+    }
 
-        // Map results with safe index checking
-        long totalClaimsCount = (len > 0 && result[0] != null) ? ((Number) result[0]).longValue() : 0L;
-        BigDecimal totalRequested = (len > 1 && result[1] != null) ? new BigDecimal(result[1].toString())
-                : BigDecimal.ZERO;
-        BigDecimal totalApproved = (len > 2 && result[2] != null) ? new BigDecimal(result[2].toString())
-                : BigDecimal.ZERO;
-        BigDecimal totalRefused = (len > 3 && result[3] != null) ? new BigDecimal(result[3].toString())
-                : BigDecimal.ZERO;
-        BigDecimal totalPaid = (len > 4 && result[4] != null) ? new BigDecimal(result[4].toString()) : BigDecimal.ZERO;
-        BigDecimal totalCompanyDiscount = (len > 5 && result[5] != null) ? new BigDecimal(result[5].toString())
-                : BigDecimal.ZERO;
-        long approvedCount = (len > 6 && result[6] != null) ? ((Number) result[6]).longValue() : 0L;
-        long settledCount = (len > 7 && result[7] != null) ? ((Number) result[7]).longValue() : 0L;
+    /**
+     * Every provider's financial summary for one employer and period, in one
+     * query, keyed by provider id.
+     *
+     * The batches screen draws a card per provider and each card called
+     * {@link #getFinancialSummary} for itself. With 146 active providers that is
+     * 146 simultaneous requests; nginx rate-limits /api/ at 20r/s with a burst of
+     * 40, so most were refused with 503 and their cards fell back to 0.00 --
+     * indistinguishable, on screen, from a provider with no claims.
+     *
+     * Scope is enforced exactly as the single-provider path enforces it, and
+     * deliberately by reusing the same decisions rather than restating them: a
+     * provider sees only itself, an employer administrator only its own employer,
+     * and a reviewer under isolation only the providers assigned to it. A caller
+     * whose scope resolves to nothing gets an empty map, never an unfiltered one.
+     */
+    @Transactional(readOnly = true)
+    public java.util.Map<Long, FinancialSummaryDto> getFinancialSummaryByProvider(
+            Long employerId, ClaimStatus status, LocalDate dateFrom, LocalDate dateTo) {
+
+        User currentUser = authorizationService.getCurrentUser();
+        if (currentUser == null) {
+            throw new org.springframework.security.access.AccessDeniedException("Authentication required");
+        }
+
+        // A provider asking this question is asking about itself, and the
+        // single-provider path already answers that correctly. Routing through it
+        // keeps one implementation of the provider-binding guard.
+        if (authorizationService.isProvider(currentUser)) {
+            providerContextGuard.validateProviderBinding(currentUser);
+            Long own = currentUser.getProviderId();
+            FinancialSummaryDto mine = getFinancialSummary(employerId, own, status, dateFrom, dateTo);
+            return own == null ? java.util.Map.of() : java.util.Map.of(own, mine);
+        }
+
+        if (authorizationService.isEmployerAdmin(currentUser)) {
+            employerId = currentUser.getEmployerId();
+        }
+
+        java.util.Set<Long> visibleProviderIds = null;
+        if (reviewerIsolationService.isSubjectToIsolation(currentUser)) {
+            List<Long> allowed = reviewerIsolationService.getAllowedProviderIds(currentUser);
+            if (allowed.isEmpty()) {
+                return java.util.Map.of();
+            }
+            visibleProviderIds = new java.util.HashSet<>(allowed);
+        }
+
+        List<Object[]> rows = claimRepository.getFinancialSummaryGroupedByProvider(
+                employerId, status, dateFrom, dateTo);
+        if (rows == null || rows.isEmpty()) {
+            return java.util.Map.of();
+        }
+
+        java.util.Map<Long, FinancialSummaryDto> byProvider = new java.util.LinkedHashMap<>();
+        for (Object[] row : rows) {
+            if (row == null || row.length == 0 || row[0] == null) {
+                continue;
+            }
+            Long providerId = ((Number) row[0]).longValue();
+            if (visibleProviderIds != null && !visibleProviderIds.contains(providerId)) {
+                continue;
+            }
+            byProvider.put(providerId, toFinancialSummary(row, 1));
+        }
+        return byProvider;
+    }
+
+    /**
+     * Reads one aggregation row into the DTO. Shared by the single-provider and
+     * grouped paths so the two can never drift in how they interpret the same
+     * columns; {@code offset} is where the aggregates start, since the grouped
+     * row carries the provider id first.
+     */
+    private FinancialSummaryDto toFinancialSummary(Object[] result, int offset) {
+        int len = result.length;
+        long claimsCount = (len > offset && result[offset] != null)
+                ? ((Number) result[offset]).longValue() : 0L;
+        BigDecimal requested = decimalAt(result, offset + 1);
+        BigDecimal approved = decimalAt(result, offset + 2);
+        BigDecimal refused = decimalAt(result, offset + 3);
+        BigDecimal paid = decimalAt(result, offset + 4);
+        BigDecimal companyDiscount = decimalAt(result, offset + 5);
+        long approvedCount = (len > offset + 6 && result[offset + 6] != null)
+                ? ((Number) result[offset + 6]).longValue() : 0L;
+        long settledCount = (len > offset + 7 && result[offset + 7] != null)
+                ? ((Number) result[offset + 7]).longValue() : 0L;
 
         return FinancialSummaryDto.builder()
-                .claimsCount(totalClaimsCount)
-                .totalClaimsAmount(totalRequested)
-                .totalApprovedAmount(totalApproved)
-                .totalRefusedAmount(totalRefused)
-                .totalPaidAmount(totalPaid)
-                .outstandingAmount(totalApproved.subtract(totalPaid))
-                .totalCompanyDiscountAmount(totalCompanyDiscount)
+                .claimsCount(claimsCount)
+                .totalClaimsAmount(requested)
+                .totalApprovedAmount(approved)
+                .totalRefusedAmount(refused)
+                .totalPaidAmount(paid)
+                .outstandingAmount(approved.subtract(paid))
+                .totalCompanyDiscountAmount(companyDiscount)
                 .approvedCount(approvedCount)
                 .settledCount(settledCount)
                 .build();
+    }
+
+    private static BigDecimal decimalAt(Object[] result, int index) {
+        return (result.length > index && result[index] != null)
+                ? new BigDecimal(result[index].toString())
+                : BigDecimal.ZERO;
     }
 
     /**

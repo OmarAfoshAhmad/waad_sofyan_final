@@ -103,32 +103,24 @@ const generateBatchCode = (employer, provider, month, year) => {
 /**
  * Provider Card for Batch Dashboard - Redesigned to match reference image (Phase 5.5)
  */
-const ProviderBatchCard = ({ provider, selectedEmployer, onSelectBatch, filterMonth, filterYear }) => {
+/**
+ * @param summaryData this provider's slice of the ONE summary request the parent
+ *   makes, or undefined when that request failed. The card no longer fetches for
+ *   itself: 146 providers meant 146 simultaneous calls, and nginx refused all but
+ *   the first burst with 503.
+ * @param summaryFailed true when the single request failed. The card must say so
+ *   rather than render 0.00, which on a money screen is indistinguishable from a
+ *   provider that genuinely has no claims.
+ */
+const ProviderBatchCard = ({
+  provider, selectedEmployer, onSelectBatch, filterMonth, filterYear,
+  summaryData, summaryFailed
+}) => {
   const batchCode = useMemo(() => {
     if (provider.realBatch) return provider.realBatch.batchCode;
     return generateBatchCode(selectedEmployer, provider, filterMonth, filterYear);
   }, [selectedEmployer, provider, filterMonth, filterYear]);
 
-  // Fetch actual stats using Claims Service Financial Summary endpoint
-  const { data: summaryData } = useQuery({
-    queryKey: ['batch-stats', selectedEmployer?.id, provider?.id, filterMonth, filterYear],
-    queryFn: () => {
-      if (!selectedEmployer?.id || !provider?.id || !filterMonth || !filterYear) return null;
-      const lastDay = new Date(filterYear, filterMonth, 0).getDate();
-      return claimsService.getFinancialSummary({
-        employerId: selectedEmployer.id,
-        providerId: provider.id,
-        dateFrom: `${filterYear}-${String(filterMonth).padStart(2, '0')}-01`,
-        dateTo: `${filterYear}-${String(filterMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
-      });
-    },
-    enabled: !!selectedEmployer?.id && !!provider?.id,
-    refetchOnWindowFocus: true,
-    refetchOnMount: 'always',
-    staleTime: 0
-  });
-
-  // Map fetched stats or default to 0
   // patientShare = المطلوب - المعتمد للمزود - المرفوض
   // (المكوّن المفقود الذي يجعل الأرقام تبدو غير متطابقة إذا لم يُعرض)
   const safeAmount = summaryData?.totalClaimsAmount || 0;
@@ -216,9 +208,14 @@ const ProviderBatchCard = ({ provider, selectedEmployer, onSelectBatch, filterMo
           }}
         >
           <Stack direction="row" spacing={2} alignItems="center" sx={{ whiteSpace: 'nowrap' }}>
-            <ViewListIcon sx={{ color: '#7cb983', fontSize: '1.6rem' }} />
-            <Typography variant="h6" sx={{ color: '#7cb983', fontWeight: 400, fontSize: '1.1rem' }}>
-              {stats.requestsCount} مطالبة
+            <ViewListIcon sx={{ color: summaryFailed ? '#b26a00' : '#7cb983', fontSize: '1.6rem' }} />
+            <Typography
+              variant="h6"
+              sx={{ color: summaryFailed ? '#b26a00' : '#7cb983', fontWeight: 400, fontSize: '1.1rem' }}
+            >
+              {/* Never render 0 for a failed read: on a money card that is
+                  indistinguishable from a provider with no claims. */}
+              {summaryFailed ? 'تعذّر تحميل الأرقام' : `${stats.requestsCount} مطالبة`}
             </Typography>
           </Stack>
         </Box>
@@ -243,7 +240,7 @@ const ProviderBatchCard = ({ provider, selectedEmployer, onSelectBatch, filterMo
               المبلغ المطلوب
             </Typography>
             <Typography variant="body2" sx={{ fontWeight: 500, fontSize: '0.85rem' }}>
-              {stats.amount.toFixed(2)}
+              {summaryFailed ? '—' : stats.amount.toFixed(2)}
             </Typography>
           </Box>
 
@@ -268,7 +265,7 @@ const ProviderBatchCard = ({ provider, selectedEmployer, onSelectBatch, filterMo
               </Typography>
             </Stack>
             <Typography variant="body2" sx={{ fontWeight: 500, fontSize: '0.85rem' }}>
-              {stats.covered.toFixed(2)}
+              {summaryFailed ? '—' : stats.covered.toFixed(2)}
             </Typography>
           </Box>
 
@@ -294,7 +291,7 @@ const ProviderBatchCard = ({ provider, selectedEmployer, onSelectBatch, filterMo
                 </Typography>
               </Stack>
               <Typography variant="body2" sx={{ fontWeight: 500, fontSize: '0.85rem' }}>
-                {stats.patientShare.toFixed(2)}
+                {summaryFailed ? '—' : stats.patientShare.toFixed(2)}
               </Typography>
             </Box>
           )}
@@ -320,7 +317,7 @@ const ProviderBatchCard = ({ provider, selectedEmployer, onSelectBatch, filterMo
               </Typography>
             </Stack>
             <Typography variant="body2" sx={{ fontWeight: 500, fontSize: '0.85rem' }}>
-              {stats.refused.toFixed(2)}
+              {summaryFailed ? '—' : stats.refused.toFixed(2)}
             </Typography>
           </Box>
         </Stack>
@@ -406,6 +403,35 @@ export default function ClaimBatchManagement() {
       return response.content || [];
     },
     enabled: !!selectedEmployer
+  });
+
+  // 3b. Every provider's stats in ONE request, keyed by provider id.
+  //
+  // Each ProviderBatchCard used to fetch its own summary. With 146 active
+  // providers that is 146 simultaneous calls; nginx rate-limits /api/ at 20r/s
+  // with a burst of 40 and refused the rest with 503, and each refused card
+  // then rendered 0.00 -- which on this screen reads as "no activity" rather
+  // than "we could not load this".
+  //
+  // staleTime is a minute rather than 0: these are month-to-date aggregates on
+  // a screen people leave open, and refetching the whole set on every remount
+  // is what made the burst so easy to trigger. Mutations that change claims
+  // invalidate ['batch-stats-by-provider'] explicitly.
+  const {
+    data: summaryByProvider,
+    isError: summaryFailed
+  } = useQuery({
+    queryKey: ['batch-stats-by-provider', selectedEmployer?.id, filterMonth, filterYear],
+    queryFn: () => {
+      const lastDay = new Date(filterYear, filterMonth, 0).getDate();
+      return claimsService.getFinancialSummaryByProvider({
+        employerId: selectedEmployer.id,
+        dateFrom: `${filterYear}-${String(filterMonth).padStart(2, '0')}-01`,
+        dateTo: `${filterYear}-${String(filterMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+      });
+    },
+    enabled: !!selectedEmployer?.id && !!filterMonth && !!filterYear,
+    staleTime: 60 * 1000
   });
 
   // 4. Fetch Global Financial Stats (lazy - only when showStats=true)
@@ -704,6 +730,8 @@ export default function ClaimBatchManagement() {
                       onSelectBatch={handleSelectBatch}
                       filterMonth={filterMonth}
                       filterYear={filterYear}
+                      summaryData={summaryByProvider?.[provider.id]}
+                      summaryFailed={summaryFailed}
                     />
                   </Grid>
                 ))}

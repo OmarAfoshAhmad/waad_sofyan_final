@@ -726,6 +726,34 @@ export const claimsService = {
   },
 
   /**
+   * Every provider's summary for one employer and period, in ONE request,
+   * keyed by provider id.
+   *
+   * The batches screen draws a card per provider and each card called
+   * getFinancialSummary for itself. With 146 active providers that is 146
+   * simultaneous requests; nginx rate-limits /api/ at 20r/s with a burst of 40
+   * and refuses the rest with 503. Ask once, read from the map.
+   *
+   * @returns {Promise<Object>} { [providerId]: FinancialSummary }
+   */
+  getFinancialSummaryByProvider: async (params = {}) => {
+    try {
+      const queryParams = new URLSearchParams();
+      if (params.employerId) queryParams.append('employerId', params.employerId);
+      if (params.status) queryParams.append('status', params.status);
+      if (params.dateFrom) queryParams.append('dateFrom', params.dateFrom);
+      if (params.dateTo) queryParams.append('dateTo', params.dateTo);
+
+      const queryString = queryParams.toString();
+      const url = `${BASE_URL}/financial-summary/by-provider${queryString ? `?${queryString}` : ''}`;
+      const response = await axiosClient.get(url);
+      return unwrap(response) || {};
+    } catch (error) {
+      throw handleClaimErrors(error);
+    }
+  },
+
+  /**
    * Get settlement-focused summary for Settlement Inbox.
    * ⚠️ SINGLE SOURCE OF TRUTH - Never calculate settlement totals in frontend!
    *

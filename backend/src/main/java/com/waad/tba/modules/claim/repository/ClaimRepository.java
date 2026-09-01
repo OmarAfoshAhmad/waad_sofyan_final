@@ -1056,6 +1056,48 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
                         @Param("dateFrom") LocalDate dateFrom,
                         @Param("dateTo") LocalDate dateTo);
 
+        /**
+         * The aggregation above, for every provider at once, keyed by provider id.
+         *
+         * The batches screen renders one card per provider and each card fetched
+         * its own summary: 146 active providers meant 146 simultaneous requests,
+         * most of which nginx refused with 503 (20r/s, burst 40). A refused card
+         * then displayed 0.00 rather than an error, which reads as "this provider
+         * has no activity" -- a silent financial untruth on a money screen.
+         *
+         * Every projection is character-for-character the one above, in the same
+         * order, with providerId prepended and the providerId filter replaced by
+         * GROUP BY. Two aggregations that must agree should not be written twice
+         * differently, so a test pins them together against the same data.
+         */
+        @Query("SELECT c.providerId, COUNT(c), " +
+                        "COALESCE(SUM(c.requestedAmount), 0), " +
+                        "COALESCE(SUM(CASE WHEN c.status IN (com.waad.tba.modules.claim.entity.ClaimStatus.APPROVED, com.waad.tba.modules.claim.entity.ClaimStatus.BATCHED, com.waad.tba.modules.claim.entity.ClaimStatus.SETTLED) " +
+                        "               THEN c.approvedAmount ELSE 0 END), 0), " +
+                        "COALESCE(SUM(CASE WHEN c.status IN (com.waad.tba.modules.claim.entity.ClaimStatus.APPROVED, com.waad.tba.modules.claim.entity.ClaimStatus.BATCHED, com.waad.tba.modules.claim.entity.ClaimStatus.SETTLED) " +
+                        "               THEN c.refusedAmount ELSE 0 END), 0), " +
+                        "COALESCE(SUM(CASE WHEN c.status IN (com.waad.tba.modules.claim.entity.ClaimStatus.APPROVED, com.waad.tba.modules.claim.entity.ClaimStatus.BATCHED, com.waad.tba.modules.claim.entity.ClaimStatus.SETTLED) THEN COALESCE(c.netProviderAmount, c.approvedAmount) ELSE 0 END), 0), "
+                        +
+                        "COALESCE(SUM(CASE WHEN c.status IN (com.waad.tba.modules.claim.entity.ClaimStatus.APPROVED, com.waad.tba.modules.claim.entity.ClaimStatus.BATCHED, com.waad.tba.modules.claim.entity.ClaimStatus.SETTLED) " +
+                        "               THEN c.companyDiscountAmount ELSE 0 END), 0), " +
+                        "COUNT(CASE WHEN c.status IN (com.waad.tba.modules.claim.entity.ClaimStatus.APPROVED, com.waad.tba.modules.claim.entity.ClaimStatus.SETTLED, com.waad.tba.modules.claim.entity.ClaimStatus.BATCHED) THEN 1 END), "
+                        +
+                        "COUNT(CASE WHEN c.status = com.waad.tba.modules.claim.entity.ClaimStatus.SETTLED THEN 1 END) "
+                        +
+                        "FROM Claim c " +
+                        "WHERE c.active = true " +
+                        "AND c.providerId IS NOT NULL " +
+                        "AND (:employerId IS NULL OR c.member.employer.id = :employerId) " +
+                        "AND (:status IS NULL OR c.status = :status) " +
+                        "AND (CAST(:dateFrom AS date) IS NULL OR c.serviceDate >= :dateFrom) " +
+                        "AND (CAST(:dateTo AS date) IS NULL OR c.serviceDate <= :dateTo) " +
+                        "GROUP BY c.providerId")
+        List<Object[]> getFinancialSummaryGroupedByProvider(
+                        @Param("employerId") Long employerId,
+                        @Param("status") com.waad.tba.modules.claim.entity.ClaimStatus status,
+                        @Param("dateFrom") LocalDate dateFrom,
+                        @Param("dateTo") LocalDate dateTo);
+
         // ═══════════════════════════════════════════════════════════════════════════════
         // TICKET 1: ANNUAL LIMIT CONSUMPTION TRACKING (Phase Lite)
         // Sum APPROVED claims for member by benefit year
