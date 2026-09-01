@@ -1,14 +1,36 @@
 import { useEffect, useState } from 'react';
-import { Box, Button, Collapse, TextField } from '@mui/material';
+import { Autocomplete, Box, Button, Collapse, Stack, TextField } from '@mui/material';
 import NotesOutlinedIcon from '@mui/icons-material/NotesOutlined';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 
-export const ClaimAdditionalDetails = ({ complaint, setComplaint, setIsDirty }) => {
-  const hasDetails = Boolean(complaint?.trim());
+/**
+ * The optional half of the claim header.
+ *
+ * Both fields here are exceptions rather than the normal path: most claims carry
+ * no recorded complaint, and most are entered with no pre-authorization to link.
+ * Keeping the pre-auth field in the primary row cost every clerk a field of
+ * width and attention on every claim, to serve the minority that use it.
+ *
+ * The section opens by itself whenever either field already carries data --
+ * persisted values must never sit hidden behind a collapsed panel, which is the
+ * failure mode a collapsible optional section invites.
+ */
+export const ClaimAdditionalDetails = ({
+  complaint,
+  setComplaint,
+  setIsDirty,
+  preAuthResults,
+  searchingPreAuth,
+  preAuthId,
+  setPreAuthId
+}) => {
+  const hasComplaint = Boolean(complaint?.trim());
+  const hasPreAuth = Boolean(preAuthId);
+  const hasDetails = hasComplaint || hasPreAuth;
   const [open, setOpen] = useState(hasDetails);
 
   // Existing claim/draft data is hydrated after the first render. Never leave
-  // persisted clinical text hidden behind a closed optional section.
+  // persisted clinical text or a linked approval hidden behind a closed section.
   useEffect(() => {
     if (hasDetails) setOpen(true);
   }, [hasDetails]);
@@ -17,6 +39,11 @@ export const ClaimAdditionalDetails = ({ complaint, setComplaint, setIsDirty }) 
     setter(event.target.value);
     setIsDirty(true);
   };
+
+  const options = Array.isArray(preAuthResults) ? preAuthResults : [];
+  const recorded = [hasPreAuth ? 'موافقة مسبقة' : null, hasComplaint ? 'شكوى' : null]
+    .filter(Boolean)
+    .join(' و');
 
   return (
     <Box>
@@ -28,10 +55,26 @@ export const ClaimAdditionalDetails = ({ complaint, setComplaint, setIsDirty }) 
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
       >
-        شكوى المستفيد{hasDetails ? ' · مسجّلة' : ' (اختياري)'}
+        {/* The label names what is actually recorded, so a collapsed section
+            never hides the fact that something is set. */}
+        تفاصيل إضافية{recorded ? ` · ${recorded}` : ' (اختياري)'}
       </Button>
       <Collapse in={open}>
-        <Box sx={{ mt: 1 }}>
+        <Stack spacing={1.5} sx={{ mt: 1 }}>
+          <Autocomplete
+            size="small"
+            options={options}
+            loading={searchingPreAuth}
+            value={options.find((item) => String(item.id) === String(preAuthId)) || null}
+            onChange={(_, value) => {
+              setPreAuthId(value?.id || '');
+              setIsDirty(true);
+            }}
+            getOptionLabel={(item) => `${item.number || item.id} · ${item.serviceName || 'خدمة معتمدة'} · ${item.approvedAmount ?? '-'} د.ل`}
+            isOptionEqualToValue={(option, value) => option.id === value?.id}
+            renderInput={(params) => <TextField {...params} size="small" label="ربط موافقة مسبقة صالحة" />}
+            noOptionsText="لا توجد موافقة صالحة لهذا المستفيد والمزود في تاريخ الخدمة"
+          />
           <TextField
             size="small"
             label="شكوى المستفيد"
@@ -41,7 +84,7 @@ export const ClaimAdditionalDetails = ({ complaint, setComplaint, setIsDirty }) 
             minRows={2}
             inputProps={{ maxLength: 1000 }}
           />
-        </Box>
+        </Stack>
       </Collapse>
     </Box>
   );

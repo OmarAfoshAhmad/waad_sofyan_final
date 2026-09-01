@@ -29,9 +29,9 @@ export const ClaimHeaderFields = ({
   fullCoverage,
   setFullCoverage,
   onRefetchAll,
-  preAuthResults,
-  searchingPreAuth,
-  preAuthId,
+  // The pre-auth picker itself moved to ClaimAdditionalDetails, but the setter
+  // stays here: changing member or service date must still clear a linked
+  // approval, and both of those fields live in this row.
   setPreAuthId,
   serviceDate,
   setServiceDate,
@@ -64,7 +64,12 @@ export const ClaimHeaderFields = ({
     <Box
       sx={{
         display: 'grid',
-        gridTemplateColumns: { xs: '1fr', md: '1.05fr 1.15fr 0.72fr minmax(430px, 1.55fr)' },
+        // Order follows what the coverage engine needs before it can answer:
+        // who, when, and under which context -- those three first and adjacent,
+        // then the clinical description, which describes the encounter but
+        // changes no ceiling. Entering left to right no longer means jumping
+        // back over the diagnosis to reach the date the whole answer hangs on.
+        gridTemplateColumns: { xs: '1fr', md: '1.05fr 0.72fr minmax(430px, 1.55fr) 1.15fr' },
         gap: 2,
         alignItems: 'flex-start',
         width: '100%',
@@ -130,47 +135,7 @@ export const ClaimHeaderFields = ({
         )}
       </Box>
 
-      {/* Column 2: Diagnosis */}
-      <Box>
-        <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 500, display: 'block', mb: 0.5, fontSize: '0.75rem' }}>
-          {t('claimEntry.diagnosis')}{' '}
-          <Typography component="span" color="error.main">
-            *
-          </Typography>
-        </Typography>
-        <TextField
-          fullWidth
-          size="small"
-          variant="standard"
-          value={diagnosis}
-          placeholder="التشخيص الطبي..."
-          onChange={(e) => {
-            setDiagnosis(e.target.value);
-            setIsDirty(true);
-          }}
-          error={showValidationErrors && !diagnosis?.trim()}
-          sx={inlineSx}
-        />
-        <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 500, display: 'block', mt: 1.25, mb: 0.5, fontSize: '0.75rem' }}>
-          اسم الطبيب{' '}
-          <Typography component="span" color="error.main">*</Typography>
-        </Typography>
-        <TextField
-          fullWidth
-          size="small"
-          variant="standard"
-          value={doctorName}
-          placeholder="اسم الطبيب المعالج..."
-          onChange={(e) => {
-            setDoctorName(e.target.value);
-            setIsDirty(true);
-          }}
-          error={showValidationErrors && !doctorName?.trim()}
-          sx={inlineSx}
-        />
-      </Box>
-
-      {/* Column 3: Service Date */}
+      {/* Column 2: Service Date */}
       <Box>
         <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 500, display: 'block', mb: 0.5, fontSize: '0.75rem' }}>
           تاريخ الخدمة{' '}
@@ -197,7 +162,7 @@ export const ClaimHeaderFields = ({
         />
       </Box>
 
-      {/* Column 4: Coverage Context */}
+      {/* Column 3: Coverage Context */}
       <Box sx={{ position: 'relative', minHeight: 58 }}>
         <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 500, display: 'block', mb: 0.5, fontSize: '0.75rem' }}>
           سياق المطالبة
@@ -243,38 +208,78 @@ export const ClaimHeaderFields = ({
               flexWrap="nowrap"
               sx={{ flexShrink: 0 }}
             >
+              {/* These two carry the money a clerk decides against, and sat at
+                  0.68rem -- smaller than every form label around them. The
+                  remaining figure is filled rather than outlined because it is
+                  the one that moves as lines are entered, and tabular-nums stops
+                  the digits shifting while it does. */}
               <Chip
                 size="small"
                 variant="outlined"
                 label={`السقف العام: ${amountLimit.toFixed(2)} د.ل`}
-                sx={{ height: 24, '& .MuiChip-label': { px: 0.7, fontSize: '0.68rem' } }}
+                sx={{
+                  height: 28,
+                  '& .MuiChip-label': {
+                    px: 1, fontSize: '0.82rem', fontWeight: 600,
+                    fontVariantNumeric: 'tabular-nums'
+                  }
+                }}
               />
               <Chip
                 size="small"
                 color={remainingAmount <= 0 ? 'error' : 'success'}
-                variant="outlined"
+                variant="filled"
                 label={`المتاح لالتزام جديد: ${remainingAmount.toFixed(2)} د.ل`}
-                sx={{ height: 24, '& .MuiChip-label': { px: 0.7, fontSize: '0.68rem' } }}
+                sx={{
+                  height: 28,
+                  '& .MuiChip-label': {
+                    px: 1, fontSize: '0.82rem', fontWeight: 700,
+                    fontVariantNumeric: 'tabular-nums'
+                  }
+                }}
               />
             </Stack>
           )}
         </Stack>
-        <Autocomplete
+      </Box>
+
+      {/* Column 4: Clinical description */}
+      <Box>
+        <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 500, display: 'block', mb: 0.5, fontSize: '0.75rem' }}>
+          {t('claimEntry.diagnosis')}{' '}
+          <Typography component="span" color="error.main">
+            *
+          </Typography>
+        </Typography>
+        <TextField
+          fullWidth
           size="small"
-          sx={{ mt: 1 }}
-          options={Array.isArray(preAuthResults) ? preAuthResults : []}
-          loading={searchingPreAuth}
-          value={(Array.isArray(preAuthResults) ? preAuthResults : []).find((item) => String(item.id) === String(preAuthId)) || null}
-          onChange={(_, value) => {
-            setPreAuthId(value?.id || '');
+          variant="standard"
+          value={diagnosis}
+          placeholder="التشخيص الطبي..."
+          onChange={(e) => {
+            setDiagnosis(e.target.value);
             setIsDirty(true);
           }}
-          getOptionLabel={(item) => `${item.number || item.id} · ${item.serviceName || 'خدمة معتمدة'} · ${item.approvedAmount ?? '-'} د.ل`}
-          isOptionEqualToValue={(option, value) => option.id === value?.id}
-          renderInput={(params) => (
-            <TextField {...params} variant="standard" placeholder="ربط موافقة مسبقة صالحة (اختياري)" sx={inlineSx} />
-          )}
-          noOptionsText="لا توجد موافقة صالحة لهذا المستفيد والمزود في تاريخ الخدمة"
+          error={showValidationErrors && !diagnosis?.trim()}
+          sx={inlineSx}
+        />
+        <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 500, display: 'block', mt: 1.25, mb: 0.5, fontSize: '0.75rem' }}>
+          اسم الطبيب{' '}
+          <Typography component="span" color="error.main">*</Typography>
+        </Typography>
+        <TextField
+          fullWidth
+          size="small"
+          variant="standard"
+          value={doctorName}
+          placeholder="اسم الطبيب المعالج..."
+          onChange={(e) => {
+            setDoctorName(e.target.value);
+            setIsDirty(true);
+          }}
+          error={showValidationErrors && !doctorName?.trim()}
+          sx={inlineSx}
         />
       </Box>
     </Box>

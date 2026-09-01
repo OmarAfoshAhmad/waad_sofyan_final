@@ -1917,7 +1917,16 @@ export default function ClaimBatchEntry() {
               )}
             </Stack>
           }
-          subtitle={`${t('providers.singular')}: ${provider?.name || '...'} | رقم العقد: ${entryContext?.contractNumber || 'بانتظار التحقق'} | المؤمن عليه: ${member?.fullName || '...'} (${member?.cardNumber || '—'})`}
+          /* The policy is named, not just numbered. A code identifies a row in a
+             table; a data-entry clerk checking they are billing the right cover
+             recognises "وثيقة المنطقة الحرة جليانة", not "POL-2026-014". The
+             contract number stays because it is what appears on paperwork. */
+          subtitle={[
+            `${t('providers.singular')}: ${provider?.name || '...'}`,
+            `الوثيقة: ${entryContext?.policyName || 'بانتظار التحقق'}`,
+            `رقم العقد: ${entryContext?.contractNumber || 'بانتظار التحقق'}`,
+            `المؤمن عليه: ${member?.fullName || '...'} (${member?.cardNumber || '—'})`
+          ].join(' | ')}
           icon={<ReceiptIcon />}
           actions={
             <Stack direction="row" spacing={1} alignItems="center">
@@ -2037,9 +2046,6 @@ export default function ClaimBatchEntry() {
                 fullCoverage={fullCoverage}
                 setFullCoverage={setFullCoverage}
                 onRefetchAll={refetchAllLinesCoverageCallback}
-                preAuthResults={preAuthResults}
-                searchingPreAuth={searchingPreAuth}
-                preAuthId={preAuthId}
                 setPreAuthId={setPreAuthId}
                 serviceDate={serviceDate}
                 setServiceDate={setServiceDate}
@@ -2065,6 +2071,10 @@ export default function ClaimBatchEntry() {
                   complaint={complaint}
                   setComplaint={setComplaint}
                   setIsDirty={setIsDirty}
+                  preAuthResults={preAuthResults}
+                  searchingPreAuth={searchingPreAuth}
+                  preAuthId={preAuthId}
+                  setPreAuthId={setPreAuthId}
                 />
               </Box>
             </Box>
