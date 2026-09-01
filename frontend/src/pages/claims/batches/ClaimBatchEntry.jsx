@@ -6,6 +6,7 @@
  */
 import { useState, useMemo, useRef, useCallback, useEffect, Fragment } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
+import { keyframes } from '@mui/system';
 import {
   Box,
   Stack,
@@ -113,6 +114,11 @@ import { getServiceContext, isServiceAllowedForClaimContext } from './claim-cont
 
 // ── أسماء الشهور ─────────────────────────────────────────────────────────────
 const MONTHS_AR = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+
+const draftPulse = keyframes`
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.3; transform: scale(0.75); }
+`;
 
 const newLine = () => ({
   id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15),
@@ -248,7 +254,6 @@ export default function ClaimBatchEntry() {
   const [confirmDeleteReason, setConfirmDeleteReason] = useState('');
   const [showValidationErrors, setShowValidationErrors] = useState(false);
   const [autoSaveStatus, setAutoSaveStatus] = useState('idle');
-  const [lastSavedAt, setLastSavedAt] = useState(null);
   const [draftVersion, setDraftVersion] = useState(null);
   const [draftBatchId, setDraftBatchId] = useState(null);
   const [recoveryDialog, setRecoveryDialog] = useState({ open: false, serverDraft: null, localDraft: null });
@@ -918,7 +923,6 @@ export default function ClaimBatchEntry() {
           if (saved?.conflictResolved) {
             enqueueSnackbar('تمت مزامنة المسودة بعد تعارض بسيط', { variant: 'info' });
           }
-          setLastSavedAt(new Date());
           setAutoSaveStatus('saved');
         } catch (error) {
           if (typeof navigator !== 'undefined' && navigator.onLine === false) {
@@ -1795,7 +1799,6 @@ export default function ClaimBatchEntry() {
       }
       setDraftVersion(null);
       setAutoSaveStatus('idle');
-      setLastSavedAt(null);
 
       invalidateBatchData();
       setPage(0);
@@ -1932,15 +1935,33 @@ export default function ClaimBatchEntry() {
           icon={<ReceiptIcon />}
           actions={
             <Stack direction="row" spacing={1} alignItems="center">
-              {autoSaveStatus === 'saving' && (
-                <Typography variant="caption" color="warning.main" fontWeight={600}>
-                  Saving...
-                </Typography>
-              )}
-              {autoSaveStatus === 'saved' && (
-                <Typography variant="caption" color="success.main" fontWeight={600}>
-                  Saved{lastSavedAt ? ' just now' : ''}
-                </Typography>
+              {/* Draft autosave, shown as a dot rather than a word. It was two
+                  English phrases on an Arabic screen, and it reported something
+                  the clerk never asked for and cannot act on -- the draft saves
+                  itself either way. A dot that pulses while writing and settles
+                  when written says the same thing without taking a line of the
+                  header. The tooltip and the label carry the meaning for anyone
+                  who cannot read a colour. */}
+              {autoSaveStatus !== 'idle' && (
+                <Tooltip title={autoSaveStatus === 'saving' ? 'جارٍ حفظ المسودة' : 'المسودة محفوظة'}>
+                  <Box
+                    role="status"
+                    aria-label={autoSaveStatus === 'saving' ? 'جارٍ حفظ المسودة' : 'المسودة محفوظة'}
+                    sx={{
+                      width: 9,
+                      height: 9,
+                      borderRadius: '50%',
+                      flexShrink: 0,
+                      bgcolor: autoSaveStatus === 'saving' ? 'warning.main' : 'success.main',
+                      // Through the keyframes helper, not a bare name declared
+                      // inside sx: the helper emits the rule and hands back the
+                      // generated name, so the animation cannot reference a
+                      // name that was never injected.
+                      animation: autoSaveStatus === 'saving' ? `${draftPulse} 1.1s ease-in-out infinite` : 'none',
+                      '@media (prefers-reduced-motion: reduce)': { animation: 'none' }
+                    }}
+                  />
+                </Tooltip>
               )}
 
               <Tooltip title={t('claimEntry.discardChanges')}>

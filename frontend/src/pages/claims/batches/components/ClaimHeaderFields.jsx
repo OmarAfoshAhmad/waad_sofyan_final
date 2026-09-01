@@ -8,18 +8,21 @@ const inlineSx = {
   '& .MuiInput-input': { fontSize: '0.9rem' }
 };
 
-// The date field sat lower than every other field in the row. The cause is its
-// calendar button: a default IconButton is 40px tall, so the input row it lives
-// in is taller than a plain standard input and its underline lands further
-// down. Shrinking the button to the height of the text it sits beside puts the
-// four underlines back on one line -- the field is not moved, the button stops
-// inflating it.
+// The date field sat lower than every other field in the row, and the first
+// attempt to fix it did nothing: x-date-pickers v8 renders an accessible field,
+// so there is no `.MuiInput-input` and no plain `<input>` to style -- the
+// visible value lives in `.MuiPickersInputBase-*` and inherits body1 (1rem),
+// while its neighbours here run at 0.9rem.
+//
+// The drop itself comes from the calendar button. A default IconButton is 40px
+// tall and the field root centres on it, so the underline lands ~10px below a
+// plain standard input. The button is therefore sized through the picker's own
+// `openPickerButton` slot rather than by guessing at a class name, which is
+// what failed the first time.
 const dateFieldSx = {
-  ...inlineSx,
-  '& input': { fontSize: '0.9rem' },
-  '& .MuiInputAdornment-root': { ml: 0, mr: -0.5 },
-  '& .MuiIconButton-root': { p: 0.25 },
-  '& .MuiIconButton-root .MuiSvgIcon-root': { fontSize: '1.15rem' }
+  '& .MuiPickersInputBase-root': { fontSize: '0.9rem', mt: 0 },
+  '& .MuiPickersInputBase-sectionsContainer': { fontSize: '0.9rem' },
+  '& .MuiInputAdornment-root': { ml: 0, mr: -0.5, height: 'auto', maxHeight: 'none' }
 };
 
 export const ClaimHeaderFields = ({
@@ -187,7 +190,12 @@ export const ClaimHeaderFields = ({
               variant: 'standard',
               error: showValidationErrors && !serviceDate,
               sx: dateFieldSx
-            }
+            },
+            // Sized through the slot the picker exposes, not through a class
+            // name: this is what actually stops the button from making the
+            // field taller than the rest of the row.
+            openPickerButton: { size: 'small', sx: { p: 0.25 } },
+            openPickerIcon: { fontSize: 'small' }
           }}
         />
       </Box>
