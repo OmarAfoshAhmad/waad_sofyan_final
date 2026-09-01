@@ -104,6 +104,18 @@ public class ProviderContractPricingExcelService {
         COLUMN_MAPPINGS.put("contract_price", "contractPrice");
         COLUMN_MAPPINGS.put("سعر العقد", "contractPrice");
 
+        // The classification columns the approved price lists actually carry.
+        // Every generated file uses these two headings and neither was mapped,
+        // so the classifier received nothing at all and every row of every file
+        // came back unclassified -- while the code column held the exact
+        // medical_categories code all along.
+        COLUMN_MAPPINGS.put("medical_category_code / كود التصنيف الطبي", "categoryCode");
+        COLUMN_MAPPINGS.put("medical_category_code", "categoryCode");
+        COLUMN_MAPPINGS.put("كود التصنيف الطبي", "categoryCode");
+        COLUMN_MAPPINGS.put("medical_category_name / اسم التصنيف الطبي", "categoryName");
+        COLUMN_MAPPINGS.put("medical_category_name", "categoryName");
+        COLUMN_MAPPINGS.put("اسم التصنيف الطبي", "categoryName");
+
         // Extra fields
         COLUMN_MAPPINGS.put("category / التصنيف", "category");
         COLUMN_MAPPINGS.put("category", "category");
@@ -168,7 +180,15 @@ public class ProviderContractPricingExcelService {
                 String currencyValue = getCellValueAsString(row, columnIndices.get("currency"));
                 String mainCatCode = getCellValueAsString(row, columnIndices.get("mainCategory"));
                 String subCatCode = getCellValueAsString(row, columnIndices.get("subCategory"));
-                String specialtyValue = getCellValueAsString(row, columnIndices.get("specialty"));
+                // The template's own classification column. COLUMN_MAPPINGS has
+                // recognised "التصنيف" and "category / التصنيف" all along and
+                // nothing ever read the result, so a file whose classification
+                // sits under the most natural Arabic heading reached the
+                // classifier with nothing at all -- which is why every row came
+                // back unclassified and the reason named an empty label.
+                String categoryValue = getCellValueAsString(row, columnIndices.get("category"));
+                String categoryCodeValue = getCellValueAsString(row, columnIndices.get("categoryCode"));
+                String categoryNameValue = getCellValueAsString(row, columnIndices.get("categoryName"));
 
                 if (contractPriceValue == null || contractPriceValue.compareTo(BigDecimal.ZERO) < 0) {
                     continue; // Skip invalid prices for preview
@@ -196,7 +216,9 @@ public class ProviderContractPricingExcelService {
                 boolean requiresReview = false;
                 String reviewReason = null;
 
-                String targetCatCode = (subCatCode != null && !subCatCode.isBlank()) ? subCatCode : mainCatCode;
+                // The dedicated code column comes first: when a file names the
+                // category outright there is nothing left to interpret.
+                String targetCatCode = firstNonBlank(categoryCodeValue, subCatCode, categoryValue, mainCatCode);
 
                 // Step 1: an explicit category code written in the file.
                 //
@@ -245,15 +267,17 @@ public class ProviderContractPricingExcelService {
                 // provider-specific label over the global one, and that carries a
                 // real review gate.
                 if (assignedCategory == null) {
-                    // The approved classification is the main heading. A file that
-                    // carries it only in the sub-column is still read, through the
-                    // same resolver -- a second candidate column, not a second way
-                    // of deciding.
-                    var resolution = claimContextSourceResolver
-                            .resolve(mainCatCode, contract.getProvider().getId());
-                    if (resolution.isEmpty()) {
-                        resolution = claimContextSourceResolver
-                                .resolve(subCatCode, contract.getProvider().getId());
+                    // The approved classification may sit under any of the three
+                    // headings a price list uses for it. All three are offered to
+                    // the same resolver: candidate columns, not competing ways of
+                    // deciding.
+                    Long providerId = contract.getProvider().getId();
+                    var resolution = java.util.Optional
+                            .<ClaimContextSourceResolver.Resolution>empty();
+                    for (String candidate : new String[]{mainCatCode, categoryNameValue, categoryValue, subCatCode}) {
+                        if (resolution.isEmpty()) {
+                            resolution = claimContextSourceResolver.resolve(candidate, providerId);
+                        }
                     }
 
                     if (resolution.isEmpty()) {
@@ -261,11 +285,14 @@ public class ProviderContractPricingExcelService {
                         confidence = ConfidenceLevel.LOW;
                         encounterType = EncounterType.ANY;
                         classificationSource = "NO_APPROVED_ALIAS";
-                        // Names the heading the file actually carried, so the
-                        // person reading this knows which cell to correct.
-                        String unknown = (mainCatCode != null && !mainCatCode.isBlank())
-                                ? mainCatCode : (subCatCode == null ? "" : subCatCode);
-                        reviewReason = "التصنيف «" + unknown + "» غير معروف في قائمة التصنيفات المعتمدة.";
+                        // Two different problems, told apart. An unknown heading
+                        // is a mapping to add; no heading at all is a missing
+                        // column, and naming an empty label helps nobody.
+                        String unknown = firstNonBlank(categoryCodeValue, categoryNameValue,
+                                mainCatCode, categoryValue, subCatCode);
+                        reviewReason = unknown == null
+                                ? "لا يحتوي الملف على عمود تصنيف لهذه الخدمة."
+                                : "التصنيف «" + unknown + "» غير معروف في قائمة التصنيفات المعتمدة.";
                     } else {
                         var resolved = resolution.get();
                         assignedCategory = resolved.medicalCategoryCode() == null ? null
@@ -491,6 +518,16 @@ public class ProviderContractPricingExcelService {
      * uses differently never changes how another provider's file is read; the
      * resolver already prefers a provider-scoped alias over the global one.
      */
+    /** First value that actually carries text, or null when none of them does. */
+    private static String firstNonBlank(String... values) {
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value.trim();
+            }
+        }
+        return null;
+    }
+
     private void saveAsNewRule(String sourceClassification, String serviceName, String catCode,
                                EncounterType encounterType,
                                com.waad.tba.modules.provider.entity.Provider provider) {
