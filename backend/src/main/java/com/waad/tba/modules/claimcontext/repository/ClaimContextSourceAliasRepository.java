@@ -8,6 +8,16 @@ import java.util.List;
 import java.util.Collection;
 
 public interface ClaimContextSourceAliasRepository extends JpaRepository<ClaimContextSourceAlias, Long> {
+
+    /**
+     * The exact row a provider-scoped confirmation updates. Deliberately matches
+     * on the normalized alias and this provider only: the unique index is over
+     * (normalized_alias, COALESCE(provider_id, 0)), so a confirmation for one
+     * provider must never collide with, or overwrite, the global row.
+     */
+    java.util.Optional<ClaimContextSourceAlias> findByNormalizedAliasAndProviderId(
+            String normalizedAlias, Long providerId);
+
     @Query("""
         select a from ClaimContextSourceAlias a join fetch a.claimContext c
         where a.active = true and c.active = true and a.normalizedAlias = :alias

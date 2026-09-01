@@ -5,7 +5,12 @@ import com.waad.tba.modules.medicaltaxonomy.dto.ExcelImportResultDto.ImportError
 import com.waad.tba.modules.medicaltaxonomy.dto.ExcelImportResultDto.ImportSummary;
 import com.waad.tba.modules.medicaltaxonomy.entity.MedicalCategory;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalCategoryRepository;
-import com.waad.tba.modules.providercontract.dto.ClassificationResult;
+import com.waad.tba.modules.claimcontext.entity.ClaimContextDefinition;
+import com.waad.tba.modules.claimcontext.entity.ClaimContextSourceAlias;
+import com.waad.tba.modules.claimcontext.repository.ClaimContextSourceAliasRepository;
+import com.waad.tba.modules.medicaldictionary.service.MedicalDictionaryNormalizer;
+import com.waad.tba.modules.claimcontext.repository.ClaimContextDefinitionRepository;
+import com.waad.tba.modules.claimcontext.service.ClaimContextSourceResolver;
 import com.waad.tba.modules.providercontract.dto.PricingImportConfirmRequest;
 import com.waad.tba.modules.providercontract.dto.PricingImportModificationDto;
 import com.waad.tba.modules.providercontract.dto.PricingImportPreviewDto;
@@ -41,7 +46,10 @@ public class ProviderContractPricingExcelService {
     private final ProviderContractRepository contractRepository;
     private final ProviderContractPricingItemRepository pricingRepository;
     private final MedicalCategoryRepository categoryRepository;
-    private final PricingItemClassificationEngine classificationEngine;
+    private final ClaimContextSourceResolver claimContextSourceResolver;
+    private final ClaimContextDefinitionRepository claimContextRepository;
+    private final ClaimContextSourceAliasRepository aliasRepository;
+    private final MedicalDictionaryNormalizer normalizer;
     private final PricingImportSessionCache sessionCache;
     private final ServiceSpecialtyInsuranceMapRepository mapRepository;
 
@@ -190,30 +198,29 @@ public class ProviderContractPricingExcelService {
 
                 String targetCatCode = (subCatCode != null && !subCatCode.isBlank()) ? subCatCode : mainCatCode;
 
-                // Step 1: Direct Match (by Code or Name)
+                // Step 1: an explicit category code written in the file.
+                //
+                // Only a code. This used to fall through to findFirstByNameAr /
+                // NameEn / Name, which is a third way of deciding a category:
+                // whichever category happens to carry a similar name wins, with
+                // no ranking and no review. A code is the file's author naming a
+                // category outright; a heading is a label that needs
+                // interpreting, and interpretation belongs to the alias table
+                // below -- one approved way, not three.
                 if (targetCatCode != null && !targetCatCode.trim().isBlank()) {
                     String trimTarget = targetCatCode.trim();
-                    
+
                     String codeCandidate = trimTarget;
                     if (codeCandidate.contains(" - ")) {
                         codeCandidate = codeCandidate.substring(0, codeCandidate.indexOf(" - ")).trim();
                     } else if (codeCandidate.contains("- ")) {
                         codeCandidate = codeCandidate.substring(0, codeCandidate.indexOf("- ")).trim();
                     }
-                    
+
                     assignedCategory = categoryRepository.findByCode(codeCandidate).orElse(null);
-                    
+
                     if (assignedCategory == null) {
                         assignedCategory = categoryRepository.findByCode(trimTarget).orElse(null);
-                    }
-                    if (assignedCategory == null) {
-                        assignedCategory = categoryRepository.findFirstByNameAr(trimTarget).orElse(null);
-                    }
-                    if (assignedCategory == null) {
-                        assignedCategory = categoryRepository.findFirstByNameEn(trimTarget).orElse(null);
-                    }
-                    if (assignedCategory == null) {
-                        assignedCategory = categoryRepository.findFirstByName(trimTarget).orElse(null);
                     }
 
                     if (assignedCategory != null) {
@@ -223,15 +230,61 @@ public class ProviderContractPricingExcelService {
                     }
                 }
 
-                // Step 2: Use Engine
+                // Step 2: the approved source-classification map.
+                //
+                // This used to call PricingItemClassificationEngine, which reads
+                // service_specialty_insurance_map -- a table V84 emptied during
+                // the cutover to context-independent categories. With no rules
+                // left to match, every service came back "no matching
+                // classification rule found", which was not even true: there were
+                // no rules at all. Nothing has seeded that table since, and there
+                // is no way to add a rule to it.
+                //
+                // The provider's own heading is resolved through the alias table
+                // instead -- the one that is seeded and maintained, that prefers a
+                // provider-specific label over the global one, and that carries a
+                // real review gate.
                 if (assignedCategory == null) {
-                    ClassificationResult result = classificationEngine.classify(serviceNameValue, mainCatCode, specialtyValue, contract.getProvider().getId());
-                    assignedCategory = result.getCategory();
-                    confidence = result.getConfidenceLevel();
-                    classificationSource = result.getClassificationSource();
-                    encounterType = result.getEncounterType();
-                    requiresReview = result.isRequiresReview();
-                    reviewReason = result.getReviewReason();
+                    // The approved classification is the main heading. A file that
+                    // carries it only in the sub-column is still read, through the
+                    // same resolver -- a second candidate column, not a second way
+                    // of deciding.
+                    var resolution = claimContextSourceResolver
+                            .resolve(mainCatCode, contract.getProvider().getId());
+                    if (resolution.isEmpty()) {
+                        resolution = claimContextSourceResolver
+                                .resolve(subCatCode, contract.getProvider().getId());
+                    }
+
+                    if (resolution.isEmpty()) {
+                        requiresReview = true;
+                        confidence = ConfidenceLevel.LOW;
+                        encounterType = EncounterType.ANY;
+                        classificationSource = "NO_APPROVED_ALIAS";
+                        // Names the heading the file actually carried, so the
+                        // person reading this knows which cell to correct.
+                        String unknown = (mainCatCode != null && !mainCatCode.isBlank())
+                                ? mainCatCode : (subCatCode == null ? "" : subCatCode);
+                        reviewReason = "التصنيف «" + unknown + "» غير معروف في قائمة التصنيفات المعتمدة.";
+                    } else {
+                        var resolved = resolution.get();
+                        assignedCategory = resolved.medicalCategoryCode() == null ? null
+                                : categoryRepository.findByCode(resolved.medicalCategoryCode()).orElse(null);
+                        encounterType = claimContextRepository.findById(resolved.claimContextCode())
+                                .map(ClaimContextDefinition::getBaseEncounterType)
+                                .orElse(EncounterType.ANY);
+                        classificationSource = "CLAIM_CONTEXT_ALIAS";
+                        // A resolved alias whose category is missing is reported as
+                        // needing review, never as classified. That silent drop --
+                        // a match that succeeds and is then discarded -- is exactly
+                        // what made the old engine report "no rule found".
+                        requiresReview = resolved.requiresReview() || assignedCategory == null;
+                        confidence = requiresReview ? ConfidenceLevel.MEDIUM : ConfidenceLevel.HIGH;
+                        reviewReason = !requiresReview ? null
+                                : assignedCategory == null
+                                        ? "هذا التصنيف يحدّد سياق المطالبة فقط؛ اختر التصنيف الطبي للخدمة."
+                                        : "التصنيف يحتاج تأكيداً بشرياً قبل الترحيل.";
+                    }
                 }
 
                 PricingImportPreviewItemDto item = PricingImportPreviewItemDto.builder()
@@ -426,19 +479,51 @@ public class ProviderContractPricingExcelService {
                 .build();
     }
 
-    private void saveAsNewRule(String specialty, String serviceName, String catCode, EncounterType encounterType, com.waad.tba.modules.provider.entity.Provider provider) {
-        ServiceSpecialtyInsuranceMap rule = ServiceSpecialtyInsuranceMap.builder()
-                .sourceSpecialtyNameAr(specialty)
-                .keywordPatterns("[\"" + serviceName + "\"]")
-                .matchField("BOTH")
-                .insuranceCategoryCode(catCode)
-                .defaultEncounterType(encounterType != null ? encounterType : EncounterType.INPATIENT)
-                .confidenceLevel(ConfidenceLevel.HIGH)
-                .priority(5) // high priority for manual overrides
-                .provider(provider)
-                .isActive(true)
-                .build();
-        mapRepository.save(rule);
+    /**
+     * "Save as a rule" now teaches the table the resolver actually reads.
+     *
+     * <p>It used to write a keyword rule into service_specialty_insurance_map.
+     * Nothing reads that table any more -- V84 emptied it and the engine that
+     * consumed it is gone -- so the checkbox was writing rows no import would
+     * ever consult, while telling the user they had taught the system something.
+     *
+     * <p>The row is written against this provider, so a heading one provider
+     * uses differently never changes how another provider's file is read; the
+     * resolver already prefers a provider-scoped alias over the global one.
+     */
+    private void saveAsNewRule(String sourceClassification, String serviceName, String catCode,
+                               EncounterType encounterType,
+                               com.waad.tba.modules.provider.entity.Provider provider) {
+        String normalized = normalizer.normalize(sourceClassification);
+        if (normalized.isBlank()) {
+            return;
+        }
+        EncounterType wanted = encounterType == null ? EncounterType.OUTPATIENT : encounterType;
+        ClaimContextDefinition context = claimContextRepository
+                .findByActiveTrueOrderByDisplayOrderAscCodeAsc().stream()
+                .filter(definition -> definition.getBaseEncounterType() == wanted)
+                .findFirst()
+                .or(() -> claimContextRepository.findById("OUTPATIENT"))
+                .orElse(null);
+        if (context == null) {
+            return;
+        }
+
+        ClaimContextSourceAlias alias = aliasRepository
+                .findByNormalizedAliasAndProviderId(normalized, provider.getId())
+                .orElseGet(() -> ClaimContextSourceAlias.builder()
+                        .sourceAlias(sourceClassification)
+                        .normalizedAlias(normalized)
+                        .providerId(provider.getId())
+                        .build());
+
+        alias.setClaimContext(context);
+        alias.setMedicalCategoryCode(catCode);
+        // Confirmed by a person on this screen, so the next file carrying the
+        // same heading resolves without stopping for review again.
+        alias.setRequiresReview(false);
+        alias.setActive(true);
+        aliasRepository.save(alias);
     }
 
     /**
