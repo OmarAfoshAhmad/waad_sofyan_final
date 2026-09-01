@@ -482,6 +482,30 @@ export const providersService = {
     } catch (error) {
       throw handleProviderErrors(error);
     }
+  },
+
+  /**
+   * Export every provider, with its contract, into the same workbook the
+   * importer accepts — so an exported file can be edited and fed straight back.
+   * GET /api/v1/providers/import/export
+   *
+   * Sits under /import deliberately: the template, the import and the export
+   * are one round trip, and the export's whole contract is that its columns
+   * ARE the template's columns.
+   *
+   * The initial_password column comes back empty by design — the system keeps
+   * only a hash, and a downloaded spreadsheet is the last place a credential
+   * belongs.
+   */
+  exportProvidersToExcel: async () => {
+    try {
+      const response = await axiosClient.get(`${BASE_URL}/import/export`, {
+        responseType: 'blob'
+      });
+      return response.data;
+    } catch (error) {
+      throw handleProviderErrors(error);
+    }
   }
 };
 

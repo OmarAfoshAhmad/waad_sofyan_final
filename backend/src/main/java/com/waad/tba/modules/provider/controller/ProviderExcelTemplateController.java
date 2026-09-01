@@ -25,7 +25,40 @@ import java.io.IOException;
 public class ProviderExcelTemplateController {
     
     private final ProviderExcelTemplateService templateService;
-    
+    private final com.waad.tba.modules.provider.service.ProviderExcelExportService exportService;
+
+    /**
+     * Exports every provider into the very workbook this controller imports.
+     *
+     * Deliberately sits beside the template and import endpoints rather than in
+     * a reports controller: the three only make sense as one round trip, and the
+     * export's whole contract is that its columns ARE the template's columns.
+     * Whoever changes one of them here is looking straight at the other two.
+     *
+     * The password column comes back empty by design -- the system keeps only a
+     * hash, and a spreadsheet leaving the building is the last place credentials
+     * belong.
+     */
+    @GetMapping("/export")
+    @PreAuthorize("@permissionGuard.has('PROVIDER_MANAGE')")
+    @Operation(
+        summary = "Export Providers to Excel",
+        description = "Exports all providers with their contract, in the same shape as the import template"
+    )
+    public ResponseEntity<byte[]> exportProviders() throws IOException {
+        log.info("[ProviderExport] Export requested");
+
+        byte[] excelData = exportService.exportProviders();
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
+        headers.setContentDispositionFormData("attachment",
+                "Providers_Export_" + java.time.LocalDate.now() + ".xlsx");
+        headers.setContentLength(excelData.length);
+
+        return ResponseEntity.ok().headers(headers).body(excelData);
+    }
+
     @GetMapping("/template")
     @PreAuthorize("@permissionGuard.has('PROVIDER_MANAGE')")
     @Operation(

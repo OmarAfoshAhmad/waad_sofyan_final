@@ -52,6 +52,7 @@ import BusinessIcon from '@mui/icons-material/Business'; // Added BusinessIcon
 import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
 import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
+import FileDownloadIcon from '@mui/icons-material/FileDownload';
 
 // Project Components
 import MainCard from 'components/MainCard';
@@ -238,6 +239,7 @@ export default function ProvidersList() {
   const [showDeleted, setShowDeleted] = useState(false);
   const [selectedIds, setSelectedIds] = useState([]);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('');
   
@@ -259,6 +261,36 @@ export default function ProvidersList() {
   const { page, pageSize: rowsPerPage, sorting } = tableState;
   const sortColumn = sorting?.[0]?.id;
   const sortDirection = sorting?.[0]?.desc ? 'desc' : 'asc';
+
+  /**
+   * Downloads every provider with its contract, in the same workbook shape the
+   * importer accepts, so the file can be edited and fed straight back.
+   *
+   * A failure says so. Silently doing nothing on a button the user just pressed
+   * is the behaviour that made the batches screen show 0.00 for a refused read.
+   */
+  const handleExportToExcel = useCallback(async () => {
+    setIsExporting(true);
+    try {
+      const blob = await providersService.exportProvidersToExcel();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `providers-${new Date().toISOString().slice(0, 10)}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      openSnackbar({ message: 'تم تصدير مقدمي الخدمة بنجاح', variant: 'success' });
+    } catch (err) {
+      openSnackbar({
+        message: err?.message || 'تعذر تصدير مقدمي الخدمة. حاول مرة أخرى.',
+        variant: 'error'
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  }, []);
 
   const handleNavigateAdd = useCallback(() => {
     navigate('/providers/add');
@@ -805,6 +837,18 @@ export default function ProvidersList() {
           breadcrumbs={[{ label: 'الرئيسية', path: '/' }, { label: 'مقدمي الخدمات' }]}
           actions={
             <Stack direction="row" spacing={1} alignItems="center" flexWrap="nowrap" sx={{ overflowX: 'auto', maxWidth: '100%' }}>
+              <PermissionGuard requiredPermission="PROVIDER_MANAGE">
+                <Button
+                  variant="outlined"
+                  color="secondary"
+                  startIcon={<FileDownloadIcon />}
+                  onClick={handleExportToExcel}
+                  disabled={isExporting}
+                  sx={{ minWidth: '9.6875rem', whiteSpace: 'nowrap', flexShrink: 0 }}
+                >
+                  {isExporting ? 'جارٍ التصدير…' : 'تصدير إلى إكسل'}
+                </Button>
+              </PermissionGuard>
               <PermissionGuard requiredPermission="PROVIDER_MANAGE">
                 <Button
                   variant="outlined"
