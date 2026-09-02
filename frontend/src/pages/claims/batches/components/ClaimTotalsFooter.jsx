@@ -19,7 +19,8 @@ export const ClaimTotalsFooter = ({
   theme,
   lines,
   t,
-  visibleColumns
+  visibleColumns,
+  saveDisabledReason
 }) => {
   // اكتشاف أن جميع البنود مرفوضة
   const activeLines = (lines || []).filter((l) => l.service || l.serviceName);
@@ -27,6 +28,19 @@ export const ClaimTotalsFooter = ({
   const showRejected = isClaimRejected || allLinesRejected;
   const requiresClaimRejection = !showRejected && hasUncoveredLines;
   const netApproved = totals.total - totals.refused;
+
+  const saveDisabled = saving || !isDirty || coveragePending || financialDataUnavailable;
+  const saveDisabledTitle =
+    saveDisabledReason ||
+    (saving
+      ? 'جارٍ حفظ المطالبة'
+      : !isDirty
+        ? 'لا توجد تغييرات للحفظ'
+        : coveragePending
+          ? 'انتظر اكتمال حساب التغطية لكل البنود'
+          : financialDataUnavailable
+            ? 'انتظر نجاح التحقق من الوثيقة والعقد والسقف'
+            : '');
 
   return (
     <Box
@@ -41,21 +55,25 @@ export const ClaimTotalsFooter = ({
         bgcolor: showRejected ? alpha(theme.palette.error.main, 0.04) : alpha(theme.palette.primary.main, 0.02)
       }}
     >
-      <Button
-        variant="contained"
-        color={showRejected || requiresClaimRejection ? 'error' : 'primary'}
-        onClick={() => {
-          if (requiresClaimRejection) {
-            openRejectDialog('claim');
-            return;
-          }
-          handleSave(true);
-        }}
-        disabled={saving || !isDirty || coveragePending || financialDataUnavailable}
-        sx={{ px: '2.0rem', fontWeight: 600 }}
-      >
-        {saving ? t('claimEntry.saving') : showRejected ? 'حفظ (مرفوضة)' : requiresClaimRejection ? 'رفض وحفظ المطالبة' : t('claimEntry.saveAndAdd')}
-      </Button>
+      <Tooltip title={saveDisabled ? saveDisabledTitle : ''} arrow disableHoverListener={!saveDisabled}>
+        <span>
+          <Button
+            variant="contained"
+            color={showRejected || requiresClaimRejection ? 'error' : 'primary'}
+            onClick={() => {
+              if (requiresClaimRejection) {
+                openRejectDialog('claim');
+                return;
+              }
+              handleSave(true);
+            }}
+            disabled={saveDisabled}
+            sx={{ px: '2.0rem', fontWeight: 600 }}
+          >
+            {saving ? t('claimEntry.saving') : showRejected ? 'حفظ (مرفوضة)' : requiresClaimRejection ? 'رفض وحفظ المطالبة' : t('claimEntry.saveAndAdd')}
+          </Button>
+        </span>
+      </Tooltip>
 
       {!isClaimRejected && !allLinesRejected ? (
         <Button

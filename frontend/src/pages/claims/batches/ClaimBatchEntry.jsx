@@ -616,6 +616,32 @@ export default function ClaimBatchEntry() {
     const normalized = normalizeApiError(memberSearchQueryError);
     enqueueSnackbar(normalized.message || 'فشل تحميل نتائج البحث', { variant: 'error' });
   }, [memberSearchError, memberSearchQueryError, enqueueSnackbar]);
+
+  const entryContextBlockReason = useMemo(() => {
+    if (!member?.id) return null;
+    if (!serviceDate) return 'اختر تاريخ الخدمة أولاً حتى نتحقق من وثيقة المستفيد وعقد مقدم الخدمة والسقف.';
+    if (loadingEntryContext) return 'انتظر اكتمال التحقق من الوثيقة والعقد والسقف لهذا التاريخ.';
+    if (entryContextError) {
+      const normalized = normalizeApiError(entryContextFailure);
+      return normalized.message || 'تعذر التحقق من الوثيقة أو العقد أو السقف. اضغط إعادة التحقق.';
+    }
+    if (!entryContext) return 'لم تكتمل نتيجة التحقق بعد. اضغط إعادة التحقق قبل الحفظ.';
+    return null;
+  }, [entryContext, entryContextError, entryContextFailure, loadingEntryContext, member?.id, serviceDate]);
+
+  const coveragePending = useMemo(
+    () => lines.some((line) => (line.service || line.serviceName) && !line.rejected && line.coveragePending),
+    [lines]
+  );
+
+  const saveDisabledReason = useMemo(() => {
+    if (saving) return 'جارٍ حفظ المطالبة.';
+    if (!isDirty) return 'لا توجد تغييرات جديدة للحفظ.';
+    if (entryContextBlockReason) return entryContextBlockReason;
+    if (coveragePending) return 'انتظر اكتمال حساب التغطية والسقوف لكل البنود قبل الحفظ.';
+    return null;
+  }, [coveragePending, entryContextBlockReason, isDirty, saving]);
+
   const { data: summaryData } = useQuery({
     queryKey: ['batch-stats', employerId, providerId, month, year],
     queryFn: () => {
@@ -1557,8 +1583,8 @@ export default function ClaimBatchEntry() {
   const handleSave = async (resetAfter = false) => {
     if (isSavingRef.current) return;
 
-    if (member?.id && (!serviceDate || loadingEntryContext || entryContextError || !entryContext)) {
-      enqueueSnackbar('لا يمكن الحفظ قبل نجاح التحقق من الوثيقة والعقد والرصيد في تاريخ الخدمة.', { variant: 'error' });
+    if (entryContextBlockReason) {
+      enqueueSnackbar(entryContextBlockReason, { variant: entryContextError ? 'error' : 'warning', autoHideDuration: 6500 });
       return;
     }
 
@@ -1602,7 +1628,7 @@ export default function ClaimBatchEntry() {
       return;
     }
 
-    if (!isClaimRejected && lines.some((line) => (line.service || line.serviceName) && !line.rejected && line.coveragePending)) {
+    if (!isClaimRejected && coveragePending) {
       enqueueSnackbar('لا يمكن الحفظ أثناء انتظار قرار محرك التغطية. انتظر اكتمال تحديث جميع البنود.', {
         variant: 'warning',
         autoHideDuration: 5000
@@ -2259,41 +2285,36 @@ export default function ClaimBatchEntry() {
               }}
             >
               {editCoverageLoading && (
-              <Box
-                role="status"
-                aria-live="polite"
-                sx={{
-                  position: 'absolute',
-                  inset: 0,
-                  zIndex: 5,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  bgcolor: alpha(theme.palette.background.paper, 0.94),
-                  backdropFilter: 'blur(1px)'
-                }}
-              >
-                <Stack spacing={1.25} alignItems="center">
-                  <CircularProgress size={30} thickness={4} />
-                  <Typography variant="subtitle2" fontWeight={700} color="text.primary">
-                    جارٍ تجهيز الحساب المالي للمطالبة
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    يتم تحديث التغطية والسقوف والأرصدة قبل عرض البنود
-                  </Typography>
-                </Stack>
-              </Box>
+                <Alert
+                  role="status"
+                  aria-live="polite"
+                  severity="info"
+                  icon={<CircularProgress size={16} thickness={5} />}
+                  sx={{
+                    mb: 1,
+                    alignItems: 'center',
+                    border: `1px solid ${alpha(theme.palette.primary.main, 0.18)}`,
+                    bgcolor: alpha(theme.palette.primary.main, 0.05),
+                    '& .MuiAlert-message': { width: '100%' }
+                  }}
+                >
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ xs: 'flex-start', sm: 'center' }}>
+                    <Typography variant="body2" fontWeight={800} color="primary.dark">
+                      جارٍ تحديث الحساب المالي
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      يمكنك مراجعة البنود، وسيُفتح الحفظ بعد اكتمال التغطية والسقوف.
+                    </Typography>
+                  </Stack>
+                </Alert>
               )}
 
               <Box
-                aria-hidden={editCoverageLoading ? 'true' : undefined}
                 sx={{
                   flex: 1,
                   minHeight: 0,
                   display: 'flex',
                   flexDirection: 'column',
-                  opacity: editCoverageLoading ? 0 : 1,
-                  pointerEvents: editCoverageLoading ? 'none' : 'auto',
                   transition: 'opacity 120ms ease-out'
                 }}
               >
@@ -2415,7 +2436,7 @@ export default function ClaimBatchEntry() {
               handleSave={handleSave}
               saving={saving}
               isDirty={isDirty}
-              coveragePending={lines.some((line) => (line.service || line.serviceName) && !line.rejected && line.coveragePending)}
+              coveragePending={coveragePending}
                 financialDataUnavailable={Boolean(member?.id) && (
                   !serviceDate || loadingEntryContext || entryContextError || !entryContext
                 )}
@@ -2431,6 +2452,7 @@ export default function ClaimBatchEntry() {
               lines={lines}
               t={t}
               visibleColumns={visibleColumns}
+              saveDisabledReason={saveDisabledReason}
                 />
               </Box>
             </Box>
