@@ -95,7 +95,7 @@ export function useCoverageLogic({
   };
 
   const fetchCoverage = useCallback(
-    async (service, encounterOverride, lineId = null) => {
+    async (service, encounterOverride, lineId = null, claimContextOverride = null) => {
       const sid = service?.medicalServiceId || 0;
       const pricingItemId = service?.pricingItemId || null;
       let serviceOwnCategoryId =
@@ -129,7 +129,7 @@ export function useCoverageLogic({
           excludeClaimId: currentClaimId || null,
           fullCoverage,
           encounterType: encounterOverride || encounterType || 'OUTPATIENT',
-          claimContextCode,
+          claimContextCode: claimContextOverride || claimContextCode || encounterOverride || encounterType || 'OUTPATIENT',
           lines: [
             {
               lineId: lineId || 'single',

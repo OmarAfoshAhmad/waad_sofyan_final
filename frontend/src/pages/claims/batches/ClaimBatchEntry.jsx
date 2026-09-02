@@ -1142,16 +1142,25 @@ export default function ClaimBatchEntry() {
         return;
       }
 
+      const currentLine = lines[idx] || {};
+      const price = svc?.contractPrice ?? 0;
+      const maxPrice = svc?.maxContractPrice ?? price;
+      const coverageInput = {
+        ...svc,
+        quantity: currentLine.quantity ?? svc.quantity ?? 1,
+        unitPrice: price,
+        contractPrice: maxPrice,
+        maxContractPrice: maxPrice
+      };
+
       let cov = failedCoverageResult('الخدمة النصية غير مرتبطة بخدمة معتمدة ولا يمكن احتساب تغطيتها');
       if (!isFreeText) {
-        cov = await fetchCoverage(svc, encounterType);
+        cov = await fetchCoverage(coverageInput, encounterType, null, claimContextCode);
         if (cov?.__stale) {
           return;
         }
       }
 
-      const price = svc?.contractPrice ?? 0;
-      const maxPrice = svc?.maxContractPrice ?? price;
       const resolvedCategoryId =
         svc.categoryId ??
         svc.serviceCategoryId ??
@@ -1184,7 +1193,7 @@ export default function ClaimBatchEntry() {
         ...cov
       });
     },
-    [fetchCoverage, updateLine, lines, enqueueSnackbar, encounterType]
+    [fetchCoverage, updateLine, lines, enqueueSnackbar, encounterType, claimContextCode]
   );
 
   useEffect(() => {

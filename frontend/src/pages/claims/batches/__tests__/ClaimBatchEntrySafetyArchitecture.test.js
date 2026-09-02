@@ -67,6 +67,14 @@ describe('claim batch entry safety boundary', () => {
     expect(entrySource).not.toContain('وسيتم احتسابها حسب قواعد التغطية المطابقة فقط');
   });
 
+  it('calculates a newly selected service with the current row quantity and explicit claim decision context', () => {
+    expect(entrySource).toContain('const coverageInput = {');
+    expect(entrySource).toContain('quantity: currentLine.quantity ?? svc.quantity ?? 1');
+    expect(entrySource).toContain('fetchCoverage(coverageInput, encounterType, null, claimContextCode)');
+    expect(entrySource).not.toContain('fetchCoverage(svc, encounterType, null, claimContextCode)');
+    expect(entrySource).not.toContain('fetchCoverage(svc, encounterType);');
+  });
+
   it('does not fetch employer details or a second approval context that this screen does not consume', () => {
     expect(entrySource).not.toContain('employersService.getById');
     expect(entrySource).not.toContain("['eligible-claim-preauths'");
