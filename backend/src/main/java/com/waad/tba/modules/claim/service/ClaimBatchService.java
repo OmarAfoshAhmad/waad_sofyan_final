@@ -152,6 +152,26 @@ public class ClaimBatchService {
     }
 
     /**
+     * A claim batch represents the service period, not the entry month. It is
+     * therefore valid to enter August services in September only when the batch
+     * itself is the August batch. Using createdAt/current month here would bind
+     * coverage to clerical timing instead of the date the patient was treated.
+     */
+    public void validateServiceDateInsideBatch(ClaimBatch batch, LocalDate serviceDate) {
+        if (batch == null || serviceDate == null) {
+            return;
+        }
+        if (batch.getPeriodStart() != null && serviceDate.isBefore(batch.getPeriodStart())
+                || batch.getPeriodEnd() != null && serviceDate.isAfter(batch.getPeriodEnd())) {
+            throw new BusinessRuleException(
+                    "تاريخ خدمة المطالبة " + serviceDate
+                            + " خارج فترة الدفعة [" + batch.getBatchCode() + "] "
+                            + batch.getPeriodStart() + " إلى " + batch.getPeriodEnd()
+                            + ". افتح دفعة شهر الخدمة الحقيقي لا شهر الإدخال.");
+        }
+    }
+
+    /**
      * Auto-close batches from previous months that are still OPEN.
      * Runs at 23:59:00 on the last day of every month.
      * FIX: Uses efficient @Modifying JPQL bulk update instead of loading all
@@ -160,21 +180,9 @@ public class ClaimBatchService {
     @Scheduled(cron = "0 59 23 L * ?")
     @Transactional
     public void autoCloseExpiredBatches() {
-        log.info("🕒 Running auto-close for expired claim batches...");
-
-        YearMonth currentMonth = YearMonth.now();
-        int currentYear = currentMonth.getYear();
-        int currentMonthVal = currentMonth.getMonthValue();
-
-        // Efficient: bulk update via JPQL instead of loading all entities into memory
-        int closedCount = claimBatchRepository.closeExpiredBatches(
-                ClaimBatch.ClaimBatchStatus.OPEN,
-                ClaimBatch.ClaimBatchStatus.CLOSED,
-                currentYear,
-                currentMonthVal,
-                LocalDateTime.now());
-
-        log.info("✅ Finished auto-close. Total batches closed: {}", closedCount);
+        log.info("🕒 Claim batch auto-close skipped: batches represent service periods, "
+                + "and late entry for a previous service month is a normal workflow. "
+                + "Close batches explicitly after operational review.");
     }
 
     /**

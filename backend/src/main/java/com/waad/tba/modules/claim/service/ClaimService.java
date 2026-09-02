@@ -364,6 +364,7 @@ public class ClaimService {
                         !claimBatch.getEmployerId().equals(serviceEmployer.getId())) {
                     throw new BusinessRuleException("الدفعة المختارة لا تتطابق مع المزود أو جهة العمل للمطالبة.");
                 }
+                claimBatchService.validateServiceDateInsideBatch(claimBatch, dto.getServiceDate());
             }
         } else {
             // AUTO-RESOLVE CURRENT BATCH (Phase 11 Law)

@@ -112,7 +112,10 @@ public class CoverageEngineService {
         // the underlying OUTPATIENT/INPATIENT rule; looking up a synthetic
         // FULL_COVERAGE rule would turn a missing configuration into a limit bypass.
         String decisionContextCode = request.isFullCoverage()
-                ? request.getEncounterType().name() : request.getClaimContextCode();
+                ? request.getEncounterType().name()
+                : (request.getClaimContextCode() != null && !request.getClaimContextCode().isBlank()
+                        ? request.getClaimContextCode()
+                        : request.getEncounterType().name());
         var coverageDecision = coverageDecisionService.resolve(CoverageDecisionRequest.builder()
                 .policyId(request.getPolicyId()).memberId(request.getMemberId())
                 .serviceId(line.getServiceId())
@@ -167,7 +170,7 @@ public class CoverageEngineService {
             // OUTPATIENT or INPATIENT: a claim entered under MATERNITY was refused
             // with the word INPATIENT, which sends whoever reads it looking for a
             // rule that was never searched for.
-            refusalReason = "لا توجد قاعدة تغطية فعالة لهذا التصنيف في سياق المطالبة "
+            refusalReason = "لا توجد قاعدة تغطية فعالة للتصنيف في سياق المطالبة "
                     + decisionContextCode;
         }
 
@@ -448,6 +451,9 @@ public class CoverageEngineService {
     }
 
     private long bucketAccumulatorKey(Long bucketId) {
+        if (bucketId == null) {
+            return Long.MIN_VALUE;
+        }
         return Long.MIN_VALUE + bucketId;
     }
 

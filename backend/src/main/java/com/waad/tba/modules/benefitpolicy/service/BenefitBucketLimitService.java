@@ -68,22 +68,19 @@ public class BenefitBucketLimitService {
                     bucket.getConsumptionBasis() != null ? bucket.getConsumptionBasis() : ConsumptionBasis.COMPANY_SHARE,
                     directlyLinkedBucketIds.contains(bucket.getId())));
         }
-        // finance-00: the general annual ceiling is deliberately NOT injected as a
-        // coverage-time limit bucket here. Its consumption basis would have to be
-        // coveragePercent-scaled GROSS, computed before ClaimLineFinancialEngine
-        // ever applies the contract discount -- so a ceiling set to the correct,
-        // single source of truth for "what the ceiling consumes"
-        // (Claim.approvedAmount == Sigma ClaimLine.companyShare, i.e. AFTER
-        // coverage, co-pay, rejection AND the discount) would pre-emptively
-        // refuse part of a claim's own gross before the discount that makes it
-        // fit ever runs, landing on a companyShare strictly less than a ceiling
-        // that should have been exactly sufficient. The ceiling is enforced
-        // instead, once and only once against the correct post-discount figure,
-        // by BenefitPolicyCoverageService.validateAmountLimits (inside
-        // ClaimFinancialSnapshotService.finalizeSnapshot, under the member lock)
-        // and BenefitBucketLedgerService.validatePolicyAnnualLimit (at ledger
-        // commit, under the policy lock) -- both already reject the whole claim
-        // on overflow, never a partial fill.
+        if (policy != null && policy.getAnnualLimit() != null && policy.getAnnualLimit().signum() > 0) {
+            BucketPeriodCalculator.Period annual = BucketPeriodCalculator.resolve(
+                    LimitPeriodType.ANNUAL, 1, policy, date);
+            BigDecimal committed = consumptionRepository.sumGeneralScopeCommitted(
+                    memberId, policy.getId(), annual.start(), annual.end(), excludeClaimId);
+            BigDecimal reserved = consumptionRepository.sumGeneralScopeReserved(
+                    memberId, policy.getId(), annual.start(), annual.end());
+            BigDecimal unavailable = Optional.ofNullable(committed).orElse(BigDecimal.ZERO)
+                    .add(Optional.ofNullable(reserved).orElse(BigDecimal.ZERO));
+            result.add(new LimitSnapshot(null, "السقف السنوي العام", policy.getAnnualLimit(), null, null,
+                    unavailable, 0, 0, false, CountingMethod.EACH_LINE,
+                    ConsumptionBasis.ELIGIBLE_AMOUNT, false));
+        }
         return result;
     }
 
