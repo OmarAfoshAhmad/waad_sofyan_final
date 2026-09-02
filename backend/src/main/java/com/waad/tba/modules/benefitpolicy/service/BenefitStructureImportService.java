@@ -249,7 +249,7 @@ public class BenefitStructureImportService {
                         amount, times, days, enumOrDefault(LimitPeriodType.class, row, 9, n, LimitPeriodType.POLICY_PERIOD),
                         benefitsHasPeriodValue ? integer(row, 10, 1) : 1,
                         enumOrDefault(CountingMethod.class, row, countingColumn, n, CountingMethod.EACH_UNIT),
-                        benefitsHasBasis ? enumValue(ConsumptionBasis.class, row, basisColumn, n) : ConsumptionBasis.COMPANY_SHARE,
+                        benefitsHasBasis ? enumValue(ConsumptionBasis.class, row, basisColumn, n) : ConsumptionBasis.ELIGIBLE_AMOUNT,
                         BenefitScopeType.CATEGORY, null, false, bool(row, activeColumn, true), n));
                 p.links.add(new LinkRow(category, context, decisionContext, bucketCode, 1, ConsumptionMode.PRIMARY, true, n));
             }
@@ -270,7 +270,7 @@ public class BenefitStructureImportService {
                         enumOrDefault(LimitPeriodType.class, row, 7, n, LimitPeriodType.POLICY_PERIOD),
                         groupsHasPeriodValue ? integer(row, 8, 1) : 1,
                         enumOrDefault(CountingMethod.class, row, countingColumn, n, CountingMethod.EACH_UNIT),
-                        groupsHasBasis ? enumValue(ConsumptionBasis.class, row, basisColumn, n) : ConsumptionBasis.COMPANY_SHARE,
+                        groupsHasBasis ? enumValue(ConsumptionBasis.class, row, basisColumn, n) : ConsumptionBasis.ELIGIBLE_AMOUNT,
                         BenefitScopeType.GROUP, null, true, active, n));
                 String members = text(row, 3);
                 if (members != null) for (String member : members.split("[,،]"))
@@ -382,7 +382,7 @@ public class BenefitStructureImportService {
             else c.updated++;
             bucket.setBenefitGroup(group); bucket.setNameAr(row.name); bucket.setContextType(EncounterType.SPECIAL);
             bucket.setAmountLimit(row.amount); bucket.setTimesLimit(row.times); bucket.setPeriodType(row.period); bucket.setPeriodValue(1);
-            bucket.setCountingMethod(CountingMethod.EACH_LINE); bucket.setConsumptionBasis(ConsumptionBasis.COMPANY_SHARE);
+            bucket.setCountingMethod(CountingMethod.EACH_LINE); bucket.setConsumptionBasis(ConsumptionBasis.ELIGIBLE_AMOUNT);
             bucket.setBenefitScopeType(BenefitScopeType.SERVICE);
             bucket.setShared(false); bucket.setActive(row.active); bucketRepository.save(bucket);
         }

@@ -75,7 +75,7 @@ public class BenefitStructureService {
                     .countingMethod(request.countingMethod() == null
                             ? com.waad.tba.modules.benefitpolicy.enums.CountingMethod.EACH_UNIT
                             : request.countingMethod())
-                    .consumptionBasis(com.waad.tba.modules.benefitpolicy.enums.ConsumptionBasis.COMPANY_SHARE)
+                    .consumptionBasis(com.waad.tba.modules.benefitpolicy.enums.ConsumptionBasis.ELIGIBLE_AMOUNT)
                     .benefitScopeType(com.waad.tba.modules.benefitpolicy.enums.BenefitScopeType.GROUP)
                     .shared(ruleIds.size() > 1).active(request.active() == null || request.active()).build();
             BenefitLimitBucket savedBucket = bucketRepository.save(bucket);
@@ -121,7 +121,7 @@ public class BenefitStructureService {
                 .filter(item -> item.getCode().startsWith("AUTO-GRP-"))
                 .findFirst().orElseGet(() -> BenefitLimitBucket.builder()
                         .policy(group.getPolicy()).benefitGroup(group).code("AUTO-GRP-" + group.getCode())
-                        .periodValue(request.periodValue() == null ? 1 : request.periodValue()).consumptionBasis(com.waad.tba.modules.benefitpolicy.enums.ConsumptionBasis.COMPANY_SHARE)
+                        .periodValue(request.periodValue() == null ? 1 : request.periodValue()).consumptionBasis(com.waad.tba.modules.benefitpolicy.enums.ConsumptionBasis.ELIGIBLE_AMOUNT)
                         .benefitScopeType(com.waad.tba.modules.benefitpolicy.enums.BenefitScopeType.GROUP)
                         .build());
         bucket.setNameAr(name);
@@ -273,7 +273,7 @@ public class BenefitStructureService {
             group = groupRepository.save(group);
             bucket = BenefitLimitBucket.builder().policy(rule.getBenefitPolicy()).benefitGroup(group)
                     .code("AUTO-BEN-LIMIT-RULE-" + ruleId).nameAr(rule.getLabel()).contextType(rule.getEncounterType())
-                    .periodValue(request.periodValue() == null ? 1 : request.periodValue()).consumptionBasis(com.waad.tba.modules.benefitpolicy.enums.ConsumptionBasis.COMPANY_SHARE)
+                    .periodValue(request.periodValue() == null ? 1 : request.periodValue()).consumptionBasis(com.waad.tba.modules.benefitpolicy.enums.ConsumptionBasis.ELIGIBLE_AMOUNT)
                     .benefitScopeType(com.waad.tba.modules.benefitpolicy.enums.BenefitScopeType.CATEGORY)
                     .shared(false).active(true).build();
         } else {

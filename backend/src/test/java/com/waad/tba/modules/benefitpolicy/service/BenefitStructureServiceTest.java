@@ -29,6 +29,7 @@ import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicyRule;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitRuleBucket;
 import com.waad.tba.modules.benefitpolicy.enums.AggregationMode;
+import com.waad.tba.modules.benefitpolicy.enums.ConsumptionBasis;
 import com.waad.tba.modules.benefitpolicy.enums.CountingMethod;
 import com.waad.tba.modules.benefitpolicy.enums.LimitPeriodType;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitGroupRepository;
@@ -87,6 +88,7 @@ class BenefitStructureServiceTest {
         ArgumentCaptor<BenefitLimitBucket> bucket = ArgumentCaptor.forClass(BenefitLimitBucket.class);
         verify(bucketRepository).save(bucket.capture());
         assertThat(bucket.getValue().getCountingMethod()).isEqualTo(CountingMethod.EACH_UNIT);
+        assertThat(bucket.getValue().getConsumptionBasis()).isEqualTo(ConsumptionBasis.ELIGIBLE_AMOUNT);
         assertThat(bucket.getValue().getAmountLimit()).isNull();
         verify(linkRepository, org.mockito.Mockito.times(2)).save(any());
     }
@@ -110,6 +112,7 @@ class BenefitStructureServiceTest {
         ArgumentCaptor<BenefitLimitBucket> bucket = ArgumentCaptor.forClass(BenefitLimitBucket.class);
         verify(bucketRepository).save(bucket.capture());
         assertThat(bucket.getValue().getCountingMethod()).isEqualTo(CountingMethod.EACH_UNIT);
+        assertThat(bucket.getValue().getConsumptionBasis()).isEqualTo(ConsumptionBasis.ELIGIBLE_AMOUNT);
         assertThat(bucket.getValue().getTimesLimit()).isEqualTo(20);
         verify(linkRepository).save(any());
     }
