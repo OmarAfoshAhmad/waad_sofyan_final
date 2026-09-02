@@ -240,19 +240,18 @@ class ClaimFinancialSummaryCompanyDiscountIntegrationTest extends PostgresIntegr
         assertThat(summary.getTotalCompanyDiscountAmount()).isEqualByComparingTo("20.00");
         assertThat(summary.getTotalApprovedAmount()).isEqualByComparingTo("180.00");
 
-        // Pre-existing characteristic, NOT something this fix changes: totalPaidAmount
-        // is SUM(netProviderAmount), and Claim.netProviderAmount always equals
-        // Claim.approvedAmount (see ClaimFinancialIdentityTest / ClaimFinancialSnapshotServiceTest)
-        // -- so today totalPaidAmount and totalApprovedAmount are always identical. The
-        // name "totalPaidAmount" suggests actual disbursement, which this is not; that
-        // mislabeling is a separate, pre-existing issue outside this fix's scope and is
-        // recorded here only so a future change to either field trips this assertion.
-        assertThat(summary.getTotalPaidAmount()).isEqualByComparingTo(summary.getTotalApprovedAmount());
+        // A claim being approved makes it payable; it does not make it paid. The
+        // previous characterization intentionally failed once totalPaidAmount stopped
+        // mirroring the approved/net-provider amount. With no posted settlement here,
+        // the paid amount is zero and the provider share remains outstanding.
+        assertThat(summary.getTotalPaidAmount()).isEqualByComparingTo("0.00");
+        assertThat(summary.getOutstandingAmount()).isEqualByComparingTo("180.00");
 
         // What the settlement screen derives as "إجمالي المستحق" (payable before the
-        // company/facility split) = companyDiscount + facilityShare. With no patient
-        // co-pay and no rejection in this scenario, that equals the gross claim amount.
-        assertThat(summary.getTotalCompanyDiscountAmount().add(summary.getTotalPaidAmount()))
+        // company/facility split) = companyDiscount + outstanding facility share. With
+        // no patient co-pay and no rejection in this scenario, that equals the gross
+        // claim amount.
+        assertThat(summary.getTotalCompanyDiscountAmount().add(summary.getOutstandingAmount()))
                 .isEqualByComparingTo(summary.getTotalClaimsAmount());
     }
 }
