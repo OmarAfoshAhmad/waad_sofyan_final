@@ -14,6 +14,8 @@ public interface BenefitLimitBucketRepository extends JpaRepository<BenefitLimit
     Optional<BenefitLimitBucket> findByPolicyIdAndCode(Long policyId, String code);
     Optional<BenefitLimitBucket> findByPolicyIdAndCodeIgnoreCase(Long policyId, String code);
     Optional<BenefitLimitBucket> findByPolicyIdAndNameArIgnoreCase(Long policyId, String nameAr);
+    @Query("select b from BenefitLimitBucket b where b.policy.id = :policyId and lower(trim(b.nameAr)) = lower(trim(:nameAr))")
+    Optional<BenefitLimitBucket> findByPolicyIdAndNormalizedNameAr(@Param("policyId") Long policyId, @Param("nameAr") String nameAr);
     boolean existsByPolicyIdAndCodeIgnoreCase(Long policyId, String code);
     boolean existsByBenefitGroupId(Long benefitGroupId);
     List<BenefitLimitBucket> findByBenefitGroupId(Long benefitGroupId);

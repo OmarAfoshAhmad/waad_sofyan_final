@@ -318,6 +318,18 @@ public class GlobalExceptionHandler {
                 messageAr = "اسم المستخدم هذا مسجل مسبقاً بنظام آخر أو بحالة مختلفة.";
             } else if (rootMsg.contains("users_email_key") || rootMsg.toLowerCase().contains("duplicate key") && rootMsg.contains("email")) {
                 messageAr = "البريد الإلكتروني هذا مسجل مسبقاً بنظام آخر أو بحالة مختلفة.";
+            } else if (rootMsg.contains("uq_benefit_group_policy_name_ar_ci")) {
+                messageAr = "يوجد أكثر من مجموعة منافع بنفس الاسم داخل الوثيقة. استخدم الاستبدال الشامل أو عدّل الاسم/الكود في ملف القواعد.";
+            } else if (rootMsg.contains("uq_benefit_bucket_policy_name_ar_ci")) {
+                messageAr = "يوجد أكثر من وعاء سقف بنفس الاسم داخل الوثيقة. استخدم الاستبدال الشامل أو عدّل الاسم/الكود في ملف القواعد.";
+            } else if (rootMsg.contains("uq_benefit_bucket_policy_code") || rootMsg.contains("benefit_limit_buckets_policy_id_code_key")) {
+                messageAr = "كود وعاء السقف مكرر داخل الوثيقة. راجع عمود كود المجموعة/الوعاء في ملف قواعد التغطية.";
+            } else if (rootMsg.contains("benefit_groups_policy_id_code_key")) {
+                messageAr = "كود مجموعة المنافع مكرر داخل الوثيقة. راجع عمود كود المجموعة في ملف قواعد التغطية.";
+            } else if (rootMsg.contains("chk_bucket_period")) {
+                messageAr = "نوع فترة السقف في ملف القواعد غير مدعوم في قاعدة البيانات الحالية. استخدم POLICY_PERIOD أو ANNUAL أو MONTHLY أو DAILY أو PER_VISIT أو PER_SERVICE أو LIFETIME.";
+            } else if (rootMsg.contains("chk_bucket_benefit_scope_type")) {
+                messageAr = "نوع نطاق الوعاء غير صحيح. الأوعية الفعلية يجب أن تكون SERVICE أو CATEGORY أو GROUP، ولا تُترك فارغة.";
             }
         }
 

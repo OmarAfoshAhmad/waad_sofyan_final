@@ -112,7 +112,7 @@ public class BenefitStructureImportService {
         if (!dryRun) {
             assertImportAllowed(policy);
         }
-        List<String> errors = validate(policyId, parsed);
+        List<String> errors = validate(policyId, parsed, mode);
         if (!errors.isEmpty() && !dryRun) {
             throw new BusinessRuleException("ملف المنافع غير صالح: " + String.join(" | ", errors));
         }
@@ -279,7 +279,7 @@ public class BenefitStructureImportService {
         }
     }
 
-    private List<String> validate(Long policyId, Parsed p) {
+    private List<String> validate(Long policyId, Parsed p, ImportMode mode) {
         List<String> errors = new ArrayList<>(p.reviewErrors);
         Set<String> groupCodes = uniqueCodes(p.groups.stream().map(GroupRow::code).toList(), "Groups", errors);
         Set<String> bucketCodes = uniqueCodes(p.buckets.stream().map(BucketRow::code).toList(), "Buckets", errors);
@@ -312,8 +312,8 @@ public class BenefitStructureImportService {
             if (blank(g.code) || blank(g.name) || g.context == null || g.mode == null)
                 errors.add("Groups صف " + g.row + ": بيانات ناقصة — group_code=" + g.code + ", group_name=" + g.name
                         + ", context_type=" + g.context + ", aggregation_mode=" + g.mode);
-            if (!blank(g.name)) groupRepository.findByPolicyIdAndNameArIgnoreCase(policyId, g.name).ifPresent(existing -> {
-                if (g.code == null || !existing.getCode().equalsIgnoreCase(g.code))
+            if (!blank(g.name)) groupRepository.findByPolicyIdAndNormalizedNameAr(policyId, g.name).ifPresent(existing -> {
+                if (mode != ImportMode.REPLACE && (g.code == null || !existing.getCode().equalsIgnoreCase(g.code)))
                     errors.add("Groups صف " + g.row + ": الاسم «" + g.name + "» مستخدم مسبقًا للمجموعة " + existing.getCode());
             });
         }
@@ -331,8 +331,8 @@ public class BenefitStructureImportService {
             if (b.amount != null && b.amount.signum() < 0) errors.add("Buckets صف " + b.row + ": السقف المالي لا يقبل قيمة سالبة");
             if (b.times != null && b.times < 0) errors.add("Buckets صف " + b.row + ": حد المرات لا يقبل قيمة سالبة");
             if (b.days != null && b.days < 0) errors.add("Buckets صف " + b.row + ": حد الأيام لا يقبل قيمة سالبة");
-            if (!blank(b.name)) bucketRepository.findByPolicyIdAndNameArIgnoreCase(policyId, b.name).ifPresent(existing -> {
-                if (b.code == null || !existing.getCode().equalsIgnoreCase(b.code))
+            if (!blank(b.name)) bucketRepository.findByPolicyIdAndNormalizedNameAr(policyId, b.name).ifPresent(existing -> {
+                if (mode != ImportMode.REPLACE && (b.code == null || !existing.getCode().equalsIgnoreCase(b.code)))
                     errors.add("Buckets صف " + b.row + ": الاسم «" + b.name + "» مستخدم مسبقًا للوعاء " + existing.getCode());
             });
         }
@@ -359,9 +359,14 @@ public class BenefitStructureImportService {
         }
         Map<String, BenefitGroup> groups = new HashMap<>();
         for (GroupRow row : p.groups) {
-            BenefitGroup group = groupRepository.findByPolicyIdAndCodeIgnoreCase(policy.getId(), row.code).orElse(null);
+            BenefitGroup group = groupRepository.findByPolicyIdAndCodeIgnoreCase(policy.getId(), row.code)
+                    .or(() -> mode == ImportMode.REPLACE && !blank(row.name)
+                            ? groupRepository.findByPolicyIdAndNormalizedNameAr(policy.getId(), row.name)
+                            : Optional.empty())
+                    .orElse(null);
             if (group == null) { group = new BenefitGroup(); group.setPolicy(policy); group.setCode(row.code); c.created++; }
             else c.updated++;
+            group.setCode(row.code);
             group.setNameAr(row.name); group.setContextType(row.context); group.setAggregationMode(row.mode); group.setActive(row.active);
             groups.put(row.code, groupRepository.save(group));
         }
@@ -388,9 +393,14 @@ public class BenefitStructureImportService {
         }
         Map<String, BenefitLimitBucket> buckets = new HashMap<>();
         for (BucketRow row : p.buckets) {
-            BenefitLimitBucket b = bucketRepository.findByPolicyIdAndCodeIgnoreCase(policy.getId(), row.code).orElse(null);
+            BenefitLimitBucket b = bucketRepository.findByPolicyIdAndCodeIgnoreCase(policy.getId(), row.code)
+                    .or(() -> mode == ImportMode.REPLACE && !blank(row.name)
+                            ? bucketRepository.findByPolicyIdAndNormalizedNameAr(policy.getId(), row.name)
+                            : Optional.empty())
+                    .orElse(null);
             if (b == null) { b = new BenefitLimitBucket(); b.setPolicy(policy); b.setCode(row.code); c.created++; }
             else c.updated++;
+            b.setCode(row.code);
             b.setBenefitGroup(groups.get(row.groupCode)); b.setNameAr(row.name); b.setContextType(row.context);
             b.setAmountLimit(row.amount); b.setTimesLimit(row.times); b.setDaysLimit(row.days); b.setPeriodType(row.period); b.setPeriodValue(row.periodValue);
             b.setCountingMethod(row.counting); b.setConsumptionBasis(row.basis); b.setShared(row.shared); b.setActive(row.active);

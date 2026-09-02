@@ -975,7 +975,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
         enqueueSnackbar(adaptedResult.messageAr, { variant: 'warning' });
       }
     } catch (err) {
-      const msg = err?.response?.data?.message || 'فشل الاستيراد';
+      const msg = err?.response?.data?.messageAr || err?.response?.data?.message || 'فشل الاستيراد';
       enqueueSnackbar(msg, { variant: 'error' });
       setImportResult({ success: false, messageAr: msg, summary: { totalRows: 0, created: 0, updated: 0, rejected: 0 }, errors: [] });
     } finally {

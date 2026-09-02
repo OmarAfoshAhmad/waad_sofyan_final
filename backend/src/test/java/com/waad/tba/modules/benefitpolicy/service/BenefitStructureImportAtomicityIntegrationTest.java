@@ -23,12 +23,22 @@ import org.springframework.test.context.ActiveProfiles;
 import com.waad.tba.TbaWaadApplication;
 import com.waad.tba.common.exception.BusinessRuleException;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy;
+import com.waad.tba.modules.benefitpolicy.entity.BenefitGroup;
+import com.waad.tba.modules.benefitpolicy.entity.BenefitLimitBucket;
+import com.waad.tba.modules.benefitpolicy.enums.AggregationMode;
+import com.waad.tba.modules.benefitpolicy.enums.BenefitScopeType;
+import com.waad.tba.modules.benefitpolicy.enums.ConsumptionBasis;
+import com.waad.tba.modules.benefitpolicy.enums.CountingMethod;
+import com.waad.tba.modules.benefitpolicy.enums.LimitPeriodType;
+import com.waad.tba.modules.benefitpolicy.repository.BenefitGroupRepository;
+import com.waad.tba.modules.benefitpolicy.repository.BenefitLimitBucketRepository;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRuleRepository;
 import com.waad.tba.modules.employer.entity.Employer;
 import com.waad.tba.modules.employer.repository.EmployerRepository;
 import com.waad.tba.modules.medicaltaxonomy.entity.MedicalCategory;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalCategoryRepository;
+import com.waad.tba.modules.providercontract.enums.EncounterType;
 import com.waad.tba.modules.rbac.entity.User;
 import com.waad.tba.modules.rbac.repository.UserRepository;
 import com.waad.tba.support.PostgresIntegrationTestBase;
@@ -52,6 +62,8 @@ class BenefitStructureImportAtomicityIntegrationTest extends PostgresIntegration
     @Autowired private BenefitStructureImportService importService;
     @Autowired private BenefitPolicyRepository policies;
     @Autowired private BenefitPolicyRuleRepository rules;
+    @Autowired private BenefitGroupRepository groups;
+    @Autowired private BenefitLimitBucketRepository buckets;
     @Autowired private EmployerRepository employers;
     @Autowired private MedicalCategoryRepository categories;
     @Autowired private UserRepository users;
@@ -119,6 +131,47 @@ class BenefitStructureImportAtomicityIntegrationTest extends PostgresIntegration
                 .isEqualTo(1);
     }
 
+    @Test
+    @DisplayName("REPLACE reuses existing visible group and bucket names when the file renames their codes")
+    void replaceCanRenameCodesWithoutCollidingWithVisibleNameIndexes() throws Exception {
+        BenefitPolicy policy = policies.findById(policyId).orElseThrow();
+        BenefitGroup oldGroup = groups.save(BenefitGroup.builder()
+                .policy(policy)
+                .code("OLD-MATERNITY-GROUP")
+                .nameAr("الولادة الطبيعية والقيصرية")
+                .contextType(EncounterType.INPATIENT)
+                .aggregationMode(AggregationMode.SHARED)
+                .active(true)
+                .build());
+        buckets.save(BenefitLimitBucket.builder()
+                .policy(policy)
+                .benefitGroup(oldGroup)
+                .code("OLD-MATERNITY-BUCKET")
+                .nameAr("الولادة الطبيعية والقيصرية")
+                .contextType(EncounterType.INPATIENT)
+                .amountLimit(java.math.BigDecimal.valueOf(4000))
+                .periodType(LimitPeriodType.POLICY_PERIOD)
+                .periodValue(1)
+                .countingMethod(CountingMethod.EACH_UNIT)
+                .consumptionBasis(ConsumptionBasis.ELIGIBLE_AMOUNT)
+                .benefitScopeType(BenefitScopeType.GROUP)
+                .shared(true)
+                .active(true)
+                .build());
+
+        MockMultipartFile workbook = simplifiedWorkbookWithGroup(
+                "NEW-MATERNITY-GROUP", "الولادة الطبيعية والقيصرية",
+                "");
+
+        var result = importService.importWorkbook(policyId, workbook, false, BenefitStructureImportService.ImportMode.REPLACE);
+
+        assertThat(result.getErrors()).isEmpty();
+        assertThat(groups.findByPolicyIdAndCodeIgnoreCase(policyId, "NEW-MATERNITY-GROUP")).isPresent();
+        assertThat(groups.findByPolicyIdAndCodeIgnoreCase(policyId, "OLD-MATERNITY-GROUP")).isEmpty();
+        assertThat(buckets.findByPolicyIdAndCodeIgnoreCase(policyId, "AUTO-GRP-NEW-MATERNITY-GROUP")).isPresent();
+        assertThat(buckets.findByPolicyIdAndCodeIgnoreCase(policyId, "OLD-MATERNITY-BUCKET")).isEmpty();
+    }
+
     /** The "المنافع" simplified sheet BenefitStructureImportService.parseSimplified reads. */
     private MockMultipartFile simplifiedWorkbookWith(String[]... rows) throws Exception {
         try (XSSFWorkbook workbook = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
@@ -132,6 +185,40 @@ class BenefitStructureImportAtomicityIntegrationTest extends PostgresIntegration
             }
             workbook.write(out);
             return new MockMultipartFile("file", "benefits.xlsx",
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", out.toByteArray());
+        }
+    }
+
+    private MockMultipartFile simplifiedWorkbookWithGroup(String groupCode, String groupName, String benefitCodes) throws Exception {
+        try (XSSFWorkbook workbook = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            Sheet benefits = workbook.createSheet("المنافع");
+            Row benefitsHeader = benefits.createRow(0);
+            String[] benefitHeaders = {"كود التصنيف", "اسم المنفعة", "السياق", "نسبة التغطية"};
+            for (int i = 0; i < benefitHeaders.length; i++) benefitsHeader.createCell(i).setCellValue(benefitHeaders[i]);
+
+            Sheet sheet = workbook.createSheet("المجموعات");
+            Row header = sheet.createRow(0);
+            String[] headers = {
+                    "كود المجموعة", "اسم المجموعة", "السياق", "أكواد المنافع مفصولة بفاصلة",
+                    "السقف المالي", "حد المرات", "حد الأيام", "الفترة", "قيمة الفترة", "طريقة العد",
+                    "أساس احتساب السقف", "نشط", "سياق القرار"
+            };
+            for (int i = 0; i < headers.length; i++) header.createCell(i).setCellValue(headers[i]);
+            Row row = sheet.createRow(1);
+            row.createCell(0).setCellValue(groupCode);
+            row.createCell(1).setCellValue(groupName);
+            row.createCell(2).setCellValue("INPATIENT");
+            row.createCell(3).setCellValue(benefitCodes);
+            row.createCell(4).setCellValue(4000);
+            row.createCell(7).setCellValue("POLICY_PERIOD");
+            row.createCell(8).setCellValue(1);
+            row.createCell(9).setCellValue("EACH_UNIT");
+            row.createCell(10).setCellValue("ELIGIBLE_AMOUNT");
+            row.createCell(11).setCellValue("نعم");
+            row.createCell(12).setCellValue("INPATIENT");
+
+            workbook.write(out);
+            return new MockMultipartFile("file", "benefits-groups.xlsx",
                     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", out.toByteArray());
         }
     }
