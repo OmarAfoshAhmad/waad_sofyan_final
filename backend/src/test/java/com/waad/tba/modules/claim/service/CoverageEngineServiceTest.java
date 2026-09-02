@@ -205,6 +205,9 @@ class CoverageEngineServiceTest {
         assertMoney("650.00", results.get(1).getLimitRefused());
         assertMoney("3000.00", results.stream().map(CoverageResult::getCompanyShare)
                 .reduce(BigDecimal.ZERO, BigDecimal::add));
+        assertMoney("0.00", results.get(0).getUsageDetails().getUsedAmountBeforeLine());
+        assertMoney("1650.00", results.get(0).getUsageDetails().getRequestedAmountForLimit());
+        assertMoney("1650.00", results.get(0).getUsageDetails().getApprovedAmountForLimit());
         assertEquals("ELIGIBLE_AMOUNT", results.get(1).getUsageDetails().getConsumptionBasis());
         assertMoney("1650.00", results.get(1).getUsageDetails().getUsedAmountBeforeLine());
         assertMoney("3000.00", results.get(1).getUsageDetails().getRequestedAmountForLimit());

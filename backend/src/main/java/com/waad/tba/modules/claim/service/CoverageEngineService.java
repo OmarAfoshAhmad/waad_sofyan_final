@@ -297,6 +297,7 @@ public class CoverageEngineService {
         CoverageLimitSnapshot constraining = limits.get(0);
         BigDecimal constrainingUsedBefore = ZERO;
         BigDecimal constrainingRequestedBasis = ZERO;
+        boolean constrainingInitialized = false;
 
         for (CoverageLimitSnapshot limit : limits) {
             BatchUsageAccumulator acc = batchUsageContext.computeIfAbsent(bucketAccumulatorKey(limit.bucketId()),
@@ -313,6 +314,12 @@ public class CoverageEngineService {
 
             BigDecimal usedAmount = scale2(defaultIfNull(limit.usedAmount(), ZERO).add(acc.addedAmount));
             BigDecimal requestedBasis = basisAmount(limit.consumptionBasis(), effectiveTotal, coveragePercent);
+            if (!constrainingInitialized) {
+                constraining = limit;
+                constrainingUsedBefore = usedAmount;
+                constrainingRequestedBasis = requestedBasis;
+                constrainingInitialized = true;
+            }
         if (!thisTimesExceeded && !thisDaysExceeded && limit.amountLimit() != null) {
                 BigDecimal available = maxZero(scale2(limit.amountLimit().subtract(usedAmount)));
                 if (requestedBasis.compareTo(available) > 0) {
