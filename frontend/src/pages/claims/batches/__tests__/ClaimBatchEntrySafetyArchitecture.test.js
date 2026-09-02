@@ -25,6 +25,12 @@ describe('claim batch entry safety boundary', () => {
     expect(entrySource).not.toMatch(/const defaultDate\s*=\s*useMemo/);
   });
 
+  it('does not reject a service date just because it differs from the accounting batch month', () => {
+    expect(entrySource).not.toContain('لا يتبع لشهر الدفعة الحالي');
+    expect(entrySource).not.toContain('d.getMonth() + 1 !== month');
+    expect(entrySource).not.toContain('d.getFullYear() !== year');
+  });
+
   it('does not display a policy default as a calculated line coverage', () => {
     expect(lineSource).not.toContain('policyInfo?.defaultCoveragePercent ?? 100');
     expect(lineSource).toContain('بانتظار الحساب');
@@ -67,10 +73,10 @@ describe('claim batch entry safety boundary', () => {
     expect(entrySource).not.toContain('وسيتم احتسابها حسب قواعد التغطية المطابقة فقط');
   });
 
-  it('calculates a newly selected service with the current row quantity and explicit claim decision context', () => {
-    expect(entrySource).toContain('const coverageInput = {');
-    expect(entrySource).toContain('quantity: currentLine.quantity ?? svc.quantity ?? 1');
-    expect(entrySource).toContain('fetchCoverage(coverageInput, encounterType, null, claimContextCode)');
+  it('recalculates all draft lines when a service is selected so shared limits are consumed once', () => {
+    expect(entrySource).toContain('const nextLines = lines.map((line, lineIdx) => (lineIdx === idx ? { ...currentLine, ...nextPatch } : line))');
+    expect(entrySource).toContain('refetchAllLinesCoverage(encounterType, nextLines, fullCoverage, claimContextCode)');
+    expect(entrySource).not.toContain('fetchCoverage(coverageInput, encounterType, null, claimContextCode)');
     expect(entrySource).not.toContain('fetchCoverage(svc, encounterType, null, claimContextCode)');
     expect(entrySource).not.toContain('fetchCoverage(svc, encounterType);');
   });

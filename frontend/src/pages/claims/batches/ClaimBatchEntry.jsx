@@ -347,7 +347,7 @@ export default function ClaimBatchEntry() {
   // ── المنطق المالي وتغطية الخدمات (المرحلة 3: Hooks المستخرجة) ─────────────────
   const { recompute } = useCalculationLogic();
 
-  const { fetchCoverage, refetchAllLinesCoverage } = useCoverageLogic({
+  const { refetchAllLinesCoverage } = useCoverageLogic({
     policyId,
     member,
     medicalCategories,
@@ -1145,22 +1145,6 @@ export default function ClaimBatchEntry() {
       const currentLine = lines[idx] || {};
       const price = svc?.contractPrice ?? 0;
       const maxPrice = svc?.maxContractPrice ?? price;
-      const coverageInput = {
-        ...svc,
-        quantity: currentLine.quantity ?? svc.quantity ?? 1,
-        unitPrice: price,
-        contractPrice: maxPrice,
-        maxContractPrice: maxPrice
-      };
-
-      let cov = failedCoverageResult('الخدمة النصية غير مرتبطة بخدمة معتمدة ولا يمكن احتساب تغطيتها');
-      if (!isFreeText) {
-        cov = await fetchCoverage(coverageInput, encounterType, null, claimContextCode);
-        if (cov?.__stale) {
-          return;
-        }
-      }
-
       const resolvedCategoryId =
         svc.categoryId ??
         svc.serviceCategoryId ??
@@ -1177,7 +1161,8 @@ export default function ClaimBatchEntry() {
         svc.effectiveCategory?.nameAr ??
         svc.effectiveCategory?.name ??
         null;
-      updateLine(idx, {
+
+      const nextPatch = {
         service: svc,
         medicalServiceId: svc.medicalServiceId || null,
         pricingItemId: svc.pricingItemId || null,
@@ -1190,10 +1175,21 @@ export default function ClaimBatchEntry() {
         unitPrice: price,
         contractPrice: maxPrice,
         maxContractPrice: maxPrice,
-        ...cov
-      });
+        ...(isFreeText
+          ? failedCoverageResult('الخدمة النصية غير مرتبطة بخدمة معتمدة ولا يمكن احتساب تغطيتها')
+          : { coveragePending: true })
+      };
+
+      const nextLines = lines.map((line, lineIdx) => (lineIdx === idx ? { ...currentLine, ...nextPatch } : line));
+      setLines(nextLines.map((line, lineIdx) => recompute(line, lineIdx, nextLines)));
+      setIsDirty(true);
+
+      if (!isFreeText && policyId && member?.id) {
+        const updated = await refetchAllLinesCoverage(encounterType, nextLines, fullCoverage, claimContextCode);
+        if (updated) setLines(updated);
+      }
     },
-    [fetchCoverage, updateLine, lines, enqueueSnackbar, encounterType, claimContextCode]
+    [updateLine, lines, enqueueSnackbar, encounterType, claimContextCode, policyId, member?.id, refetchAllLinesCoverage, fullCoverage, recompute]
   );
 
   useEffect(() => {
@@ -1668,18 +1664,6 @@ export default function ClaimBatchEntry() {
     setSaving(true);
     try {
       const actualDate = serviceDate || defaultDate;
-
-      // المرحلة 2.1: التحقق من مطابقة التاريخ لشهر الدفعة الحالي
-      const d = new Date(actualDate);
-      if (d.getMonth() + 1 !== month || d.getFullYear() !== year) {
-        enqueueSnackbar(
-          `⚠️ تاريخ الخدمة (${actualDate}) لا يتبع لشهر الدفعة الحالي (${MONTHS_AR[month - 1]} ${year}). يرجى التأكد من التاريخ أو الانتقال لدفعة الشهر الصحيح.`,
-          { variant: 'warning', autoHideDuration: 8000 }
-        );
-        setSaving(false);
-        isSavingRef.current = false;
-        return;
-      }
 
       // التحقق: تاريخ الخدمة لا يجوز أن يكون في المستقبل
       if (actualDate && new Date(actualDate) > new Date()) {
