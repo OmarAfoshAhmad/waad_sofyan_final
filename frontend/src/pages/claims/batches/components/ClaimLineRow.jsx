@@ -68,6 +68,9 @@ export const ClaimLineRow = ({
   const limitRefused = parseFloat(line.limitRefused) || 0;
   const refusedAmount = parseFloat(line.refusedAmount) || 0;
   const hasFinancialRefusal = refusedAmount > 0 || priceRefused > 0 || limitRefused > 0;
+  const effectiveFinancialRefusal = Math.max(refusedAmount, priceRefused + limitRefused);
+  const lineTotal = parseFloat(line.total) || 0;
+  const financialRefusalLabel = lineTotal > 0 && effectiveFinancialRefusal >= lineTotal ? 'رفض مالي كامل' : 'رفض جزئي';
   const financialRefusalText =
     line.rejectionReason ||
     [
@@ -516,7 +519,7 @@ export const ClaimLineRow = ({
         <TableRow sx={{ bgcolor: alpha(theme.palette.warning.main, 0.03) }}>
           <TableCell colSpan={12} sx={{ py: 0.5 }}>
             <Typography variant="caption" color="warning.dark" fontWeight={500} sx={{ fontSize: '0.75rem', px: '1.0rem' }}>
-              ⚠️ خصم/رفض جزئي: {Math.max(refusedAmount, priceRefused + limitRefused).toFixed(2)} د.ل — {financialRefusalText}
+              ⚠️ {financialRefusalLabel}: {effectiveFinancialRefusal.toFixed(2)} د.ل — {financialRefusalText}
             </Typography>
           </TableCell>
         </TableRow>
@@ -533,7 +536,7 @@ export const ClaimLineRow = ({
               {line.usageExhausted ? <RejectIcon sx={{ fontSize: '0.875rem' }} /> : <WarningIcon sx={{ fontSize: '0.875rem' }} />}
               {line.usageExhausted ? '⚠️ رصيد المنفعة استنفذ بالكامل: ' : '⚠️ تجاوز سقف المنفعة المحدد: '}
               {line.usageDetails?.timesLimit > 0 &&
-                `(سيُّسجَّل ${(line.usageDetails.totalUsedCount || 0) + 1} من أصل ${line.usageDetails.timesLimit} مرّة/سنة)`}
+                `(تعذّر قبول البند لأن عدد المرات المطلوبة يتجاوز الحد ${line.usageDetails.timesLimit} مرّة/سنة)`}
               {line.usageDetails?.amountLimit > 0 &&
                 (() => {
                   const prev = parseFloat(line.usageDetails.usedAmountBeforeLine || 0);

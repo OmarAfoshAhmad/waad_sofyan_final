@@ -1148,9 +1148,11 @@ export default function ClaimBatchEntry() {
       const code = svc?.serviceCode || svc?.code;
       const isGeneralService = code === 'GEN-MEDICATION' || code === 'GEN-MEDICAL-SERVICE';
 
+      const currentLines = linesRef.current || lines;
+
       const isDuplicate =
         !isGeneralService &&
-        lines.some((l, i) => {
+        currentLines.some((l, i) => {
           if (i === idx) return false;
           const existingName = l.serviceName || l.service?.serviceName || l.service?.name;
           return newName && existingName && existingName === newName;
@@ -1161,7 +1163,7 @@ export default function ClaimBatchEntry() {
         return;
       }
 
-      const currentLine = lines[idx] || {};
+      const currentLine = currentLines[idx] || {};
       const price = svc?.contractPrice ?? 0;
       const maxPrice = svc?.maxContractPrice ?? price;
       const resolvedCategoryId =
@@ -1209,12 +1211,19 @@ export default function ClaimBatchEntry() {
           : { coveragePending: true })
       };
 
-      const nextLines = lines.map((line, lineIdx) => (lineIdx === idx ? { ...currentLine, ...nextPatch } : line));
+      const nextLines = currentLines.map((line, lineIdx) => (lineIdx === idx ? { ...currentLine, ...nextPatch } : line));
       setLines(nextLines.map((line, lineIdx) => recompute(line, lineIdx, nextLines)));
       setIsDirty(true);
 
       if (!isFreeText && policyId && member?.id) {
-        const updated = await refetchAllLinesCoverage(encounterType, nextLines, fullCoverage, claimContextCode);
+        // Selecting a service changes the same row that the clerk can already
+        // have edited (quantity/price). Ask the backend from the committed
+        // draft state that is now visible on screen, not from a transitional
+        // Autocomplete event snapshot. Otherwise a service-only change can
+        // calculate limits for quantity=1 while the row displays quantity=15.
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        const committedLines = linesRef.current?.length ? linesRef.current : nextLines;
+        const updated = await refetchAllLinesCoverage(encounterType, committedLines, fullCoverage, claimContextCode);
         if (updated) setLines(updated);
       }
     },

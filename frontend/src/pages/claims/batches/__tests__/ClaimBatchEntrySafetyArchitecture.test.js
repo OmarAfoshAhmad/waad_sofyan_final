@@ -74,11 +74,25 @@ describe('claim batch entry safety boundary', () => {
   });
 
   it('recalculates all draft lines when a service is selected so shared limits are consumed once', () => {
-    expect(entrySource).toContain('const nextLines = lines.map((line, lineIdx) => (lineIdx === idx ? { ...currentLine, ...nextPatch } : line))');
-    expect(entrySource).toContain('refetchAllLinesCoverage(encounterType, nextLines, fullCoverage, claimContextCode)');
+    expect(entrySource).toContain('const currentLines = linesRef.current || lines');
+    expect(entrySource).toContain('const currentLine = currentLines[idx] || {}');
+    expect(entrySource).toContain('const nextLines = currentLines.map((line, lineIdx) => (lineIdx === idx ? { ...currentLine, ...nextPatch } : line))');
+    expect(entrySource).toContain('const committedLines = linesRef.current?.length ? linesRef.current : nextLines');
+    expect(entrySource).toContain('refetchAllLinesCoverage(encounterType, committedLines, fullCoverage, claimContextCode)');
+    expect(entrySource).not.toContain('refetchAllLinesCoverage(encounterType, nextLines, fullCoverage, claimContextCode)');
     expect(entrySource).not.toContain('fetchCoverage(coverageInput, encounterType, null, claimContextCode)');
     expect(entrySource).not.toContain('fetchCoverage(svc, encounterType, null, claimContextCode)');
     expect(entrySource).not.toContain('fetchCoverage(svc, encounterType);');
+  });
+
+  it('does not invent a one-occurrence usage message when a quantity-based times limit rejects the line', () => {
+    expect(lineSource).toContain('تعذّر قبول البند لأن عدد المرات المطلوبة يتجاوز الحد');
+    expect(lineSource).not.toContain('(line.usageDetails.totalUsedCount || 0) + 1');
+  });
+
+  it('labels a fully refused financial amount as full rather than partial', () => {
+    expect(lineSource).toContain("effectiveFinancialRefusal >= lineTotal ? 'رفض مالي كامل' : 'رفض جزئي'");
+    expect(lineSource).not.toContain('خصم/رفض جزئي');
   });
 
   it('does not fetch employer details or a second approval context that this screen does not consume', () => {
