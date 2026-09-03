@@ -8,7 +8,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
-import com.waad.tba.common.exception.BusinessRuleException;
 import com.waad.tba.modules.claim.dto.ClaimEntryContextDto;
 import com.waad.tba.modules.member.service.MemberContextResolver;
 import com.waad.tba.modules.providercontract.service.EffectiveProviderContractResolver;
@@ -31,6 +30,7 @@ import lombok.RequiredArgsConstructor;
 public class ClaimEntryContextService {
 
     private final MemberContextResolver memberContextResolver;
+    private final ClaimProviderEmployerAccessService employerAccess;
     private final EffectiveProviderContractResolver contractResolver;
     private final ProviderContractPricingItemService pricingItemService;
     private final LimitBalanceReader limitBalanceReader;
@@ -41,11 +41,8 @@ public class ClaimEntryContextService {
             Long requestedEmployerId, LocalDate serviceDate) {
         var memberContext = memberContextResolver.resolveForOrFail(memberId, serviceDate);
 
-        if (requestedEmployerId == null
-                || !requestedEmployerId.equals(memberContext.employer().getId())) {
-            throw new BusinessRuleException(
-                    "المستفيد لا يتبع جهة عمل الدفعة في تاريخ الخدمة " + serviceDate);
-        }
+        employerAccess.requireMemberBelongsToEmployer(
+                requestedEmployerId, memberContext.employer(), serviceDate);
 
         var resolvedContract = contractResolver.resolve(
                 providerId, memberContext.employer().getId(), serviceDate);

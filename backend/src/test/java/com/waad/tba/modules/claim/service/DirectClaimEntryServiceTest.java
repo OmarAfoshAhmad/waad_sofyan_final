@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.times;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 import java.time.LocalDate;
@@ -52,7 +53,14 @@ class DirectClaimEntryServiceTest {
     @Mock ClaimRepository claimRepository;
     @Mock ClaimMapper claimMapper;
     @Mock JdbcTemplate jdbcTemplate;
-    @Spy ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
+    // Real, not mocked: the fingerprint is a pure function of the request, and a
+    // stubbed one would let a broken fingerprint pass this suite unnoticed.
+    @Spy DirectClaimEntryFingerprint fingerprints = new DirectClaimEntryFingerprint();
+    // Real too, over a mock repository: the member/employer check it performs
+    // here never reaches the provider network table.
+    @Spy ClaimProviderEmployerAccessService employerAccess = new ClaimProviderEmployerAccessService(
+            org.mockito.Mockito.mock(
+                    com.waad.tba.modules.provider.repository.ProviderAllowedEmployerRepository.class));
     @InjectMocks DirectClaimEntryService service;
 
     @Test
@@ -65,7 +73,7 @@ class DirectClaimEntryServiceTest {
         when(memberContextResolver.resolveForOrFail(7L, date)).thenReturn(context(date, 9L));
         when(visitService.create(any())).thenReturn(VisitResponseDto.builder().id(44L).build());
         when(claimApiMapper.toCreateDto(request.getClaim())).thenReturn(mapped);
-        when(claimService.createClaim(mapped)).thenReturn(expected);
+        when(claimService.createClaim(eq(mapped), any())).thenReturn(expected);
         when(claimRepository.findById(55L)).thenReturn(java.util.Optional.of(new com.waad.tba.modules.claim.entity.Claim()));
 
         assertThat(service.create(request)).isSameAs(expected);
@@ -74,7 +82,7 @@ class DirectClaimEntryServiceTest {
         verify(visitService).create(visitCaptor.capture());
         assertThat(visitCaptor.getValue().getVisitDate()).isEqualTo(date);
         assertThat(mapped.getVisitId()).isEqualTo(44L);
-        verify(claimService).createClaim(mapped);
+        verify(claimService).createClaim(eq(mapped), any());
     }
 
     @Test
@@ -88,7 +96,7 @@ class DirectClaimEntryServiceTest {
                 .hasMessageContaining("لا يتبع جهة عمل الدفعة");
 
         verify(visitService, never()).create(any());
-        verify(claimService, never()).createClaim(any());
+        verify(claimService, never()).createClaim(any(), any());
     }
 
     @Test
@@ -106,7 +114,7 @@ class DirectClaimEntryServiceTest {
         when(memberContextResolver.resolveForOrFail(7L, date)).thenReturn(context(date, 9L));
         when(visitService.create(any())).thenReturn(VisitResponseDto.builder().id(44L).build());
         when(claimApiMapper.toCreateDto(request.getClaim())).thenReturn(mapped);
-        when(claimService.createClaim(mapped)).thenReturn(expected);
+        when(claimService.createClaim(eq(mapped), any())).thenReturn(expected);
         when(claimRepository.findById(55L)).thenReturn(java.util.Optional.of(persisted));
         when(claimRepository.save(any())).thenAnswer(invocation -> {
             Claim saved = invocation.getArgument(0);
@@ -119,7 +127,7 @@ class DirectClaimEntryServiceTest {
         assertThat(service.create(request)).isSameAs(expected);
 
         verify(visitService, times(1)).create(any());
-        verify(claimService, times(1)).createClaim(mapped);
+        verify(claimService, times(1)).createClaim(eq(mapped), any());
         assertThat(persisted.getDirectEntryIdempotencyKey()).isEqualTo("entry-test-key");
         assertThat(persisted.getDirectEntryRequestFingerprint()).hasSize(64);
     }

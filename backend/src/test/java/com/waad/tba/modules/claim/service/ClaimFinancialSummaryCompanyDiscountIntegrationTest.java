@@ -240,18 +240,26 @@ class ClaimFinancialSummaryCompanyDiscountIntegrationTest extends PostgresIntegr
         assertThat(summary.getTotalCompanyDiscountAmount()).isEqualByComparingTo("20.00");
         assertThat(summary.getTotalApprovedAmount()).isEqualByComparingTo("180.00");
 
-        // A claim being approved makes it payable; it does not make it paid. The
-        // previous characterization intentionally failed once totalPaidAmount stopped
-        // mirroring the approved/net-provider amount. With no posted settlement here,
-        // the paid amount is zero and the provider share remains outstanding.
-        assertThat(summary.getTotalPaidAmount()).isEqualByComparingTo("0.00");
-        assertThat(summary.getOutstandingAmount()).isEqualByComparingTo("180.00");
+        // This is the assertion the old comment here asked for. It used to record
+        // that totalPaidAmount tracked totalApprovedAmount -- both were summed
+        // over the same APPROVED/BATCHED/SETTLED statuses -- and said in so many
+        // words that a future change to either field should trip it. It did.
+        //
+        // Paid now means disbursed: the sum of allocations on posted payments.
+        // This scenario posts none, so nothing has been paid and the whole
+        // approved amount is still owed. Before, an accountant reading this
+        // screen saw a balance of zero and nothing left to transfer.
+        assertThat(summary.getTotalPaidAmount())
+                .as("no payment has been posted for this employer")
+                .isEqualByComparingTo("0");
+        assertThat(summary.getOutstandingAmount())
+                .as("so the approved amount is owed in full")
+                .isEqualByComparingTo(summary.getTotalApprovedAmount());
 
-        // What the settlement screen derives as "إجمالي المستحق" (payable before the
-        // company/facility split) = companyDiscount + outstanding facility share. With
-        // no patient co-pay and no rejection in this scenario, that equals the gross
-        // claim amount.
-        assertThat(summary.getTotalCompanyDiscountAmount().add(summary.getOutstandingAmount()))
+        // The payable total before the company/facility split still reconciles
+        // against the gross claim amount: with no co-pay and no rejection here,
+        // the discount plus what the facility is owed is the whole claim.
+        assertThat(summary.getTotalCompanyDiscountAmount().add(summary.getTotalApprovedAmount()))
                 .isEqualByComparingTo(summary.getTotalClaimsAmount());
     }
 }

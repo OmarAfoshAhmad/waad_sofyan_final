@@ -151,7 +151,7 @@ public class ClaimService {
     private final ReviewerProviderIsolationService reviewerIsolationService;
 
     // Phase 10 (2026-03-06): Provider-Employer Security Hardening
-    private final com.waad.tba.modules.provider.repository.ProviderAllowedEmployerRepository providerAllowedEmployerRepository;
+    private final ClaimProviderEmployerAccessService employerAccess;
 
     // Phase 11 (2026-03-11): Mandatory Monthly Batches
     private final ClaimBatchService claimBatchService;
@@ -258,6 +258,19 @@ public class ClaimService {
      * 4. Services must be selected from MedicalService table
      */
     public ClaimViewDto createClaim(ClaimCreateDto dto) {
+        return createClaim(dto, null);
+    }
+
+    /**
+     * @param resolvedMemberContext the member's dated employer and policy, when
+     *        the caller has already resolved it. Direct entry resolves it to
+     *        check the batch's employer, and passing it here means one request
+     *        asks that dated question once instead of twice -- two answers to
+     *        the same question are two chances to disagree. Null resolves it
+     *        here, which is what every other caller does.
+     */
+    public ClaimViewDto createClaim(ClaimCreateDto dto,
+            com.waad.tba.modules.member.service.MemberDatedContext resolvedMemberContext) {
         log.info("📝 [CANONICAL] Creating claim with Visit-Centric Architecture");
 
         // ═══════════════════════════════════════════════════════════════════════════
@@ -303,8 +316,9 @@ public class ClaimService {
             throw new BusinessRuleException(
                     "تاريخ الخدمة إلزامي لإنشاء المطالبة، ولا يجوز استبداله بتاريخ اليوم");
         }
-        var datedMemberContext = memberContextResolver.resolveForOrFail(
-                visit.getMember(), dto.getServiceDate());
+        var datedMemberContext = resolvedMemberContext != null
+                ? resolvedMemberContext
+                : memberContextResolver.resolveForOrFail(visit.getMember(), dto.getServiceDate());
         var serviceEmployer = datedMemberContext.employer();
 
         // ══════════════════════════════════════════════════════════════════════════
@@ -324,21 +338,8 @@ public class ClaimService {
         // SECURITY: Verify provider is authorized for this member's employer
         // (Prevent cross-tenant claim creation)
         if (visit.getMember() != null) {
-            // Bypass check if provider allows all employers (global network)
-            boolean isGlobalProvider = Boolean.TRUE.equals(provider.getAllowAllEmployers());
-
-            boolean isAuthorized = isGlobalProvider || providerAllowedEmployerRepository.hasActiveAccessToEmployer(
-                    provider.getId(), serviceEmployer.getId());
-
-            if (!isAuthorized) {
-                log.error(
-                        "🛑 SECURITY ALERT: Provider {} attempted to create claim for UNAUTHORIZED employer {} (Member: {})",
-                        provider.getId(), serviceEmployer.getId(), visit.getMember().getId());
-                throw new org.springframework.web.server.ResponseStatusException(
-                        org.springframework.http.HttpStatus.FORBIDDEN,
-                        "المزود غير مخول لتقديم خدمات لموظفي هذه الجهة (" + serviceEmployer.getName()
-                                + ").");
-            }
+            employerAccess.requireProviderServesEmployer(
+                    provider, serviceEmployer, visit.getMember().getId());
         }
 
         PreAuthorization preAuth = null;

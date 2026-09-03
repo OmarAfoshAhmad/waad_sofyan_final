@@ -3,6 +3,7 @@ package com.waad.tba.modules.claim.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 import java.time.LocalDate;
@@ -97,7 +98,7 @@ class DirectClaimEntryRollbackIntegrationTest extends PostgresIntegrationTestBas
                     Long.class, memberId, providerId, date, "طبيب الاختبار");
             return VisitResponseDto.builder().id(visitId).build();
         });
-        when(claimService.createClaim(mapped)).thenThrow(new IllegalStateException("late claim failure"));
+        when(claimService.createClaim(eq(mapped), any())).thenThrow(new IllegalStateException("late claim failure"));
 
         assertThatThrownBy(() -> service.create(request))
                 .isInstanceOf(IllegalStateException.class)
@@ -156,7 +157,7 @@ class DirectClaimEntryRollbackIntegrationTest extends PostgresIntegrationTestBas
                     memberId, providerId, date, "طبيب التزامن");
             return VisitResponseDto.builder().id(id).build();
         });
-        when(claimService.createClaim(any())).thenAnswer(invocation -> {
+        when(claimService.createClaim(any(), any())).thenAnswer(invocation -> {
             claimCreates.incrementAndGet();
             ClaimCreateDto dto = invocation.getArgument(0);
             Long id = jdbc.queryForObject("INSERT INTO claims (claim_number, member_id, provider_id, visit_id, "

@@ -4,11 +4,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.jdbc.core.JdbcTemplate;
 
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import com.waad.tba.common.exception.BusinessRuleException;
 import com.waad.tba.modules.claim.api.ClaimApiMapper;
@@ -33,10 +29,11 @@ public class DirectClaimEntryService {
     private final ClaimService claimService;
     private final ClaimApiMapper claimApiMapper;
     private final MemberContextResolver memberContextResolver;
+    private final ClaimProviderEmployerAccessService employerAccess;
+    private final DirectClaimEntryFingerprint fingerprints;
     private final ClaimRepository claimRepository;
     private final ClaimMapper claimMapper;
     private final JdbcTemplate jdbcTemplate;
-    private final ObjectMapper objectMapper;
 
     @Transactional
     public ClaimViewDto create(DirectClaimEntryRequest request) {
@@ -44,7 +41,7 @@ public class DirectClaimEntryService {
         // Canonicalize before hashing so harmless surrounding whitespace cannot
         // turn a retry of the same command into a different payload.
         request.setIdempotencyKey(idempotencyKey);
-        String fingerprint = fingerprint(request);
+        String fingerprint = fingerprints.of(request);
 
         // PostgreSQL transaction advisory lock serializes identical commands,
         // including the first insert race before the unique index can help.
@@ -72,11 +69,13 @@ public class DirectClaimEntryService {
             throw new BusinessRuleException("اسم الطبيب مطلوب؛ لا يجوز تسجيل طبيب افتراضي في مطالبة مالية");
         }
 
+        // Resolved once, here, and handed to claim creation below. It used to be
+        // resolved again inside createClaim, so one request asked the same dated
+        // question twice and two answers could in principle disagree.
         var datedMember = memberContextResolver.resolveForOrFail(
                 claimRequest.getMemberId(), claimRequest.getServiceDate());
-        if (!request.getEmployerId().equals(datedMember.employer().getId())) {
-            throw new BusinessRuleException("المستفيد لا يتبع جهة عمل الدفعة في تاريخ الخدمة");
-        }
+        employerAccess.requireMemberBelongsToEmployer(
+                request.getEmployerId(), datedMember.employer(), claimRequest.getServiceDate());
 
         var visit = visitService.create(VisitCreateDto.builder()
                 .memberId(claimRequest.getMemberId())
@@ -90,7 +89,7 @@ public class DirectClaimEntryService {
 
         var claimDto = claimApiMapper.toCreateDto(claimRequest);
         claimDto.setVisitId(visit.getId());
-        ClaimViewDto created = claimService.createClaim(claimDto);
+        ClaimViewDto created = claimService.createClaim(claimDto, datedMember);
         var persisted = claimRepository.findById(created.getId())
                 .orElseThrow(() -> new IllegalStateException("تعذر تثبيت مفتاح أمر المطالبة المنشأة"));
         persisted.setDirectEntryIdempotencyKey(idempotencyKey);
@@ -110,13 +109,4 @@ public class DirectClaimEntryService {
         return normalized;
     }
 
-    private String fingerprint(DirectClaimEntryRequest request) {
-        try {
-            byte[] payload = objectMapper.writeValueAsBytes(request);
-            byte[] digest = MessageDigest.getInstance("SHA-256").digest(payload);
-            return java.util.HexFormat.of().formatHex(digest);
-        } catch (JsonProcessingException | NoSuchAlgorithmException ex) {
-            throw new IllegalStateException("تعذر بناء بصمة أمر المطالبة", ex);
-        }
-    }
 }

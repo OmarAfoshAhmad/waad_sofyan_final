@@ -13,6 +13,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.mockito.InjectMocks;
+import org.mockito.Spy;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -40,6 +41,12 @@ class ClaimEntryContextServiceTest {
     @Mock ProviderContractPricingItemService pricingItemService;
     @Mock LimitBalanceReader limitBalanceReader;
     @Mock PreAuthorizationRepository preAuthorizationRepository;
+    // Real, over a mock repository: this screen only asks the member/employer
+    // question, which never reaches the provider network table. A stub here
+    // would let the check pass without actually checking.
+    @Spy ClaimProviderEmployerAccessService employerAccess = new ClaimProviderEmployerAccessService(
+            org.mockito.Mockito.mock(
+                    com.waad.tba.modules.provider.repository.ProviderAllowedEmployerRepository.class));
     @InjectMocks ClaimEntryContextService service;
 
     @Test
