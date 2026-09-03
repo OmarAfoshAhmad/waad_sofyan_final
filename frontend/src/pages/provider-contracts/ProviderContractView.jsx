@@ -848,7 +848,7 @@ const ProviderContractView = () => {
             {error?.message || 'لم يتم العثور على العقد المطلوب'}
           </Typography>
           <Stack direction="row" spacing={2}>
-            <Button variant="outlined" startIcon={<BackIcon />} onClick={() => navigate(-1)}>
+            <Button variant="outlined" startIcon={<BackIcon />} onClick={() => navigate('/provider-contracts')}>
               العودة للقائمة
             </Button>
             <Button variant="contained" startIcon={<RefreshIcon />} onClick={() => refetch()}>
@@ -878,7 +878,7 @@ const ProviderContractView = () => {
         ]}
         actions={
           <Stack direction="row" spacing={1}>
-            <Button variant="outlined" color="inherit" startIcon={<BackIcon />} onClick={() => navigate(-1)}>
+            <Button variant="outlined" color="inherit" startIcon={<BackIcon />} onClick={() => navigate('/provider-contracts')}>
               رجوع
             </Button>
 
