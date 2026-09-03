@@ -48,6 +48,8 @@ public class UnifiedSearchService {
 
     private static final int MIN_TEXT_SEARCH_LENGTH = 3;
     private static final int MAX_SEARCH_RESULTS = 20;
+    private static final java.util.regex.Pattern ISSUANCE_PREFIX =
+            java.util.regex.Pattern.compile("^[A-Z]+[-_ ]?\\d{4}[-_ ]?(.+)$");
 
     private final MemberRepository memberRepository;
     private final MemberQueryAccessPolicy queryAccessPolicy;
@@ -124,7 +126,21 @@ public class UnifiedSearchService {
             return List.of(MemberSearchDto.fromMember(m, "CARD_NUMBER", 1.0));
         }
 
-        // 2. Try ID exact match (Priority 2)
+        // 2. Search the stable part of an imported card number before treating a
+        // numeric query as an internal database id. Company/year prefixes (for
+        // example JFZ2025 or JFZ2026) are issuance metadata and may change while
+        // the beneficiary sequence remains the identifier operators know.
+        String stablePart = stableCardNumberPart(cardNumber);
+        boolean searchedOriginal = stablePart.equalsIgnoreCase(cardNumber.trim());
+        if (stablePart.length() >= MIN_TEXT_SEARCH_LENGTH) {
+            List<MemberSearchDto> cardMatches = searchByName(stablePart, scope);
+            if (!cardMatches.isEmpty()) {
+                return cardMatches;
+            }
+        }
+
+        // 3. Try ID exact match only after card-number matching. Database ids are
+        // supported for staff convenience but must not shadow a real card suffix.
         if (cardNumber.matches("\\d+")) {
             try {
                 Long id = Long.parseLong(cardNumber);
@@ -139,9 +155,16 @@ public class UnifiedSearchService {
             }
         }
 
-        // 3. Fallback to partial search (Priority 3)
-        // This allows searching for '2025' to find 'JFZ2025...'
-        return searchByName(cardNumber, scope);
+        // 4. Fallback to the original query for unusual legacy formats. Do not
+        // repeat the same database query when the stable part was the input.
+        return searchedOriginal ? List.of() : searchByName(cardNumber, scope);
+    }
+
+    static String stableCardNumberPart(String value) {
+        if (value == null) return "";
+        String normalized = value.trim().toUpperCase(java.util.Locale.ROOT);
+        java.util.regex.Matcher prefixed = ISSUANCE_PREFIX.matcher(normalized);
+        return prefixed.matches() ? prefixed.group(1).trim() : normalized;
     }
 
     /**
@@ -224,7 +247,8 @@ public class UnifiedSearchService {
         
         // Modern alphanumeric format: [CHARS]-[4 DIGITS]-[ANYTHING]
         // Matches CardNumberGeneratorService.isValidCardNumberFormat pattern
-        return str.matches("^[A-Z0-9]+-\\d{4}-.+");
+        return str.matches("^[A-Z0-9]+-\\d{4}-.+")
+                || str.matches("^[A-Za-z]+[-_ ]?\\d{4}[-_ ]?.+");
     }
 
     /**

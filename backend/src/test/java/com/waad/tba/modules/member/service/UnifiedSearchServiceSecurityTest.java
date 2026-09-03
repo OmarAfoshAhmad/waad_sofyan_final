@@ -18,6 +18,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.assertj.core.api.Assertions.assertThat;
 
 /** Regression coverage for the unified-search tenant boundary. */
 @ExtendWith(MockitoExtension.class)
@@ -81,5 +82,28 @@ class UnifiedSearchServiceSecurityTest {
                 () -> service.search(member.getBarcode(), null));
 
         verify(queryAccessPolicy).requireMember(MemberOperation.SEARCH, null);
+    }
+
+    @Test
+    void cardSearchUsesTheStableSuffixAcrossIssuanceYears() {
+        assertThat(UnifiedSearchService.stableCardNumberPart("JFZ202533933")).isEqualTo("33933");
+        assertThat(UnifiedSearchService.stableCardNumberPart("JFZ202633933")).isEqualTo("33933");
+        assertThat(UnifiedSearchService.stableCardNumberPart("JFZ-2026-33933")).isEqualTo("33933");
+        assertThat(UnifiedSearchService.stableCardNumberPart("33933")).isEqualTo("33933");
+    }
+
+    @Test
+    void numericCardSuffixIsSearchedBeforeAnInternalMemberId() {
+        when(queryAccessPolicy.requireListing(MemberOperation.SEARCH, null)).thenReturn(authorizedScope);
+        when(memberRepository.findByCardNumberWithDetails("33933")).thenReturn(java.util.Optional.empty());
+        when(memberRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(java.util.List.of(
+                        Member.builder().id(7L).cardNumber("JFZ202533933").build())));
+
+        var results = service.search("33933", null);
+
+        assertThat(results).singleElement().extracting(com.waad.tba.modules.member.dto.MemberSearchDto::getCardNumber)
+                .isEqualTo("JFZ202533933");
+        verify(memberRepository, never()).findById(33933L);
     }
 }
