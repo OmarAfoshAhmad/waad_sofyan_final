@@ -45,7 +45,8 @@ import {
   ListItemText,
   FormControl,
   InputLabel,
-  Select
+  Select,
+  Collapse
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import {
@@ -74,7 +75,9 @@ import {
   ExpandMore as ExpandMoreIcon,
   MedicalServices as MedicalServicesIcon,
   LocalHospital as InpatientIcon,
-  Healing as OutpatientIcon
+  Healing as OutpatientIcon,
+  UnfoldLess as CompactIcon,
+  UnfoldMore as ExpandIcon
 } from '@mui/icons-material';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSnackbar } from 'notistack';
@@ -142,9 +145,7 @@ const newLine = () => ({
   oldRejected: 0
 });
 
-const newDirectEntryKey = () =>
-  globalThis.crypto?.randomUUID?.() ||
-  `claim-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+const newDirectEntryKey = () => globalThis.crypto?.randomUUID?.() || `claim-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
 const hasMeaningfulDraftData = (draft) => {
   if (!draft) return false;
@@ -293,6 +294,7 @@ export default function ClaimBatchEntry() {
     patientShare: true
   });
   const [anchorElCols, setAnchorElCols] = useState(null);
+  const [headerExpanded, setHeaderExpanded] = useState(true);
   const handleOpenCols = (event) => setAnchorElCols(event.currentTarget);
   const handleCloseCols = () => setAnchorElCols(null);
   const handleToggleColumn = (col) => {
@@ -518,11 +520,7 @@ export default function ClaimBatchEntry() {
     } catch (err) {
       console.error('Failed to add custom service pricing:', err);
       const apiMessage =
-        err?.response?.data?.messageAr ||
-        err?.response?.data?.message ||
-        err?.response?.data?.error ||
-        err?.userMessage ||
-        err?.message;
+        err?.response?.data?.messageAr || err?.response?.data?.message || err?.response?.data?.error || err?.userMessage || err?.message;
       setCustomServiceError(apiMessage || 'فشل في حفظ الخدمة الجديدة في قائمة أسعار مقدم الخدمة. تأكد من صحة البيانات.');
     } finally {
       setAddingCustomService(false);
@@ -591,16 +589,25 @@ export default function ClaimBatchEntry() {
     error: servicesFailure,
     refetch: refetchServices
   } = useQuery({
-    queryKey: ['claim-entry-contract-services', member?.id, providerId, employerId, entryContext?.contractId, serviceDate, debouncedServiceSearch],
-    queryFn: () => claimsService.getEntryServices({
-      memberId: member.id,
+    queryKey: [
+      'claim-entry-contract-services',
+      member?.id,
       providerId,
       employerId,
+      entryContext?.contractId,
       serviceDate,
-      q: debouncedServiceSearch || undefined,
-      size: 100,
-      sort: 'serviceName,asc'
-    }),
+      debouncedServiceSearch
+    ],
+    queryFn: () =>
+      claimsService.getEntryServices({
+        memberId: member.id,
+        providerId,
+        employerId,
+        serviceDate,
+        q: debouncedServiceSearch || undefined,
+        size: 100,
+        sort: 'serviceName,asc'
+      }),
     enabled: !!member?.id && !!providerId && !!employerId && !!entryContext?.contractId && !!serviceDate,
     retry: false
   });
@@ -739,16 +746,18 @@ export default function ClaimBatchEntry() {
   // The claim header must use the same dated policy/balance snapshot as the
   // contract and its prices. A separate "current summary" request would mix
   // today's balance into a historical claim and add an unnecessary request.
-  const financialSummary = entryContext ? {
-    annualLimit: entryContext.annualLimit,
-    limitConsumedAmount: entryContext.committedAmount,
-    reservedAmount: entryContext.reservedAmount,
-    actualRemaining: entryContext.actualRemaining,
-    reservableAvailable: entryContext.reservableAvailable,
-    asOfDate: entryContext.serviceDate,
-    readAt: entryContext.balanceReadAt,
-    ceilingMode: entryContext.ceilingMode
-  } : null;
+  const financialSummary = entryContext
+    ? {
+        annualLimit: entryContext.annualLimit,
+        limitConsumedAmount: entryContext.committedAmount,
+        reservedAmount: entryContext.reservedAmount,
+        actualRemaining: entryContext.actualRemaining,
+        reservableAvailable: entryContext.reservableAvailable,
+        asOfDate: entryContext.serviceDate,
+        readAt: entryContext.balanceReadAt,
+        ceilingMode: entryContext.ceilingMode
+      }
+    : null;
   // ── Load Existing Claim for Edit ───────────────────────────────────────
   const { data: editingClaim, isLoading: loadingClaim } = useQuery({
     queryKey: ['claim', editingClaimId],
@@ -1035,12 +1044,7 @@ export default function ClaimBatchEntry() {
       const code = s.serviceCode || s.code || '';
       const name = s.serviceName || s.name || '';
       const normalizedCategoryId =
-        s.categoryId ??
-        s.serviceCategoryId ??
-        s.medicalCategoryId ??
-        s.medicalCategory?.id ??
-        s.effectiveCategory?.id ??
-        null;
+        s.categoryId ?? s.serviceCategoryId ?? s.medicalCategoryId ?? s.medicalCategory?.id ?? s.effectiveCategory?.id ?? null;
       const normalizedCategoryName =
         s.categoryName ??
         s.serviceCategoryName ??
@@ -1167,12 +1171,7 @@ export default function ClaimBatchEntry() {
       const price = svc?.contractPrice ?? 0;
       const maxPrice = svc?.maxContractPrice ?? price;
       const resolvedCategoryId =
-        svc.categoryId ??
-        svc.serviceCategoryId ??
-        svc.medicalCategoryId ??
-        svc.medicalCategory?.id ??
-        svc.effectiveCategory?.id ??
-        null;
+        svc.categoryId ?? svc.serviceCategoryId ?? svc.medicalCategoryId ?? svc.medicalCategory?.id ?? svc.effectiveCategory?.id ?? null;
       const resolvedCategoryName =
         svc.categoryName ??
         svc.serviceCategoryName ??
@@ -1206,9 +1205,7 @@ export default function ClaimBatchEntry() {
         unitPrice: isManualAmount ? 0 : price,
         contractPrice: isManualAmount ? 0 : maxPrice,
         maxContractPrice: isManualAmount ? 0 : maxPrice,
-        ...(isFreeText
-          ? failedCoverageResult('الخدمة النصية غير مرتبطة بخدمة معتمدة ولا يمكن احتساب تغطيتها')
-          : { coveragePending: true })
+        ...(isFreeText ? failedCoverageResult('الخدمة النصية غير مرتبطة بخدمة معتمدة ولا يمكن احتساب تغطيتها') : { coveragePending: true })
       };
 
       const nextLines = currentLines.map((line, lineIdx) => (lineIdx === idx ? { ...currentLine, ...nextPatch } : line));
@@ -1227,7 +1224,18 @@ export default function ClaimBatchEntry() {
         if (updated) setLines(updated);
       }
     },
-    [updateLine, lines, enqueueSnackbar, encounterType, claimContextCode, policyId, member?.id, refetchAllLinesCoverage, fullCoverage, recompute]
+    [
+      updateLine,
+      lines,
+      enqueueSnackbar,
+      encounterType,
+      claimContextCode,
+      policyId,
+      member?.id,
+      refetchAllLinesCoverage,
+      fullCoverage,
+      recompute
+    ]
   );
 
   useEffect(() => {
@@ -1261,14 +1269,17 @@ export default function ClaimBatchEntry() {
     setLines((p) => [...p, newLine()]);
     setIsDirty(true);
   }, []);
-  const removeLine = useCallback((idx) => {
-    const targetLine = lines[idx];
-    const serviceLabel = targetLine?.serviceName || targetLine?.service?.serviceName || targetLine?.serviceCode || `البند رقم ${idx + 1}`;
-    triggerConfirm('تأكيد حذف البند', `هل تريد حذف بند الخدمة «${serviceLabel}»؟ سيتم إخراجه من حساب المطالبة.`, () => {
-      setLines((p) => (p.length === 1 ? [newLine()] : p.filter((_, i) => i !== idx)));
-      setIsDirty(true);
-    });
-  }, [lines]);
+  const removeLine = useCallback(
+    (idx) => {
+      const targetLine = lines[idx];
+      const serviceLabel = targetLine?.serviceName || targetLine?.service?.serviceName || targetLine?.serviceCode || `البند رقم ${idx + 1}`;
+      triggerConfirm('تأكيد حذف البند', `هل تريد حذف بند الخدمة «${serviceLabel}»؟ سيتم إخراجه من حساب المطالبة.`, () => {
+        setLines((p) => (p.length === 1 ? [newLine()] : p.filter((_, i) => i !== idx)));
+        setIsDirty(true);
+      });
+    },
+    [lines]
+  );
 
   const resolveLineCategoryId = useCallback((line) => {
     return (
@@ -1396,7 +1407,9 @@ export default function ClaimBatchEntry() {
   ]);
 
   const activeClassificationLine = classificationReview.lineIndex != null ? lines[classificationReview.lineIndex] : null;
-  const activeClassificationCategory = resolveCategoryLabel(classificationReview.selectedCategoryId || resolveLineCategoryId(activeClassificationLine));
+  const activeClassificationCategory = resolveCategoryLabel(
+    classificationReview.selectedCategoryId || resolveLineCategoryId(activeClassificationLine)
+  );
   const currentClassificationCategory = resolveCategoryLabel(resolveLineCategoryId(activeClassificationLine));
 
   const categoriesForReview = useMemo(
@@ -1655,10 +1668,10 @@ export default function ClaimBatchEntry() {
 
     const invalidQuantityLines = invalidQuantityLineNumbers(lines);
     if (invalidQuantityLines.length > 0) {
-      enqueueSnackbar(
-        `الكمية يجب أن تكون عدداً صحيحاً أكبر من صفر في البنود: ${invalidQuantityLines.join('، ')}`,
-        { variant: 'error', autoHideDuration: 6000 }
-      );
+      enqueueSnackbar(`الكمية يجب أن تكون عدداً صحيحاً أكبر من صفر في البنود: ${invalidQuantityLines.join('، ')}`, {
+        variant: 'error',
+        autoHideDuration: 6000
+      });
       return;
     }
 
@@ -1788,9 +1801,7 @@ export default function ClaimBatchEntry() {
             null,
           quantity: Number(l.quantity),
           unitPrice: parseFloat(l.unitPrice) || 0,
-          manualAmount: (l.pricingMode || l.service?.pricingMode) === 'MANUAL_AMOUNT'
-            ? parseFloat(l.unitPrice) || 0
-            : null,
+          manualAmount: (l.pricingMode || l.service?.pricingMode) === 'MANUAL_AMOUNT' ? parseFloat(l.unitPrice) || 0 : null,
           rejected: isClaimRejected ? true : l.rejected || false,
           rejectionReason: isClaimRejected ? effectiveRejectionReason : l.rejectionReason || null,
           // refusedAmount on the rendered line includes price/benefit-limit
@@ -2111,61 +2122,88 @@ export default function ClaimBatchEntry() {
               </Box>
             )}
 
-            {/* ── حقول الرأس (مكون منفصل) ── */}
-            <Box sx={{ flexShrink: 0, px: '1.25rem', py: '0.75rem', bgcolor: 'background.paper' }}>
-              <ClaimHeaderFields
-                member={member}
-                setMember={setMember}
-                memberOptions={memberOptions}
-                searchingMember={searchingMember}
-                memberSearchError={memberSearchError}
-                onRetryMemberSearch={retryMemberSearch}
-                setMemberInput={setMemberInput}
-                memberRef={memberRef}
-                diagnosis={diagnosis}
-                setDiagnosis={setDiagnosis}
-                encounterType={encounterType}
-                claimContextCode={claimContextCode}
-                claimContexts={claimContexts}
-                setClaimContextCode={setClaimContextCode}
-                setEncounterType={setEncounterType}
-                fullCoverage={fullCoverage}
-                setFullCoverage={setFullCoverage}
-                onRefetchAll={refetchAllLinesCoverageCallback}
-                setPreAuthId={setPreAuthId}
-                serviceDate={serviceDate}
-                setServiceDate={setServiceDate}
-                setIsDirty={setIsDirty}
-                financialSummary={financialSummary}
-                currentCompanyCommitment={totals.company}
-                editingApprovedAmount={editingClaim?.approvedAmount || 0}
-                t={t}
-                showValidationErrors={showValidationErrors}
-              />
-              <Box sx={{ mt: 1 }}>
-                <ClaimEntryReadinessAlert
+            {!headerExpanded && (
+              <Box
+                sx={{
+                  flexShrink: 0,
+                  px: '1.25rem',
+                  py: 0.5,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 1,
+                  bgcolor: alpha(theme.palette.primary.main, 0.035)
+                }}
+              >
+                <Typography variant="caption" noWrap sx={{ minWidth: 0 }}>
+                  {member?.fullName || 'لم يحدد مستفيد'} · {serviceDate || 'بلا تاريخ'} · {diagnosis?.trim() || 'بلا تشخيص'}
+                </Typography>
+                <Button size="small" startIcon={<ExpandIcon />} onClick={() => setHeaderExpanded(true)} sx={{ flexShrink: 0 }}>
+                  إظهار بيانات المطالبة
+                </Button>
+              </Box>
+            )}
+            <Collapse in={headerExpanded} timeout={160} unmountOnExit>
+              <Box sx={{ flexShrink: 0, px: '1.25rem', pt: '0.5rem', pb: '0.4rem', bgcolor: 'background.paper' }}>
+                <ClaimHeaderFields
                   member={member}
-                  serviceDate={serviceDate}
-                  loading={loadingEntryContext}
-                  context={entryContext}
-                  error={entryContextFailure}
-                  onRetry={refetchEntryContext}
-                />
-              </Box>
-              <Box sx={{ mt: 0.5 }}>
-                <ClaimAdditionalDetails
-                  complaint={complaint}
-                  setComplaint={setComplaint}
-                  setIsDirty={setIsDirty}
-                  preAuthResults={preAuthResults}
-                  searchingPreAuth={searchingPreAuth}
-                  preAuthId={preAuthId}
+                  setMember={setMember}
+                  memberOptions={memberOptions}
+                  searchingMember={searchingMember}
+                  memberSearchError={memberSearchError}
+                  onRetryMemberSearch={retryMemberSearch}
+                  setMemberInput={setMemberInput}
+                  memberRef={memberRef}
+                  diagnosis={diagnosis}
+                  setDiagnosis={setDiagnosis}
+                  encounterType={encounterType}
+                  claimContextCode={claimContextCode}
+                  claimContexts={claimContexts}
+                  setClaimContextCode={setClaimContextCode}
+                  setEncounterType={setEncounterType}
+                  fullCoverage={fullCoverage}
+                  setFullCoverage={setFullCoverage}
+                  onRefetchAll={refetchAllLinesCoverageCallback}
                   setPreAuthId={setPreAuthId}
-                  doctorName={doctorName}
-                  setDoctorName={setDoctorName}
+                  serviceDate={serviceDate}
+                  setServiceDate={setServiceDate}
+                  setIsDirty={setIsDirty}
+                  financialSummary={financialSummary}
+                  currentCompanyCommitment={totals.company}
+                  editingApprovedAmount={editingClaim?.approvedAmount || 0}
+                  t={t}
+                  showValidationErrors={showValidationErrors}
                 />
+                <Box sx={{ mt: 1 }}>
+                  <ClaimEntryReadinessAlert
+                    member={member}
+                    serviceDate={serviceDate}
+                    loading={loadingEntryContext}
+                    context={entryContext}
+                    error={entryContextFailure}
+                    onRetry={refetchEntryContext}
+                  />
+                </Box>
+                <Box sx={{ mt: 0.5 }}>
+                  <ClaimAdditionalDetails
+                    complaint={complaint}
+                    setComplaint={setComplaint}
+                    setIsDirty={setIsDirty}
+                    preAuthResults={preAuthResults}
+                    searchingPreAuth={searchingPreAuth}
+                    preAuthId={preAuthId}
+                    setPreAuthId={setPreAuthId}
+                    doctorName={doctorName}
+                    setDoctorName={setDoctorName}
+                  />
+                </Box>
+                <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 0.25 }}>
+                  <Button size="small" startIcon={<CompactIcon />} onClick={() => setHeaderExpanded(false)}>
+                    توسيع مساحة إدخال البنود
+                  </Button>
+                </Box>
               </Box>
-            </Box>
+            </Collapse>
 
             <Divider />
 
@@ -2180,9 +2218,8 @@ export default function ClaimBatchEntry() {
                   '& .MuiAlert-message': { width: '100%', textAlign: 'right' }
                 }}
               >
-                لا يمكن الحفظ: الخدمات في البنود{' '}
-                {incompatibleContextLines.map(({ index }) => index + 1).join('، ')} لا تتوافق مع سياق المطالبة الحالي.
-                احذفها أو أعد اختيار خدمات صالحة لهذا السياق.
+                لا يمكن الحفظ: الخدمات في البنود {incompatibleContextLines.map(({ index }) => index + 1).join('، ')} لا تتوافق مع سياق
+                المطالبة الحالي. احذفها أو أعد اختيار خدمات صالحة لهذا السياق.
               </Alert>
             )}
 
@@ -2364,134 +2401,135 @@ export default function ClaimBatchEntry() {
                     line that has not settled is visible where it happens rather
                     than through a notice parked on top of the table. */}
                 <TableContainer dir="rtl" sx={{ flex: 1, overflow: 'auto' }}>
-              <Table
-                dir="rtl"
-                size="small"
-                stickyHeader
-                sx={{
-                  minWidth: '60rem',
-                  '& .MuiTableCell-body': {
-                    borderRight: '1px solid #e0e0e0',
-                    borderBottom: '1px solid #e0e0e0',
-                    '&:last-child': { borderRight: 'none' }
-                  }
-                }}
-              >
-                <TableHead>
-                  <TableRow>
-                    <TH align="center" w={40}>
-                      #
-                    </TH>
-                    <TH align="center" w={280}>
-                      الخدمة الطبية
-                    </TH>
-                    <TH align="center" w={45}>
-                      الكمية
-                    </TH>
-                    <TH align="center" w={70}>
-                      سعر الوحدة
-                    </TH>
-                    {visibleColumns.coverage && (
-                      <TH align="center" w={60}>
-                        التحمل %
-                      </TH>
-                    )}
-                    {visibleColumns.benefitLimit && (
-                      <TH align="center" w={110}>
-                        سقف المنفعة
-                      </TH>
-                    )}
-                    {visibleColumns.remainingLimit && (
-                      <TH align="center" w={110}>
-                        {' '}
-                        المتبقي من السقف{' '}
-                      </TH>
-                    )}
-                    {visibleColumns.refused && (
-                      <TH align="center" w={75}>
-                        المرفوض
-                      </TH>
-                    )}
-                    {visibleColumns.companyShare && (
-                      <TH align="center" w={105}>
-                        حصة الشركة
-                      </TH>
-                    )}
-                    {visibleColumns.patientShare && (
-                      <TH align="center" w={105}>
-                        حصة المشترك
-                      </TH>
-                    )}
-                    <TH align="center" w={80}>
-                      الإجمالي
-                    </TH>
-                    <TH align="left" w={40}></TH>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {lines.map((line, idx) => (
-                    <ClaimLineRow
-                      key={line.id}
-                      line={line}
-                      idx={idx}
-                      theme={theme}
-                      serviceOptions={serviceOptions}
-                      loadingServices={loadingServices}
-                      servicesError={servicesError}
-                      servicesErrorMessage={servicesFailure?.userMessage || servicesFailure?.message}
-                      onRetryServices={refetchServices}
-                      onServiceSearchChange={setServiceSearchInput}
-                      updateLine={updateLine}
-                      handleServiceChange={handleServiceChange}
-                      removeLine={removeLine}
-                      openRejectDialog={openRejectDialog}
-                      policyInfo={policyInfo}
-                      visibleColumns={visibleColumns}
-                      triggerConfirm={triggerConfirm}
-                      onOpenClassificationReview={openClassificationReviewDialog}
-                    />
-                  ))}
-                  <TableRow>
-                    <TableCell colSpan={12} sx={{ py: 0.5, borderRight: 'none' }}>
-                      <Box sx={{ display: 'flex', justifyContent: 'flex-start' }}>
-                        <Button
-                          size="small"
-                          startIcon={<AddIcon />}
-                          onClick={addLine}
-                          sx={{ fontWeight: 700, color: 'primary.main', px: 0 }}
-                        >
-                          {t('claimEntry.addLine')}
-                        </Button>
-                      </Box>
-                    </TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
+                  <Table
+                    dir="rtl"
+                    size="small"
+                    stickyHeader
+                    sx={{
+                      minWidth: '60rem',
+                      '& .MuiTableCell-body': {
+                        borderRight: '1px solid #e0e0e0',
+                        borderBottom: '1px solid #e0e0e0',
+                        '&:last-child': { borderRight: 'none' }
+                      }
+                    }}
+                  >
+                    <TableHead>
+                      <TableRow>
+                        <TH align="center" w={40}>
+                          #
+                        </TH>
+                        <TH align="center" w={280}>
+                          الخدمة الطبية
+                        </TH>
+                        <TH align="center" w={45}>
+                          الكمية
+                        </TH>
+                        <TH align="center" w={70}>
+                          سعر الوحدة
+                        </TH>
+                        {visibleColumns.coverage && (
+                          <TH align="center" w={60}>
+                            التحمل %
+                          </TH>
+                        )}
+                        {visibleColumns.benefitLimit && (
+                          <TH align="center" w={110}>
+                            سقف المنفعة
+                          </TH>
+                        )}
+                        {visibleColumns.remainingLimit && (
+                          <TH align="center" w={110}>
+                            {' '}
+                            المتبقي من السقف{' '}
+                          </TH>
+                        )}
+                        {visibleColumns.refused && (
+                          <TH align="center" w={75}>
+                            المرفوض
+                          </TH>
+                        )}
+                        {visibleColumns.companyShare && (
+                          <TH align="center" w={105}>
+                            حصة الشركة
+                          </TH>
+                        )}
+                        {visibleColumns.patientShare && (
+                          <TH align="center" w={105}>
+                            حصة المشترك
+                          </TH>
+                        )}
+                        <TH align="center" w={80}>
+                          الإجمالي
+                        </TH>
+                        <TH align="left" w={40}></TH>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {lines.map((line, idx) => (
+                        <ClaimLineRow
+                          key={line.id}
+                          line={line}
+                          idx={idx}
+                          theme={theme}
+                          serviceOptions={serviceOptions}
+                          loadingServices={loadingServices}
+                          servicesError={servicesError}
+                          servicesErrorMessage={servicesFailure?.userMessage || servicesFailure?.message}
+                          onRetryServices={refetchServices}
+                          onServiceSearchChange={setServiceSearchInput}
+                          updateLine={updateLine}
+                          handleServiceChange={handleServiceChange}
+                          removeLine={removeLine}
+                          openRejectDialog={openRejectDialog}
+                          policyInfo={policyInfo}
+                          visibleColumns={visibleColumns}
+                          triggerConfirm={triggerConfirm}
+                          onOpenClassificationReview={openClassificationReviewDialog}
+                        />
+                      ))}
+                      <TableRow>
+                        <TableCell colSpan={12} sx={{ py: 0.5, borderRight: 'none' }}>
+                          <Box sx={{ display: 'flex', justifyContent: 'flex-start' }}>
+                            <Button
+                              size="small"
+                              startIcon={<AddIcon />}
+                              onClick={addLine}
+                              sx={{ fontWeight: 700, color: 'primary.main', px: 0 }}
+                            >
+                              {t('claimEntry.addLine')}
+                            </Button>
+                          </Box>
+                        </TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
                 </TableContainer>
 
                 {/* ── ذيل المطالبة والمجاميع (مكون منفصل) ── */}
                 <ClaimTotalsFooter
-              isClaimRejected={isClaimRejected}
-              handleSave={handleSave}
-              saving={saving}
-              isDirty={isDirty}
-              coveragePending={coveragePending}
-                financialDataUnavailable={Boolean(member?.id) && (
-                  !serviceDate || loadingEntryContext || entryContextError || !entryContext
-                )}
-              hasUncoveredLines={lines.some(
-                (line) => (line.service || line.serviceName) && !line.rejected && (line.notCovered || (Number(line.coveragePercent) || 0) <= 0)
-              )}
-              setIsClaimRejected={setIsClaimRejected}
-              setIsDirty={setIsDirty}
-              setRejectionInput={setRejectionInput}
-              openRejectDialog={openRejectDialog}
-              totals={totals}
-              theme={theme}
-              lines={lines}
-              t={t}
-              visibleColumns={visibleColumns}
-              saveDisabledReason={saveDisabledReason}
+                  isClaimRejected={isClaimRejected}
+                  handleSave={handleSave}
+                  saving={saving}
+                  isDirty={isDirty}
+                  coveragePending={coveragePending}
+                  financialDataUnavailable={
+                    Boolean(member?.id) && (!serviceDate || loadingEntryContext || entryContextError || !entryContext)
+                  }
+                  hasUncoveredLines={lines.some(
+                    (line) =>
+                      (line.service || line.serviceName) && !line.rejected && (line.notCovered || (Number(line.coveragePercent) || 0) <= 0)
+                  )}
+                  setIsClaimRejected={setIsClaimRejected}
+                  setIsDirty={setIsDirty}
+                  setRejectionInput={setRejectionInput}
+                  openRejectDialog={openRejectDialog}
+                  totals={totals}
+                  theme={theme}
+                  lines={lines}
+                  t={t}
+                  visibleColumns={visibleColumns}
+                  saveDisabledReason={saveDisabledReason}
                 />
               </Box>
             </Box>
@@ -2512,7 +2550,10 @@ export default function ClaimBatchEntry() {
                 الخدمة
               </Typography>
               <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
-                {activeClassificationLine?.serviceName || activeClassificationLine?.service?.serviceName || activeClassificationLine?.service?.name || '-'}
+                {activeClassificationLine?.serviceName ||
+                  activeClassificationLine?.service?.serviceName ||
+                  activeClassificationLine?.service?.name ||
+                  '-'}
               </Typography>
               {(activeClassificationLine?.serviceCode || activeClassificationLine?.service?.serviceCode) && (
                 <Typography variant="caption" color="text.secondary">
@@ -2539,7 +2580,9 @@ export default function ClaimBatchEntry() {
 
             <Autocomplete
               options={categoriesForReview}
-              value={categoriesForReview.find((category) => String(category.id) === String(classificationReview.selectedCategoryId)) || null}
+              value={
+                categoriesForReview.find((category) => String(category.id) === String(classificationReview.selectedCategoryId)) || null
+              }
               onChange={(_, category) =>
                 setClassificationReview((prev) => ({
                   ...prev,
@@ -2559,13 +2602,16 @@ export default function ClaimBatchEntry() {
                     .some((value) => String(value).toLowerCase().includes(query))
                 );
               }}
-              renderInput={(params) => <TextField {...params} label="تغيير التصنيف عند الحاجة" placeholder="ابحث باسم التصنيف أو الكود..." />}
+              renderInput={(params) => (
+                <TextField {...params} label="تغيير التصنيف عند الحاجة" placeholder="ابحث باسم التصنيف أو الكود..." />
+              )}
             />
 
             {activeClassificationCategory && (
               <Alert severity="success" variant="outlined">
                 سيتم اعتماد: {activeClassificationCategory.name}
-                {activeClassificationCategory.code ? ` (${activeClassificationCategory.code})` : ''}، وتسجيل القرار على سطر المطالبة ثم إعادة احتساب التغطية.
+                {activeClassificationCategory.code ? ` (${activeClassificationCategory.code})` : ''}، وتسجيل القرار على سطر المطالبة ثم
+                إعادة احتساب التغطية.
               </Alert>
             )}
           </Stack>
@@ -2576,7 +2622,12 @@ export default function ClaimBatchEntry() {
             <Button variant="outlined" color="warning" onClick={sendClassificationToReviewQueue}>
               إرسال لقائمة المراجعة
             </Button>
-            <Button variant="contained" color="primary" onClick={approveClassificationForLine} disabled={!classificationReview.selectedCategoryId}>
+            <Button
+              variant="contained"
+              color="primary"
+              onClick={approveClassificationForLine}
+              disabled={!classificationReview.selectedCategoryId}
+            >
               اعتماد التصنيف
             </Button>
           </Stack>
@@ -2649,4 +2700,3 @@ export default function ClaimBatchEntry() {
     </Box>
   );
 }
-

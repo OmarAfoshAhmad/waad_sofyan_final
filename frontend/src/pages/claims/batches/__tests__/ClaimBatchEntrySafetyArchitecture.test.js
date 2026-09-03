@@ -30,6 +30,13 @@ describe('claim batch entry safety boundary', () => {
     expect(entrySource).not.toMatch(/const defaultDate\s*=\s*useMemo/);
   });
 
+  it('keeps diagnosis required, doctor optional, and offers a spacious service-entry mode', () => {
+    expect(entrySource).toContain("if (!diagnosis?.trim()) missingFields.push('التشخيص الطبي')");
+    expect(entrySource).not.toMatch(/if\s*\(!doctorName/);
+    expect(entrySource).toContain('توسيع مساحة إدخال البنود');
+    expect(entrySource).toContain('<Collapse in={headerExpanded}');
+  });
+
   it('does not reject a service date just because it differs from the accounting batch month', () => {
     expect(entrySource).not.toContain('لا يتبع لشهر الدفعة الحالي');
     expect(entrySource).not.toContain('d.getMonth() + 1 !== month');
@@ -66,7 +73,9 @@ describe('claim batch entry safety boundary', () => {
 
   it('clears a dated pre-authorization when its member or service date changes', () => {
     const memberChange = headerSource.match(/value=\{member\}[\s\S]*?onChange=\{\(_, v\) => \{([\s\S]*?)setMember\(v\)/)?.[1];
-    const dateChange = headerSource.match(/value=\{serviceDate \? dayjs\(serviceDate\) : null\}[\s\S]*?onChange=\{\(value\) => \{([\s\S]*?)setServiceDate/)?.[1];
+    const dateChange = headerSource.match(
+      /value=\{serviceDate \? dayjs\(serviceDate\) : null\}[\s\S]*?onChange=\{\(value\) => \{([\s\S]*?)setServiceDate/
+    )?.[1];
 
     expect(memberChange).toContain("setPreAuthId('')");
     expect(dateChange).toContain("setPreAuthId('')");
@@ -81,7 +90,9 @@ describe('claim batch entry safety boundary', () => {
   it('recalculates all draft lines when a service is selected so shared limits are consumed once', () => {
     expect(entrySource).toContain('const currentLines = linesRef.current || lines');
     expect(entrySource).toContain('const currentLine = currentLines[idx] || {}');
-    expect(entrySource).toContain('const nextLines = currentLines.map((line, lineIdx) => (lineIdx === idx ? { ...currentLine, ...nextPatch } : line))');
+    expect(entrySource).toContain(
+      'const nextLines = currentLines.map((line, lineIdx) => (lineIdx === idx ? { ...currentLine, ...nextPatch } : line))'
+    );
     expect(entrySource).toContain('const committedLines = linesRef.current?.length ? linesRef.current : nextLines');
     expect(entrySource).toContain('refetchAllLinesCoverage(encounterType, committedLines, fullCoverage, claimContextCode)');
     expect(entrySource).not.toContain('refetchAllLinesCoverage(encounterType, nextLines, fullCoverage, claimContextCode)');

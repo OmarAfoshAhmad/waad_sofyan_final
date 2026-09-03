@@ -86,6 +86,40 @@ class DirectClaimEntryServiceTest {
     }
 
     @Test
+    void createsDirectClaimWithoutDoctorButRequiresDiagnosis() {
+        LocalDate date = LocalDate.of(2025, 8, 12);
+        DirectClaimEntryRequest request = request(date);
+        request.getClaim().setDoctorName("  ");
+        ClaimCreateDto mapped = ClaimCreateDto.builder()
+                .lines(List.of(ClaimLineDto.builder().quantity(1).build())).build();
+        ClaimViewDto expected = ClaimViewDto.builder().id(55L).build();
+        when(memberContextResolver.resolveForOrFail(7L, date)).thenReturn(context(date, 9L));
+        when(visitService.create(any())).thenReturn(VisitResponseDto.builder().id(44L).build());
+        when(claimApiMapper.toCreateDto(request.getClaim())).thenReturn(mapped);
+        when(claimService.createClaim(eq(mapped), any())).thenReturn(expected);
+        when(claimRepository.findById(55L)).thenReturn(java.util.Optional.of(new Claim()));
+
+        assertThat(service.create(request)).isSameAs(expected);
+
+        ArgumentCaptor<VisitCreateDto> visitCaptor = ArgumentCaptor.forClass(VisitCreateDto.class);
+        verify(visitService).create(visitCaptor.capture());
+        assertThat(visitCaptor.getValue().getDoctorName()).isNull();
+        assertThat(visitCaptor.getValue().getDiagnosis()).isEqualTo("تشخيص اختباري");
+    }
+
+    @Test
+    void rejectsDirectClaimWithoutDiagnosisBeforeWriting() {
+        DirectClaimEntryRequest request = request(LocalDate.of(2025, 8, 12));
+        request.getClaim().setDiagnosisDescription(" ");
+
+        assertThatThrownBy(() -> service.create(request))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("التشخيص الطبي");
+        verify(visitService, never()).create(any());
+        verify(claimService, never()).createClaim(any(), any());
+    }
+
+    @Test
     void rejectsEmployerMismatchBeforeWritingEitherEntity() {
         LocalDate date = LocalDate.of(2025, 8, 12);
         DirectClaimEntryRequest request = request(date);
@@ -135,6 +169,7 @@ class DirectClaimEntryServiceTest {
     private DirectClaimEntryRequest request(LocalDate date) {
         CreateClaimRequest claim = CreateClaimRequest.builder()
                 .memberId(7L).providerId(8L).serviceDate(date).doctorName("طبيب")
+                .diagnosisDescription("تشخيص اختباري")
                 .lines(List.of(CreateClaimRequest.ClaimLineRequest.builder().quantity(1).build()))
                 .build();
         return DirectClaimEntryRequest.builder().idempotencyKey("entry-test-key").employerId(9L).claim(claim).build();

@@ -65,8 +65,9 @@ public class DirectClaimEntryService {
                 || claimRequest.getServiceDate() == null) {
             throw new BusinessRuleException("المستفيد ومقدم الخدمة وتاريخ الخدمة مطلوبة لإنشاء المطالبة");
         }
-        if (claimRequest.getDoctorName() == null || claimRequest.getDoctorName().isBlank()) {
-            throw new BusinessRuleException("اسم الطبيب مطلوب؛ لا يجوز تسجيل طبيب افتراضي في مطالبة مالية");
+        if (claimRequest.getDiagnosisDescription() == null
+                || claimRequest.getDiagnosisDescription().isBlank()) {
+            throw new BusinessRuleException("التشخيص الطبي مطلوب لإنشاء المطالبة");
         }
 
         // Resolved once, here, and handed to claim creation below. It used to be
@@ -81,8 +82,8 @@ public class DirectClaimEntryService {
                 .memberId(claimRequest.getMemberId())
                 .providerId(claimRequest.getProviderId())
                 .visitDate(claimRequest.getServiceDate())
-                .doctorName(claimRequest.getDoctorName().trim())
-                .diagnosis(claimRequest.getDiagnosisDescription())
+                .doctorName(trimToNull(claimRequest.getDoctorName()))
+                .diagnosis(claimRequest.getDiagnosisDescription().trim())
                 .notes(claimRequest.getNotes())
                 .visitType(VisitType.LEGACY_BACKLOG)
                 .build());
@@ -107,6 +108,10 @@ public class DirectClaimEntryService {
             throw new BusinessRuleException("مفتاح إعادة الإرسال أطول من الحد المسموح");
         }
         return normalized;
+    }
+
+    private String trimToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 
 }
