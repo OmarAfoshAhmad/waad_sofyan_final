@@ -1,5 +1,6 @@
 package com.waad.tba.modules.providercontract.service;
 
+import com.waad.tba.modules.claimcontext.service.ClaimContextSourceResolver;
 import com.waad.tba.modules.medicaltaxonomy.entity.MedicalCategory;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalCategoryRepository;
 import com.waad.tba.modules.provider.entity.Provider;
@@ -88,6 +89,7 @@ public class BulkPriceListImportService {
     private final ProviderContractPricingItemRepository pricingRepository;
     private final MedicalCategoryRepository      medicalCategoryRepository;
     private final ProviderContractTermsService   termsService;
+    private final ClaimContextSourceResolver     claimContextSourceResolver;
 
     @lombok.Data
     private static class ParsedRow {
@@ -534,8 +536,8 @@ public class BulkPriceListImportService {
         if (mainCat != null) mainCat = truncate(mainCat.trim(), 255);
         if (subCat  != null) subCat  = truncate(subCat.trim(),  255);
 
-        // Resolve MedicalCategory (CAT code first, then name)
-        MedicalCategory medCat = resolveMedicalCategory(catCode, mainCat, subCat);
+        // Resolve MedicalCategory (CAT code first, then the canonical alias resolver)
+        MedicalCategory medCat = resolveMedicalCategory(catCode, mainCat, subCat, contract.getProvider().getId());
 
         // ── Upsert ────────────────────────────────────────────────────────────
         return upsert(contract, serviceCode, serviceName, price, mainCat, subCat, medCat);
@@ -601,7 +603,7 @@ public class BulkPriceListImportService {
     // MEDICAL CATEGORY RESOLUTION
     // ─────────────────────────────────────────────────────────────────────────
 
-    private MedicalCategory resolveMedicalCategory(String catCode, String mainCat, String subCat) {
+    private MedicalCategory resolveMedicalCategory(String catCode, String mainCat, String subCat, Long providerId) {
         // 1. Try CAT code directly (e.g. "CAT023")
         if (catCode != null && !catCode.isBlank()) {
             java.util.regex.Matcher m = CAT_CODE_PATTERN.matcher(catCode.trim().toUpperCase());
@@ -611,24 +613,25 @@ public class BulkPriceListImportService {
                 if (byCode.isPresent()) return byCode.get();
             }
         }
-        // 2. Try sub-category name
+        // 2. Try sub-category name, then main-category name, through the same
+        // approved-alias resolver the single-contract import uses -- not
+        // first-similar-name-wins free-text matching, which could silently
+        // assign a service to the wrong category on a coincidental name match.
         if (subCat != null && !subCat.isBlank()) {
-            MedicalCategory c = findCategoryByName(subCat);
+            MedicalCategory c = resolveCategoryByAlias(subCat, providerId);
             if (c != null) return c;
         }
-        // 3. Try main-category name
         if (mainCat != null && !mainCat.isBlank()) {
-            return findCategoryByName(mainCat);
+            return resolveCategoryByAlias(mainCat, providerId);
         }
         return null;
     }
 
-    private MedicalCategory findCategoryByName(String name) {
-        String t = name.trim();
-        return medicalCategoryRepository.findFirstByNameAr(t)
+    private MedicalCategory resolveCategoryByAlias(String candidate, Long providerId) {
+        return claimContextSourceResolver.resolve(candidate.trim(), providerId)
+                .filter(resolution -> !resolution.requiresReview() && resolution.medicalCategoryCode() != null)
+                .flatMap(resolution -> medicalCategoryRepository.findByCode(resolution.medicalCategoryCode()))
                 .filter(MedicalCategory::isActive)
-                .or(() -> medicalCategoryRepository.findFirstByNameEn(t).filter(MedicalCategory::isActive))
-                .or(() -> medicalCategoryRepository.findFirstByName(t).filter(MedicalCategory::isActive))
                 .orElse(null);
     }
 

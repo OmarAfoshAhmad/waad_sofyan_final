@@ -1,5 +1,6 @@
 package com.waad.tba.modules.providercontract.service;
 
+import com.waad.tba.modules.claimcontext.service.ClaimContextSourceResolver;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalCategoryRepository;
 import com.waad.tba.modules.provider.repository.ProviderRepository;
 import com.waad.tba.modules.providercontract.repository.ProviderContractPricingItemRepository;
@@ -23,6 +24,7 @@ class BulkPriceListImportTemplateTest {
                 mock(ProviderContractPricingItemRepository.class),
                 mock(MedicalCategoryRepository.class),
                 mock(ProviderContractTermsService.class),
+                mock(ClaimContextSourceResolver.class),
                 mock(PlatformTransactionManager.class));
 
         try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(service.generateTemplate()))) {
