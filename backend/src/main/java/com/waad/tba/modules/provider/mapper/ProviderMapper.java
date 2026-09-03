@@ -139,6 +139,7 @@ public class ProviderMapper {
                         provider.getNetworkStatus().name() : null)
                 .networkStatusLabel(networkStatusLabel)
                 .active(provider.getActive())
+                .allowAllEmployers(provider.getAllowAllEmployers())
                 .hasDocuments(provider.getHasDocuments() != null ? provider.getHasDocuments() : false)
                 .contractStartDate(provider.getContractStartDate())
                 .contractEndDate(provider.getContractEndDate())

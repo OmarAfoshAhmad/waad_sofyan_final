@@ -31,7 +31,16 @@ public class ProviderViewDto {
     private String networkStatus;
     private String networkStatusLabel;
     private Boolean active;
-    
+
+    /**
+     * Whether this provider accepts members from any employer, rather than
+     * only the ones explicitly listed in ProviderAllowedEmployer. Omitted
+     * from toViewDto() used to make every provider read back as "not
+     * allowed" regardless of what was actually stored, forcing a manual
+     * re-toggle after every import.
+     */
+    private Boolean allowAllEmployers;
+
     /**
      * Whether provider has administrative documents uploaded
      */
