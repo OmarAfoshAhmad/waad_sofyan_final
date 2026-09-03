@@ -30,8 +30,6 @@ class ClaimPermissionWiringArchitectureTest {
             "src/main/java/com/waad/tba/modules/claim/controller/ClaimLegacyReconciliationController.java");
     private static final Path COVERAGE_ENGINE = Path.of(
             "src/main/java/com/waad/tba/modules/claim/controller/CoverageEngineController.java");
-    private static final Path COVERAGE_RULE_ADMIN = Path.of(
-            "src/main/java/com/waad/tba/modules/claim/ruleengine/controller/ClaimCoverageRuleAdminController.java");
 
     @Test
     void resourceMutationsUseClaimAccessGuardInsteadOfRoles() throws Exception {
@@ -122,12 +120,11 @@ class ClaimPermissionWiringArchitectureTest {
                 .doesNotContain("hasRole(", "hasAnyRole(", "isAuthenticated()");
     }
 
-    @Test
-    void coverageRuleAdministrationUsesBenefitPolicyCapabilities() throws Exception {
-        String source = Files.readString(COVERAGE_RULE_ADMIN);
-        assertThat(source)
-                .contains("@permissionGuard.has('BENEFIT_POLICY_VIEW')")
-                .contains("@permissionGuard.has('BENEFIT_POLICY_MANAGE')")
-                .doesNotContain("hasRole(", "hasAnyRole(", "isAuthenticated()");
-    }
+    // coverageRuleAdministrationUsesBenefitPolicyCapabilities removed with
+    // ClaimCoverageRuleAdminController: that controller administered
+    // claim.ruleengine, a fully-built admin CRUD surface that never fed
+    // CoverageEngineService or CoverageDecisionService -- an administrator could
+    // edit "coverage rules" through a working screen that changed no claim.
+    // See DeadCoverageRuleEngineArchitectureTest, which now guards against the
+    // package returning at all.
 }
