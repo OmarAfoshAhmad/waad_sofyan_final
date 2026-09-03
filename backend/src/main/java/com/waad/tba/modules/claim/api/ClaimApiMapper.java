@@ -80,7 +80,9 @@ public class ClaimApiMapper {
                                 .serviceCategoryName(lineRequest.getServiceCategoryName())
                                 .quantity(lineRequest.getQuantity())
                                 .unitPrice(lineRequest.getUnitPrice())
-                                .manualRefusedAmount(lineRequest.getRefusedAmount())
+                                .manualRefusedAmount(lineRequest.getManualRefusedAmount() != null
+                                                ? lineRequest.getManualRefusedAmount()
+                                                : lineRequest.getRefusedAmount())
                                 .rejected(lineRequest.getRejected())
                                 .rejectionReason(lineRequest.getRejectionReason())
                                 .build();

@@ -1791,9 +1791,14 @@ export default function ClaimBatchEntry() {
           manualAmount: (l.pricingMode || l.service?.pricingMode) === 'MANUAL_AMOUNT'
             ? parseFloat(l.unitPrice) || 0
             : null,
-          refusedAmount: parseFloat(l.refusedAmount) || 0,
           rejected: isClaimRejected ? true : l.rejected || false,
           rejectionReason: isClaimRejected ? effectiveRejectionReason : l.rejectionReason || null,
+          // refusedAmount on the rendered line includes price/benefit-limit
+          // refusals calculated by the server. Sending that aggregate back as
+          // a manual refusal makes the financial engine subtract the same
+          // ceiling excess twice (and can exceed the insurer gross share).
+          // Only the user's explicit refusal is command input; the backend
+          // must recalculate every automatic refusal at save time.
           manualRefusedAmount: isClaimRejected ? 0 : parseFloat(l.manualRefusedAmount) || 0
         }))
       };

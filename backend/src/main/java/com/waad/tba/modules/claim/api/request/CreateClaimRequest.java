@@ -222,6 +222,17 @@ public class CreateClaimRequest {
          */
         private String rejectionReason;
 
+        /**
+         * Explicit amount refused by the operator. Automatic contract-price and
+         * benefit-limit refusals are server-owned and must never be posted here.
+         */
+        private java.math.BigDecimal manualRefusedAmount;
+
+        /**
+         * Legacy alias for {@link #manualRefusedAmount}. Kept temporarily for older
+         * clients; it has never represented the server-calculated aggregate refusal.
+         */
+        @Deprecated
         private java.math.BigDecimal refusedAmount;
 
         @Size(max = 50, message = "Service code must not exceed 50 characters")

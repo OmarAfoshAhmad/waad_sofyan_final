@@ -7,6 +7,8 @@ import java.math.BigDecimal;
 import org.junit.jupiter.api.Test;
 
 import com.waad.tba.modules.claim.api.response.ClaimResponse;
+import com.waad.tba.modules.claim.api.request.CreateClaimRequest;
+import com.waad.tba.modules.claim.dto.ClaimCreateDto;
 import com.waad.tba.modules.claim.dto.ClaimViewDto;
 
 /**
@@ -50,5 +52,37 @@ class ClaimApiMapperTest {
         ClaimResponse response = mapper.toResponse(dto);
 
         assertThat(response.getCompanyDiscountAmount()).isNull();
+    }
+
+    @Test
+    void explicitManualRefusalIsTheOnlyRefusalAcceptedAsCommandInput() {
+        CreateClaimRequest request = CreateClaimRequest.builder()
+                .lines(java.util.List.of(CreateClaimRequest.ClaimLineRequest.builder()
+                        .quantity(1)
+                        .manualRefusedAmount(new BigDecimal("125.00"))
+                        .refusedAmount(new BigDecimal("4250.00"))
+                        .build()))
+                .build();
+
+        ClaimCreateDto mapped = mapper.toCreateDto(request);
+
+        assertThat(mapped.getLines().get(0).getManualRefusedAmount())
+                .isEqualByComparingTo("125.00");
+    }
+
+    @Test
+    @SuppressWarnings("deprecation")
+    void legacyRefusedAmountRemainsACompatibleAliasForOlderClients() {
+        CreateClaimRequest request = CreateClaimRequest.builder()
+                .lines(java.util.List.of(CreateClaimRequest.ClaimLineRequest.builder()
+                        .quantity(1)
+                        .refusedAmount(new BigDecimal("50.00"))
+                        .build()))
+                .build();
+
+        ClaimCreateDto mapped = mapper.toCreateDto(request);
+
+        assertThat(mapped.getLines().get(0).getManualRefusedAmount())
+                .isEqualByComparingTo("50.00");
     }
 }

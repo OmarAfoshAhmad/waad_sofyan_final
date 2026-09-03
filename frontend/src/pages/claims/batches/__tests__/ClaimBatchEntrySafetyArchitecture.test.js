@@ -20,6 +20,11 @@ describe('claim batch entry safety boundary', () => {
     expect(entrySource).not.toMatch(/status:\s*effectivelyRejected\s*\?\s*['"]REJECTED['"]\s*:\s*['"]APPROVED['"]/);
   });
 
+  it('submits only an explicit manual refusal and never reposts the calculated aggregate refusal', () => {
+    expect(entrySource).toContain('manualRefusedAmount: isClaimRejected ? 0 : parseFloat(l.manualRefusedAmount) || 0');
+    expect(entrySource).not.toContain('refusedAmount: parseFloat(l.refusedAmount)');
+  });
+
   it('does not guess the first day of the batch as the service date', () => {
     expect(entrySource).toContain("const defaultDate = '';");
     expect(entrySource).not.toMatch(/const defaultDate\s*=\s*useMemo/);

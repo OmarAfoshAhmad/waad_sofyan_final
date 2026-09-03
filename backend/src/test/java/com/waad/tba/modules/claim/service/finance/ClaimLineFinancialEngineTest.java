@@ -163,6 +163,24 @@ class ClaimLineFinancialEngineTest {
     }
 
     @Test
+    void productionMaternityExampleRejectsTheGrossLimitExcessBeforeTheCopaySplit() {
+        // Production incident 674388a8: 8,250 gross under a 4,000 benefit
+        // ceiling and 75% coverage. The 4,250 ceiling excess is automatic --
+        // never a provider/manual rejection -- then the accepted 4,000 splits
+        // into 3,000 company and 1,000 patient.
+        Result r = engine.evaluate(new Input(
+                new BigDecimal("8250.00"), 75, BigDecimal.ZERO, BigDecimal.ZERO,
+                new BigDecimal("4250.00"), BigDecimal.ZERO, true, false, 5, null));
+
+        assertThat(r.requestedAmount()).isEqualByComparingTo("8250.00");
+        assertThat(r.allowedAmount()).isEqualByComparingTo("4000.00");
+        assertThat(r.patientShare()).isEqualByComparingTo("1000.00");
+        assertThat(r.companyShare()).isEqualByComparingTo("3000.00");
+        assertThat(r.refusedAmount()).isEqualByComparingTo("4250.00");
+        assertInvariant(r);
+    }
+
+    @Test
     void manualRefusalCannotExceedWhatIsActuallyAvailableToReject() {
         // gross=100, 100% coverage -> providerShare=100. A reviewer typo of 500
         // manual-refused must be capped at what is actually available (100),
