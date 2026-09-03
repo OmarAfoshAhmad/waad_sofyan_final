@@ -47,6 +47,7 @@ public class ProviderService {
     private final ProviderAllowedEmployerRepository providerAllowedEmployerRepository;
     private final ProviderAdminDocumentRepository providerAdminDocumentRepository;
     private final EntityManager entityManager;
+    private final ProviderStandardServiceProvisioner standardServiceProvisioner;
 
     /**
      * Get provider selector options with pagination
@@ -76,6 +77,10 @@ public class ProviderService {
 
         Provider provider = providerMapper.toEntity(dto);
         provider = providerRepository.save(provider);
+        // Same transaction as creation: a failure here must roll the
+        // provider back too, not leave it created without its standard
+        // services (e.g. a new pharmacy silently missing SYS-DRUG-GENERAL).
+        standardServiceProvisioner.autoApplyOnNewProvider(provider);
         return providerMapper.toViewDto(provider);
     }
 

@@ -116,4 +116,26 @@ describe('claim batch entry safety boundary', () => {
     expect(entrySource).toContain("queryKey: ['claim-entry-contract-services'");
     expect(entrySource).not.toContain("queryKey: ['contracted-services'");
   });
+
+  /**
+   * A standard (pharmacy/optics-style) service has no contract price list --
+   * selecting one must fix quantity at 1, clear any pricingItemId, and send
+   * the entered amount as manualAmount rather than trusting the generic
+   * unitPrice field a contract-priced line also uses.
+   */
+  it('locks quantity to 1 and clears the pricing item when a manual-amount service is selected', () => {
+    expect(entrySource).toContain("const isManualAmount = svc.pricingMode === 'MANUAL_AMOUNT'");
+    expect(entrySource).toContain('pricingItemId: isManualAmount ? null : svc.pricingItemId || null');
+    expect(entrySource).toContain('quantity: isManualAmount ? 1 : currentLine.quantity || 1');
+  });
+
+  it('submits the entered amount as manualAmount for a manual-amount line, not as a contract unitPrice', () => {
+    expect(entrySource).toContain("manualAmount: (l.pricingMode || l.service?.pricingMode) === 'MANUAL_AMOUNT'");
+  });
+
+  it('shows an invoice-amount field instead of the contract-bounds-checked price for a manual-amount line', () => {
+    expect(lineSource).toContain("const isManualAmount = (line.pricingMode || line.service?.pricingMode) === 'MANUAL_AMOUNT'");
+    expect(lineSource).toContain('label="قيمة الفاتورة"');
+    expect(lineSource).toContain('disabled={isManualAmount}');
+  });
 });

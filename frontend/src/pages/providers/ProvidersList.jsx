@@ -863,6 +863,16 @@ export default function ProvidersList() {
               <PermissionGuard requiredPermission="PROVIDER_MANAGE">
                 <SoftDeleteToggle showDeleted={showDeleted} onToggle={() => setShowDeleted((v) => !v)} />
               </PermissionGuard>
+              <PermissionGuard requiredPermission="PROVIDER_STANDARD_SERVICES_MANAGE">
+                <Button
+                  variant="outlined"
+                  color="secondary"
+                  onClick={() => navigate('/providers/standard-services')}
+                  sx={{ minWidth: '9.6875rem', whiteSpace: 'nowrap', flexShrink: 0 }}
+                >
+                  الخدمات المهنية القياسية
+                </Button>
+              </PermissionGuard>
               <PermissionGuard requiredPermission="PROVIDER_MANAGE">
                 <Button
                   variant="contained"

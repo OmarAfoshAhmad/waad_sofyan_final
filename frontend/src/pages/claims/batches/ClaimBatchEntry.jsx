@@ -804,6 +804,12 @@ export default function ClaimBatchEntry() {
             service: serviceObj,
             medicalServiceId: l.medicalServiceId || serviceObj.medicalServiceId || null,
             pricingItemId: l.pricingItemId || serviceObj.pricingItemId || null,
+            // Re-derived from the live standard-service list, not from the
+            // saved line: a service's pricing mode is a catalog property,
+            // and l.amountSource (fixed at save time) is what the
+            // already-settled financial split reflects, not what a further
+            // edit should be validated against.
+            pricingMode: serviceObj.pricingMode === 'MANUAL_AMOUNT' ? 'MANUAL_AMOUNT' : 'CONTRACT_PRICE',
             serviceName: lineName || serviceObj.serviceName || '',
             serviceCode: lineCode || serviceObj.serviceCode || '',
             serviceCategoryId: l.appliedCategoryId ?? l.serviceCategoryId ?? serviceObj.serviceCategoryId ?? null,
@@ -1175,19 +1181,29 @@ export default function ClaimBatchEntry() {
         svc.effectiveCategory?.name ??
         null;
 
+      // Pharmacy/optics-style services: no contract price list exists at
+      // all, the clerk enters the invoice amount directly. quantity is
+      // fixed at 1 -- an invoice is one line, not N units of a unit price --
+      // and the contract-price bounds (price/maxPrice) stay 0 so the
+      // per-row bounds-check tooltip never fires for a price that was never
+      // a contract price to begin with.
+      const isManualAmount = svc.pricingMode === 'MANUAL_AMOUNT';
+
       const nextPatch = {
         service: svc,
         medicalServiceId: svc.medicalServiceId || null,
-        pricingItemId: svc.pricingItemId || null,
+        pricingItemId: isManualAmount ? null : svc.pricingItemId || null,
+        pricingMode: isManualAmount ? 'MANUAL_AMOUNT' : 'CONTRACT_PRICE',
         serviceName: svc.serviceName || (typeof val === 'string' ? val : ''),
         serviceCode: svc.serviceCode || '',
         medicalCategoryId: resolvedCategoryId,
         medicalCategoryName: resolvedCategoryName,
         serviceCategoryId: resolvedCategoryId,
         serviceCategoryName: resolvedCategoryName,
-        unitPrice: price,
-        contractPrice: maxPrice,
-        maxContractPrice: maxPrice,
+        quantity: isManualAmount ? 1 : currentLine.quantity || 1,
+        unitPrice: isManualAmount ? 0 : price,
+        contractPrice: isManualAmount ? 0 : maxPrice,
+        maxContractPrice: isManualAmount ? 0 : maxPrice,
         ...(isFreeText
           ? failedCoverageResult('الخدمة النصية غير مرتبطة بخدمة معتمدة ولا يمكن احتساب تغطيتها')
           : { coveragePending: true })
@@ -1763,6 +1779,9 @@ export default function ClaimBatchEntry() {
             null,
           quantity: Number(l.quantity),
           unitPrice: parseFloat(l.unitPrice) || 0,
+          manualAmount: (l.pricingMode || l.service?.pricingMode) === 'MANUAL_AMOUNT'
+            ? parseFloat(l.unitPrice) || 0
+            : null,
           refusedAmount: parseFloat(l.refusedAmount) || 0,
           rejected: isClaimRejected ? true : l.rejected || false,
           rejectionReason: isClaimRejected ? effectiveRejectionReason : l.rejectionReason || null,

@@ -100,6 +100,42 @@ public class ProviderServiceService {
         return mapToResponseDto(saved, medicalService);
     }
 
+    /**
+     * Outcome of {@link #assignOrReactivate(Long, String)}: distinguishes a
+     * true no-op from an actual write, so a bulk caller can report an
+     * accurate created/reactivated/already-active summary.
+     */
+    public enum AssignmentOutcome {
+        CREATED, REACTIVATED, ALREADY_ACTIVE
+    }
+
+    /**
+     * Idempotent assign: unlike {@link #assignService}, which always attempts
+     * an INSERT and fails on any existing row (active or not), this looks at
+     * the existing row first and does the smallest correct thing -- no write
+     * at all if already active, reactivate the same row if it was soft-
+     * deleted, or create it if it never existed. Safe to call repeatedly with
+     * the same (providerId, serviceCode): a second call never creates a
+     * duplicate or throws.
+     */
+    @Transactional
+    public AssignmentOutcome assignOrReactivate(Long providerId, String serviceCode) {
+        return providerServiceRepository.findByProviderIdAndServiceCode(providerId, serviceCode)
+                .map(existing -> {
+                    if (Boolean.TRUE.equals(existing.getActive())) {
+                        return AssignmentOutcome.ALREADY_ACTIVE;
+                    }
+                    existing.setActive(true);
+                    providerServiceRepository.save(existing);
+                    return AssignmentOutcome.REACTIVATED;
+                })
+                .orElseGet(() -> {
+                    providerServiceRepository.save(ProviderService.builder()
+                            .providerId(providerId).serviceCode(serviceCode).active(true).build());
+                    return AssignmentOutcome.CREATED;
+                });
+    }
+
     // ═══════════════════════════════════════════════════════════════════════════
     // REMOVE SERVICE
     // ═══════════════════════════════════════════════════════════════════════════

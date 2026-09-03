@@ -95,6 +95,7 @@ export const ClaimLineRow = ({
     line.service?.effectiveCategory?.code ||
     '';
   const quantityInvalid = Boolean(line.service || line.serviceName) && !isValidClaimQuantity(line.quantity);
+  const isManualAmount = (line.pricingMode || line.service?.pricingMode) === 'MANUAL_AMOUNT';
 
   return (
     <Fragment>
@@ -223,64 +224,82 @@ export const ClaimLineRow = ({
             variant="standard"
             type="number"
             value={line.quantity}
+            disabled={isManualAmount}
             onChange={(e) => {
               const v = e.target.value;
               if (v === '' || Number(v) >= 0) updateLine(idx, { quantity: v });
             }}
             error={quantityInvalid}
-            helperText={quantityInvalid ? 'عدد صحيح > 0' : null}
+            helperText={quantityInvalid ? 'عدد صحيح > 0' : isManualAmount ? 'فاتورة واحدة' : null}
             inputProps={{ min: 1, step: 1 }}
             sx={inlineSx}
           />
         </TableCell>
         <TableCell align="center">
-          <Tooltip
-            title={
-              line.service?.maxContractPrice > line.service?.contractPrice
-                ? line.unitPrice > line.service?.maxContractPrice
-                  ? `السعر يتجاوز الحد الأقصى (${line.service.maxContractPrice})`
-                  : line.unitPrice < line.service?.contractPrice && line.unitPrice > 0
-                    ? `السعر أقل من الحد الأدنى (${line.service.contractPrice})`
+          {isManualAmount ? (
+            <Tooltip title="لا توجد قائمة أسعار لهذه الخدمة — أدخل قيمة الفاتورة الفعلية" arrow>
+              <TextField
+                variant="standard"
+                type="number"
+                label="قيمة الفاتورة"
+                value={line.unitPrice}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v === '' || Number(v) >= 0) updateLine(idx, { unitPrice: v });
+                }}
+                inputProps={{ min: 0, step: '0.01' }}
+                sx={inlineSx}
+              />
+            </Tooltip>
+          ) : (
+            <Tooltip
+              title={
+                line.service?.maxContractPrice > line.service?.contractPrice
+                  ? line.unitPrice > line.service?.maxContractPrice
+                    ? `السعر يتجاوز الحد الأقصى (${line.service.maxContractPrice})`
+                    : line.unitPrice < line.service?.contractPrice && line.unitPrice > 0
+                      ? `السعر أقل من الحد الأدنى (${line.service.contractPrice})`
+                      : ''
+                  : line.contractPrice > 0 && line.unitPrice > line.contractPrice
+                    ? `السعر يتجاوز العقد (${line.contractPrice})`
                     : ''
-                : line.contractPrice > 0 && line.unitPrice > line.contractPrice
-                  ? `السعر يتجاوز العقد (${line.contractPrice})`
-                  : ''
-            }
-            arrow
-          >
-            <TextField
-              variant="standard"
-              type="number"
-              value={line.unitPrice}
-              onChange={(e) => {
-                const v = e.target.value;
-                if (v === '' || Number(v) >= 0) updateLine(idx, { unitPrice: v });
-              }}
-              inputProps={{ min: 0 }}
-              sx={{
-                ...inlineSx,
-                '& input': {
-                  ...inlineSx['& input'],
-                  color: (
-                    line.service?.maxContractPrice > line.service?.contractPrice
-                      ? line.unitPrice > line.service?.maxContractPrice ||
-                        (line.unitPrice < line.service?.contractPrice && line.unitPrice > 0)
-                      : line.contractPrice > 0 && line.unitPrice > line.contractPrice
-                  )
-                    ? 'error.main'
-                    : 'inherit',
-                  fontWeight: (
-                    line.service?.maxContractPrice > line.service?.contractPrice
-                      ? line.unitPrice > line.service?.maxContractPrice ||
-                        (line.unitPrice < line.service?.contractPrice && line.unitPrice > 0)
-                      : line.contractPrice > 0 && line.unitPrice > line.contractPrice
-                  )
-                    ? 900
-                    : 'inherit'
-                }
-              }}
-            />
-          </Tooltip>
+              }
+              arrow
+            >
+              <TextField
+                variant="standard"
+                type="number"
+                value={line.unitPrice}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v === '' || Number(v) >= 0) updateLine(idx, { unitPrice: v });
+                }}
+                inputProps={{ min: 0 }}
+                sx={{
+                  ...inlineSx,
+                  '& input': {
+                    ...inlineSx['& input'],
+                    color: (
+                      line.service?.maxContractPrice > line.service?.contractPrice
+                        ? line.unitPrice > line.service?.maxContractPrice ||
+                          (line.unitPrice < line.service?.contractPrice && line.unitPrice > 0)
+                        : line.contractPrice > 0 && line.unitPrice > line.contractPrice
+                    )
+                      ? 'error.main'
+                      : 'inherit',
+                    fontWeight: (
+                      line.service?.maxContractPrice > line.service?.contractPrice
+                        ? line.unitPrice > line.service?.maxContractPrice ||
+                          (line.unitPrice < line.service?.contractPrice && line.unitPrice > 0)
+                        : line.contractPrice > 0 && line.unitPrice > line.contractPrice
+                    )
+                      ? 900
+                      : 'inherit'
+                  }
+                }}
+              />
+            </Tooltip>
+          )}
         </TableCell>
         {visibleColumns.coverage && (
           <TableCell align="center">

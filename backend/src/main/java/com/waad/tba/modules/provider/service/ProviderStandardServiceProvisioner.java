@@ -1,0 +1,205 @@
+package com.waad.tba.modules.provider.service;
+
+import com.waad.tba.common.exception.BusinessRuleException;
+import com.waad.tba.modules.medicaltaxonomy.entity.MedicalCategory;
+import com.waad.tba.modules.medicaltaxonomy.entity.MedicalService;
+import com.waad.tba.modules.medicaltaxonomy.enums.PricingMode;
+import com.waad.tba.modules.medicaltaxonomy.repository.MedicalCategoryRepository;
+import com.waad.tba.modules.medicaltaxonomy.repository.MedicalServiceRepository;
+import com.waad.tba.modules.provider.dto.ProvisionStandardServicesRequestDto;
+import com.waad.tba.modules.provider.dto.ProvisionStandardServicesSummaryDto;
+import com.waad.tba.modules.provider.dto.StandardServiceDto;
+import com.waad.tba.modules.provider.entity.Provider;
+import com.waad.tba.modules.provider.entity.ProviderService;
+import com.waad.tba.modules.provider.repository.ProviderRepository;
+import com.waad.tba.modules.provider.repository.ProviderServiceDefaultRepository;
+import com.waad.tba.modules.provider.repository.ProviderServiceRepository;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+/**
+ * Bulk-assigns standard (MANUAL_AMOUNT) services across many providers, and
+ * auto-applies them to a single newly created provider. This picks which
+ * providers get which service; it never decides coverage or pricing -- that
+ * stays exactly where it already lives (BenefitPolicyRule / MedicalService).
+ *
+ * Preview and apply share one computation: preview never writes, apply
+ * writes inside one transaction and reports what it actually did. Both read
+ * every matching provider and every existing assignment in one query each --
+ * bulk provisioning across thousands of providers must not become a
+ * per-provider round trip.
+ */
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class ProviderStandardServiceProvisioner {
+
+    private final ProviderRepository providerRepository;
+    private final ProviderServiceRepository providerServiceRepository;
+    private final ProviderServiceDefaultRepository providerServiceDefaultRepository;
+    private final MedicalServiceRepository medicalServiceRepository;
+    private final MedicalCategoryRepository medicalCategoryRepository;
+
+    @Transactional(readOnly = true)
+    public List<StandardServiceDto> listStandardServices() {
+        List<MedicalService> services = medicalServiceRepository
+                .findByPricingModeAndActiveTrue(PricingMode.MANUAL_AMOUNT);
+        Map<Long, MedicalCategory> categoriesById = medicalCategoryRepository
+                .findAllById(services.stream().map(MedicalService::getCategoryId)
+                        .filter(java.util.Objects::nonNull).collect(Collectors.toSet()))
+                .stream().collect(Collectors.toMap(MedicalCategory::getId, c -> c));
+
+        return services.stream().map(s -> {
+            MedicalCategory category = categoriesById.get(s.getCategoryId());
+            return StandardServiceDto.builder()
+                    .id(s.getId())
+                    .code(s.getCode())
+                    .name(s.getName())
+                    .categoryCode(category != null ? category.getCode() : null)
+                    .categoryName(category != null
+                            ? (category.getNameAr() != null ? category.getNameAr() : category.getName())
+                            : null)
+                    .build();
+        }).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public ProvisionStandardServicesSummaryDto preview(ProvisionStandardServicesRequestDto request) {
+        return compute(request, false);
+    }
+
+    @Transactional
+    public ProvisionStandardServicesSummaryDto apply(ProvisionStandardServicesRequestDto request) {
+        return compute(request, true);
+    }
+
+    /**
+     * Called once, right after a new provider is persisted, inside the same
+     * transaction as its creation -- a failure here must roll the provider
+     * back too, not leave it created without its standard services.
+     */
+    @Transactional
+    public void autoApplyOnNewProvider(Provider provider) {
+        if (provider.getProviderType() == null) {
+            return;
+        }
+        List<String> serviceCodes = providerServiceDefaultRepository
+                .findByProviderTypeAndActiveTrueAndAutoApplyTrueOrderBySortOrder(provider.getProviderType())
+                .stream().map(d -> d.getServiceCode()).toList();
+        if (serviceCodes.isEmpty()) {
+            return;
+        }
+        for (String code : serviceCodes) {
+            providerServiceRepository.save(ProviderService.builder()
+                    .providerId(provider.getId()).serviceCode(code).active(true).build());
+        }
+    }
+
+    private ProvisionStandardServicesSummaryDto compute(
+            ProvisionStandardServicesRequestDto request, boolean apply) {
+        List<String> serviceCodes = validateServiceCodes(request.getServiceCodes());
+        List<Provider> providers = resolveProviders(request);
+
+        if (providers.isEmpty() || serviceCodes.isEmpty()) {
+            return ProvisionStandardServicesSummaryDto.builder().build();
+        }
+
+        List<Long> providerIds = providers.stream().map(Provider::getId).toList();
+        Map<String, ProviderService> existingByKey = providerServiceRepository
+                .findAllByProviderIdInAndServiceCodeIn(providerIds, serviceCodes)
+                .stream().collect(Collectors.toMap(
+                        ps -> ps.getProviderId() + "|" + ps.getServiceCode(), ps -> ps));
+
+        List<ProviderService> toInsert = new ArrayList<>();
+        List<ProviderService> toReactivate = new ArrayList<>();
+        long alreadyActive = 0;
+        Set<Long> providersNeedingChanges = new HashSet<>();
+
+        for (Provider provider : providers) {
+            for (String code : serviceCodes) {
+                ProviderService existing = existingByKey.get(provider.getId() + "|" + code);
+                if (existing == null) {
+                    toInsert.add(ProviderService.builder()
+                            .providerId(provider.getId()).serviceCode(code).active(true).build());
+                    providersNeedingChanges.add(provider.getId());
+                } else if (!Boolean.TRUE.equals(existing.getActive())) {
+                    toReactivate.add(existing);
+                    providersNeedingChanges.add(provider.getId());
+                } else {
+                    alreadyActive++;
+                }
+            }
+        }
+
+        if (apply) {
+            if (!toInsert.isEmpty()) {
+                providerServiceRepository.saveAll(toInsert);
+            }
+            if (!toReactivate.isEmpty()) {
+                toReactivate.forEach(ps -> ps.setActive(true));
+                providerServiceRepository.saveAll(toReactivate);
+            }
+        }
+
+        return ProvisionStandardServicesSummaryDto.builder()
+                .providersMatched(providers.size())
+                .providersAlreadyComplete(providers.size() - providersNeedingChanges.size())
+                .providersNeedingChanges(providersNeedingChanges.size())
+                .assignmentsToCreate(toInsert.size())
+                .assignmentsToReactivate(toReactivate.size())
+                .assignmentsAlreadyActive(alreadyActive)
+                .build();
+    }
+
+    private List<String> validateServiceCodes(List<String> requested) {
+        if (requested == null || requested.isEmpty()) {
+            throw new BusinessRuleException("يجب اختيار خدمة واحدة على الأقل");
+        }
+        List<String> normalized = requested.stream().map(c -> c.trim().toUpperCase()).distinct().toList();
+        List<MedicalService> found = medicalServiceRepository.findByCodeIn(normalized);
+        if (found.size() != normalized.size()) {
+            Set<String> foundCodes = found.stream().map(MedicalService::getCode).collect(Collectors.toSet());
+            List<String> missing = normalized.stream().filter(c -> !foundCodes.contains(c)).toList();
+            throw new BusinessRuleException("خدمات غير موجودة في الفهرس الطبي: " + String.join(", ", missing));
+        }
+        boolean anyNotManual = found.stream().anyMatch(s -> s.getPricingMode() != PricingMode.MANUAL_AMOUNT);
+        if (anyNotManual) {
+            throw new BusinessRuleException(
+                    "هذا التوفير الجماعي مخصص فقط للخدمات المهنية القياسية (المبلغ اليدوي)");
+        }
+        return normalized;
+    }
+
+    private List<Provider> resolveProviders(ProvisionStandardServicesRequestDto request) {
+        if (request.getScope() == null) {
+            throw new BusinessRuleException("يجب تحديد نطاق التطبيق");
+        }
+        return switch (request.getScope()) {
+            case ALL_ACTIVE -> providerRepository.findByActiveTrue();
+            case PROVIDER_TYPES -> {
+                if (request.getProviderTypes() == null || request.getProviderTypes().isEmpty()) {
+                    throw new BusinessRuleException("يجب تحديد نوع مرفق واحد على الأقل");
+                }
+                List<Provider.ProviderType> types = request.getProviderTypes().stream()
+                        .map(t -> Provider.ProviderType.valueOf(t.trim().toUpperCase())).toList();
+                yield providerRepository.findByActiveTrueAndProviderTypeIn(types);
+            }
+            case SELECTED_PROVIDERS -> {
+                if (request.getProviderIds() == null || request.getProviderIds().isEmpty()) {
+                    throw new BusinessRuleException("يجب تحديد مرفق واحد على الأقل");
+                }
+                yield providerRepository.findAllById(request.getProviderIds()).stream()
+                        .filter(Provider::getActive).toList();
+            }
+        };
+    }
+}

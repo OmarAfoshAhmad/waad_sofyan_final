@@ -51,6 +51,7 @@ const ProvidersList = Loadable(lazy(() => import('pages/providers/ProvidersList'
 const ProviderCreate = Loadable(lazy(() => import('pages/providers/ProviderCreate')));
 const ProviderEdit = Loadable(lazy(() => import('pages/providers/ProviderEdit')));
 const ProviderView = Loadable(lazy(() => import('pages/providers/ProviderView')));
+const ProviderStandardServicesPage = Loadable(lazy(() => import('pages/providers/ProviderStandardServicesPage')));
 
 // Provider Portal Reports
 const ProviderClaimsReport = Loadable(lazy(() => import('pages/provider/reports/ProviderClaimsReport')));
@@ -442,6 +443,14 @@ const MainRoutes = {
           element: (
             <PermissionGuard isRouteGuard>
               <ProviderEdit />
+            </PermissionGuard>
+          )
+        },
+        {
+          path: 'standard-services',
+          element: (
+            <PermissionGuard requiredPermission="PROVIDER_STANDARD_SERVICES_MANAGE" isRouteGuard>
+              <ProviderStandardServicesPage />
             </PermissionGuard>
           )
         },

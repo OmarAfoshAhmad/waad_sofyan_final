@@ -96,6 +96,17 @@ public interface ProviderServiceRepository extends JpaRepository<ProviderService
     Optional<ProviderService> findByProviderIdAndServiceCode(@Param("providerId") Long providerId,
                                                               @Param("serviceCode") String serviceCode);
 
+    /**
+     * Every existing assignment (active or not) across a set of providers and
+     * service codes, in one query -- the read side of bulk provisioning
+     * across many providers must not become N (or N×M) round trips.
+     */
+    @Query("SELECT ps FROM ProviderService ps " +
+           "WHERE ps.providerId IN :providerIds AND ps.serviceCode IN :serviceCodes")
+    List<ProviderService> findAllByProviderIdInAndServiceCodeIn(
+            @Param("providerIds") List<Long> providerIds,
+            @Param("serviceCodes") List<String> serviceCodes);
+
     // ═══════════════════════════════════════════════════════════════════════════
     // BULK OPERATIONS
     // ═══════════════════════════════════════════════════════════════════════════

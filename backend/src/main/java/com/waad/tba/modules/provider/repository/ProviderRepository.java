@@ -49,6 +49,15 @@ public interface ProviderRepository extends JpaRepository<Provider, Long>, JpaSp
 
        Page<Provider> findByActiveFalse(Pageable pageable);
 
+       /**
+        * Non-paginated: bulk provisioning scopes (ALL_ACTIVE / PROVIDER_TYPES)
+        * need every matching provider in one query, not a page of them.
+        */
+       List<Provider> findByActiveTrue();
+
+       List<Provider> findByActiveTrueAndProviderTypeIn(
+                     java.util.Collection<Provider.ProviderType> providerTypes);
+
        @Query("SELECT p FROM Provider p WHERE p.active = true")
        List<Provider> findAllActive();
 
