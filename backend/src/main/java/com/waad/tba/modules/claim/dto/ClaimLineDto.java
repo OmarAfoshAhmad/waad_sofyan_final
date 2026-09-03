@@ -41,6 +41,16 @@ public class ClaimLineDto {
     private Long pricingItemId;
     private Long pendingServiceId;
 
+    /**
+     * Invoice amount entered directly by the clerk, for a service whose
+     * MedicalService.pricingMode is MANUAL_AMOUNT (e.g. a pharmacy or optics
+     * invoice with no fixed contract price list). Rejected if the resolved
+     * service is CONTRACT_PRICE, and required (greater than zero) when it is
+     * MANUAL_AMOUNT -- pricingItemId must be null in that case.
+     */
+    @Positive(message = "Manual amount must be positive")
+    private BigDecimal manualAmount;
+
     // Auditable price/dictionary snapshot selected by serviceDate (read-only).
     private LocalDate pricingEffectiveFrom;
     private LocalDate pricingEffectiveTo;
@@ -97,6 +107,14 @@ public class ClaimLineDto {
      * Total price (SERVER-CALCULATED: quantity × unitPrice) (READ-ONLY)
      */
     private BigDecimal totalPrice;
+
+    /**
+     * Where unitPrice came from for this line (READ-ONLY):
+     * CONTRACT_PRICE or MANUAL_AMOUNT. Set once at save time so later
+     * financial reporting can tell a manually-entered invoice line apart
+     * from a contract-priced one without re-deriving it.
+     */
+    private String amountSource;
 
     /**
      * Whether service requires pre-authorization

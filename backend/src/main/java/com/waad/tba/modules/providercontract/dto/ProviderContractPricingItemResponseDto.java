@@ -74,6 +74,22 @@ public class ProviderContractPricingItemResponseDto {
     private LocalDateTime updatedAt;
 
     /**
+     * Set only for a standard (MANUAL_AMOUNT) service option synthesized by
+     * ClaimEntryContextService -- there is no ProviderContractPricingItem
+     * behind it, so {@code id} stays null and this is the only identifier
+     * the claim line can submit as medicalServiceId.
+     */
+    private Long medicalServiceId;
+
+    /**
+     * CONTRACT_PRICE (default, from the pricing item) or MANUAL_AMOUNT (the
+     * clerk enters the invoice amount; contractPrice/maxContractPrice are
+     * null because there is no price list for it).
+     */
+    @Builder.Default
+    private String pricingMode = "CONTRACT_PRICE";
+
+    /**
      * Convert entity to response DTO
      */
     public static ProviderContractPricingItemResponseDto fromEntity(ProviderContractPricingItem entity) {

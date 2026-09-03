@@ -253,6 +253,16 @@ public class ClaimLine {
     private Boolean requiresPA = false;
 
     /**
+     * Where unitPrice came from, fixed at save time: CONTRACT_PRICE or
+     * MANUAL_AMOUNT. Lets financial reporting tell a manually-entered
+     * invoice line apart from a contract-priced one without re-deriving it
+     * from MedicalService, whose pricing_mode can change after the fact.
+     */
+    @Column(name = "amount_source", length = 20)
+    @Builder.Default
+    private String amountSource = "CONTRACT_PRICE";
+
+    /**
      * Total requested amount for this line (enteredUnitPrice * quantity).
      * Added for direct mapping and reporting.
      */

@@ -36,6 +36,11 @@ public interface MedicalServiceRepository extends JpaRepository<MedicalService, 
    */
   Optional<MedicalService> findByCode(String code);
 
+  List<MedicalService> findByCodeIn(java.util.Collection<String> codes);
+
+  List<MedicalService> findByPricingModeAndActiveTrue(
+          com.waad.tba.modules.medicaltaxonomy.enums.PricingMode pricingMode);
+
   /**
    * Find service by exact name (for duplicate checking during import)
    * Uses findFirstBy to avoid IncorrectResultSizeDataAccessException when

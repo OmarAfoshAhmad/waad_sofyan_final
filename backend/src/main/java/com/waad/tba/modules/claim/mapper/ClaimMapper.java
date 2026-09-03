@@ -13,6 +13,8 @@ import com.waad.tba.modules.preauthorization.entity.PreAuthorization;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalCategoryRepository;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalServiceRepository;
 import com.waad.tba.modules.medicaltaxonomy.entity.MedicalCategory;
+import com.waad.tba.modules.medicaltaxonomy.enums.PricingMode;
+import com.waad.tba.modules.provider.repository.ProviderServiceRepository;
 import com.waad.tba.modules.providercontract.entity.ProviderContractPricingItem;
 import com.waad.tba.modules.providercontract.repository.ProviderContractPricingItemRepository;
 import com.waad.tba.modules.providercontract.service.EffectiveProviderContractResolver;
@@ -56,6 +58,7 @@ public class ClaimMapper {
         private final MedicalCategoryRepository medicalCategoryRepository;
         private final MedicalServiceRepository medicalServiceRepository;
         private final ProviderContractPricingItemRepository pricingItemRepository;
+        private final ProviderServiceRepository providerServiceRepository;
         private final EffectiveProviderContractResolver effectiveContractResolver;
         private final ClaimBatchRepository claimBatchRepository;
         private final ClaimPendingServiceRepository pendingServiceRepository;
@@ -215,6 +218,7 @@ public class ClaimMapper {
                         // The public DTO accepts the unified-catalog service ID as its
                         // canonical input. Resolve its denormalized values server-side;
                         // callers must not have to resend editable code/name fields.
+                        PricingMode servicePricingMode = PricingMode.CONTRACT_PRICE;
                         if (lineDto.getMedicalServiceId() != null) {
                                 var catalogService = medicalServiceRepository.findById(lineDto.getMedicalServiceId())
                                                 .orElseThrow(() -> new IllegalArgumentException(
@@ -223,9 +227,37 @@ public class ClaimMapper {
                                 codeToLookup = catalogService.getCode();
                                 resolvedServiceName = catalogService.getName();
                                 catalogCategoryId = catalogService.getCategoryId();
+                                servicePricingMode = catalogService.getPricingMode() != null
+                                                ? catalogService.getPricingMode()
+                                                : PricingMode.CONTRACT_PRICE;
                         }
 
-                        ProviderContractPricingItem matchedPricingItem = pendingDirectPrice ? null
+                        // Pharmacy/optics-style services: the invoice amount is entered
+                        // directly, there is no contract price list to look up at all.
+                        boolean manualAmountLine = !pendingDirectPrice
+                                        && servicePricingMode == PricingMode.MANUAL_AMOUNT;
+                        if (manualAmountLine) {
+                                if (lineDto.getPricingItemId() != null) {
+                                        throw new BusinessRuleException(
+                                                        "هذه الخدمة تُدخل قيمتها يدوياً ولا تتبع قائمة أسعار عقد");
+                                }
+                                if (lineDto.getManualAmount() == null
+                                                || lineDto.getManualAmount().compareTo(BigDecimal.ZERO) <= 0) {
+                                        throw new BusinessRuleException("يجب إدخال قيمة الفاتورة لهذه الخدمة");
+                                }
+                                if (!providerServiceRepository.existsByProviderIdAndServiceCode(
+                                                claim.getProviderId(), codeToLookup)) {
+                                        throw new BusinessRuleException(
+                                                        "مقدم الخدمة غير مُسنَد إليه هذه الخدمة المهنية القياسية");
+                                }
+                                enteredUnitPrice = lineDto.getManualAmount();
+                                resolvedUnitPrice = lineDto.getManualAmount();
+                        } else if (lineDto.getManualAmount() != null) {
+                                throw new BusinessRuleException(
+                                                "لا يمكن إدخال مبلغ يدوي لخدمة مُسعَّرة عبر عقد مقدم الخدمة");
+                        }
+
+                        ProviderContractPricingItem matchedPricingItem = (pendingDirectPrice || manualAmountLine) ? null
                                         : resolvePricingItemForLine(
                                                         resolvedContract.contract().getId(), claim.getServiceDate(),
                                                         resolvedPricingItemId,
@@ -244,7 +276,9 @@ public class ClaimMapper {
                                 }
                         }
 
-                        if ("GEN-MEDICATION".equals(codeToLookup) || "GEN-MEDICAL-SERVICE".equals(codeToLookup)) {
+                        if (manualAmountLine) {
+                                // resolvedUnitPrice already set to the entered invoice amount above.
+                        } else if ("GEN-MEDICATION".equals(codeToLookup) || "GEN-MEDICAL-SERVICE".equals(codeToLookup)) {
                                 resolvedUnitPrice = enteredUnitPrice;
                         } else if (!pendingDirectPrice && hasBusinessValue(codeToLookup)) {
                                 EffectivePriceResponseDto priceResponse = providerContractService.getEffectivePrice(
@@ -268,7 +302,8 @@ public class ClaimMapper {
                                                 : resolvedUnitPrice;
                         }
 
-                        Integer quantity = lineDto.getQuantity() != null ? lineDto.getQuantity() : 1;
+                        Integer quantity = manualAmountLine ? 1
+                                        : (lineDto.getQuantity() != null ? lineDto.getQuantity() : 1);
                         BigDecimal requestedUnitPrice = enteredUnitPrice.compareTo(BigDecimal.ZERO) > 0
                                         ? enteredUnitPrice
                                         : (resolvedUnitPrice != null ? resolvedUnitPrice : BigDecimal.ZERO);
@@ -431,6 +466,7 @@ public class ClaimMapper {
                                                                         ? effectiveLineRejectionReason
                                                                         : lineDto.getManualRefusalReason())
                                         .unitPrice(resolvedUnitPrice != null ? resolvedUnitPrice : enteredUnitPrice)
+                                        .amountSource(manualAmountLine ? "MANUAL_AMOUNT" : "CONTRACT_PRICE")
                                         .totalPrice(result.getEffectiveTotal())
                                         .requestedUnitPrice(requestedUnitPrice)
                                         .approvedUnitPrice(result.getEffectiveUnitPrice())
@@ -686,6 +722,7 @@ public class ClaimMapper {
                                 .appliedCategoryName(line.getAppliedCategoryName())
                                 .quantity(line.getQuantity())
                                 .unitPrice(line.getUnitPrice())
+                                .amountSource(line.getAmountSource())
                                 .totalPrice(line.getTotalPrice())
                                 .requestedUnitPrice(line.getRequestedUnitPrice())
                                 .approvedUnitPrice(line.getApprovedUnitPrice())

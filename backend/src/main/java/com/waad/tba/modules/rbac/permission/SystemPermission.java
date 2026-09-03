@@ -30,6 +30,8 @@ public enum SystemPermission {
     PREAUTH_DELETE(PermissionCategory.PREAUTHORIZATIONS, "حذف مسودة موافقة مسبقة", true),
     PROVIDER_VIEW(PermissionCategory.PROVIDERS, "عرض مقدمي الخدمة", false),
     PROVIDER_MANAGE(PermissionCategory.PROVIDERS, "إدارة مقدمي الخدمة", true),
+    PROVIDER_STANDARD_SERVICES_MANAGE(PermissionCategory.PROVIDERS,
+            "تطبيق الخدمات المهنية القياسية على مقدمي الخدمة", true),
     EMPLOYER_VIEW(PermissionCategory.EMPLOYERS, "عرض جهات العمل", false),
     EMPLOYER_MANAGE(PermissionCategory.EMPLOYERS, "إدارة جهات العمل", true),
     CONTRACT_VIEW(PermissionCategory.CONTRACTS_PRICING, "عرض العقود والأسعار", false),

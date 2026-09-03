@@ -41,6 +41,9 @@ class ClaimEntryContextServiceTest {
     @Mock ProviderContractPricingItemService pricingItemService;
     @Mock LimitBalanceReader limitBalanceReader;
     @Mock PreAuthorizationRepository preAuthorizationRepository;
+    @Mock com.waad.tba.modules.provider.repository.ProviderServiceRepository providerServiceRepository;
+    @Mock com.waad.tba.modules.medicaltaxonomy.repository.MedicalServiceRepository medicalServiceRepository;
+    @Mock com.waad.tba.modules.medicaltaxonomy.repository.MedicalCategoryRepository medicalCategoryRepository;
     // Real, over a mock repository: this screen only asks the member/employer
     // question, which never reaches the provider network table. A stub here
     // would let the check pass without actually checking.
@@ -141,5 +144,79 @@ class ClaimEntryContextServiceTest {
         service.findEffectiveServices(7L, 8L, 9L, date, pageable);
 
         verify(pricingItemService).findEffectiveInContract(41L, date, null, pageable);
+    }
+
+    @Test
+    void includesTheProvidersAssignedStandardServicesAlongsideContractPricedItems() {
+        LocalDate date = LocalDate.of(2025, 8, 12);
+        Employer employer = Employer.builder().id(9L).name("جهة أ").build();
+        ProviderContract contract = ProviderContract.builder().id(41L).contractCode("CON-A")
+                .contractNumber("2025-A").startDate(LocalDate.of(2025, 1, 1))
+                .endDate(LocalDate.of(2025, 12, 31)).build();
+        ProviderContractTerm terms = ProviderContractTerm.builder().id(42L).contract(contract).build();
+        var pageable = PageRequest.of(0, 50);
+
+        when(memberContextResolver.resolveForOrFail(7L, date)).thenReturn(new MemberDatedContext(
+                7L, date,
+                MemberEmployerAssignment.builder().id(101L).build(), employer,
+                MemberPolicyAssignment.builder().id(202L).build(),
+                BenefitPolicy.builder().id(31L).policyCode("POL-A").name("وثيقة أ")
+                        .status(BenefitPolicyStatus.ACTIVE).build()));
+        when(contractResolver.resolve(8L, 9L, date))
+                .thenReturn(new EffectiveProviderContractResolver.ResolvedContract(contract, terms));
+        when(pricingItemService.findEffectiveInContract(41L, date, null, pageable))
+                .thenReturn(new PageImpl<>(java.util.List.of()));
+
+        when(providerServiceRepository.findServiceCodesByProviderId(8L))
+                .thenReturn(java.util.List.of("SYS-DRUG-GENERAL"));
+        var drugCategory = com.waad.tba.modules.medicaltaxonomy.entity.MedicalCategory.builder()
+                .id(77L).code("CAT-DRUG-GENERAL").name("Drugs").nameAr("أدوية").build();
+        when(medicalServiceRepository.findByPricingModeAndActiveTrue(
+                com.waad.tba.modules.medicaltaxonomy.enums.PricingMode.MANUAL_AMOUNT))
+                .thenReturn(java.util.List.of(
+                        com.waad.tba.modules.medicaltaxonomy.entity.MedicalService.builder()
+                                .id(501L).code("SYS-DRUG-GENERAL").name("فاتورة أدوية روتينية")
+                                .categoryId(77L)
+                                .pricingMode(com.waad.tba.modules.medicaltaxonomy.enums.PricingMode.MANUAL_AMOUNT)
+                                .build()));
+        when(medicalCategoryRepository.findAllById(java.util.Set.of(77L)))
+                .thenReturn(java.util.List.of(drugCategory));
+
+        var result = service.findEffectiveServices(7L, 8L, 9L, date, pageable);
+
+        assertThat(result.getContent()).hasSize(1);
+        var option = result.getContent().get(0);
+        assertThat(option.getMedicalServiceId()).isEqualTo(501L);
+        assertThat(option.getPricingMode()).isEqualTo("MANUAL_AMOUNT");
+        assertThat(option.getServiceCode()).isEqualTo("SYS-DRUG-GENERAL");
+        assertThat(option.getContractPrice()).isNull();
+        assertThat(option.getId()).isNull();
+    }
+
+    @Test
+    void excludesAStandardServiceTheProviderIsNotAssigned() {
+        LocalDate date = LocalDate.of(2025, 8, 12);
+        Employer employer = Employer.builder().id(9L).name("جهة أ").build();
+        ProviderContract contract = ProviderContract.builder().id(41L).contractCode("CON-A")
+                .contractNumber("2025-A").startDate(LocalDate.of(2025, 1, 1))
+                .endDate(LocalDate.of(2025, 12, 31)).build();
+        ProviderContractTerm terms = ProviderContractTerm.builder().id(42L).contract(contract).build();
+        var pageable = PageRequest.of(0, 50);
+
+        when(memberContextResolver.resolveForOrFail(7L, date)).thenReturn(new MemberDatedContext(
+                7L, date,
+                MemberEmployerAssignment.builder().id(101L).build(), employer,
+                MemberPolicyAssignment.builder().id(202L).build(),
+                BenefitPolicy.builder().id(31L).policyCode("POL-A").name("وثيقة أ")
+                        .status(BenefitPolicyStatus.ACTIVE).build()));
+        when(contractResolver.resolve(8L, 9L, date))
+                .thenReturn(new EffectiveProviderContractResolver.ResolvedContract(contract, terms));
+        when(pricingItemService.findEffectiveInContract(41L, date, null, pageable))
+                .thenReturn(new PageImpl<>(java.util.List.of()));
+        when(providerServiceRepository.findServiceCodesByProviderId(8L)).thenReturn(java.util.List.of());
+
+        var result = service.findEffectiveServices(7L, 8L, 9L, date, pageable);
+
+        assertThat(result.getContent()).isEmpty();
     }
 }

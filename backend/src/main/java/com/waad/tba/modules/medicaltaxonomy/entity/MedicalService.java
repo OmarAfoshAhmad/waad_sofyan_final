@@ -1,6 +1,7 @@
 package com.waad.tba.modules.medicaltaxonomy.entity;
 
 import com.waad.tba.modules.medicaltaxonomy.enums.MedicalServiceStatus;
+import com.waad.tba.modules.medicaltaxonomy.enums.PricingMode;
 import com.waad.tba.common.exception.ArchitecturalViolationException;
 import jakarta.persistence.*;
 import lombok.*;
@@ -142,6 +143,17 @@ public class MedicalService {
      */
     @Column(name = "cost", precision = 15, scale = 2)
     private BigDecimal cost;
+
+    /**
+     * How a claim line's unit price is determined for this service:
+     * CONTRACT_PRICE (default) resolves from the provider's contract pricing
+     * item; MANUAL_AMOUNT lets the clerk enter the invoice amount directly
+     * (pharmacy/optics-style services with no fixed price list).
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "pricing_mode", nullable = false, length = 20)
+    @Builder.Default
+    private PricingMode pricingMode = PricingMode.CONTRACT_PRICE;
 
     /**
      * Master catalog flag.

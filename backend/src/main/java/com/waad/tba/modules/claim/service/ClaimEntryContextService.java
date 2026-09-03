@@ -16,7 +16,16 @@ import com.waad.tba.modules.providercontract.dto.ProviderContractPricingItemResp
 import com.waad.tba.modules.benefitpolicy.service.LimitBalanceReader;
 import com.waad.tba.modules.preauthorization.repository.PreAuthorizationRepository;
 import com.waad.tba.modules.claim.dto.EligiblePreAuthorizationDto;
+import com.waad.tba.modules.medicaltaxonomy.entity.MedicalCategory;
+import com.waad.tba.modules.medicaltaxonomy.entity.MedicalService;
+import com.waad.tba.modules.medicaltaxonomy.enums.PricingMode;
+import com.waad.tba.modules.medicaltaxonomy.repository.MedicalCategoryRepository;
+import com.waad.tba.modules.medicaltaxonomy.repository.MedicalServiceRepository;
+import com.waad.tba.modules.provider.repository.ProviderServiceRepository;
+import org.springframework.data.domain.PageImpl;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 import lombok.RequiredArgsConstructor;
 
@@ -35,6 +44,9 @@ public class ClaimEntryContextService {
     private final ProviderContractPricingItemService pricingItemService;
     private final LimitBalanceReader limitBalanceReader;
     private final PreAuthorizationRepository preAuthorizationRepository;
+    private final ProviderServiceRepository providerServiceRepository;
+    private final MedicalServiceRepository medicalServiceRepository;
+    private final MedicalCategoryRepository medicalCategoryRepository;
 
     @Transactional(readOnly = true)
     public ClaimEntryContextDto resolve(Long memberId, Long providerId,
@@ -90,7 +102,70 @@ public class ClaimEntryContextService {
             Long memberId, Long providerId, Long requestedEmployerId,
             LocalDate serviceDate, String query, Pageable pageable) {
         ClaimEntryContextDto context = resolve(memberId, providerId, requestedEmployerId, serviceDate);
-        return pricingItemService.findEffectiveInContract(context.contractId(), serviceDate, query, pageable);
+        Page<ProviderContractPricingItemResponseDto> contractItems = pricingItemService
+                .findEffectiveInContract(context.contractId(), serviceDate, query, pageable);
+
+        // Standard services (pharmacy/optics-style invoices, MANUAL_AMOUNT):
+        // there is no ProviderContractPricingItem to page through, and the
+        // set is always small (a handful of catalog entries), so it is
+        // folded into the first page only rather than paginated separately.
+        List<ProviderContractPricingItemResponseDto> manualAmountOptions = pageable.getOffset() == 0
+                ? findManualAmountServiceOptions(providerId, query)
+                : List.of();
+        if (manualAmountOptions.isEmpty()) {
+            return contractItems;
+        }
+
+        List<ProviderContractPricingItemResponseDto> merged = new ArrayList<>(contractItems.getContent());
+        merged.addAll(manualAmountOptions);
+        return new PageImpl<>(merged, pageable, contractItems.getTotalElements() + manualAmountOptions.size());
+    }
+
+    private List<ProviderContractPricingItemResponseDto> findManualAmountServiceOptions(
+            Long providerId, String query) {
+        Set<String> providerServiceCodes = Set.copyOf(
+                providerServiceRepository.findServiceCodesByProviderId(providerId));
+        if (providerServiceCodes.isEmpty()) {
+            return List.of();
+        }
+
+        String normalizedQuery = query == null ? "" : query.trim().toLowerCase();
+        List<MedicalService> standardServices = medicalServiceRepository
+                .findByPricingModeAndActiveTrue(PricingMode.MANUAL_AMOUNT).stream()
+                .filter(service -> providerServiceCodes.contains(service.getCode()))
+                .filter(service -> normalizedQuery.isBlank()
+                        || service.getName().toLowerCase().contains(normalizedQuery)
+                        || service.getCode().toLowerCase().contains(normalizedQuery))
+                .toList();
+        if (standardServices.isEmpty()) {
+            return List.of();
+        }
+
+        java.util.Map<Long, MedicalCategory> categoriesById = medicalCategoryRepository
+                .findAllById(standardServices.stream().map(MedicalService::getCategoryId)
+                        .filter(java.util.Objects::nonNull).collect(java.util.stream.Collectors.toSet()))
+                .stream().collect(java.util.stream.Collectors.toMap(MedicalCategory::getId, c -> c));
+
+        return standardServices.stream().map(service -> {
+            MedicalCategory category = categoriesById.get(service.getCategoryId());
+            ProviderContractPricingItemResponseDto.CategorySummaryDto categoryDto = category == null ? null
+                    : ProviderContractPricingItemResponseDto.CategorySummaryDto.builder()
+                            .id(category.getId()).code(category.getCode())
+                            .name(category.getName()).nameAr(category.getNameAr()).build();
+            return ProviderContractPricingItemResponseDto.builder()
+                    .medicalServiceId(service.getId())
+                    .pricingMode(PricingMode.MANUAL_AMOUNT.name())
+                    .serviceName(service.getName())
+                    .serviceCode(service.getCode())
+                    .categoryName(category != null
+                            ? (category.getNameAr() != null ? category.getNameAr() : category.getName())
+                            : null)
+                    .medicalCategory(categoryDto)
+                    .effectiveCategory(categoryDto)
+                    .quantity(1)
+                    .isCurrentlyEffective(true)
+                    .build();
+        }).toList();
     }
 
     public Page<ProviderContractPricingItemResponseDto> findEffectiveServices(
