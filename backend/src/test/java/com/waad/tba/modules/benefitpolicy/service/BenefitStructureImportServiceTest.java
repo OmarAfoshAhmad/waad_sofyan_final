@@ -177,6 +177,79 @@ class BenefitStructureImportServiceTest {
         assertThat(result.getRules()).isEqualTo(1);
     }
 
+    /**
+     * The mistake this message exists for: writing a business context in the
+     * base "السياق" column instead of the dedicated "سياق القرار" column beside
+     * it. MATERNITY is not an {@link EncounterType} constant at all, so this
+     * used to fail one layer earlier than the column-aware message could reach
+     * -- inside the shared enum parser, with a bare "قيمة غير صحيحة" that named
+     * neither what was expected nor where the value belonged.
+     */
+    @Test
+    void writingABusinessContextInTheBaseColumnNamesTheRightColumnToUseInstead() throws Exception {
+        BenefitPolicy policy = BenefitPolicy.builder().id(1L)
+                .status(BenefitPolicy.BenefitPolicyStatus.DRAFT).active(true).build();
+        when(policyRepository.findById(1L)).thenReturn(Optional.of(policy));
+
+        byte[] populated;
+        try (Workbook workbook = new XSSFWorkbook(new ByteArrayInputStream(service.createSimplifiedTemplate()));
+             ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            Row row = workbook.getSheet("المنافع").createRow(1);
+            row.createCell(0).setCellValue("CAT-COV-INPATIENT");
+            row.createCell(1).setCellValue("الولادة");
+            row.createCell(2).setCellValue("MATERNITY"); // the mistake: belongs in column 14
+            row.createCell(3).setCellValue(75);
+            workbook.write(output);
+            populated = output.toByteArray();
+        }
+
+        assertThatThrownBy(() -> service.importWorkbook(1L,
+                workbook("wrong-column.xlsx", populated), true, BenefitStructureImportService.ImportMode.MERGE))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("سياق القرار")
+                .hasMessageContaining("MATERNITY")
+                .as("must not surface the shared enum parser's bare \"قيمة غير صحيحة\", which names "
+                        + "neither what was expected nor where the value belonged")
+                .satisfies(ex -> assertThat(ex.getMessage()).doesNotContain("قيمة غير صحيحة"));
+    }
+
+    /**
+     * The narrower case: a value that IS a valid {@link EncounterType} constant
+     * (so it survives the shared enum parser) but is not one of the three this
+     * feature accepts. The message must still name what is allowed. The
+     * سياق القرار hint is appended whenever the sheet carries that column,
+     * regardless of which invalid value triggered it -- it names where a
+     * business context belongs without claiming that is what OPERATING_ROOM
+     * meant, so its presence here is harmless rather than something to assert
+     * against.
+     */
+    @Test
+    void writingADisallowedButValidEncounterTypeNamesWhatIsAccepted() throws Exception {
+        BenefitPolicy policy = BenefitPolicy.builder().id(1L)
+                .status(BenefitPolicy.BenefitPolicyStatus.DRAFT).active(true).build();
+        when(policyRepository.findById(1L)).thenReturn(Optional.of(policy));
+
+        byte[] populated;
+        try (Workbook workbook = new XSSFWorkbook(new ByteArrayInputStream(service.createSimplifiedTemplate()));
+             ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            Row row = workbook.getSheet("المنافع").createRow(1);
+            row.createCell(0).setCellValue("CAT-COV-INPATIENT");
+            row.createCell(1).setCellValue("غرفة العمليات");
+            row.createCell(2).setCellValue("OPERATING_ROOM");
+            row.createCell(3).setCellValue(75);
+            workbook.write(output);
+            populated = output.toByteArray();
+        }
+
+        assertThatThrownBy(() -> service.importWorkbook(1L,
+                workbook("disallowed-encounter.xlsx", populated), true, BenefitStructureImportService.ImportMode.MERGE))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("OUTPATIENT")
+                .hasMessageContaining("INPATIENT")
+                .hasMessageContaining("ANY")
+                .hasMessageContaining("OPERATING_ROOM");
+    }
+
     private MockMultipartFile workbook(String name, byte[] content) {
         return new MockMultipartFile("file", name,
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", content);

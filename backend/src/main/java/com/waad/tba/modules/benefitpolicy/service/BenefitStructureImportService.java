@@ -224,7 +224,7 @@ public class BenefitStructureImportService {
         boolean benefitsHasBasis = "أساس احتساب السقف".equals(text(workbook.getSheet("المنافع").getRow(0), benefitsHasPeriodValue ? 12 : 11));
         read(workbook, "المنافع", 12, (row, n) -> {
             String category = text(row, 0);
-            EncounterType context = benefitContext(row, 2, n);
+            EncounterType context = benefitContext(row, 2, n, true);
             int countingColumn = benefitsHasPeriodValue ? 11 : 10;
             int basisColumn = countingColumn + 1;
             int activeColumn = basisColumn + (benefitsHasBasis ? 1 : 0);
@@ -258,7 +258,7 @@ public class BenefitStructureImportService {
             boolean groupsHasPeriodValue = "قيمة الفترة".equals(text(workbook.getSheet("المجموعات").getRow(0), 8));
             boolean groupsHasBasis = "أساس احتساب السقف".equals(text(workbook.getSheet("المجموعات").getRow(0), groupsHasPeriodValue ? 10 : 9));
             read(workbook, "المجموعات", 10, (row, n) -> {
-                String code = text(row, 0); EncounterType context = benefitContext(row, 2, n);
+                String code = text(row, 0); EncounterType context = benefitContext(row, 2, n, true);
                 int countingColumn = groupsHasPeriodValue ? 9 : 8;
                 int basisColumn = countingColumn + 1;
                 int activeColumn = basisColumn + (groupsHasBasis ? 1 : 0);
@@ -537,11 +537,48 @@ public class BenefitStructureImportService {
     private <E extends Enum<E>> E enumValue(Class<E> type, Row row, int i, int n) { String v=text(row,i); if(v==null)return null; try{return Enum.valueOf(type,v.toUpperCase());}catch(Exception e){throw new BusinessRuleException("قيمة غير صحيحة في الصف "+n+": "+v);} }
     private <E extends Enum<E>> E enumOrDefault(Class<E> type, Row row, int i, int n, E fallback) { E value=enumValue(type,row,i,n); return value==null?fallback:value; }
     private EncounterType benefitContext(Row row, int i, int n) {
-        EncounterType value = enumValue(EncounterType.class, row, i, n);
+        return benefitContext(row, i, n, false);
+    }
+
+    /**
+     * The base visit type a rule applies under -- OUTPATIENT, INPATIENT or ANY
+     * -- kept separate from the dynamic claim/decision context (MATERNITY,
+     * PREGNANCY_COMPLICATIONS, ...) that the current template carries in its own
+     * "سياق القرار" column.
+     *
+     * <p>Parses the cell directly instead of delegating to {@code enumValue}: a
+     * business context typed here (MATERNITY is not an {@link EncounterType}
+     * constant at all) used to fail inside {@code enumValue} first, with the
+     * generic "قيمة غير صحيحة" message and no mention of what was expected or
+     * where the value belonged -- the more specific guidance below was
+     * unreachable for exactly the mistake someone using the new business
+     * contexts was most likely to make.
+     *
+     * @param hasDecisionContextColumn whether this sheet also carries a "سياق
+     *        القرار" column. True only for the current template's "المنافع" and
+     *        "المجموعات" sheets; the legacy English-named Rules/Groups/Buckets/
+     *        Links sheets have no such column, and pointing a user at one that
+     *        does not exist there would be worse than saying nothing.
+     */
+    private EncounterType benefitContext(Row row, int i, int n, boolean hasDecisionContextColumn) {
+        String raw = text(row, i);
+        EncounterType value = null;
+        if (raw != null) {
+            try {
+                value = EncounterType.valueOf(raw.trim().toUpperCase(Locale.ROOT));
+            } catch (IllegalArgumentException ignored) {
+                // value stays null; reported below with the raw text.
+            }
+        }
         if (value == EncounterType.OUTPATIENT || value == EncounterType.INPATIENT || value == EncounterType.ANY) {
             return value;
         }
-        throw new BusinessRuleException("سياق غير مسموح لقواعد التغطية في الصف " + n + ": " + value + "؛ المسموح فقط OUTPATIENT أو INPATIENT أو ANY");
+        String guidance = hasDecisionContextColumn
+                ? " إن كنت تقصد سياقاً تجارياً مثل MATERNITY أو PREGNANCY_COMPLICATIONS، اكتبه في عمود «سياق القرار» لا في عمود «السياق»."
+                : "";
+        throw new BusinessRuleException("عمود «السياق» في الصف " + n
+                + " يمثل نوع الزيارة الأساسي ويقبل فقط OUTPATIENT أو INPATIENT أو ANY؛ القيمة المكتوبة «"
+                + raw + "» ليست كذلك." + guidance);
     }
     private boolean blank(String value) { return value == null || value.isBlank(); }
     private String normalizedCode(String value) { return value == null ? null : value.trim().toLowerCase(Locale.ROOT); }
