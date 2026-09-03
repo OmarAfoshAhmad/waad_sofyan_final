@@ -1612,4 +1612,20 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
         @Query("SELECT COUNT(c) FROM Claim c WHERE c.providerContractId = :contractId")
         long countByProviderContractId(@Param("contractId") Long contractId);
 
+        /**
+         * Every (providerId, serviceCode) pair that has at least one claim line
+         * ever recorded against it -- including rejected/withdrawn claims,
+         * since a line was still entered and priced. Revoking a provider's
+         * standard-service assignment must be refused wherever this returns a
+         * match: the assignment already carries financial history, and
+         * deactivating it silently would look like coverage never existed.
+         */
+        @Query("SELECT DISTINCT c.providerId AS providerId, l.serviceCode AS serviceCode " +
+               "FROM Claim c JOIN c.lines l " +
+               "WHERE c.providerId IN :providerIds AND l.serviceCode IN :serviceCodes")
+        List<com.waad.tba.modules.provider.projection.ProviderServiceClaimUsageProjection>
+               findProviderServiceCodePairsWithClaimHistory(
+                       @Param("providerIds") java.util.Collection<Long> providerIds,
+                       @Param("serviceCodes") java.util.Collection<String> serviceCodes);
+
 }

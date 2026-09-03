@@ -8,12 +8,14 @@ import com.waad.tba.modules.medicaltaxonomy.repository.MedicalCategoryRepository
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalServiceRepository;
 import com.waad.tba.modules.provider.dto.ProvisionStandardServicesRequestDto;
 import com.waad.tba.modules.provider.dto.ProvisionStandardServicesSummaryDto;
+import com.waad.tba.modules.provider.dto.RevokeStandardServicesSummaryDto;
 import com.waad.tba.modules.provider.dto.StandardServiceDto;
 import com.waad.tba.modules.provider.entity.Provider;
 import com.waad.tba.modules.provider.entity.ProviderService;
 import com.waad.tba.modules.provider.repository.ProviderRepository;
 import com.waad.tba.modules.provider.repository.ProviderServiceDefaultRepository;
 import com.waad.tba.modules.provider.repository.ProviderServiceRepository;
+import com.waad.tba.modules.claim.repository.ClaimRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -48,6 +50,7 @@ public class ProviderStandardServiceProvisioner {
     private final ProviderServiceDefaultRepository providerServiceDefaultRepository;
     private final MedicalServiceRepository medicalServiceRepository;
     private final MedicalCategoryRepository medicalCategoryRepository;
+    private final ClaimRepository claimRepository;
 
     @Transactional(readOnly = true)
     public List<StandardServiceDto> listStandardServices() {
@@ -80,6 +83,89 @@ public class ProviderStandardServiceProvisioner {
     @Transactional
     public ProvisionStandardServicesSummaryDto apply(ProvisionStandardServicesRequestDto request) {
         return compute(request, true);
+    }
+
+    /**
+     * The exact inverse of apply(): deactivates the same rows apply would
+     * have created or reactivated, for a provider mistakenly included in an
+     * earlier bulk apply. Never touches a provider or a service code outside
+     * the requested scope, and never re-activates anything -- an assignment
+     * that is already inactive is reported, not written to.
+     */
+    @Transactional(readOnly = true)
+    public RevokeStandardServicesSummaryDto previewRevoke(ProvisionStandardServicesRequestDto request) {
+        return computeRevoke(request, false);
+    }
+
+    @Transactional
+    public RevokeStandardServicesSummaryDto revoke(ProvisionStandardServicesRequestDto request) {
+        return computeRevoke(request, true);
+    }
+
+    private RevokeStandardServicesSummaryDto computeRevoke(
+            ProvisionStandardServicesRequestDto request, boolean apply) {
+        List<String> serviceCodes = validateServiceCodes(request.getServiceCodes());
+        List<Provider> providers = resolveProviders(request);
+
+        if (providers.isEmpty() || serviceCodes.isEmpty()) {
+            return RevokeStandardServicesSummaryDto.builder().build();
+        }
+
+        List<Long> providerIds = providers.stream().map(Provider::getId).toList();
+        List<ProviderService> existing = providerServiceRepository
+                .findAllByProviderIdInAndServiceCodeIn(providerIds, serviceCodes);
+
+        // A blanket "no financial effect" rule: any pair with even one claim
+        // line ever recorded (any status -- a rejected claim still had a
+        // line entered and priced) is refused, not silently deactivated.
+        Set<String> withClaimHistory = claimRepository
+                .findProviderServiceCodePairsWithClaimHistory(providerIds, serviceCodes).stream()
+                .map(p -> p.getProviderId() + "|" + p.getServiceCode())
+                .collect(Collectors.toSet());
+
+        Map<Long, String> providerNames = providers.stream()
+                .collect(Collectors.toMap(Provider::getId, Provider::getName));
+        Map<String, String> serviceNames = medicalServiceRepository.findByCodeIn(serviceCodes).stream()
+                .collect(Collectors.toMap(MedicalService::getCode, MedicalService::getName));
+
+        List<ProviderService> toRevoke = new ArrayList<>();
+        List<RevokeStandardServicesSummaryDto.BlockedAssignment> blocked = new ArrayList<>();
+        long alreadyInactive = 0;
+        Set<Long> providersAffected = new HashSet<>();
+
+        for (ProviderService assignment : existing) {
+            if (!Boolean.TRUE.equals(assignment.getActive())) {
+                alreadyInactive++;
+                continue;
+            }
+            String key = assignment.getProviderId() + "|" + assignment.getServiceCode();
+            if (withClaimHistory.contains(key)) {
+                blocked.add(RevokeStandardServicesSummaryDto.BlockedAssignment.builder()
+                        .providerId(assignment.getProviderId())
+                        .providerName(providerNames.get(assignment.getProviderId()))
+                        .serviceCode(assignment.getServiceCode())
+                        .serviceName(serviceNames.get(assignment.getServiceCode()))
+                        .reason("توجد مطالبات مسجّلة سابقاً بهذه الخدمة لهذا المرفق — لا يمكن سحبها لوجود أثر مالي؛ السحب مسموح فقط لما لم يُستخدَم بعد في أي مطالبة")
+                        .build());
+                continue;
+            }
+            toRevoke.add(assignment);
+            providersAffected.add(assignment.getProviderId());
+        }
+
+        if (apply && !toRevoke.isEmpty()) {
+            toRevoke.forEach(ps -> ps.setActive(false));
+            providerServiceRepository.saveAll(toRevoke);
+        }
+
+        return RevokeStandardServicesSummaryDto.builder()
+                .providersMatched(providers.size())
+                .providersAffected(providersAffected.size())
+                .assignmentsToRevoke(toRevoke.size())
+                .assignmentsAlreadyInactive(alreadyInactive)
+                .assignmentsBlockedByClaimHistory(blocked.size())
+                .blockedAssignments(blocked)
+                .build();
     }
 
     /**

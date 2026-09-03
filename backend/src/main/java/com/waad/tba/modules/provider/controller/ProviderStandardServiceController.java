@@ -3,6 +3,7 @@ package com.waad.tba.modules.provider.controller;
 import com.waad.tba.common.dto.ApiResponse;
 import com.waad.tba.modules.provider.dto.ProvisionStandardServicesRequestDto;
 import com.waad.tba.modules.provider.dto.ProvisionStandardServicesSummaryDto;
+import com.waad.tba.modules.provider.dto.RevokeStandardServicesSummaryDto;
 import com.waad.tba.modules.provider.dto.StandardServiceDto;
 import com.waad.tba.modules.provider.service.ProviderStandardServiceProvisioner;
 import jakarta.validation.Valid;
@@ -44,5 +45,17 @@ public class ProviderStandardServiceController {
     public ResponseEntity<ApiResponse<ProvisionStandardServicesSummaryDto>> apply(
             @Valid @RequestBody ProvisionStandardServicesRequestDto request) {
         return ResponseEntity.ok(ApiResponse.success(provisioner.apply(request)));
+    }
+
+    @PostMapping("/revoke/preview")
+    public ResponseEntity<ApiResponse<RevokeStandardServicesSummaryDto>> previewRevoke(
+            @Valid @RequestBody ProvisionStandardServicesRequestDto request) {
+        return ResponseEntity.ok(ApiResponse.success(provisioner.previewRevoke(request)));
+    }
+
+    @PostMapping("/revoke/apply")
+    public ResponseEntity<ApiResponse<RevokeStandardServicesSummaryDto>> applyRevoke(
+            @Valid @RequestBody ProvisionStandardServicesRequestDto request) {
+        return ResponseEntity.ok(ApiResponse.success(provisioner.revoke(request)));
     }
 }

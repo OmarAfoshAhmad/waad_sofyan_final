@@ -30,6 +30,9 @@ import com.waad.tba.modules.provider.entity.ProviderServiceDefault;
 import com.waad.tba.modules.provider.repository.ProviderRepository;
 import com.waad.tba.modules.provider.repository.ProviderServiceDefaultRepository;
 import com.waad.tba.modules.provider.repository.ProviderServiceRepository;
+import com.waad.tba.modules.provider.dto.RevokeStandardServicesSummaryDto;
+import com.waad.tba.modules.claim.repository.ClaimRepository;
+import com.waad.tba.modules.provider.projection.ProviderServiceClaimUsageProjection;
 
 /**
  * Bulk provisioning across many providers must (a) never write during
@@ -46,10 +49,11 @@ class ProviderStandardServiceProvisionerTest {
             mock(ProviderServiceDefaultRepository.class);
     private final MedicalServiceRepository medicalServiceRepository = mock(MedicalServiceRepository.class);
     private final MedicalCategoryRepository medicalCategoryRepository = mock(MedicalCategoryRepository.class);
+    private final ClaimRepository claimRepository = mock(ClaimRepository.class);
 
     private final ProviderStandardServiceProvisioner provisioner = new ProviderStandardServiceProvisioner(
             providerRepository, providerServiceRepository, providerServiceDefaultRepository,
-            medicalServiceRepository, medicalCategoryRepository);
+            medicalServiceRepository, medicalCategoryRepository, claimRepository);
 
     private MedicalService standardService;
 
@@ -200,5 +204,95 @@ class ProviderStandardServiceProvisionerTest {
         provisioner.autoApplyOnNewProvider(newProvider);
 
         verify(providerServiceRepository, never()).save(any());
+    }
+
+    // ── Revoke: the exact inverse of apply, but never when money already moved ──
+
+    private record UsagePair(Long providerId, String serviceCode) implements ProviderServiceClaimUsageProjection {
+        @Override
+        public Long getProviderId() { return providerId; }
+        @Override
+        public String getServiceCode() { return serviceCode; }
+    }
+
+    @Test
+    void revokePreviewNeverWrites() {
+        Provider p1 = provider(1, true);
+        when(providerRepository.findByActiveTrue()).thenReturn(List.of(p1));
+        ProviderService active = ProviderService.builder()
+                .id(9L).providerId(1L).serviceCode("SYS-DRUG-GENERAL").active(true).build();
+        when(providerServiceRepository.findAllByProviderIdInAndServiceCodeIn(anyList(), anyList()))
+                .thenReturn(List.of(active));
+        when(claimRepository.findProviderServiceCodePairsWithClaimHistory(anyList(), anyList()))
+                .thenReturn(List.of());
+
+        RevokeStandardServicesSummaryDto summary = provisioner.previewRevoke(allActiveRequest());
+
+        assertThat(summary.getAssignmentsToRevoke()).isEqualTo(1);
+        verify(providerServiceRepository, never()).saveAll(any());
+        verify(providerServiceRepository, never()).save(any());
+    }
+
+    @Test
+    void revokeDeactivatesExactlyWhatPreviewReportedWhenNoClaimHistoryExists() {
+        Provider p1 = provider(1, true);
+        when(providerRepository.findByActiveTrue()).thenReturn(List.of(p1));
+        ProviderService active = ProviderService.builder()
+                .id(9L).providerId(1L).serviceCode("SYS-DRUG-GENERAL").active(true).build();
+        when(providerServiceRepository.findAllByProviderIdInAndServiceCodeIn(anyList(), anyList()))
+                .thenReturn(List.of(active));
+        when(claimRepository.findProviderServiceCodePairsWithClaimHistory(anyList(), anyList()))
+                .thenReturn(List.of());
+
+        RevokeStandardServicesSummaryDto summary = provisioner.revoke(allActiveRequest());
+
+        assertThat(summary.getAssignmentsToRevoke()).isEqualTo(1);
+        assertThat(summary.getAssignmentsBlockedByClaimHistory()).isZero();
+        assertThat(active.getActive()).isFalse();
+        verify(providerServiceRepository).saveAll(List.of(active));
+    }
+
+    @Test
+    void refusesToRevokeAnAssignmentWithClaimHistoryAndNamesExactlyWhichOne() {
+        Provider p1 = provider(1, true);
+        p1.setName("صيدلية الاختبار");
+        when(providerRepository.findByActiveTrue()).thenReturn(List.of(p1));
+        ProviderService active = ProviderService.builder()
+                .id(9L).providerId(1L).serviceCode("SYS-DRUG-GENERAL").active(true).build();
+        when(providerServiceRepository.findAllByProviderIdInAndServiceCodeIn(anyList(), anyList()))
+                .thenReturn(List.of(active));
+        when(claimRepository.findProviderServiceCodePairsWithClaimHistory(anyList(), anyList()))
+                .thenReturn(List.of(new UsagePair(1L, "SYS-DRUG-GENERAL")));
+
+        RevokeStandardServicesSummaryDto summary = provisioner.revoke(allActiveRequest());
+
+        assertThat(summary.getAssignmentsToRevoke()).isZero();
+        assertThat(summary.getAssignmentsBlockedByClaimHistory()).isEqualTo(1);
+        assertThat(summary.getBlockedAssignments()).hasSize(1);
+        var blocked = summary.getBlockedAssignments().get(0);
+        assertThat(blocked.getProviderId()).isEqualTo(1L);
+        assertThat(blocked.getProviderName()).isEqualTo("صيدلية الاختبار");
+        assertThat(blocked.getServiceCode()).isEqualTo("SYS-DRUG-GENERAL");
+        assertThat(blocked.getReason()).contains("أثر مالي");
+        assertThat(active.getActive()).isTrue();
+        verify(providerServiceRepository, never()).saveAll(any());
+    }
+
+    @Test
+    void revokeReportsAlreadyInactiveSeparatelyFromRevoked() {
+        Provider p1 = provider(1, true);
+        when(providerRepository.findByActiveTrue()).thenReturn(List.of(p1));
+        ProviderService inactive = ProviderService.builder()
+                .id(9L).providerId(1L).serviceCode("SYS-DRUG-GENERAL").active(false).build();
+        when(providerServiceRepository.findAllByProviderIdInAndServiceCodeIn(anyList(), anyList()))
+                .thenReturn(List.of(inactive));
+        when(claimRepository.findProviderServiceCodePairsWithClaimHistory(anyList(), anyList()))
+                .thenReturn(List.of());
+
+        RevokeStandardServicesSummaryDto summary = provisioner.revoke(allActiveRequest());
+
+        assertThat(summary.getAssignmentsAlreadyInactive()).isEqualTo(1);
+        assertThat(summary.getAssignmentsToRevoke()).isZero();
+        verify(providerServiceRepository, never()).saveAll(any());
     }
 }
