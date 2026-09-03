@@ -14,7 +14,11 @@ export const providerStandardServicesService = {
 
   previewProvisioning: async (request) => unwrap(await axiosClient.post(`${BASE_URL}/preview`, request)),
 
-  applyProvisioning: async (request) => unwrap(await axiosClient.post(`${BASE_URL}/apply`, request))
+  applyProvisioning: async (request) => unwrap(await axiosClient.post(`${BASE_URL}/apply`, request)),
+
+  previewRevoke: async (request) => unwrap(await axiosClient.post(`${BASE_URL}/revoke/preview`, request)),
+
+  applyRevoke: async (request) => unwrap(await axiosClient.post(`${BASE_URL}/revoke/apply`, request))
 };
 
 export default providerStandardServicesService;

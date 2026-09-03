@@ -17,10 +17,18 @@ import {
   CardContent,
   Chip,
   CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
   FormControl,
   FormControlLabel,
   Grid,
   InputLabel,
+  List,
+  ListItem,
+  ListItemText,
   MenuItem,
   Radio,
   RadioGroup,
@@ -34,6 +42,7 @@ import {
 import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutline';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import MedicalServicesIcon from '@mui/icons-material/MedicalServices';
+import BlockIcon from '@mui/icons-material/Block';
 
 import MainCard from 'components/MainCard';
 import { ModernPageHeader } from 'components/tba';
@@ -51,18 +60,11 @@ const PROVIDER_TYPES = [
   { value: 'OPTICS', label: 'بصريات وعيون' }
 ];
 
-const SummaryGrid = ({ summary, title }) => (
+const SummaryGrid = ({ summary, title, fields }) => (
   <Box sx={{ mt: 2 }}>
     <Typography variant="subtitle2" sx={{ mb: 1 }}>{title}</Typography>
     <Grid container spacing={1}>
-      {[
-        ['مرافق مطابقة', summary.providersMatched],
-        ['لا تحتاج تغييراً', summary.providersAlreadyComplete],
-        ['تحتاج تحديثاً', summary.providersNeedingChanges],
-        ['خدمات ستُضاف', summary.assignmentsToCreate],
-        ['خدمات ستُعاد تفعيلها', summary.assignmentsToReactivate],
-        ['خدمات مفعّلة أصلاً', summary.assignmentsAlreadyActive]
-      ].map(([label, value]) => (
+      {fields.map(([label, value]) => (
         <Grid size={{ xs: 6, sm: 4 }} key={label}>
           <Card variant="outlined">
             <CardContent sx={{ p: '0.75rem !important', textAlign: 'center' }}>
@@ -76,8 +78,51 @@ const SummaryGrid = ({ summary, title }) => (
   </Box>
 );
 
+const APPLY_SUMMARY_FIELDS = (summary) => [
+  ['مرافق مطابقة', summary.providersMatched],
+  ['لا تحتاج تغييراً', summary.providersAlreadyComplete],
+  ['تحتاج تحديثاً', summary.providersNeedingChanges],
+  ['خدمات ستُضاف', summary.assignmentsToCreate],
+  ['خدمات ستُعاد تفعيلها', summary.assignmentsToReactivate],
+  ['خدمات مفعّلة أصلاً', summary.assignmentsAlreadyActive]
+];
+
+const REVOKE_SUMMARY_FIELDS = (summary) => [
+  ['مرافق مطابقة', summary.providersMatched],
+  ['مرافق ستتأثر', summary.providersAffected],
+  ['خدمات ستُسحب', summary.assignmentsToRevoke],
+  ['غير مفعّلة أصلاً', summary.assignmentsAlreadyInactive],
+  ['محظورة (يوجد أثر مالي)', summary.assignmentsBlockedByClaimHistory]
+];
+
+/**
+ * Every refusal is named, not counted: which provider, which service, why.
+ * A bare "3 blocked" would leave the clerk guessing which three.
+ */
+const BlockedAssignmentsList = ({ blockedAssignments }) => {
+  if (!blockedAssignments || blockedAssignments.length === 0) return null;
+  return (
+    <Alert severity="warning" icon={<BlockIcon />} sx={{ mt: 2 }}>
+      <Typography variant="subtitle2" sx={{ mb: 1 }}>
+        لن تُسحَب هذه الخدمات لوجود أثر مالي (مطالبات مسجّلة بالفعل):
+      </Typography>
+      <List dense disablePadding>
+        {blockedAssignments.map((b, idx) => (
+          <ListItem key={`${b.providerId}-${b.serviceCode}-${idx}`} disableGutters>
+            <ListItemText
+              primary={`${b.providerName || 'مرفق #' + b.providerId} — ${b.serviceName || b.serviceCode}`}
+              secondary={b.reason}
+            />
+          </ListItem>
+        ))}
+      </List>
+    </Alert>
+  );
+};
+
 export default function ProviderStandardServicesPage() {
   const navigate = useNavigate();
+  const [mode, setMode] = useState('APPLY'); // APPLY | REVOKE
   const [selectedCodes, setSelectedCodes] = useState([]);
   const [scope, setScope] = useState('PROVIDER_TYPES');
   const [providerTypes, setProviderTypes] = useState([]);
@@ -86,6 +131,7 @@ export default function ProviderStandardServicesPage() {
   const [providerSearchLoading, setProviderSearchLoading] = useState(false);
   const [previewResult, setPreviewResult] = useState(null);
   const [applyResult, setApplyResult] = useState(null);
+  const [confirmRevokeOpen, setConfirmRevokeOpen] = useState(false);
 
   const { data: standardServices = [], isLoading: loadingServices } = useQuery({
     queryKey: ['provider-standard-services-catalog'],
@@ -100,7 +146,9 @@ export default function ProviderStandardServicesPage() {
   });
 
   const previewMutation = useMutation({
-    mutationFn: () => providerStandardServicesService.previewProvisioning(buildRequest()),
+    mutationFn: () => (mode === 'REVOKE'
+      ? providerStandardServicesService.previewRevoke(buildRequest())
+      : providerStandardServicesService.previewProvisioning(buildRequest())),
     onSuccess: (data) => {
       setPreviewResult(data);
       setApplyResult(null);
@@ -108,7 +156,9 @@ export default function ProviderStandardServicesPage() {
   });
 
   const applyMutation = useMutation({
-    mutationFn: () => providerStandardServicesService.applyProvisioning(buildRequest()),
+    mutationFn: () => (mode === 'REVOKE'
+      ? providerStandardServicesService.applyRevoke(buildRequest())
+      : providerStandardServicesService.applyProvisioning(buildRequest())),
     onSuccess: (data) => setApplyResult(data)
   });
 
@@ -117,15 +167,35 @@ export default function ProviderStandardServicesPage() {
     && (scope !== 'SELECTED_PROVIDERS' || selectedProviders.length > 0);
 
   const requestSignature = useMemo(
-    () => JSON.stringify(buildRequest()),
-    [selectedCodes, scope, providerTypes, selectedProviders]
+    () => JSON.stringify({ mode, ...buildRequest() }),
+    [mode, selectedCodes, scope, providerTypes, selectedProviders]
   );
   const [previewedSignature, setPreviewedSignature] = useState(null);
-  const canApply = previewResult != null && previewedSignature === requestSignature;
+  const canApply = previewResult != null && previewedSignature === requestSignature
+    && (mode !== 'REVOKE' || previewResult.assignmentsToRevoke > 0);
+
+  const handleModeChange = (nextMode) => {
+    setMode(nextMode);
+    setPreviewResult(null);
+    setApplyResult(null);
+  };
 
   const handlePreview = () => {
     setPreviewedSignature(requestSignature);
     previewMutation.mutate();
+  };
+
+  const handleApplyClick = () => {
+    if (mode === 'REVOKE') {
+      setConfirmRevokeOpen(true);
+      return;
+    }
+    applyMutation.mutate();
+  };
+
+  const handleConfirmRevoke = () => {
+    setConfirmRevokeOpen(false);
+    applyMutation.mutate();
   };
 
   const handleProviderSearch = async (query) => {
@@ -238,22 +308,37 @@ export default function ProviderStandardServicesPage() {
         )}
       </MainCard>
 
-      <MainCard sx={{ mt: 2 }} title="3. معاينة وتطبيق">
+      <MainCard sx={{ mt: 2 }} title="3. الإجراء">
+        <RadioGroup row value={mode} onChange={(e) => handleModeChange(e.target.value)} sx={{ mb: 2 }}>
+          <FormControlLabel value="APPLY" control={<Radio />} label="تطبيق (إضافة الخدمات)" />
+          <FormControlLabel value="REVOKE" control={<Radio color="warning" />} label="سحب جماعي معاكس (إزالة الخدمات)" />
+        </RadioGroup>
+
+        {mode === 'REVOKE' && (
+          <Alert severity="info" sx={{ mb: 2 }}>
+            السحب لا يؤثر إطلاقاً على أي خدمة لها أثر مالي — أي مرفق سبق أن سُجّلت له مطالبة بهذه الخدمة لن تُسحَب منه، وسيظهر السبب صراحة باسم المرفق والخدمة أدناه.
+          </Alert>
+        )}
+
         <Stack direction="row" spacing={2}>
           <Button
             variant="outlined"
+            color={mode === 'REVOKE' ? 'warning' : 'primary'}
             startIcon={<PlayCircleOutlineIcon />}
             disabled={!canPreview || previewMutation.isPending}
             onClick={handlePreview}
           >
-            {previewMutation.isPending ? 'جارٍ المعاينة…' : 'معاينة قبل التطبيق'}
+            {previewMutation.isPending ? 'جارٍ المعاينة…' : (mode === 'REVOKE' ? 'معاينة السحب' : 'معاينة قبل التطبيق')}
           </Button>
           <Button
             variant="contained"
+            color={mode === 'REVOKE' ? 'warning' : 'primary'}
             disabled={!canApply || applyMutation.isPending}
-            onClick={() => applyMutation.mutate()}
+            onClick={handleApplyClick}
           >
-            {applyMutation.isPending ? 'جارٍ التطبيق…' : 'تطبيق الخدمات القياسية'}
+            {applyMutation.isPending
+              ? (mode === 'REVOKE' ? 'جارٍ السحب…' : 'جارٍ التطبيق…')
+              : (mode === 'REVOKE' ? 'سحب الخدمات القياسية' : 'تطبيق الخدمات القياسية')}
           </Button>
         </Stack>
 
@@ -264,19 +349,53 @@ export default function ProviderStandardServicesPage() {
         )}
         {applyMutation.isError && (
           <Alert severity="error" sx={{ mt: 2 }}>
-            {applyMutation.error?.response?.data?.message || 'تعذر التطبيق. حاول مرة أخرى.'}
+            {applyMutation.error?.response?.data?.message
+              || (mode === 'REVOKE' ? 'تعذر السحب. حاول مرة أخرى.' : 'تعذر التطبيق. حاول مرة أخرى.')}
           </Alert>
         )}
 
-        {previewResult && !applyResult && <SummaryGrid summary={previewResult} title="نتيجة المعاينة (لم يُحفظ شيء بعد)" />}
+        {previewResult && !applyResult && (
+          <>
+            <SummaryGrid
+              summary={previewResult}
+              title={mode === 'REVOKE' ? 'نتيجة معاينة السحب (لم يُحفظ شيء بعد)' : 'نتيجة المعاينة (لم يُحفظ شيء بعد)'}
+              fields={(mode === 'REVOKE' ? REVOKE_SUMMARY_FIELDS : APPLY_SUMMARY_FIELDS)(previewResult)}
+            />
+            {mode === 'REVOKE' && <BlockedAssignmentsList blockedAssignments={previewResult.blockedAssignments} />}
+          </>
+        )}
         {applyResult && (
           <>
-            <Alert severity="success" sx={{ mt: 2 }}>تم التطبيق بنجاح.</Alert>
-            <SummaryGrid summary={applyResult} title="نتيجة التطبيق" />
+            <Alert severity="success" sx={{ mt: 2 }}>
+              {mode === 'REVOKE' ? 'تم السحب بنجاح.' : 'تم التطبيق بنجاح.'}
+            </Alert>
+            <SummaryGrid
+              summary={applyResult}
+              title={mode === 'REVOKE' ? 'نتيجة السحب' : 'نتيجة التطبيق'}
+              fields={(mode === 'REVOKE' ? REVOKE_SUMMARY_FIELDS : APPLY_SUMMARY_FIELDS)(applyResult)}
+            />
+            {mode === 'REVOKE' && <BlockedAssignmentsList blockedAssignments={applyResult.blockedAssignments} />}
             <Button sx={{ mt: 2 }} onClick={() => navigate('/providers')}>العودة إلى قائمة المرافق</Button>
           </>
         )}
       </MainCard>
+
+      <Dialog open={confirmRevokeOpen} onClose={() => setConfirmRevokeOpen(false)}>
+        <DialogTitle>تأكيد السحب الجماعي</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            سيتم سحب {previewResult?.assignmentsToRevoke ?? 0} إسناد خدمة قياسية من المرافق المطابقة للنطاق المحدد.
+            الخدمات التي لها أثر مالي (مطالبات مسجّلة) لن تُسحَب — ستبقى كما هي وسيظهر السبب صراحة.
+            هذا الإجراء يمكن التراجع عنه لاحقاً بإعادة التطبيق من نفس الصفحة.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmRevokeOpen(false)}>إلغاء</Button>
+          <Button color="warning" variant="contained" onClick={handleConfirmRevoke}>
+            تأكيد السحب
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
