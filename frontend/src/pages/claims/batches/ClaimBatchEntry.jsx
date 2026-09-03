@@ -433,8 +433,15 @@ export default function ClaimBatchEntry() {
 
     setAddingCustomService(true);
     try {
-      if (!providerId || Number.isNaN(Number(providerId))) {
-        setCustomServiceError('لا يمكن إضافة خدمة قبل تحديد مقدم الخدمة/العقد بشكل صحيح');
+      // The dated contract, not the provider: this screen can only price a
+      // service against the specific contract ClaimEntryContextService already
+      // resolved for this provider/employer/service-date. Providers can hold
+      // more than one contract over time, and the provider-portal pricing
+      // endpoint this used to call guessed at "the" active one from the
+      // provider alone -- and had been retired behind a deny-all guard besides,
+      // so every attempt to use it failed outright regardless.
+      if (!entryContext?.contractId) {
+        setCustomServiceError('لا يمكن إضافة خدمة قبل التحقق من العقد الفعّال لهذا المستفيد وتاريخ الخدمة');
         return;
       }
 
@@ -450,12 +457,14 @@ export default function ClaimBatchEntry() {
         contractPrice: priceNum,
         basePrice: priceNum,
         unit: 'service',
-        currency: 'LYD',
-        providerId: providerId ? Number(providerId) : null
+        currency: 'LYD'
       };
 
-      // Call the modified backend endpoint, passing the active providerId from search params
-      const response = await axiosClient.post(`/provider/my-contract/pricing?providerId=${Number(providerId)}`, payload);
+      // The canonical internal path for adding one priced item to a contract --
+      // the same ProviderContractPricingItemService the import screens and the
+      // contract's own pricing tab use, authorized for internal staff managing
+      // the contract rather than a provider acting on its own behalf.
+      const response = await axiosClient.post(`/provider-contracts/${entryContext.contractId}/pricing`, payload);
       const createdItem = response.data?.data || response.data;
 
       const newServiceId = createdItem.medicalServiceId || createdItem.serviceId || createdItem.id;
@@ -472,8 +481,12 @@ export default function ClaimBatchEntry() {
         price: priceNum
       };
 
-      // Invalidate queries to refresh contracted services lists
-      queryClient.invalidateQueries({ queryKey: ['contracted-services', providerId] });
+      // Invalidate the service search this screen actually queries. The old key
+      // here ('contracted-services') matched nothing this file ever fetches with
+      // -- the real one is 'claim-entry-contract-services' -- so a service just
+      // added would not appear if the clerk searched again afterward, even once
+      // the endpoint above was reachable.
+      queryClient.invalidateQueries({ queryKey: ['claim-entry-contract-services'] });
 
       // Update the active claim line to select this newly added service
       if (activeLineIdForCustomService) {

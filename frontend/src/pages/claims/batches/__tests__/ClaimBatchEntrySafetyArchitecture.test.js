@@ -85,4 +85,35 @@ describe('claim batch entry safety boundary', () => {
     expect(entrySource).not.toContain('employersService.getById');
     expect(entrySource).not.toContain("['eligible-claim-preauths'");
   });
+
+  /**
+   * "Add a new service" used to post to /provider/my-contract/pricing, a
+   * provider-portal endpoint retired behind @PreAuthorize("denyAll()") on the
+   * backend -- every attempt failed for every role, always. The canonical
+   * internal path is POST /provider-contracts/{contractId}/pricing, the same
+   * ProviderContractPricingItemService the import screens and the contract's
+   * own pricing tab already write through, authorized for staff managing the
+   * contract rather than a provider acting for itself. It is keyed by the
+   * dated contract this screen already resolved, not by providerId alone --
+   * a provider can hold more than one contract over time, and the retired
+   * endpoint's own guess at "the" active one was part of what made it wrong
+   * for this screen even before it was denied outright.
+   */
+  it('adds a custom service through the contract this screen resolved, not the retired provider-portal path', () => {
+    expect(entrySource).not.toContain('/provider/my-contract/pricing');
+    expect(entrySource).toContain('/provider-contracts/${entryContext.contractId}/pricing');
+    expect(entrySource).toContain("setCustomServiceError('لا يمكن إضافة خدمة قبل التحقق من العقد الفعّال لهذا المستفيد وتاريخ الخدمة')");
+  });
+
+  /**
+   * The cache key invalidated after adding a custom service must be a real
+   * prefix of the key the search query itself uses -- otherwise the clerk who
+   * just added a service and searches again is shown stale results and does
+   * not see it. 'contracted-services' matched nothing this file ever queries
+   * with; the real key starts with 'claim-entry-contract-services'.
+   */
+  it('invalidates the query key the service search actually uses', () => {
+    expect(entrySource).toContain("queryKey: ['claim-entry-contract-services'");
+    expect(entrySource).not.toContain("queryKey: ['contracted-services'");
+  });
 });
