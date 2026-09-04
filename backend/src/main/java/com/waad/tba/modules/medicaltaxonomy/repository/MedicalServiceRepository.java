@@ -41,6 +41,10 @@ public interface MedicalServiceRepository extends JpaRepository<MedicalService, 
   List<MedicalService> findByPricingModeAndActiveTrue(
           com.waad.tba.modules.medicaltaxonomy.enums.PricingMode pricingMode);
 
+  /** Includes inactive rows -- for admin management of the standard-service catalog itself. */
+  List<MedicalService> findByPricingMode(
+          com.waad.tba.modules.medicaltaxonomy.enums.PricingMode pricingMode);
+
   /**
    * Find service by exact name (for duplicate checking during import)
    * Uses findFirstBy to avoid IncorrectResultSizeDataAccessException when

@@ -295,4 +295,109 @@ class ProviderStandardServiceProvisionerTest {
         assertThat(summary.getAssignmentsToRevoke()).isZero();
         verify(providerServiceRepository, never()).saveAll(any());
     }
+
+    // ── create/update standard service (P5) ─────────────────────────────
+
+    @Test
+    void createRejectsADuplicateCode() {
+        when(medicalServiceRepository.existsByCode("SYS-DRUG-GENERAL")).thenReturn(true);
+
+        assertThatThrownBy(() -> provisioner.createStandardService(
+                com.waad.tba.modules.provider.dto.StandardServiceCreateDto.builder()
+                        .code("SYS-DRUG-GENERAL").nameAr("اسم").categoryId(5L).build()))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("مستخدم مسبقاً");
+        verify(medicalServiceRepository, never()).save(any());
+    }
+
+    @Test
+    void createRejectsAnUnknownCategory() {
+        when(medicalServiceRepository.existsByCode(any())).thenReturn(false);
+        when(medicalCategoryRepository.findById(5L)).thenReturn(java.util.Optional.empty());
+
+        assertThatThrownBy(() -> provisioner.createStandardService(
+                com.waad.tba.modules.provider.dto.StandardServiceCreateDto.builder()
+                        .code("SYS-NEW").nameAr("اسم").categoryId(5L).build()))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("التصنيف");
+        verify(medicalServiceRepository, never()).save(any());
+    }
+
+    @Test
+    void createSavesAManualAmountServiceAndItsDefaults() {
+        var category = com.waad.tba.modules.medicaltaxonomy.entity.MedicalCategory.builder()
+                .id(5L).code("CAT-DRUG-GENERAL").name("Cat").nameAr("تصنيف").build();
+        when(medicalServiceRepository.existsByCode("SYS-NEW")).thenReturn(false);
+        when(medicalCategoryRepository.findById(5L)).thenReturn(java.util.Optional.of(category));
+        when(medicalServiceRepository.save(any())).thenAnswer(inv -> {
+            MedicalService s = inv.getArgument(0);
+            s.setId(99L);
+            return s;
+        });
+        when(providerServiceDefaultRepository.findByServiceCode("SYS-NEW")).thenReturn(List.of());
+
+        var result = provisioner.createStandardService(
+                com.waad.tba.modules.provider.dto.StandardServiceCreateDto.builder()
+                        .code("SYS-NEW").nameAr("خدمة جديدة").categoryId(5L)
+                        .defaultProviderTypes(List.of(ProviderType.PHARMACY)).build());
+
+        assertThat(result.getId()).isEqualTo(99L);
+        assertThat(result.getCode()).isEqualTo("SYS-NEW");
+        assertThat(result.getDefaultProviderTypes()).containsExactly(ProviderType.PHARMACY);
+
+        var serviceCaptor = org.mockito.ArgumentCaptor.forClass(MedicalService.class);
+        verify(medicalServiceRepository).save(serviceCaptor.capture());
+        assertThat(serviceCaptor.getValue().getPricingMode()).isEqualTo(PricingMode.MANUAL_AMOUNT);
+        assertThat(serviceCaptor.getValue().isActive()).isTrue();
+
+        var defaultsCaptor = org.mockito.ArgumentCaptor.forClass(List.class);
+        verify(providerServiceDefaultRepository).saveAll(defaultsCaptor.capture());
+        assertThat(defaultsCaptor.getValue()).hasSize(1);
+        var savedDefault = (ProviderServiceDefault) defaultsCaptor.getValue().get(0);
+        assertThat(savedDefault.getProviderType()).isEqualTo(ProviderType.PHARMACY);
+        assertThat(savedDefault.getServiceCode()).isEqualTo("SYS-NEW");
+        assertThat(savedDefault.isActive()).isTrue();
+    }
+
+    @Test
+    void updateRejectsAServiceThatIsNotManualAmount() {
+        MedicalService contractPriced = MedicalService.builder()
+                .id(7L).code("SRV-X").pricingMode(PricingMode.CONTRACT_PRICE).build();
+        when(medicalServiceRepository.findById(7L)).thenReturn(java.util.Optional.of(contractPriced));
+
+        assertThatThrownBy(() -> provisioner.updateStandardService(7L,
+                com.waad.tba.modules.provider.dto.StandardServiceUpdateDto.builder()
+                        .nameAr("اسم").categoryId(5L).active(true).build()))
+                .isInstanceOf(BusinessRuleException.class);
+    }
+
+    @Test
+    void updateReconcilesDefaultsAddingAndDeactivating() {
+        var category = com.waad.tba.modules.medicaltaxonomy.entity.MedicalCategory.builder()
+                .id(5L).code("CAT").name("Cat").nameAr("تصنيف").build();
+        when(medicalServiceRepository.findById(1L)).thenReturn(java.util.Optional.of(standardService));
+        when(medicalCategoryRepository.findById(5L)).thenReturn(java.util.Optional.of(category));
+        when(medicalServiceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        // Already has PHARMACY active; caller now wants OPTICS instead.
+        ProviderServiceDefault pharmacyDefault = ProviderServiceDefault.builder()
+                .id(1L).providerType(ProviderType.PHARMACY).serviceCode("SYS-DRUG-GENERAL").active(true).build();
+        when(providerServiceDefaultRepository.findByServiceCode("SYS-DRUG-GENERAL"))
+                .thenReturn(List.of(pharmacyDefault));
+
+        var result = provisioner.updateStandardService(1L,
+                com.waad.tba.modules.provider.dto.StandardServiceUpdateDto.builder()
+                        .nameAr("اسم محدَّث").categoryId(5L).active(true)
+                        .defaultProviderTypes(List.of(ProviderType.OPTICS)).build());
+
+        assertThat(result.getDefaultProviderTypes()).containsExactly(ProviderType.OPTICS);
+        var defaultsCaptor = org.mockito.ArgumentCaptor.forClass(List.class);
+        verify(providerServiceDefaultRepository).saveAll(defaultsCaptor.capture());
+        List<ProviderServiceDefault> saved = defaultsCaptor.getValue();
+        assertThat(saved).hasSize(2);
+        assertThat(saved.stream().filter(d -> d.getProviderType() == ProviderType.PHARMACY).findFirst().orElseThrow()
+                .isActive()).isFalse();
+        assertThat(saved.stream().filter(d -> d.getProviderType() == ProviderType.OPTICS).findFirst().orElseThrow()
+                .isActive()).isTrue();
+    }
 }

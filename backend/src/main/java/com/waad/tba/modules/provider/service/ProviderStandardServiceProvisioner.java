@@ -9,7 +9,9 @@ import com.waad.tba.modules.medicaltaxonomy.repository.MedicalServiceRepository;
 import com.waad.tba.modules.provider.dto.ProvisionStandardServicesRequestDto;
 import com.waad.tba.modules.provider.dto.ProvisionStandardServicesSummaryDto;
 import com.waad.tba.modules.provider.dto.RevokeStandardServicesSummaryDto;
+import com.waad.tba.modules.provider.dto.StandardServiceCreateDto;
 import com.waad.tba.modules.provider.dto.StandardServiceDto;
+import com.waad.tba.modules.provider.dto.StandardServiceUpdateDto;
 import com.waad.tba.modules.provider.entity.Provider;
 import com.waad.tba.modules.provider.entity.ProviderService;
 import com.waad.tba.modules.provider.repository.ProviderRepository;
@@ -54,25 +56,137 @@ public class ProviderStandardServiceProvisioner {
 
     @Transactional(readOnly = true)
     public List<StandardServiceDto> listStandardServices() {
-        List<MedicalService> services = medicalServiceRepository
-                .findByPricingModeAndActiveTrue(PricingMode.MANUAL_AMOUNT);
+        return toDtos(medicalServiceRepository.findByPricingModeAndActiveTrue(PricingMode.MANUAL_AMOUNT));
+    }
+
+    /** Includes inactive services -- for the admin catalog-management screen, not the assignment picker. */
+    @Transactional(readOnly = true)
+    public List<StandardServiceDto> listAllStandardServices() {
+        return toDtos(medicalServiceRepository.findByPricingMode(PricingMode.MANUAL_AMOUNT));
+    }
+
+    private List<StandardServiceDto> toDtos(List<MedicalService> services) {
         Map<Long, MedicalCategory> categoriesById = medicalCategoryRepository
                 .findAllById(services.stream().map(MedicalService::getCategoryId)
                         .filter(java.util.Objects::nonNull).collect(Collectors.toSet()))
                 .stream().collect(Collectors.toMap(MedicalCategory::getId, c -> c));
+        Map<String, List<Provider.ProviderType>> defaultsByServiceCode = providerServiceDefaultRepository
+                .findByServiceCodeInAndActiveTrue(services.stream().map(MedicalService::getCode).toList())
+                .stream().collect(Collectors.groupingBy(
+                        com.waad.tba.modules.provider.entity.ProviderServiceDefault::getServiceCode,
+                        Collectors.mapping(
+                                com.waad.tba.modules.provider.entity.ProviderServiceDefault::getProviderType,
+                                Collectors.toList())));
 
-        return services.stream().map(s -> {
-            MedicalCategory category = categoriesById.get(s.getCategoryId());
-            return StandardServiceDto.builder()
-                    .id(s.getId())
-                    .code(s.getCode())
-                    .name(s.getName())
-                    .categoryCode(category != null ? category.getCode() : null)
-                    .categoryName(category != null
-                            ? (category.getNameAr() != null ? category.getNameAr() : category.getName())
-                            : null)
-                    .build();
-        }).toList();
+        return services.stream().map(s -> toDto(s, categoriesById.get(s.getCategoryId()),
+                defaultsByServiceCode.getOrDefault(s.getCode(), List.of()))).toList();
+    }
+
+    private StandardServiceDto toDto(MedicalService s, MedicalCategory category,
+            List<Provider.ProviderType> defaultProviderTypes) {
+        return StandardServiceDto.builder()
+                .id(s.getId())
+                .code(s.getCode())
+                .name(s.getName())
+                .nameAr(s.getNameAr())
+                .nameEn(s.getNameEn())
+                .categoryId(s.getCategoryId())
+                .categoryCode(category != null ? category.getCode() : null)
+                .categoryName(category != null
+                        ? (category.getNameAr() != null ? category.getNameAr() : category.getName())
+                        : null)
+                .active(s.isActive())
+                .defaultProviderTypes(defaultProviderTypes)
+                .build();
+    }
+
+    /**
+     * Creates a new standard (MANUAL_AMOUNT) professional service and its
+     * default facility-type suggestions in one transaction -- a service
+     * with no defaults still exists validly (defaultProviderTypes may be
+     * empty), but a partially-created service/defaults pair from a failure
+     * mid-way would not.
+     */
+    @Transactional
+    public StandardServiceDto createStandardService(StandardServiceCreateDto dto) {
+        String code = dto.getCode().trim();
+        if (medicalServiceRepository.existsByCode(code)) {
+            throw new BusinessRuleException("رمز الخدمة \"" + code + "\" مستخدم مسبقاً");
+        }
+        MedicalCategory category = medicalCategoryRepository.findById(dto.getCategoryId())
+                .orElseThrow(() -> new BusinessRuleException("التصنيف الطبي المحدد غير موجود"));
+
+        MedicalService service = medicalServiceRepository.save(MedicalService.builder()
+                .code(code)
+                .name(dto.getNameAr().trim())
+                .nameAr(dto.getNameAr().trim())
+                .nameEn(dto.getNameEn())
+                .categoryId(category.getId())
+                .pricingMode(PricingMode.MANUAL_AMOUNT)
+                .isMaster(true)
+                .active(true)
+                .build());
+
+        List<Provider.ProviderType> defaults = reconcileDefaults(code, dto.getDefaultProviderTypes());
+        return toDto(service, category, defaults);
+    }
+
+    /** code and pricingMode are immutable; everything else may change. */
+    @Transactional
+    public StandardServiceDto updateStandardService(Long id, StandardServiceUpdateDto dto) {
+        MedicalService service = medicalServiceRepository.findById(id)
+                .filter(s -> s.getPricingMode() == PricingMode.MANUAL_AMOUNT)
+                .orElseThrow(() -> new BusinessRuleException("الخدمة المهنية القياسية غير موجودة"));
+        MedicalCategory category = medicalCategoryRepository.findById(dto.getCategoryId())
+                .orElseThrow(() -> new BusinessRuleException("التصنيف الطبي المحدد غير موجود"));
+
+        service.setName(dto.getNameAr().trim());
+        service.setNameAr(dto.getNameAr().trim());
+        service.setNameEn(dto.getNameEn());
+        service.setCategoryId(category.getId());
+        service.setActive(dto.getActive());
+        service = medicalServiceRepository.save(service);
+
+        List<Provider.ProviderType> defaults = reconcileDefaults(service.getCode(), dto.getDefaultProviderTypes());
+        return toDto(service, category, defaults);
+    }
+
+    /**
+     * Makes the active ProviderServiceDefault rows for this service exactly
+     * match {@code wantedTypes}: reactivates/creates the ones now wanted,
+     * deactivates the ones no longer wanted. Never deletes a row -- the
+     * unique (provider_type, service_code) constraint means a soft-deleted
+     * row must be reused, not left to collide with a fresh insert.
+     */
+    private List<Provider.ProviderType> reconcileDefaults(String serviceCode, List<Provider.ProviderType> wantedTypes) {
+        Set<Provider.ProviderType> wanted = new HashSet<>(wantedTypes == null ? List.of() : wantedTypes);
+        List<com.waad.tba.modules.provider.entity.ProviderServiceDefault> existing =
+                providerServiceDefaultRepository.findByServiceCode(serviceCode);
+        Map<Provider.ProviderType, com.waad.tba.modules.provider.entity.ProviderServiceDefault> existingByType =
+                existing.stream().collect(Collectors.toMap(
+                        com.waad.tba.modules.provider.entity.ProviderServiceDefault::getProviderType, d -> d));
+
+        List<com.waad.tba.modules.provider.entity.ProviderServiceDefault> toSave = new ArrayList<>();
+        for (Provider.ProviderType type : wanted) {
+            var row = existingByType.get(type);
+            if (row == null) {
+                toSave.add(com.waad.tba.modules.provider.entity.ProviderServiceDefault.builder()
+                        .providerType(type).serviceCode(serviceCode).autoApply(true).active(true).build());
+            } else if (!row.isActive()) {
+                row.setActive(true);
+                toSave.add(row);
+            }
+        }
+        for (var row : existing) {
+            if (!wanted.contains(row.getProviderType()) && row.isActive()) {
+                row.setActive(false);
+                toSave.add(row);
+            }
+        }
+        if (!toSave.isEmpty()) {
+            providerServiceDefaultRepository.saveAll(toSave);
+        }
+        return List.copyOf(wanted);
     }
 
     @Transactional(readOnly = true)

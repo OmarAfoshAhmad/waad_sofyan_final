@@ -8,7 +8,8 @@
  */
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useSnackbar } from 'notistack';
 
 import {
   Autocomplete,
@@ -25,9 +26,11 @@ import {
   FormControl,
   FormControlLabel,
   Grid,
+  IconButton,
   InputLabel,
   List,
   ListItem,
+  ListItemSecondaryAction,
   ListItemText,
   MenuItem,
   Radio,
@@ -35,6 +38,7 @@ import {
   Select,
   Stack,
   TextField,
+  Tooltip,
   Typography,
   Button,
   Alert
@@ -43,11 +47,18 @@ import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutline';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import MedicalServicesIcon from '@mui/icons-material/MedicalServices';
 import BlockIcon from '@mui/icons-material/Block';
+import AddIcon from '@mui/icons-material/Add';
+import EditIcon from '@mui/icons-material/Edit';
 
 import MainCard from 'components/MainCard';
 import { ModernPageHeader } from 'components/tba';
 import { providerStandardServicesService } from 'services/api/providerStandardServices.service';
 import { providersService } from 'services/api/providers.service';
+import { getAllMedicalCategories } from 'services/api/medical-categories.service';
+import StandardServiceFormDialog from './components/StandardServiceFormDialog';
+
+const STANDARD_SERVICES_QUERY_KEY = ['provider-standard-services-catalog'];
+const STANDARD_SERVICES_ADMIN_QUERY_KEY = ['provider-standard-services-catalog-all'];
 
 const PROVIDER_TYPES = [
   { value: 'HOSPITAL', label: 'مستشفى' },
@@ -122,6 +133,8 @@ const BlockedAssignmentsList = ({ blockedAssignments }) => {
 
 export default function ProviderStandardServicesPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { enqueueSnackbar } = useSnackbar();
   const [mode, setMode] = useState('APPLY'); // APPLY | REVOKE
   const [selectedCodes, setSelectedCodes] = useState([]);
   const [scope, setScope] = useState('PROVIDER_TYPES');
@@ -132,11 +145,69 @@ export default function ProviderStandardServicesPage() {
   const [previewResult, setPreviewResult] = useState(null);
   const [applyResult, setApplyResult] = useState(null);
   const [confirmRevokeOpen, setConfirmRevokeOpen] = useState(false);
+  const [formDialogOpen, setFormDialogOpen] = useState(false);
+  const [editingService, setEditingService] = useState(null);
 
   const { data: standardServices = [], isLoading: loadingServices } = useQuery({
-    queryKey: ['provider-standard-services-catalog'],
+    queryKey: STANDARD_SERVICES_QUERY_KEY,
     queryFn: providerStandardServicesService.list
   });
+
+  const { data: allStandardServices = [], isLoading: loadingAllServices } = useQuery({
+    queryKey: STANDARD_SERVICES_ADMIN_QUERY_KEY,
+    queryFn: providerStandardServicesService.listAll
+  });
+
+  const { data: medicalCategories = [] } = useQuery({
+    queryKey: ['medical-categories-all'],
+    queryFn: getAllMedicalCategories
+  });
+
+  // Both the admin management list and the active-only selection picker
+  // above read the same underlying catalog -- a create/update must refresh
+  // both, or the new service would only appear after a full page reload.
+  const invalidateCatalog = () => {
+    queryClient.invalidateQueries({ queryKey: STANDARD_SERVICES_QUERY_KEY });
+    queryClient.invalidateQueries({ queryKey: STANDARD_SERVICES_ADMIN_QUERY_KEY });
+  };
+
+  const createMutation = useMutation({
+    mutationFn: providerStandardServicesService.create,
+    onSuccess: () => {
+      invalidateCatalog();
+      setFormDialogOpen(false);
+      enqueueSnackbar('تمت إضافة الخدمة المهنية القياسية', { variant: 'success' });
+    }
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, payload }) => providerStandardServicesService.update(id, payload),
+    onSuccess: () => {
+      invalidateCatalog();
+      setFormDialogOpen(false);
+      enqueueSnackbar('تم حفظ تعديلات الخدمة', { variant: 'success' });
+    }
+  });
+
+  const openCreateDialog = () => {
+    setEditingService(null);
+    createMutation.reset();
+    setFormDialogOpen(true);
+  };
+
+  const openEditDialog = (service) => {
+    setEditingService(service);
+    updateMutation.reset();
+    setFormDialogOpen(true);
+  };
+
+  const handleFormSubmit = (payload) => {
+    if (editingService) {
+      updateMutation.mutate({ id: editingService.id, payload });
+    } else {
+      createMutation.mutate(payload);
+    }
+  };
 
   const buildRequest = () => ({
     serviceCodes: selectedCodes,
@@ -224,6 +295,56 @@ export default function ProviderStandardServicesPage() {
           { label: 'الخدمات المهنية القياسية' }
         ]}
       />
+
+      <MainCard
+        sx={{ mt: 2 }}
+        title="0. إدارة كتالوج الخدمات المهنية القياسية"
+        secondary={
+          <Button size="small" startIcon={<AddIcon />} onClick={openCreateDialog}>
+            إضافة خدمة جديدة
+          </Button>
+        }
+      >
+        {loadingAllServices ? (
+          <CircularProgress size={24} />
+        ) : allStandardServices.length === 0 ? (
+          <Typography variant="body2" color="text.secondary">لا توجد خدمات مهنية قياسية بعد.</Typography>
+        ) : (
+          <List dense disablePadding>
+            {allStandardServices.map((service) => (
+              <ListItem
+                key={service.id}
+                disableGutters
+                sx={{ opacity: service.active ? 1 : 0.55 }}
+              >
+                <ListItemText
+                  primary={
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <Typography variant="body2" fontWeight={600}>{service.nameAr || service.name}</Typography>
+                      <Chip size="small" label={service.code} variant="outlined" />
+                      {!service.active && <Chip size="small" color="default" label="معطّلة" />}
+                    </Stack>
+                  }
+                  secondary={`${service.categoryName || service.categoryCode || '—'}${
+                    service.defaultProviderTypes?.length
+                      ? ' · افتراضية لـ: ' + service.defaultProviderTypes
+                          .map((t) => PROVIDER_TYPES.find((p) => p.value === t)?.label || t)
+                          .join('، ')
+                      : ''
+                  }`}
+                />
+                <ListItemSecondaryAction>
+                  <Tooltip title="تعديل">
+                    <IconButton edge="end" size="small" onClick={() => openEditDialog(service)}>
+                      <EditIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                </ListItemSecondaryAction>
+              </ListItem>
+            ))}
+          </List>
+        )}
+      </MainCard>
 
       <MainCard sx={{ mt: 2 }} title="1. الخدمات القياسية">
         {loadingServices ? (
@@ -396,6 +517,20 @@ export default function ProviderStandardServicesPage() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <StandardServiceFormDialog
+        open={formDialogOpen}
+        onClose={() => setFormDialogOpen(false)}
+        onSubmit={handleFormSubmit}
+        submitting={createMutation.isPending || updateMutation.isPending}
+        error={
+          createMutation.error?.response?.data?.message
+          || updateMutation.error?.response?.data?.message
+          || null
+        }
+        service={editingService}
+        categories={medicalCategories}
+      />
     </Box>
   );
 }
