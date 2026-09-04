@@ -9,11 +9,13 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -53,6 +55,8 @@ class ProviderContractPricingItemServiceTest {
                                 .id(1L)
                                 .contractCode("CON-001")
                                 .status(ContractStatus.DRAFT)
+                                .startDate(LocalDate.of(2025, 1, 1))
+                                .endDate(LocalDate.of(2026, 12, 31))
                                 .active(true)
                                 .build();
 
@@ -91,6 +95,26 @@ class ProviderContractPricingItemServiceTest {
                 assertThat(result).isNotNull();
                 assertThat(result.getContractPrice()).isEqualTo(new BigDecimal("85"));
                 verify(pricingRepository, times(1)).save(any(ProviderContractPricingItem.class));
+        }
+
+        @Test
+        void create_withoutExplicitPricePeriod_shouldUseContractPeriodNotToday() {
+                ProviderContractPricingItemCreateDto dto = ProviderContractPricingItemCreateDto.builder()
+                                .serviceCode("SRV-11")
+                                .basePrice(new BigDecimal("120"))
+                                .contractPrice(new BigDecimal("90"))
+                                .build();
+
+                when(contractRepository.findById(1L)).thenReturn(Optional.of(contract));
+                when(pricingRepository.existsByContractIdAndServiceCodeAndActiveTrue(1L, "SRV-11")).thenReturn(false);
+                when(pricingRepository.save(any(ProviderContractPricingItem.class))).thenAnswer(i -> i.getArgument(0));
+
+                pricingItemService.create(1L, dto);
+
+                ArgumentCaptor<ProviderContractPricingItem> captor = ArgumentCaptor.forClass(ProviderContractPricingItem.class);
+                verify(pricingRepository).save(captor.capture());
+                assertThat(captor.getValue().getEffectiveFrom()).isEqualTo(LocalDate.of(2025, 1, 1));
+                assertThat(captor.getValue().getEffectiveTo()).isEqualTo(LocalDate.of(2027, 1, 1));
         }
 
         @Test

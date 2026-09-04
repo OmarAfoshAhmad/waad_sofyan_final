@@ -1128,6 +1128,13 @@ export default function ClaimBatchEntry() {
     return contractedServiceOptionsRaw.filter((item) => isServiceAllowedForClaimContext(item, encounterType));
   }, [contractedServiceOptionsRaw, encounterType]);
 
+  const noEffectiveContractServicesForDate =
+    Boolean(entryContext?.contractId) &&
+    Boolean(serviceDate) &&
+    !loadingServices &&
+    !servicesError &&
+    contractedServiceOptionsRaw.length === 0;
+
   const batchContent = useMemo(
     () => batchData?.data?.items ?? batchData?.items ?? batchData?.data?.content ?? batchData?.content ?? [],
     [batchData]
@@ -2462,6 +2469,12 @@ export default function ClaimBatchEntry() {
                     amount. The pending state still lives on each line, so a
                     line that has not settled is visible where it happens rather
                     than through a notice parked on top of the table. */}
+                {noEffectiveContractServicesForDate && (
+                  <Alert severity="warning" sx={{ m: 1.5, alignItems: 'center' }}>
+                    العقد والوثيقة صالحان لهذا التاريخ، لكن لا توجد أسعار خدمات فعالة في العقد بتاريخ الخدمة. راجع فترة سريان
+                    أسعار خدمات العقد.
+                  </Alert>
+                )}
                 <TableContainer dir="rtl" sx={{ flex: 1, overflow: 'auto' }}>
                   <Table
                     dir="rtl"

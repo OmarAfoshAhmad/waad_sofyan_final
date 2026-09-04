@@ -51,6 +51,30 @@ public interface ProviderContractPricingItemRepository extends JpaRepository<Pro
                      @Param("date") LocalDate date,
                      Pageable pageable);
 
+       @Query("SELECT COUNT(p) FROM ProviderContractPricingItem p " +
+                     "WHERE p.contract.id = :contractId " +
+                     "AND p.active = true " +
+                     "AND p.effectiveFrom = :effectiveFrom " +
+                     "AND ((:effectiveTo IS NULL AND p.effectiveTo IS NULL) OR p.effectiveTo = :effectiveTo)")
+       long countActiveAlignedToPeriod(
+                     @Param("contractId") Long contractId,
+                     @Param("effectiveFrom") LocalDate effectiveFrom,
+                     @Param("effectiveTo") LocalDate effectiveTo);
+
+       @org.springframework.data.jpa.repository.Modifying(clearAutomatically = true, flushAutomatically = true)
+       @Query("UPDATE ProviderContractPricingItem p " +
+                     "SET p.effectiveFrom = :newEffectiveFrom, p.effectiveTo = :newEffectiveTo " +
+                     "WHERE p.contract.id = :contractId " +
+                     "AND p.active = true " +
+                     "AND p.effectiveFrom = :oldEffectiveFrom " +
+                     "AND ((:oldEffectiveTo IS NULL AND p.effectiveTo IS NULL) OR p.effectiveTo = :oldEffectiveTo)")
+       int alignActivePricePeriod(
+                     @Param("contractId") Long contractId,
+                     @Param("oldEffectiveFrom") LocalDate oldEffectiveFrom,
+                     @Param("oldEffectiveTo") LocalDate oldEffectiveTo,
+                     @Param("newEffectiveFrom") LocalDate newEffectiveFrom,
+                     @Param("newEffectiveTo") LocalDate newEffectiveTo);
+
        @Query("SELECT p FROM ProviderContractPricingItem p " +
                      "WHERE p.contract.id = :contractId AND p.active = true " +
                      "AND (p.effectiveFrom IS NULL OR p.effectiveFrom <= :date) " +

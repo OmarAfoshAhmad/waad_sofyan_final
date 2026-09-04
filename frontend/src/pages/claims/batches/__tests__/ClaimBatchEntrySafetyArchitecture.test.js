@@ -133,6 +133,11 @@ describe('claim batch entry safety boundary', () => {
     expect(serviceDateState).toBeLessThan(serviceDateDebounce);
   });
 
+  it('explains when a valid dated contract has no effective service prices', () => {
+    expect(entrySource).toContain('noEffectiveContractServicesForDate');
+    expect(entrySource).toContain('لا توجد أسعار خدمات فعالة في العقد بتاريخ الخدمة');
+  });
+
   /**
    * "Add a new service" used to post to /provider/my-contract/pricing, a
    * provider-portal endpoint retired behind @PreAuthorize("denyAll()") on the

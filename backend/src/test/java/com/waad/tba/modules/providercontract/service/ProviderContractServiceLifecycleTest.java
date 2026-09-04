@@ -1,6 +1,7 @@
 package com.waad.tba.modules.providercontract.service;
 
 import com.waad.tba.common.exception.BusinessRuleException;
+import com.waad.tba.modules.providercontract.dto.ProviderContractUpdateDto;
 import com.waad.tba.modules.employer.repository.EmployerRepository;
 import com.waad.tba.modules.provider.entity.Provider;
 import com.waad.tba.modules.provider.repository.ProviderRepository;
@@ -151,5 +152,28 @@ class ProviderContractServiceLifecycleTest {
         assertThat(result.getStatus()).isEqualTo(ContractStatus.TERMINATED);
         verify(auditLogService).createAuditLog(org.mockito.ArgumentMatchers.eq("TERMINATE"),
                 any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void updateContractPeriodAlignsActivePricingItemsThatFollowedTheOldContractPeriod() {
+        ProviderContract draft = contractWithStatus(ContractStatus.DRAFT);
+        draft.setStartDate(LocalDate.of(2026, 9, 1));
+        draft.setEndDate(LocalDate.of(2026, 12, 31));
+        when(contractRepository.findById(1L)).thenReturn(Optional.of(draft));
+        when(pricingItemRepository.countActiveAlignedToPeriod(
+                1L, LocalDate.of(2026, 9, 1), LocalDate.of(2027, 1, 1)))
+                .thenReturn(2319L);
+
+        contractService.update(1L, ProviderContractUpdateDto.builder()
+                .startDate(LocalDate.of(2025, 1, 1))
+                .endDate(LocalDate.of(2026, 12, 31))
+                .build());
+
+        verify(pricingItemRepository).alignActivePricePeriod(
+                1L,
+                LocalDate.of(2026, 9, 1),
+                LocalDate.of(2027, 1, 1),
+                LocalDate.of(2025, 1, 1),
+                LocalDate.of(2027, 1, 1));
     }
 }

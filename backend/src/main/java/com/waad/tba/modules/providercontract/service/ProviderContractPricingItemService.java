@@ -251,8 +251,8 @@ public class ProviderContractPricingItemService {
                 .basePrice(basePrice)
                 .contractPrice(contractPrice)
                 .maxContractPrice(maxContractPrice)
-                .effectiveFrom(dto.getEffectiveFrom() != null ? dto.getEffectiveFrom() : java.time.LocalDate.now())
-                .effectiveTo(dto.getEffectiveTo())
+                .effectiveFrom(dto.getEffectiveFrom() != null ? dto.getEffectiveFrom() : contract.getStartDate())
+                .effectiveTo(dto.getEffectiveTo() != null ? dto.getEffectiveTo() : toPriceEndExclusive(contract.getEndDate()))
                 .notes(dto.getNotes())
                 .active(true)
                 .build();
@@ -272,6 +272,10 @@ public class ProviderContractPricingItemService {
             throw new BusinessRuleException("الحد الأعلى للسعر التعاقدي لا يجوز أن يكون أقل من الحد الأدنى");
         }
         return maxContractPrice;
+    }
+
+    private java.time.LocalDate toPriceEndExclusive(java.time.LocalDate contractEndDate) {
+        return contractEndDate == null ? null : contractEndDate.plusDays(1);
     }
 
     /**
