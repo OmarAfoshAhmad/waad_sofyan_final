@@ -1,5 +1,19 @@
 # V217 backfill gaps — per-claim analysis (2026-09-03)
 
+> **Status update (2026-09-04):** the nine claims analyzed below —
+> including all six `LEGACY_UNRESOLVED` cases — were test data and have
+> since been permanently deleted from production (confirmed by the user).
+> They exist only in the dated review copy this analysis ran against, kept
+> here as evidence and as the fixture behind
+> `ClaimsHistoricalContextStatusAcrossV219MigrationTest`. **They are not an
+> outstanding data debt on the current production database.** Deploying
+> V217–V220 against production as it stands today is expected to produce
+> **zero** `claims_historical_context_backfill_gaps` rows and zero
+> `LEGACY_UNRESOLVED` claims — conditional on no new claims being created
+> between this check and the deploy that would independently land in that
+> state. The rest of this document is kept as-written (dated 2026-09-03)
+> for the analysis trail; read it as history, not as a live gap report.
+
 `V217__claims_historical_policy_snapshot.sql` ran against
 `waad_production_review_20260903` (restored production review copy,
 local PostgreSQL, port 5432). Pre-migration backup:
