@@ -86,7 +86,7 @@ public class ApplicableLimitResolver {
 
         Map<Long, ResolvedBucket> byId = new LinkedHashMap<>();
         for (BenefitRuleBucket link : ruleBucketRepository.findByRuleIdOrderByConsumptionOrder(benefitRuleId)) {
-            walkBucketChain(link.getBucket(), policyId, link.getConsumptionOrder(), 0, byId, new java.util.HashSet<>());
+            walkBucketChain(link.getBucket(), policyId, link.getConsumptionOrder(), 0, byId);
         }
 
         List<ApplicableLimitDefinition> result = new ArrayList<>();
@@ -160,15 +160,19 @@ public class ApplicableLimitResolver {
     private record ResolvedBucket(BenefitLimitBucket bucket, int consumptionOrder, int hierarchyDepth) {
     }
 
+    /**
+     * The mechanical walk (self, then parentBucket, ...), including cycle
+     * detection, is {@link BucketChainWalker#chainFrom}, shared with the
+     * live coverage path and the gap audit -- chainFrom already guarantees
+     * no bucket repeats within one call, so no second visited-set is kept
+     * here. What stays unshared: the BUCKET_POLICY_MISMATCH check per
+     * bucket -- see BenefitPolicyGapAuditService's javadoc for why that
+     * check is not (yet) applied to the live path.
+     */
     private void walkBucketChain(BenefitLimitBucket start, Long policyId, int consumptionOrder, int depth,
-                                  Map<Long, ResolvedBucket> byId, java.util.Set<Long> visitedThisChain) {
-        BenefitLimitBucket current = start;
+                                  Map<Long, ResolvedBucket> byId) {
         int currentDepth = depth;
-        while (current != null) {
-            if (!visitedThisChain.add(current.getId())) {
-                throw new IllegalStateException(
-                        "BUCKET_HIERARCHY_CYCLE: bucket id=" + current.getId() + " is its own ancestor");
-            }
+        for (BenefitLimitBucket current : BucketChainWalker.chainFrom(start)) {
             if (current.getPolicy() == null || !policyId.equals(current.getPolicy().getId())) {
                 throw new IllegalStateException("BUCKET_POLICY_MISMATCH: bucket id=" + current.getId()
                         + " belongs to policy id=" + (current.getPolicy() == null ? null : current.getPolicy().getId())
@@ -176,7 +180,6 @@ public class ApplicableLimitResolver {
             }
             byId.merge(current.getId(), new ResolvedBucket(current, consumptionOrder, currentDepth),
                     (existing, candidate) -> existing.hierarchyDepth <= candidate.hierarchyDepth ? existing : candidate);
-            current = current.getParentBucket();
             currentDepth++;
         }
     }

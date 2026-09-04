@@ -355,11 +355,45 @@ public class BenefitPolicyController {
 
     @PostMapping("/{id:\\d+}/activate")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
-    @Operation(summary = "Activate a benefit policy", description = "Only one active policy is allowed per employer per period")
+    @Operation(summary = "Activate a benefit policy", description = "Only one active policy is allowed per employer per period. Refuses closed, with no override, on a critical rule/context gap -- see /activate-with-gap-override.")
     public ResponseEntity<ApiResponse<BenefitPolicyResponseDto>> activate(@PathVariable("id") Long id) {
         log.info("Activating benefit policy: {}", id);
         BenefitPolicyResponseDto result = benefitPolicyService.activate(id);
         return ResponseEntity.ok(ApiResponse.success("Benefit policy activated", result));
+    }
+
+    /**
+     * The one, explicit way past a critical rule/context gap (see
+     * {@link com.waad.tba.modules.benefitpolicy.dto.BenefitPolicyGapReportDto#hasCriticalGaps()}).
+     * Gated by its own permission -- not merely SUPER_ADMIN -- because
+     * activating a policy known to carry rules that will never apply is a
+     * deliberate financial decision distinct from ordinary activation.
+     */
+    @PostMapping("/{id:\\d+}/activate-with-gap-override")
+    @PreAuthorize("@permissionGuard.has('BENEFIT_POLICY_ACTIVATE_WITH_GAPS')")
+    @Operation(summary = "Activate a benefit policy despite critical rule/context gaps",
+            description = "Requires a mandatory reason; writes an audit trail entry naming the reason and exactly which gaps were overridden.")
+    public ResponseEntity<ApiResponse<BenefitPolicyResponseDto>> activateWithGapOverride(
+            @PathVariable("id") Long id,
+            @Valid @RequestBody ActivateWithGapOverrideRequest request) {
+        log.info("Activating benefit policy {} with an explicit gap override", id);
+        BenefitPolicyResponseDto result = benefitPolicyService.activateWithGapOverride(id, request.getReason());
+        return ResponseEntity.ok(ApiResponse.success("Benefit policy activated (gaps overridden)", result));
+    }
+
+    @lombok.Data
+    public static class ActivateWithGapOverrideRequest {
+        @jakarta.validation.constraints.NotBlank(message = "سبب تجاوز فجوات الوثيقة إلزامي")
+        private String reason;
+    }
+
+    @GetMapping("/{id:\\d+}/gap-report")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Operation(summary = "Structural rule/bucket/claim-context gap report for one policy",
+            description = "Diagnostic only, never writes. Critical gaps block ordinary activation with no override.")
+    public ResponseEntity<ApiResponse<com.waad.tba.modules.benefitpolicy.dto.BenefitPolicyGapReportDto>> gapReport(
+            @PathVariable("id") Long id) {
+        return ResponseEntity.ok(ApiResponse.success(benefitPolicyService.getGapReport(id)));
     }
 
     @PostMapping("/{id:\\d+}/deactivate")

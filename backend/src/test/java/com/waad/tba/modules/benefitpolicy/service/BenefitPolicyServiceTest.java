@@ -3,8 +3,10 @@ package com.waad.tba.modules.benefitpolicy.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -57,6 +59,8 @@ class BenefitPolicyServiceTest {
     private com.waad.tba.security.AuthorizationService authorizationService;
     @Mock
     private com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyStatusHistoryRepository statusHistoryRepository;
+    @Mock
+    private BenefitPolicyGapAuditService gapAuditService;
 
     @InjectMocks
     private BenefitPolicyService benefitPolicyService;
@@ -83,6 +87,9 @@ class BenefitPolicyServiceTest {
                 .status(BenefitPolicyStatus.DRAFT)
                 .active(true)
                 .build();
+
+        org.mockito.Mockito.lenient().when(gapAuditService.audit(any()))
+                .thenReturn(com.waad.tba.modules.benefitpolicy.dto.BenefitPolicyGapReportDto.builder().build());
     }
 
     @Test
@@ -165,6 +172,84 @@ class BenefitPolicyServiceTest {
         // Assert
         assertThat(policy.getStatus()).isEqualTo(BenefitPolicyStatus.ACTIVE);
         verify(benefitPolicyRepository).save(policy);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // P1: activation must fail closed on a critical rule/context gap
+    // unless explicitly acknowledged, and must never block on a merely
+    // advisory one (a rule with no bucket, or a bucket with no rule).
+    // ═══════════════════════════════════════════════════════════════════
+
+    @Test
+    void activate_withACriticalGap_isAlwaysRefusedWithNoOverride() {
+        when(benefitPolicyRepository.findById(10L)).thenReturn(Optional.of(policy));
+        when(benefitPolicyRuleRepository.countByBenefitPolicyIdAndDeletedFalseAndActiveTrue(10L)).thenReturn(1L);
+        when(benefitLimitBucketRepository.findByPolicyIdOrderByCode(10L)).thenReturn(java.util.List.of());
+        when(gapAuditService.audit(10L)).thenReturn(
+                com.waad.tba.modules.benefitpolicy.dto.BenefitPolicyGapReportDto.builder()
+                        .rulesWithUnknownContext(java.util.List.of(
+                                com.waad.tba.modules.benefitpolicy.dto.BenefitPolicyGapReportDto.RuleWithUnknownContext
+                                        .builder().ruleId(1L).claimContextCode("PREGNANCY_COMPLICATIONS").build()))
+                        .build());
+
+        assertThatThrownBy(() -> benefitPolicyService.activate(10L))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("سياق مطالبة غير موجود أو معطّل");
+        verify(benefitPolicyRepository, never()).save(any(BenefitPolicy.class));
+    }
+
+    @Test
+    void activateWithGapOverride_requiresANonBlankReason() {
+        assertThatThrownBy(() -> benefitPolicyService.activateWithGapOverride(10L, "  "))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("سبب");
+        verify(benefitPolicyRepository, never()).findById(any());
+    }
+
+    @Test
+    void activateWithGapOverride_proceedsWithAnExplicitReasonAndRecordsIt() {
+        when(benefitPolicyRepository.findById(10L)).thenReturn(Optional.of(policy));
+        when(benefitPolicyRepository.existsOverlappingActivePolicy(eq(1L), any(), any(), eq(10L)))
+                .thenReturn(false);
+        when(benefitPolicyRuleRepository.countByBenefitPolicyIdAndDeletedFalseAndActiveTrue(10L)).thenReturn(1L);
+        when(benefitLimitBucketRepository.findByPolicyIdOrderByCode(10L)).thenReturn(java.util.List.of());
+        when(benefitPolicyRepository.save(any(BenefitPolicy.class))).thenReturn(policy);
+        when(gapAuditService.audit(10L)).thenReturn(
+                com.waad.tba.modules.benefitpolicy.dto.BenefitPolicyGapReportDto.builder()
+                        .rulesWithUnknownContext(java.util.List.of(
+                                com.waad.tba.modules.benefitpolicy.dto.BenefitPolicyGapReportDto.RuleWithUnknownContext
+                                        .builder().ruleId(1L).claimContextCode("PREGNANCY_COMPLICATIONS")
+                                        .reason(com.waad.tba.modules.benefitpolicy.dto.BenefitPolicyGapReportDto.ContextGapReason.MISSING)
+                                        .build()))
+                        .build());
+
+        benefitPolicyService.activateWithGapOverride(10L, "الموسم ينتهي غداً، السياق سيُنشأ الأسبوع القادم");
+
+        assertThat(policy.getStatus()).isEqualTo(BenefitPolicyStatus.ACTIVE);
+        verify(auditLogService).createAuditLog(
+                eq("ACTIVATED_WITH_GAP_OVERRIDE"), eq("BENEFIT_POLICY"), eq(10L),
+                argThat(details -> details.contains("الموسم ينتهي غداً") && details.contains("PREGNANCY_COMPLICATIONS")),
+                any(), any(), any(), any());
+    }
+
+    @Test
+    void activate_withOnlyAdvisoryGaps_neverNeedsAcknowledgement() {
+        when(benefitPolicyRepository.findById(10L)).thenReturn(Optional.of(policy));
+        when(benefitPolicyRepository.existsOverlappingActivePolicy(eq(1L), any(), any(), eq(10L)))
+                .thenReturn(false);
+        when(benefitPolicyRuleRepository.countByBenefitPolicyIdAndDeletedFalseAndActiveTrue(10L)).thenReturn(1L);
+        when(benefitLimitBucketRepository.findByPolicyIdOrderByCode(10L)).thenReturn(java.util.List.of());
+        when(benefitPolicyRepository.save(any(BenefitPolicy.class))).thenReturn(policy);
+        when(gapAuditService.audit(10L)).thenReturn(
+                com.waad.tba.modules.benefitpolicy.dto.BenefitPolicyGapReportDto.builder()
+                        .rulesWithoutBucket(java.util.List.of(
+                                com.waad.tba.modules.benefitpolicy.dto.BenefitPolicyGapReportDto.RuleWithoutBucket
+                                        .builder().ruleId(1L).build()))
+                        .build());
+
+        benefitPolicyService.activate(10L); // no acknowledgement passed
+
+        assertThat(policy.getStatus()).isEqualTo(BenefitPolicyStatus.ACTIVE);
     }
 
     /**

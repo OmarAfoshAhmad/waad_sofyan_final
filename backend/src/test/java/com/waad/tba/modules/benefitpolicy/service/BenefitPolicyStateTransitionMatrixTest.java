@@ -61,6 +61,7 @@ class BenefitPolicyStateTransitionMatrixTest {
     @Mock private com.waad.tba.modules.systemadmin.service.AuditLogService auditLogService;
     @Mock private com.waad.tba.security.AuthorizationService authorizationService;
     @Mock private BenefitPolicyStatusHistoryRepository statusHistoryRepository;
+    @Mock private BenefitPolicyGapAuditService gapAuditService;
 
     @InjectMocks
     private BenefitPolicyService benefitPolicyService;
@@ -75,6 +76,8 @@ class BenefitPolicyStateTransitionMatrixTest {
         // strict-stubbing check for an unused stub.
         org.mockito.Mockito.lenient().when(benefitPolicyRepository.save(any(BenefitPolicy.class)))
                 .thenAnswer(i -> i.getArgument(0));
+        org.mockito.Mockito.lenient().when(gapAuditService.audit(any()))
+                .thenReturn(com.waad.tba.modules.benefitpolicy.dto.BenefitPolicyGapReportDto.builder().build());
     }
 
     private BenefitPolicy policyWith(BenefitPolicyStatus status) {

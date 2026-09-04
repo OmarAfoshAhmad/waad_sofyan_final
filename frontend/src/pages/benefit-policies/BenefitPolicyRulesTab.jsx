@@ -48,7 +48,8 @@ import {
   Download as DownloadIcon,
   FileDownload as FileDownloadIcon,
   FileUpload as FileUploadIcon,
-  Edit as EditIcon
+  Edit as EditIcon,
+  WarningAmber as WarningAmberIcon
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSnackbar } from 'notistack';
@@ -78,7 +79,7 @@ import {
 } from 'services/api/benefit-structure.service';
 import { getAllMedicalCategories } from 'services/api/medical-categories.service';
 import { lookupMedicalServices } from 'services/api/medical-services.service';
-import { getBenefitPoliciesSelector, checkPolicyEditability } from 'services/api/benefit-policies.service';
+import { getBenefitPoliciesSelector, checkPolicyEditability, getBenefitPolicyGapReport } from 'services/api/benefit-policies.service';
 import { getActiveClaimContexts } from 'services/api/claim-contexts.service';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -730,7 +731,18 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const [ruleSearch, setRuleSearch] = useState('');
   const [filterType, setFilterType] = useState('ALL');
+  // 'ALL' or a real claim_context_code (e.g. 'PREGNANCY_COMPLICATIONS') --
+  // NOT encounterType. A policy can have several contexts sharing one
+  // encounterType (MATERNITY and PREGNANCY_COMPLICATIONS are both
+  // INPATIENT), and filtering by encounterType alone could not tell them
+  // apart.
   const [contextFilter, setContextFilter] = useState('ALL');
+  // Gaps this tab can act on directly: a rule with no bucket at all, or one
+  // naming a claim context that is missing/disabled (critical -- see
+  // BenefitPolicyGapAuditService). Reuses the same P1 audit the policy-view
+  // page's warning banner reads, so "what's wrong" is answered identically
+  // everywhere, not by a second, possibly-drifting computation here.
+  const [showGapsOnly, setShowGapsOnly] = useState(false);
   const [viewMode, setViewMode] = useState('ACTIVE'); // 'ACTIVE', 'DELETED' (trash includes soft-deleted and disabled)
   const [categoryCoverageInputs, setCategoryCoverageInputs] = useState({});
   const [bulkSavingCoverage, setBulkSavingCoverage] = useState(false);
@@ -793,6 +805,36 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
     staleTime: 0,
     refetchOnMount: 'always'
   });
+
+  // The same canonical, active claim-context list the rule form already
+  // uses -- lifted here too, for the context badge and the context filter.
+  const { data: claimContexts = [] } = useQuery({
+    queryKey: ['active-claim-contexts'],
+    queryFn: getActiveClaimContexts,
+    staleTime: 300000
+  });
+  const claimContextByCode = useMemo(
+    () => Object.fromEntries(claimContexts.map((c) => [c.code, c])),
+    [claimContexts]
+  );
+
+  const { data: gapReport } = useQuery({
+    queryKey: ['benefit-policy-gap-report', policyId],
+    queryFn: () => getBenefitPolicyGapReport(policyId),
+    enabled: !!policyId,
+    staleTime: 0
+  });
+  const gapRuleIds = useMemo(() => {
+    const ids = new Set();
+    (gapReport?.rulesWithoutBucket || []).forEach((g) => ids.add(g.ruleId));
+    (gapReport?.rulesWithUnknownContext || []).forEach((g) => ids.add(g.ruleId));
+    return ids;
+  }, [gapReport]);
+  const criticalGapRuleIds = useMemo(() => {
+    const ids = new Set();
+    (gapReport?.rulesWithUnknownContext || []).forEach((g) => ids.add(g.ruleId));
+    return ids;
+  }, [gapReport]);
 
   // NOTE: Service name field now performs lightweight lookup while typing (duplicate hint only)
 
@@ -1279,15 +1321,33 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
               </Typography>
             </Stack>
           );
-        case 'encounterType':
+        case 'encounterType': {
+          // The real context (e.g. PREGNANCY_COMPLICATIONS), not just its
+          // base encounter type -- MATERNITY and PREGNANCY_COMPLICATIONS
+          // are both INPATIENT, and a chip reading only "إيواء" could not
+          // tell a reviewer which one this rule actually governs.
+          const context = claimContextByCode[rule.claimContextCode];
+          const label = context?.nameAr
+            || (rule.encounterType === 'INPATIENT' ? 'إيواء' : rule.encounterType === 'ANY' ? 'عام' : 'عيادات خارجية');
+          const isCritical = criticalGapRuleIds.has(rule.id);
+          const hasNoBucket = rule.bucketLinks?.length === 0 && !rule.groupSource;
           return (
-            <Chip
-              size="small"
-              variant="outlined"
-              label={rule.encounterType === 'INPATIENT' ? 'إيواء' : rule.encounterType === 'ANY' ? 'عام' : 'عيادات خارجية'}
-              sx={FIXED_RULE_CHIP_SX.context}
-            />
+            <Stack direction="row" spacing={0.5} alignItems="center" justifyContent="center" flexWrap="wrap">
+              <Chip size="small" variant="outlined" color={isCritical ? 'error' : 'default'} label={label}
+                sx={FIXED_RULE_CHIP_SX.context} />
+              {isCritical && (
+                <Tooltip title="سياق المطالبة غير موجود أو معطّل — هذه القاعدة لن تُطبَّق أبداً على أي مطالبة">
+                  <Chip size="small" color="error" label="⚠ سياق غير صالح" sx={{ height: 20, fontSize: '0.65rem' }} />
+                </Tooltip>
+              )}
+              {!isCritical && hasNoBucket && (
+                <Tooltip title="لا يوجد وعاء سقف مرتبط بهذه القاعدة — يُطبَّق السقف العام فقط">
+                  <Chip size="small" variant="outlined" color="warning" label="بلا وعاء" sx={{ height: 20, fontSize: '0.65rem' }} />
+                </Tooltip>
+              )}
+            </Stack>
           );
+        }
         case 'coveragePercent': {
           let value = rule.coveragePercent ?? rule.effectiveCoveragePercent;
           if (rule.groupSource && (value === null || value === undefined) && rule.groupMembers?.length > 0) {
@@ -1503,7 +1563,9 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
       handleEditGroup,
       openIndividualLimit,
       policyDefaultCoveragePercent,
-      viewMode
+      viewMode,
+      claimContextByCode,
+      criticalGapRuleIds
     ]
   );
 
@@ -1666,15 +1728,19 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
 
   const filterStats = useMemo(() => {
     const activeRules = normalizedRules.filter((r) => !r.isDeleted && r.isActive !== false);
+    const byContext = {};
+    activeRules.forEach((rule) => {
+      const code = rule.claimContextCode || rule.encounterType || 'ANY';
+      byContext[code] = (byContext[code] || 0) + 1;
+    });
     return {
       all: activeRules.length,
       groups: activeRules.filter((rule) => rule.groupSource).length,
       individuals: activeRules.filter((rule) => !rule.groupSource).length,
-      outpatient: activeRules.filter((rule) => rule.encounterType === 'OUTPATIENT').length,
-      inpatient: activeRules.filter((rule) => rule.encounterType === 'INPATIENT').length,
-      any: activeRules.filter((rule) => !rule.encounterType || rule.encounterType === 'ANY').length
+      byContext,
+      gaps: activeRules.filter((rule) => rule.bucketLinks?.length === 0 || gapRuleIds.has(rule.id)).length
     };
-  }, [normalizedRules]);
+  }, [normalizedRules, gapRuleIds]);
 
   const filteredRules = useMemo(() => {
     const query = ruleSearch.trim().toLowerCase();
@@ -1690,7 +1756,11 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
     }
 
     if (contextFilter !== 'ALL') {
-      statusFiltered = statusFiltered.filter((r) => (r.encounterType || 'ANY') === contextFilter);
+      statusFiltered = statusFiltered.filter((r) => (r.claimContextCode || r.encounterType || 'ANY') === contextFilter);
+    }
+
+    if (showGapsOnly) {
+      statusFiltered = statusFiltered.filter((r) => r.bucketLinks.length === 0 || gapRuleIds.has(r.id));
     }
 
     const filtered = !query ? statusFiltered : statusFiltered.filter((rule) => rule.searchable.includes(query));
@@ -1731,7 +1801,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
       const cmp = String(aVal).localeCompare(String(bVal), 'ar');
       return sortDirection === 'asc' ? cmp : -cmp;
     });
-  }, [normalizedRules, ruleSearch, sortBy, sortDirection, viewMode, filterType, contextFilter]);
+  }, [normalizedRules, ruleSearch, sortBy, sortDirection, viewMode, filterType, contextFilter, showGapsOnly, gapRuleIds]);
 
   const pagedRules = useMemo(
     () => filteredRules.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage),
@@ -2104,21 +2174,33 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
               setContextFilter(e.target.value);
               setPage(0);
             }}
-            sx={{ minWidth: 170, '& .MuiOutlinedInput-root': { height: '2.5rem' } }}
+            sx={{ minWidth: 200, '& .MuiOutlinedInput-root': { height: '2.5rem' } }}
           >
             <MenuItem value="ALL" sx={{ fontWeight: 500 }}>
               كل السياقات ({filterStats.all})
             </MenuItem>
-            <MenuItem value="OUTPATIENT" sx={{ fontWeight: 500 }}>
-              عيادات خارجية ({filterStats.outpatient})
-            </MenuItem>
-            <MenuItem value="INPATIENT" sx={{ fontWeight: 500 }}>
-              إيواء ({filterStats.inpatient})
-            </MenuItem>
-            <MenuItem value="ANY" sx={{ fontWeight: 500 }}>
-              عام ({filterStats.any})
-            </MenuItem>
+            {claimContexts.map((context) => (
+              <MenuItem key={context.code} value={context.code} sx={{ fontWeight: 500 }}>
+                {context.nameAr} ({filterStats.byContext[context.code] || 0})
+              </MenuItem>
+            ))}
           </TextField>
+
+          <Tooltip title="قواعد بلا وعاء سقف، أو مرتبطة بسياق مطالبة غير موجود/معطّل">
+            <Chip
+              clickable
+              size="medium"
+              variant={showGapsOnly ? 'filled' : 'outlined'}
+              color={showGapsOnly ? 'warning' : 'default'}
+              icon={<WarningAmberIcon fontSize="small" />}
+              label={`قواعد بها فجوة (${filterStats.gaps})`}
+              onClick={() => {
+                setShowGapsOnly((v) => !v);
+                setPage(0);
+              }}
+              sx={{ height: '2.5rem', fontWeight: 600 }}
+            />
+          </Tooltip>
 
           {selectedRowIds.length > 0 && (
             <Button

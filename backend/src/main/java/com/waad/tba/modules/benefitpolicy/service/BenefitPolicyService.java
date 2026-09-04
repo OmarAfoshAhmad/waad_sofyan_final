@@ -49,6 +49,7 @@ public class BenefitPolicyService {
     private final com.waad.tba.modules.systemadmin.service.AuditLogService auditLogService;
     private final AuthorizationService authorizationService;
     private final com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyStatusHistoryRepository statusHistoryRepository;
+    private final BenefitPolicyGapAuditService gapAuditService;
 
     /**
      * Lifecycle transitions here change what claims/preauth/coverage
@@ -531,7 +532,14 @@ public class BenefitPolicyService {
     // ═══════════════════════════════════════════════════════════════════════════
 
     /**
-     * Activate a benefit policy
+     * Activate a benefit policy. Fails closed, with no override, when
+     * {@link BenefitPolicyGapAuditService} finds a critical gap -- a rule
+     * naming a claim_context_code that is missing or disabled can never
+     * apply to any claim, and that is never something the ordinary
+     * activation path should be able to wave through. The only way past a
+     * critical gap is {@link #activateWithGapOverride}, which requires its
+     * own permission, a mandatory reason, and an audit trail entry naming
+     * exactly which gaps were overridden -- never a bare boolean.
      */
     @Transactional
     public BenefitPolicyResponseDto activate(Long id) {
@@ -541,6 +549,54 @@ public class BenefitPolicyService {
                 .orElseThrow(() -> new BusinessRuleException("Benefit policy not found: " + id));
 
         validateActivationReadiness(policy);
+        // gapAuditService.audit() is @Transactional(readOnly = true); called
+        // from here it joins this method's already-open transaction (Spring's
+        // default REQUIRED propagation), so the gap read and the activation
+        // write are the same atomic unit -- no rule/link can change between
+        // the check and the write.
+        var gapReport = gapAuditService.audit(id);
+        if (gapReport.hasCriticalGaps()) {
+            throw new BusinessRuleException(
+                    "توجد قواعد تغطية مرتبطة بسياق مطالبة غير موجود أو معطّل، فلن تُطبَّق أبداً على أي مطالبة. "
+                            + "أنشئ السياق أو فعّله، أو احذف القاعدة، قبل التفعيل. "
+                            + "لا يوجد تجاوز عادي لهذا الرفض؛ راجع تقرير فجوات الوثيقة.");
+        }
+        return doActivate(policy, id);
+    }
+
+    /**
+     * The one, explicit way past a critical gap: requires
+     * BENEFIT_POLICY_ACTIVATE_WITH_GAPS (checked by the controller, not
+     * here -- this method still records who and why regardless of caller),
+     * a non-blank reason, and writes precisely which critical gaps were
+     * overridden to the audit trail. Never activates silently: this is a
+     * deliberate financial decision, not a convenience toggle.
+     */
+    @Transactional
+    public BenefitPolicyResponseDto activateWithGapOverride(Long id, String reason) {
+        if (reason == null || reason.isBlank()) {
+            throw new BusinessRuleException("سبب تجاوز فجوات الوثيقة إلزامي ولا يجوز أن يكون فارغاً");
+        }
+        log.info("Activating benefit policy {} with an explicit gap override", id);
+
+        BenefitPolicy policy = benefitPolicyRepository.findById(id)
+                .orElseThrow(() -> new BusinessRuleException("Benefit policy not found: " + id));
+
+        validateActivationReadiness(policy);
+        var gapReport = gapAuditService.audit(id);
+        String overriddenGaps = gapReport.getRulesWithUnknownContext().stream()
+                .map(g -> (g.getMedicalCategoryCode() != null ? g.getMedicalCategoryCode() : "قاعدة #" + g.getRuleId())
+                        + " ← " + g.getClaimContextCode() + " (" + g.getReason() + ")")
+                .collect(java.util.stream.Collectors.joining("، "));
+        BenefitPolicyResponseDto result = doActivate(policy, id);
+        audit("ACTIVATED_WITH_GAP_OVERRIDE", id,
+                "تفعيل وثيقة التغطية رغم فجوات حرجة: " + policy.getName()
+                        + " — السبب: " + reason
+                        + (overriddenGaps.isBlank() ? "" : " — الفجوات المتجاوزة: " + overriddenGaps));
+        return result;
+    }
+
+    private BenefitPolicyResponseDto doActivate(BenefitPolicy policy, Long id) {
         benefitPolicyRepository.acquireTransactionLock(1_100_000_000_000L + policy.getEmployer().getId());
         // Check for overlapping active policies
         checkOverlappingActivePolicy(
@@ -875,6 +931,14 @@ public class BenefitPolicyService {
                     "يوجد بالفعل وثيقة تأمين فعالة لهذا الشريك في نفس الفترة الزمنية. " +
                             "يُسمح بوثيقة فعالة واحدة فقط لكل شريك في أي فترة.");
         }
+    }
+
+    @Transactional(readOnly = true)
+    public com.waad.tba.modules.benefitpolicy.dto.BenefitPolicyGapReportDto getGapReport(Long policyId) {
+        if (!benefitPolicyRepository.existsById(policyId)) {
+            throw new BusinessRuleException("Benefit policy not found: " + policyId);
+        }
+        return gapAuditService.audit(policyId);
     }
 
     private void validateActivationReadiness(BenefitPolicy policy) {

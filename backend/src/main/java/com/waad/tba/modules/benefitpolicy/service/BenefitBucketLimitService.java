@@ -34,10 +34,8 @@ public class BenefitBucketLimitService {
         Set<Long> directlyLinkedBucketIds = new HashSet<>();
         for (BenefitRuleBucket link : ruleBucketRepository.findByRuleIdOrderByConsumptionOrder(ruleId)) {
             directlyLinkedBucketIds.add(link.getBucket().getId());
-            BenefitLimitBucket current = link.getBucket();
-            while (current != null) {
-                buckets.putIfAbsent(current.getId(), current);
-                current = current.getParentBucket();
+            for (BenefitLimitBucket b : BucketChainWalker.chainFrom(link.getBucket())) {
+                buckets.putIfAbsent(b.getId(), b);
             }
         }
         BenefitPolicy policy = policyRuleRepository.findById(ruleId)
