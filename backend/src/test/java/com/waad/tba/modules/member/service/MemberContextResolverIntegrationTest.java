@@ -16,6 +16,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 
 import com.waad.tba.common.exception.BusinessRuleException;
+import com.waad.tba.common.error.ErrorCode;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy.BenefitPolicyStatus;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository;
@@ -93,7 +94,47 @@ class MemberContextResolverIntegrationTest extends PostgresIntegrationTestBase {
                 .hasMessageContaining("تاريخ الخدمة إلزامي");
         assertThatThrownBy(() -> contextResolver.resolveForOrFail(member, LocalDate.now()))
                 .isInstanceOf(BusinessRuleException.class)
-                .hasMessageContaining("تعيين جهة عمل");
+                .extracting(error -> ((BusinessRuleException) error).getErrorCode())
+                .isEqualTo(ErrorCode.MEMBER_NOT_COVERED_AT_SERVICE_DATE);
+    }
+
+    @Test
+    void preservesAnExplicit2025ServiceDateAndReturnsOneUserFacingCoverageError() {
+        String s = suffix();
+        Employer employer = employer("Employer " + s, "EMP-" + s);
+        BenefitPolicy policy = policy(employer, "P-" + s,
+                LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31));
+        Member member = member(employer, policy, s);
+
+        BusinessRuleException error = (BusinessRuleException) org.assertj.core.api.Assertions.catchThrowable(
+                () -> contextResolver.resolveForOrFail(member, LocalDate.of(2025, 5, 1)));
+
+        assertThat(error).isNotNull();
+        assertThat(error.getErrorCode()).isEqualTo(ErrorCode.MEMBER_NOT_COVERED_AT_SERVICE_DATE);
+        assertThat(error.getMessage()).isEqualTo("المستفيد غير مغطى تأمينياً بتاريخ 01/05/2025.");
+        assertThat(error.getMessage()).doesNotContain("تعيين جهة عمل", "2020");
+    }
+
+    @Test
+    void resolvesCoverageOnTheExactExplicit2025ServiceDate() {
+        String s = suffix();
+        LocalDate coverageFrom = LocalDate.of(2025, 1, 1);
+        LocalDate serviceDate = LocalDate.of(2025, 5, 1);
+        Employer employer = employer("Employer " + s, "EMP-" + s);
+        BenefitPolicy policy = policy(employer, "P-" + s,
+                coverageFrom, LocalDate.of(2026, 12, 31));
+        Member member = member(employer, policy, s);
+        employerResolver.assignEmployer(member, employer, coverageFrom,
+                "2025 coverage", EmployerAssignmentSource.MANUAL, 1L);
+        member = memberRepository.findById(member.getId()).orElseThrow();
+        policyResolver.assignPolicy(member, policy, coverageFrom,
+                "2025 coverage", PolicyAssignmentSource.MANUAL, 1L);
+
+        MemberDatedContext resolved = contextResolver.resolveForOrFail(member, serviceDate);
+
+        assertThat(resolved.serviceDate()).isEqualTo(serviceDate);
+        assertThat(resolved.employer().getId()).isEqualTo(employer.getId());
+        assertThat(resolved.policy().getId()).isEqualTo(policy.getId());
     }
 
     @Test

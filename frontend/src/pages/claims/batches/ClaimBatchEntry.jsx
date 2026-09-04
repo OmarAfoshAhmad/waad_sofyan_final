@@ -103,7 +103,6 @@ import { useCoverageLogic } from './hooks/useCoverageLogic';
 import { failedCoverageResult } from './hooks/coverageContract.mjs';
 
 import { ClaimHeaderFields } from './components/ClaimHeaderFields';
-import { ClaimEntryReadinessAlert } from './components/ClaimEntryReadinessAlert';
 import { ClaimAdditionalDetails } from './components/ClaimAdditionalDetails';
 import { invalidQuantityLineNumbers } from './claim-entry-validation';
 import { ClaimLineRow } from './components/ClaimLineRow';
@@ -212,6 +211,7 @@ export default function ClaimBatchEntry() {
   const [debouncedMemberInput, setDebouncedMemberInput] = useState('');
   const [serviceSearchInput, setServiceSearchInput] = useState('');
   const [debouncedServiceSearch, setDebouncedServiceSearch] = useState('');
+  const [debouncedServiceDate, setDebouncedServiceDate] = useState('');
   useEffect(() => {
     const t = setTimeout(() => setDebouncedMemberInput(memberInput), 350);
     return () => clearTimeout(t);
@@ -220,6 +220,13 @@ export default function ClaimBatchEntry() {
     const timer = setTimeout(() => setDebouncedServiceSearch(serviceSearchInput.trim()), 300);
     return () => clearTimeout(timer);
   }, [serviceSearchInput]);
+  useEffect(() => {
+    // MUI's segmented date field emits intermediate but valid years while the
+    // user is typing (for example 2020 on the way to 2026). Do not send those
+    // transient dates to the financial resolver.
+    const timer = setTimeout(() => setDebouncedServiceDate(serviceDate), 450);
+    return () => clearTimeout(timer);
+  }, [serviceDate]);
   const [diagnosis, setDiagnosis] = useState('');
   const [doctorName, setDoctorName] = useState('');
   const [complaint, setComplaint] = useState('');
@@ -359,8 +366,8 @@ export default function ClaimBatchEntry() {
     claimContextCode,
     setLines,
     recompute,
-    serviceYear: serviceDate ? new Date(serviceDate).getFullYear() : year || new Date().getFullYear(),
-    serviceDate,
+    serviceYear: debouncedServiceDate ? new Date(debouncedServiceDate).getFullYear() : year || new Date().getFullYear(),
+    serviceDate: debouncedServiceDate,
     currentClaimId: editingClaimId,
     fullCoverage,
     onCoverageError: (message) => enqueueSnackbar(message, { variant: 'warning' })
@@ -539,12 +546,18 @@ export default function ClaimBatchEntry() {
     data: entryContext,
     isFetching: loadingEntryContext,
     isError: entryContextError,
-    error: entryContextFailure,
-    refetch: refetchEntryContext
+    error: entryContextFailure
   } = useQuery({
-    queryKey: ['claim-entry-context', member?.id, providerId, employerId, serviceDate],
-    queryFn: () => claimsService.getEntryContext({ memberId: member.id, providerId, employerId, serviceDate }),
-    enabled: !!member?.id && !!providerId && !!employerId && !!serviceDate,
+    queryKey: ['claim-entry-context', member?.id, providerId, employerId, debouncedServiceDate],
+    queryFn: ({ signal }) =>
+      claimsService.getEntryContext({
+        memberId: member.id,
+        providerId,
+        employerId,
+        serviceDate: debouncedServiceDate,
+        signal
+      }),
+    enabled: !!member?.id && !!providerId && !!employerId && !!debouncedServiceDate,
     retry: false,
     staleTime: 30000
   });
@@ -597,7 +610,7 @@ export default function ClaimBatchEntry() {
       providerId,
       employerId,
       entryContext?.contractId,
-      serviceDate,
+      debouncedServiceDate,
       debouncedServiceSearch
     ],
     queryFn: () =>
@@ -605,12 +618,19 @@ export default function ClaimBatchEntry() {
         memberId: member.id,
         providerId,
         employerId,
-        serviceDate,
+        serviceDate: debouncedServiceDate,
         q: debouncedServiceSearch || undefined,
         size: 100,
         sort: 'serviceName,asc'
       }),
-    enabled: !!member?.id && !!providerId && !!employerId && !!entryContext?.contractId && !!serviceDate,
+    enabled:
+      !!member?.id &&
+      !!providerId &&
+      !!employerId &&
+      !!entryContext?.contractId &&
+      !!debouncedServiceDate &&
+      debouncedServiceDate === serviceDate &&
+      entryContext?.serviceDate === serviceDate,
     retry: false
   });
   const normalizedMemberSearchValue = useMemo(() => debouncedMemberInput.trim(), [debouncedMemberInput]);
@@ -639,17 +659,40 @@ export default function ClaimBatchEntry() {
     enqueueSnackbar(normalized.message || 'فشل تحميل نتائج البحث', { variant: 'error' });
   }, [memberSearchError, memberSearchQueryError, enqueueSnackbar]);
 
+  useEffect(() => {
+    if (
+      !entryContextError ||
+      !entryContextFailure ||
+      !member?.id ||
+      !debouncedServiceDate ||
+      debouncedServiceDate !== serviceDate
+    ) return;
+    const normalized = normalizeApiError(entryContextFailure);
+    const shortId = normalized.trackingId ? String(normalized.trackingId).split('-')[0] : null;
+    const message = normalized.code === 'MEMBER_NOT_COVERED_AT_SERVICE_DATE'
+      ? `المستفيد غير مغطى تأمينياً بتاريخ ${dayjs(debouncedServiceDate).format('DD/MM/YYYY')}.`
+      : normalized.message || 'تعذر التحقق من تغطية المستفيد في تاريخ الخدمة المحدد.';
+    const toastKey = `${normalized.code}:${member.id}:${debouncedServiceDate}`;
+    enqueueSnackbar(shortId ? `${message} (مرجع: ${shortId})` : message, {
+      key: toastKey,
+      preventDuplicate: true,
+      variant: 'error',
+      autoHideDuration: 6000
+    });
+  }, [debouncedServiceDate, enqueueSnackbar, entryContextError, entryContextFailure, member?.id, serviceDate]);
+
   const entryContextBlockReason = useMemo(() => {
     if (!member?.id) return null;
     if (!serviceDate) return 'اختر تاريخ الخدمة أولاً حتى نتحقق من وثيقة المستفيد وعقد مقدم الخدمة والسقف.';
+    if (serviceDate !== debouncedServiceDate) return 'انتظر لحظة حتى يكتمل إدخال تاريخ الخدمة.';
     if (loadingEntryContext) return 'انتظر اكتمال التحقق من الوثيقة والعقد والسقف لهذا التاريخ.';
     if (entryContextError) {
       const normalized = normalizeApiError(entryContextFailure);
       return normalized.message || 'تعذر التحقق من الوثيقة أو العقد أو السقف. اضغط إعادة التحقق.';
     }
-    if (!entryContext) return 'لم تكتمل نتيجة التحقق بعد. اضغط إعادة التحقق قبل الحفظ.';
+    if (!entryContext || entryContext.serviceDate !== serviceDate) return 'لم تكتمل نتيجة التحقق لهذا التاريخ بعد.';
     return null;
-  }, [entryContext, entryContextError, entryContextFailure, loadingEntryContext, member?.id, serviceDate]);
+  }, [debouncedServiceDate, entryContext, entryContextError, entryContextFailure, loadingEntryContext, member?.id, serviceDate]);
 
   const coveragePending = useMemo(
     () => lines.some((line) => (line.service || line.serviceName) && !line.rejected && line.coveragePending),
@@ -2202,16 +2245,6 @@ export default function ClaimBatchEntry() {
                   t={t}
                   showValidationErrors={showValidationErrors}
                 />
-                <Box sx={{ mt: 1 }}>
-                  <ClaimEntryReadinessAlert
-                    member={member}
-                    serviceDate={serviceDate}
-                    loading={loadingEntryContext}
-                    context={entryContext}
-                    error={entryContextFailure}
-                    onRetry={refetchEntryContext}
-                  />
-                </Box>
                 <Box sx={{ mt: 0.5 }}>
                   <ClaimAdditionalDetails
                     complaint={complaint}

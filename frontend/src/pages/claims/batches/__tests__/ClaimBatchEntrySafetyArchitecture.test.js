@@ -116,6 +116,14 @@ describe('claim batch entry safety boundary', () => {
     expect(entrySource).not.toContain("['eligible-claim-preauths'");
   });
 
+  it('debounces and cancels dated coverage checks and does not render a persistent readiness banner', () => {
+    expect(entrySource).toContain('setTimeout(() => setDebouncedServiceDate(serviceDate), 450)');
+    expect(entrySource).toContain('queryFn: ({ signal }) =>');
+    expect(entrySource).toContain('signal');
+    expect(entrySource).toContain('preventDuplicate: true');
+    expect(entrySource).not.toContain('<ClaimEntryReadinessAlert');
+  });
+
   /**
    * "Add a new service" used to post to /provider/my-contract/pricing, a
    * provider-portal endpoint retired behind @PreAuthorize("denyAll()") on the

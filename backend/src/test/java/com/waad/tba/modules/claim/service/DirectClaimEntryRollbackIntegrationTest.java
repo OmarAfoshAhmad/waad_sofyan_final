@@ -80,10 +80,12 @@ class DirectClaimEntryRollbackIntegrationTest extends PostgresIntegrationTestBas
 
         ClaimCreateDto mapped = ClaimCreateDto.builder()
                 .memberId(memberId).providerId(providerId).serviceDate(date)
+                .diagnosisDescription("تشخيص اختبار التراجع")
                 .lines(List.of(ClaimLineDto.builder().medicalServiceId(1L).quantity(1).build()))
                 .build();
         CreateClaimRequest claim = CreateClaimRequest.builder()
                 .memberId(memberId).providerId(providerId).serviceDate(date).doctorName("طبيب الاختبار")
+                .diagnosisDescription("تشخيص اختبار التراجع")
                 .lines(List.of(CreateClaimRequest.ClaimLineRequest.builder()
                         .medicalServiceId(1L).quantity(1).build()))
                 .build();
@@ -131,13 +133,24 @@ class DirectClaimEntryRollbackIntegrationTest extends PostgresIntegrationTestBas
                 "INSERT INTO providers (name, license_number, provider_type) VALUES (?, ?, 'CLINIC') RETURNING id",
                 Long.class, "Idempotent provider", "IL-" + suffix);
         LocalDate date = LocalDate.now();
+        long employerAssignmentId = jdbc.queryForObject(
+                "INSERT INTO member_employer_assignments "
+                        + "(member_id, employer_id, assignment_start_date, assignment_reason, assignment_source) "
+                        + "VALUES (?, ?, ?, 'direct-entry rollback fixture', 'SYSTEM') RETURNING id",
+                Long.class, memberId, employerId, date.minusDays(1));
+        long policyAssignmentId = jdbc.queryForObject(
+                "INSERT INTO member_policy_assignments "
+                        + "(member_id, policy_id, assignment_start_date, assignment_reason, assignment_source) "
+                        + "VALUES (?, ?, ?, 'direct-entry rollback fixture', 'SYSTEM') RETURNING id",
+                Long.class, memberId, policyId, date.minusDays(1));
         var context = new MemberDatedContext(memberId, date,
-                MemberEmployerAssignment.builder().id(11L).build(), Employer.builder().id(employerId).build(),
-                MemberPolicyAssignment.builder().id(12L).build(), BenefitPolicy.builder().id(policyId).build());
+                MemberEmployerAssignment.builder().id(employerAssignmentId).build(), Employer.builder().id(employerId).build(),
+                MemberPolicyAssignment.builder().id(policyAssignmentId).build(), BenefitPolicy.builder().id(policyId).build());
         when(memberContextResolver.resolveForOrFail(memberId, date)).thenReturn(context);
 
         CreateClaimRequest claim = CreateClaimRequest.builder()
                 .memberId(memberId).providerId(providerId).serviceDate(date).doctorName("طبيب التزامن")
+                .diagnosisDescription("تشخيص اختبار التزامن")
                 .lines(List.of(CreateClaimRequest.ClaimLineRequest.builder()
                         .medicalServiceId(1L).quantity(1).build()))
                 .build();
@@ -145,6 +158,7 @@ class DirectClaimEntryRollbackIntegrationTest extends PostgresIntegrationTestBas
                 .idempotencyKey("concurrent-" + suffix).employerId(employerId).claim(claim).build();
         when(claimApiMapper.toCreateDto(claim)).thenAnswer(ignored -> ClaimCreateDto.builder()
                 .memberId(memberId).providerId(providerId).serviceDate(date)
+                .diagnosisDescription("تشخيص اختبار التزامن")
                 .lines(List.of(ClaimLineDto.builder().medicalServiceId(1L).quantity(1).build()))
                 .build());
 
@@ -161,9 +175,11 @@ class DirectClaimEntryRollbackIntegrationTest extends PostgresIntegrationTestBas
             claimCreates.incrementAndGet();
             ClaimCreateDto dto = invocation.getArgument(0);
             Long id = jdbc.queryForObject("INSERT INTO claims (claim_number, member_id, provider_id, visit_id, "
-                    + "service_date, requested_amount, patient_copay, status, claim_context_code) "
-                    + "VALUES (?, ?, ?, ?, ?, 100, 100, 'DRAFT', 'OUTPATIENT') RETURNING id",
-                    Long.class, "IDEM-CLM-" + suffix, memberId, providerId, dto.getVisitId(), date);
+                    + "service_date, requested_amount, patient_copay, status, claim_context_code, "
+                    + "policy_id, policy_assignment_id, employer_assignment_id, historical_context_status) "
+                    + "VALUES (?, ?, ?, ?, ?, 100, 100, 'DRAFT', 'OUTPATIENT', ?, ?, ?, 'RESOLVED') RETURNING id",
+                    Long.class, "IDEM-CLM-" + suffix, memberId, providerId, dto.getVisitId(), date,
+                    policyId, policyAssignmentId, employerAssignmentId);
             return ClaimViewDto.builder().id(id).build();
         });
 

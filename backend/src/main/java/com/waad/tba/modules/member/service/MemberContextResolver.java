@@ -6,6 +6,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.waad.tba.common.exception.BusinessRuleException;
+import com.waad.tba.common.error.ErrorCode;
 import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.modules.member.repository.MemberRepository;
 
@@ -41,21 +42,28 @@ public class MemberContextResolver {
         }
 
         var employerAssignment = employerResolver.resolveAssignmentFor(member, serviceDate)
-                .orElseThrow(() -> new BusinessRuleException(
-                        "لا يوجد تعيين جهة عمل للمستفيد في تاريخ الخدمة " + serviceDate));
-        var employer = employerResolver.resolveForOrFail(member, serviceDate);
+                .orElseThrow(() -> notCovered(serviceDate));
+        var employer = employerResolver.resolveFor(member, serviceDate)
+                .orElseThrow(() -> notCovered(serviceDate));
         var policyAssignment = policyResolver.resolveAssignmentFor(member, serviceDate)
-                .orElseThrow(() -> new BusinessRuleException(
-                        "لا يوجد تعيين وثيقة للمستفيد في تاريخ الخدمة " + serviceDate));
-        var policy = policyResolver.resolveForOrFail(member, serviceDate);
+                .orElseThrow(() -> notCovered(serviceDate));
+        var policy = policyResolver.resolveFor(member, serviceDate)
+                .orElseThrow(() -> notCovered(serviceDate));
 
         Long policyEmployerId = policy.getEmployer() == null ? null : policy.getEmployer().getId();
         if (policyEmployerId == null || !employer.getId().equals(policyEmployerId)) {
-            throw new BusinessRuleException(
-                    "وثيقة المنافع لا تتبع جهة عمل المستفيد في تاريخ الخدمة " + serviceDate);
+            throw notCovered(serviceDate);
         }
 
         return new MemberDatedContext(member.getId(), serviceDate,
                 employerAssignment, employer, policyAssignment, policy);
+    }
+
+    private static BusinessRuleException notCovered(LocalDate serviceDate) {
+        String displayedDate = serviceDate.format(
+                java.time.format.DateTimeFormatter.ofPattern("dd/MM/uuuu"));
+        return new BusinessRuleException(
+                ErrorCode.MEMBER_NOT_COVERED_AT_SERVICE_DATE,
+                "المستفيد غير مغطى تأمينياً بتاريخ " + displayedDate + ".");
     }
 }
