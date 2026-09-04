@@ -23,6 +23,7 @@ import com.waad.tba.modules.benefitpolicy.enums.ConsumptionBasis;
 import com.waad.tba.modules.benefitpolicy.enums.CountingMethod;
 import com.waad.tba.modules.providercontract.enums.EncounterType;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitLimitBucketRepository;
+import com.waad.tba.modules.benefitpolicy.service.DivisibleLimitSplitter;
 import com.waad.tba.modules.benefitpolicy.service.EffectiveLimitResolver;
 import com.waad.tba.modules.benefitpolicy.service.LimitBalanceReader;
 import com.waad.tba.modules.claim.service.finance.WaadFinancialEngine;
@@ -363,21 +364,20 @@ public class PreAuthorizationDecisionBuilder {
         // Storing reservedTimes without changing the money would let the
         // insurer pay for occurrences the policy does not cover.
         if (limitExcessTimes > 0) {
-            if (requiredTimes > 0 && countingBuckets.stream().anyMatch(
-                    b -> b.getCountingMethod() == CountingMethod.EACH_UNIT)) {
-                // Divisible: the insurer pays for the covered units, and the
-                // uncovered ones move to the patient.
-                BigDecimal coveredFraction = BigDecimal.valueOf(coveredTimes)
-                        .divide(BigDecimal.valueOf(requiredTimes), 6, RoundingMode.HALF_UP);
-                BigDecimal payable = scaled(companyShare.multiply(coveredFraction));
-                patientShare = scaled(patientShare.add(companyShare.subtract(payable)));
-                companyShare = payable;
-            } else {
-                // Indivisible: a visit is not half-attended. Either the
-                // occurrence is available or the insurer pays nothing.
-                patientShare = scaled(patientShare.add(companyShare));
-                companyShare = BigDecimal.ZERO.setScale(2);
-            }
+            // Same split DivisibleLimitSplitter applies in claims
+            // (CoverageEngineService): only EACH_UNIT is divisible. The
+            // difference from claims stays exactly here -- coveredTimes comes
+            // from a reservation-availability check (reservableTimes), not a
+            // committed-usage balance -- never in how the money is split
+            // once coveredTimes/requiredTimes are known.
+            boolean divisible = requiredTimes > 0 && countingBuckets.stream().anyMatch(
+                    b -> b.getCountingMethod() == CountingMethod.EACH_UNIT);
+            DivisibleLimitSplitter.UnitSplit split = divisible
+                    ? new DivisibleLimitSplitter.UnitSplit(coveredTimes, limitExcessTimes)
+                    : new DivisibleLimitSplitter.UnitSplit(0, requiredTimes);
+            BigDecimal payable = DivisibleLimitSplitter.coveredAmountFor(companyShare, split);
+            patientShare = scaled(patientShare.add(companyShare.subtract(payable)));
+            companyShare = payable;
         }
 
         // What the policy WOULD have paid had the ceiling not intervened.

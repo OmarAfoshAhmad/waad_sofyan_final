@@ -64,7 +64,7 @@ public class BenefitBucketLimitService {
                     (int) Math.min(Integer.MAX_VALUE, usedDays), serviceDayAlreadyUsed,
                     bucket.getCountingMethod() != null ? bucket.getCountingMethod() : CountingMethod.EACH_LINE,
                     bucket.getConsumptionBasis() != null ? bucket.getConsumptionBasis() : ConsumptionBasis.COMPANY_SHARE,
-                    directlyLinkedBucketIds.contains(bucket.getId())));
+                    directlyLinkedBucketIds.contains(bucket.getId()), period.start(), period.end()));
         }
         if (policy != null && policy.getAnnualLimit() != null && policy.getAnnualLimit().signum() > 0) {
             BucketPeriodCalculator.Period annual = BucketPeriodCalculator.resolve(
@@ -77,7 +77,7 @@ public class BenefitBucketLimitService {
                     .add(Optional.ofNullable(reserved).orElse(BigDecimal.ZERO));
             result.add(new LimitSnapshot(null, "السقف السنوي العام", policy.getAnnualLimit(), null, null,
                     unavailable, 0, 0, false, CountingMethod.EACH_LINE,
-                    ConsumptionBasis.ELIGIBLE_AMOUNT, false));
+                    ConsumptionBasis.ELIGIBLE_AMOUNT, false, annual.start(), annual.end()));
         }
         return result;
     }
@@ -110,15 +110,29 @@ public class BenefitBucketLimitService {
                                 Integer daysLimit, BigDecimal usedAmount, Integer usedTimes,
                                 Integer usedDays, boolean serviceDayAlreadyUsed,
                                 CountingMethod countingMethod, ConsumptionBasis consumptionBasis,
-                                boolean directlyLinked) {
-        // Backwards-compatible constructor for existing tests and callers; an
-        // explicitly supplied snapshot represents a service-level bucket.
+                                boolean directlyLinked, LocalDate periodStart, LocalDate periodEnd) {
+        // Backwards-compatible constructors for existing tests and callers.
+        // periodStart/periodEnd distinguish two limit cycles on the same
+        // bucket (e.g. an annual reset spanning a batch) so a usage
+        // accumulator keyed on them never merges two different cycles into
+        // one running total. Existing callers that omit them get null, which
+        // is safe: within one resolve() call every limit already carries one
+        // consistent service date, so there is nothing to distinguish yet.
         public LimitSnapshot(Long bucketId, String bucketName, BigDecimal amountLimit, Integer timesLimit,
                              Integer daysLimit, BigDecimal usedAmount, Integer usedTimes,
                              Integer usedDays, boolean serviceDayAlreadyUsed,
                              CountingMethod countingMethod, ConsumptionBasis consumptionBasis) {
             this(bucketId, bucketName, amountLimit, timesLimit, daysLimit, usedAmount, usedTimes,
-                    usedDays, serviceDayAlreadyUsed, countingMethod, consumptionBasis, true);
+                    usedDays, serviceDayAlreadyUsed, countingMethod, consumptionBasis, true, null, null);
+        }
+
+        public LimitSnapshot(Long bucketId, String bucketName, BigDecimal amountLimit, Integer timesLimit,
+                             Integer daysLimit, BigDecimal usedAmount, Integer usedTimes,
+                             Integer usedDays, boolean serviceDayAlreadyUsed,
+                             CountingMethod countingMethod, ConsumptionBasis consumptionBasis,
+                             boolean directlyLinked) {
+            this(bucketId, bucketName, amountLimit, timesLimit, daysLimit, usedAmount, usedTimes,
+                    usedDays, serviceDayAlreadyUsed, countingMethod, consumptionBasis, directlyLinked, null, null);
         }
     }
     private record Period(LocalDate start, LocalDate end) {}

@@ -91,7 +91,8 @@ public class CoverageDecisionService {
                         .amountLimit(limit.amountLimit()).timesLimit(limit.timesLimit()).daysLimit(limit.daysLimit())
                         .usedAmount(limit.usedAmount()).usedTimes(limit.usedTimes()).usedDays(limit.usedDays())
                         .serviceDayAlreadyUsed(limit.serviceDayAlreadyUsed()).countingMethod(limit.countingMethod())
-                        .consumptionBasis(limit.consumptionBasis()).directlyLinked(limit.directlyLinked()).build())
+                        .consumptionBasis(limit.consumptionBasis()).directlyLinked(limit.directlyLinked())
+                        .periodStart(limit.periodStart()).periodEnd(limit.periodEnd()).build())
                 .toList();
         return CoverageDecision.builder()
                 .covered(true)
