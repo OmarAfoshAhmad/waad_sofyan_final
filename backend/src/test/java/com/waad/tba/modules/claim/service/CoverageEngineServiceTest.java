@@ -425,6 +425,180 @@ class CoverageEngineServiceTest {
         assertEquals("مستند ناقص", result.getManualRefusalReason());
     }
 
+    // ═══════════════════════════════════════════════════════════════════
+    // P2: EACH_UNIT partial acceptance when a times-limit falls short
+    // ═══════════════════════════════════════════════════════════════════
+
+    @Test
+    @DisplayName("P2-1/10 انحدار العلاج الطبيعي: 21 جلسة مطلوبة و20 متبقية تقبل 20 وترفض 1")
+    void physiotherapyTwentyOneSessionsAgainstTwentyRemainingApprovesTwentyAndRefusesOne() {
+        coveredByRule(150L, 100, false);
+        useLimits(new LimitSnapshot(
+                1501L, "جلسات العلاج الطبيعي", null, 20, null,
+                BigDecimal.ZERO, 0, 0, false,
+                CountingMethod.EACH_UNIT, ConsumptionBasis.COMPANY_SHARE));
+        ClaimLineInput input = line("PHYSIO-21-UNITS", "100.00");
+        input.setQuantity(21);
+
+        CoverageResult result = calculate(input, EncounterType.OUTPATIENT);
+
+        assertMoney("2000.00", result.getCompanyShare());
+        assertMoney("100.00", result.getLimitRefused());
+        assertEquals(20, result.getUsageDetails().getApprovedUnits());
+        assertEquals(1, result.getUsageDetails().getRefusedUnits());
+        assertTrue(result.getUsageDetails().isTimesExceeded());
+        // Invariant: requested == approved + refused, even after rounding.
+        assertMoney("2100.00", result.getCompanyShare().add(result.getLimitRefused()));
+    }
+
+    @Test
+    @DisplayName("P2-2: لا رصيد متبقٍ من عدد المرات يرفض الطلب بالكامل")
+    void eachUnitWithZeroRemainingRefusesTheWholeLine() {
+        coveredByRule(151L, 100, false);
+        useLimits(new LimitSnapshot(
+                1511L, "جلسات مستنفدة", null, 20, null,
+                BigDecimal.ZERO, 20, 0, false,
+                CountingMethod.EACH_UNIT, ConsumptionBasis.COMPANY_SHARE));
+
+        ClaimLineInput input = line("PHYSIO-EXHAUSTED", "100.00");
+        input.setQuantity(5);
+
+        CoverageResult result = calculate(input, EncounterType.OUTPATIENT);
+
+        assertMoney("0.00", result.getCompanyShare());
+        assertMoney("500.00", result.getLimitRefused());
+        assertEquals(0, result.getUsageDetails().getApprovedUnits());
+        assertEquals(5, result.getUsageDetails().getRefusedUnits());
+    }
+
+    @Test
+    @DisplayName("P2-3: كمية ضمن السقف لا تُغيَّر (سلوك محفوظ)")
+    void eachUnitWithinTheLimitIsUnaffectedByPartialAcceptance() {
+        coveredByRule(152L, 100, false);
+        useLimits(new LimitSnapshot(
+                1521L, "جلسات", null, 20, null,
+                BigDecimal.ZERO, 0, 0, false,
+                CountingMethod.EACH_UNIT, ConsumptionBasis.COMPANY_SHARE));
+        ClaimLineInput input = line("PHYSIO-WITHIN", "100.00");
+        input.setQuantity(15);
+
+        CoverageResult result = calculate(input, EncounterType.OUTPATIENT);
+
+        assertMoney("1500.00", result.getCompanyShare());
+        assertMoney("0.00", result.getLimitRefused());
+        assertNull(result.getUsageDetails().getApprovedUnits());
+        assertNull(result.getUsageDetails().getRefusedUnits());
+    }
+
+    @Test
+    @DisplayName("P2-4: EACH_LINE وPER_VISIT وPER_DAY ترفض الحدث بالكامل ولا تُجزَّأ")
+    void indivisibleCountingMethodsNeverPartiallyAccept() {
+        coveredByRule(153L, 100, false);
+
+        useLimits(new LimitSnapshot(
+                1531L, "سطر واحد", null, 3, null,
+                BigDecimal.ZERO, 3, 0, false,
+                CountingMethod.EACH_LINE, ConsumptionBasis.COMPANY_SHARE));
+        CoverageResult eachLine = calculate(line("EACH-LINE-EXCESS", "90.00"), EncounterType.OUTPATIENT);
+        assertMoney("0.00", eachLine.getCompanyShare());
+        assertMoney("90.00", eachLine.getLimitRefused());
+
+        useLimits(new LimitSnapshot(
+                1532L, "زيارة", null, 5, null,
+                BigDecimal.ZERO, 5, 0, false,
+                CountingMethod.PER_VISIT, ConsumptionBasis.COMPANY_SHARE));
+        CoverageResult perVisit = calculate(line("PER-VISIT-EXCESS", "90.00"), EncounterType.OUTPATIENT);
+        assertMoney("0.00", perVisit.getCompanyShare());
+        assertMoney("90.00", perVisit.getLimitRefused());
+
+        useLimits(new LimitSnapshot(
+                1533L, "أيام الإيواء", null, null, 2,
+                BigDecimal.ZERO, 0, 2, false,
+                CountingMethod.PER_DAY, ConsumptionBasis.COMPANY_SHARE));
+        CoverageResult perDay = calculate(line("PER-DAY-EXCESS", "90.00"), EncounterType.INPATIENT);
+        assertMoney("0.00", perDay.getCompanyShare());
+        assertMoney("90.00", perDay.getLimitRefused());
+    }
+
+    @Test
+    @DisplayName("P2-5: سطران يتشاركان وعاء EACH_UNIT في نفس المطالبة يستهلكان تراكمياً")
+    void twoLinesSharingTheSameEachUnitBucketConsumeCumulatively() {
+        coveredByRule(154L, 100, false);
+        useLimits(new LimitSnapshot(
+                1541L, "جلسات مشتركة", null, 20, null,
+                BigDecimal.ZERO, 15, 0, false,
+                CountingMethod.EACH_UNIT, ConsumptionBasis.COMPANY_SHARE));
+
+        ClaimLineInput first = line("SHARED-1", "50.00");
+        first.setQuantity(3);
+        ClaimLineInput second = line("SHARED-2", "50.00");
+        second.setQuantity(4);
+
+        List<CoverageResult> results = calculateBulk(List.of(first, second), EncounterType.OUTPATIENT);
+
+        // 15 used + 3 = 18, still within 20: line 1 fully covered.
+        assertMoney("150.00", results.get(0).getCompanyShare());
+        assertMoney("0.00", results.get(0).getLimitRefused());
+        // 18 + 4 = 22 > 20: only 2 of the 4 units in line 2 fit.
+        assertMoney("100.00", results.get(1).getCompanyShare());
+        assertMoney("100.00", results.get(1).getLimitRefused());
+        assertEquals(2, results.get(1).getUsageDetails().getApprovedUnits());
+        assertEquals(2, results.get(1).getUsageDetails().getRefusedUnits());
+    }
+
+    @Test
+    @DisplayName("P2-7: سقف مالي أقل من الجزء الذي يسمح به سقف الجلسات يُطبَّق أيضاً")
+    void amountLimitBelowWhatTheSessionLimitWouldAllowStillApplies() {
+        coveredByRule(155L, 100, false);
+        useLimits(new LimitSnapshot(
+                1551L, "جلسات وسقف مالي معاً", new BigDecimal("150.00"), 20, null,
+                new BigDecimal("50.00"), 15, 0, false,
+                CountingMethod.EACH_UNIT, ConsumptionBasis.ELIGIBLE_AMOUNT));
+
+        // 8 units requested at 100 each = 800.00; times-limit allows 5 of the
+        // 8 (15 used + 8 = 23 > 20, remaining 5), covering 500.00 -- but the
+        // amount ceiling only has 100.00 left (150.00 limit - 50.00 used),
+        // which is the more restrictive constraint on that covered portion.
+        ClaimLineInput input = line("SESSION-AND-AMOUNT-CAP", "100.00");
+        input.setQuantity(8);
+
+        CoverageResult result = calculate(input, EncounterType.OUTPATIENT);
+
+        assertMoney("100.00", result.getCompanyShare());
+        assertMoney("700.00", result.getLimitRefused());
+        assertTrue(result.getUsageDetails().isAmountExceeded());
+    }
+
+    @Test
+    @DisplayName("P2-9: ثبات معادلة المبالغ بعد التقريب على قسمة غير متساوية")
+    void roundingInvariantHoldsForAnUnevenSplit() {
+        coveredByRule(156L, 100, false);
+        useLimits(new LimitSnapshot(
+                1561L, "قسمة غير متساوية", null, 3, null,
+                BigDecimal.ZERO, 0, 0, false,
+                CountingMethod.EACH_UNIT, ConsumptionBasis.COMPANY_SHARE));
+        ClaimLineInput input = line("UNEVEN-SPLIT", "33.33");
+        input.setQuantity(7); // requests 7, only 3 remain -> covered 3/7
+
+        CoverageResult result = calculate(input, EncounterType.OUTPATIENT);
+
+        assertMoney(result.getEffectiveTotal().toPlainString(),
+                result.getCompanyShare().add(result.getLimitRefused()));
+    }
+
+    @Test
+    @DisplayName("مفتاح التراكم يفرّق بين تاريخي خدمة مختلفين لنفس الوعاء تحت PER_DAY")
+    void accumulatorKeyDistinguishesDifferentServiceDatesForTheSameBucket() {
+        var keyDay1 = new CoverageEngineService.AccumulatorKey(
+                77L, LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31),
+                LocalDate.of(2026, 3, 1), CountingMethod.PER_DAY);
+        var keyDay2 = new CoverageEngineService.AccumulatorKey(
+                77L, LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31),
+                LocalDate.of(2026, 3, 2), CountingMethod.PER_DAY);
+
+        assertNotEquals(keyDay1, keyDay2);
+    }
+
     private void coveredByRule(Long ruleId, int percent, boolean preApproval) {
         configuredRuleId = ruleId;
         configuredPercent = percent;

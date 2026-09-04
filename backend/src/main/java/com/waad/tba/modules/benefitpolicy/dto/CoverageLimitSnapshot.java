@@ -5,6 +5,7 @@ import com.waad.tba.modules.benefitpolicy.enums.CountingMethod;
 import lombok.Builder;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 
 /** Immutable, transport-safe view of an applicable benefit limit. */
 @Builder
@@ -20,5 +21,10 @@ public record CoverageLimitSnapshot(
         boolean serviceDayAlreadyUsed,
         CountingMethod countingMethod,
         ConsumptionBasis consumptionBasis,
-        boolean directlyLinked) {
+        boolean directlyLinked,
+        // The limit cycle this snapshot was resolved against. Part of the
+        // claims usage-accumulator key so two different cycles on the same
+        // bucket (e.g. an annual reset) never merge into one running total.
+        LocalDate periodStart,
+        LocalDate periodEnd) {
 }

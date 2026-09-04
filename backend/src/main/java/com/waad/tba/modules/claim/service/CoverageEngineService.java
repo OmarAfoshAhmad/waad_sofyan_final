@@ -4,6 +4,7 @@ import com.waad.tba.modules.benefitpolicy.dto.BenefitPolicyRuleResponseDto;
 import com.waad.tba.modules.benefitpolicy.dto.CoverageDecisionRequest;
 import com.waad.tba.modules.benefitpolicy.dto.CoverageLimitSnapshot;
 import com.waad.tba.modules.benefitpolicy.service.CoverageDecisionService;
+import com.waad.tba.modules.benefitpolicy.service.DivisibleLimitSplitter;
 import com.waad.tba.modules.benefitpolicy.enums.ConsumptionBasis;
 import com.waad.tba.modules.benefitpolicy.enums.CountingMethod;
 import com.waad.tba.modules.claim.dto.engine.BulkCoverageEngineRequest;
@@ -47,7 +48,7 @@ public class CoverageEngineService {
             return List.of();
         }
 
-        Map<Long, BatchUsageAccumulator> batchUsageContext = new HashMap<>();
+        Map<AccumulatorKey, BatchUsageAccumulator> batchUsageContext = new HashMap<>();
         List<CoverageResult> results = new ArrayList<>(request.getLines().size());
 
         for (ClaimLineInput line : request.getLines()) {
@@ -89,7 +90,7 @@ public class CoverageEngineService {
     public CoverageResult evaluateLine(
             BulkCoverageEngineRequest request,
             ClaimLineInput line,
-            Map<Long, BatchUsageAccumulator> batchUsageContext) {
+            Map<AccumulatorKey, BatchUsageAccumulator> batchUsageContext) {
 
         BigDecimal quantity = bd(line.getQuantity());
         BigDecimal enteredUnitPrice = scale2(defaultIfNull(line.getEnteredUnitPrice(), ZERO));
@@ -236,7 +237,7 @@ public class CoverageEngineService {
             Optional<BenefitPolicyRuleResponseDto> ruleOpt,
             List<CoverageLimitSnapshot> bucketLimits,
             Long resolvedCategoryId,
-            Map<Long, BatchUsageAccumulator> batchUsageContext,
+            Map<AccumulatorKey, BatchUsageAccumulator> batchUsageContext,
             BigDecimal effectiveTotal) {
 
         if (request.getMemberId() == null) {
@@ -244,7 +245,8 @@ public class CoverageEngineService {
         }
 
         if (!bucketLimits.isEmpty()) {
-            return computeBucketUsage(line, ruleOpt, bucketLimits, batchUsageContext, effectiveTotal);
+            return computeBucketUsage(line, ruleOpt, bucketLimits, batchUsageContext, effectiveTotal,
+                    request.getServiceDate());
         }
 
         // Full bucket cutover: an unlinked rule has no usage ceiling. Never fall back
@@ -286,8 +288,9 @@ public class CoverageEngineService {
             ClaimLineInput line,
             Optional<BenefitPolicyRuleResponseDto> ruleOpt,
             List<CoverageLimitSnapshot> limits,
-            Map<Long, BatchUsageAccumulator> batchUsageContext,
-            BigDecimal effectiveTotal) {
+            Map<AccumulatorKey, BatchUsageAccumulator> batchUsageContext,
+            BigDecimal effectiveTotal,
+            java.time.LocalDate serviceDate) {
 
         int coveragePercent = ruleOpt.map(BenefitPolicyRuleResponseDto::getEffectiveCoveragePercent).orElse(0);
         BigDecimal greatestRefusal = ZERO;
@@ -297,22 +300,60 @@ public class CoverageEngineService {
         CoverageLimitSnapshot constraining = limits.get(0);
         BigDecimal constrainingUsedBefore = ZERO;
         BigDecimal constrainingRequestedBasis = ZERO;
+        Integer constrainingApprovedUnits = null;
+        Integer constrainingRefusedUnits = null;
         boolean constrainingInitialized = false;
 
-        for (CoverageLimitSnapshot limit : limits) {
-            BatchUsageAccumulator acc = batchUsageContext.computeIfAbsent(bucketAccumulatorKey(limit.bucketId()),
-                    ignored -> new BatchUsageAccumulator());
+        // Per-limit occurrence units actually approved, computed here and
+        // reused verbatim in the accumulation pass below -- never derived
+        // from the line-level approvedGross, which reflects the MOST
+        // restrictive limit across the whole line and would otherwise credit
+        // every bucket with the full requested count even when this specific
+        // bucket's own times-limit refused part of it.
+        long[] unitsToAdd = new long[limits.size()];
+
+        for (int i = 0; i < limits.size(); i++) {
+            CoverageLimitSnapshot limit = limits.get(i);
+            AccumulatorKey key = accumulatorKey(limit, serviceDate);
+            BatchUsageAccumulator acc = batchUsageContext.computeIfAbsent(key, ignored -> new BatchUsageAccumulator());
+            CountingMethod method = limit.countingMethod() != null ? limit.countingMethod() : CountingMethod.EACH_LINE;
             long usedTimes = (limit.usedTimes() == null ? 0 : limit.usedTimes()) + acc.addedCount;
-            long requestedTimes = requestedTimes(limit.countingMethod(), line, acc);
+            long requestedTimes = requestedTimes(method, line, acc);
             boolean thisTimesExceeded = limit.timesLimit() != null
                     && usedTimes + requestedTimes > limit.timesLimit();
             boolean thisDaysExceeded = limit.daysLimit() != null
                     && !limit.serviceDayAlreadyUsed() && !acc.addedDay
                     && limit.usedDays() + 1 > limit.daysLimit();
-            BigDecimal refusal = (thisTimesExceeded || thisDaysExceeded) ? effectiveTotal : ZERO;
-            boolean thisAmountExceeded = false;
 
+            BigDecimal occurrenceRefusal = ZERO;
+            BigDecimal coveredGrossAfterOccurrence = effectiveTotal;
+            Integer approvedUnits = null;
+            Integer refusedUnits = null;
+            unitsToAdd[i] = requestedTimes;
+
+            if (thisDaysExceeded) {
+                // A day is not half-spent -- indivisible regardless of method.
+                occurrenceRefusal = effectiveTotal;
+                coveredGrossAfterOccurrence = ZERO;
+                unitsToAdd[i] = 0;
+            } else if (thisTimesExceeded) {
+                long remainingTimes = Math.max(0, limit.timesLimit() - usedTimes);
+                DivisibleLimitSplitter.UnitSplit split = DivisibleLimitSplitter.splitUnits(
+                        method, (int) requestedTimes, remainingTimes);
+                BigDecimal covered = DivisibleLimitSplitter.coveredAmountFor(effectiveTotal, split);
+                occurrenceRefusal = maxZero(scale2(effectiveTotal.subtract(covered)));
+                coveredGrossAfterOccurrence = covered;
+                approvedUnits = split.coveredUnits();
+                refusedUnits = split.refusedUnits();
+                unitsToAdd[i] = split.coveredUnits();
+            }
+
+            boolean thisAmountExceeded = false;
+            BigDecimal amountRefusalGross = ZERO;
             BigDecimal usedAmount = scale2(defaultIfNull(limit.usedAmount(), ZERO).add(acc.addedAmount));
+            // Audit fields always reflect the full line, independent of any
+            // occurrence-based split -- unchanged from before partial
+            // acceptance existed.
             BigDecimal requestedBasis = basisAmount(limit.consumptionBasis(), effectiveTotal, coveragePercent);
             if (!constrainingInitialized) {
                 constraining = limit;
@@ -320,14 +361,20 @@ public class CoverageEngineService {
                 constrainingRequestedBasis = requestedBasis;
                 constrainingInitialized = true;
             }
-        if (!thisTimesExceeded && !thisDaysExceeded && limit.amountLimit() != null) {
+            // The financial ceiling still applies to whatever the occurrence
+            // split already covers -- a session limit allowing 5 of 8 units
+            // does not exempt those 5 from a lower amount cap.
+            if (limit.amountLimit() != null && coveredGrossAfterOccurrence.signum() > 0) {
+                BigDecimal checkBasis = basisAmount(limit.consumptionBasis(), coveredGrossAfterOccurrence, coveragePercent);
                 BigDecimal available = maxZero(scale2(limit.amountLimit().subtract(usedAmount)));
-                if (requestedBasis.compareTo(available) > 0) {
+                if (checkBasis.compareTo(available) > 0) {
                     thisAmountExceeded = true;
-                    BigDecimal refusedBasis = scale2(requestedBasis.subtract(available));
-                    refusal = toGrossRefusal(limit.consumptionBasis(), refusedBasis, coveragePercent);
+                    BigDecimal refusedBasis = scale2(checkBasis.subtract(available));
+                    amountRefusalGross = toGrossRefusal(limit.consumptionBasis(), refusedBasis, coveragePercent);
                 }
             }
+            BigDecimal refusal = maxZero(scale2(occurrenceRefusal.add(amountRefusalGross)));
+
             if (refusal.compareTo(greatestRefusal) > 0) {
                 greatestRefusal = min(effectiveTotal, refusal);
                 constraining = limit;
@@ -336,14 +383,20 @@ public class CoverageEngineService {
                 daysExceeded = thisDaysExceeded;
                 constrainingUsedBefore = usedAmount;
                 constrainingRequestedBasis = requestedBasis;
+                constrainingApprovedUnits = approvedUnits;
+                constrainingRefusedUnits = refusedUnits;
             }
         }
 
         BigDecimal approvedGross = maxZero(scale2(effectiveTotal.subtract(greatestRefusal)));
-        for (CoverageLimitSnapshot limit : limits) {
-            BatchUsageAccumulator acc = batchUsageContext.get(bucketAccumulatorKey(limit.bucketId()));
+        for (int i = 0; i < limits.size(); i++) {
+            CoverageLimitSnapshot limit = limits.get(i);
+            BatchUsageAccumulator acc = batchUsageContext.get(accumulatorKey(limit, serviceDate));
+            // Occurrence consumption follows this bucket's OWN times outcome
+            // (unitsToAdd), never the line-level approvedGross: the two axes
+            // -- occurrences and money -- are enforced independently.
+            acc.addedCount += unitsToAdd[i];
             if (approvedGross.signum() > 0) {
-                acc.addedCount += requestedTimes(limit.countingMethod(), line, acc);
                 acc.addedAmount = scale2(acc.addedAmount.add(
                         basisAmount(limit.consumptionBasis(), approvedGross, coveragePercent)));
                 if (!limit.serviceDayAlreadyUsed()) acc.addedDay = true;
@@ -372,9 +425,9 @@ public class CoverageEngineService {
                 .orElse(null);
 
         BatchUsageAccumulator amountAcc = amountDisplay == null ? null
-                : batchUsageContext.get(bucketAccumulatorKey(amountDisplay.bucketId()));
+                : batchUsageContext.get(accumulatorKey(amountDisplay, serviceDate));
         BatchUsageAccumulator timesAcc = timesDisplay == null ? null
-                : batchUsageContext.get(bucketAccumulatorKey(timesDisplay.bucketId()));
+                : batchUsageContext.get(accumulatorKey(timesDisplay, serviceDate));
         BigDecimal finalAmount = amountDisplay == null ? ZERO
                 : scale2(defaultIfNull(amountDisplay.usedAmount(), ZERO).add(amountAcc.addedAmount));
         long finalTimes = timesDisplay == null ? 0
@@ -393,11 +446,12 @@ public class CoverageEngineService {
                 .requestedAmountForLimit(constrainingRequestedBasis)
                 .approvedAmountForLimit(basisAmount(constraining.consumptionBasis(), approvedGross, coveragePercent))
                 .usedDays(daysDisplay == null ? 0 : daysDisplay.usedDays()
-                        + (batchUsageContext.get(bucketAccumulatorKey(daysDisplay.bucketId())).addedDay ? 1 : 0))
+                        + (batchUsageContext.get(accumulatorKey(daysDisplay, serviceDate)).addedDay ? 1 : 0))
                 .remainingAmount(amountDisplay == null ? null
                         : maxZero(scale2(amountDisplay.amountLimit().subtract(finalAmount))))
                 .timesExceeded(timesExceeded).amountExceeded(amountExceeded).daysExceeded(daysExceeded)
-                .exceeded(timesExceeded || amountExceeded || daysExceeded).build();
+                .exceeded(timesExceeded || amountExceeded || daysExceeded)
+                .approvedUnits(constrainingApprovedUnits).refusedUnits(constrainingRefusedUnits).build();
         String reason = timesExceeded ? "USAGE_TIMES_LIMIT_EXCEEDED"
                 : daysExceeded ? "USAGE_DAYS_LIMIT_EXCEEDED"
                 : amountExceeded ? "USAGE_AMOUNT_LIMIT_EXCEEDED" : null;
@@ -457,11 +511,22 @@ public class CoverageEngineService {
                 .divide(BigDecimal.valueOf(coveragePercent), 2, RoundingMode.HALF_UP));
     }
 
-    private long bucketAccumulatorKey(Long bucketId) {
-        if (bucketId == null) {
-            return Long.MIN_VALUE;
-        }
-        return Long.MIN_VALUE + bucketId;
+    /**
+     * bucketId alone is not enough: a batch accumulator keyed only on it
+     * would merge two different limit cycles on the same bucket (e.g. an
+     * annual reset) or two different service dates into one running total.
+     * Today's public API resolves one service date per request, so
+     * serviceDate never actually varies within a call -- this key is
+     * defense-in-depth against that assumption changing, not a fix for a
+     * reachable bug today.
+     */
+    public record AccumulatorKey(Long bucketId, java.time.LocalDate periodStart, java.time.LocalDate periodEnd,
+                                  java.time.LocalDate serviceDate, CountingMethod countingMethod) {
+    }
+
+    private AccumulatorKey accumulatorKey(CoverageLimitSnapshot limit, java.time.LocalDate serviceDate) {
+        CountingMethod method = limit.countingMethod() != null ? limit.countingMethod() : CountingMethod.EACH_LINE;
+        return new AccumulatorKey(limit.bucketId(), limit.periodStart(), limit.periodEnd(), serviceDate, method);
     }
 
     private BigDecimal resolveEffectiveUnitPrice(BigDecimal enteredUnitPrice, BigDecimal contractPrice) {

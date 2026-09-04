@@ -225,5 +225,14 @@ public class CoverageResult {
 
         /** هل تجاوز بأي شكل من الأشكال؟ */
         private boolean exceeded;
+
+        /**
+         * عدد الوحدات المقبولة فعلياً من هذا السطر ضمن سقف عدد المرات
+         * (لا يتأثر برفض السقف المالي) — null إذا لم يوجد سقف عدد مرات مطبّق.
+         */
+        private Integer approvedUnits;
+
+        /** عدد الوحدات المرفوضة بسبب تجاوز سقف عدد المرات تحديداً. */
+        private Integer refusedUnits;
     }
 }
