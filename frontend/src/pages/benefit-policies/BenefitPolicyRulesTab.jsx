@@ -76,7 +76,7 @@ import {
   downloadBenefitStructureTemplate,
   importBenefitStructure
 } from 'services/api/benefit-structure.service';
-import { getMedicalCategories } from 'services/api/medical-categories.service';
+import { getAllMedicalCategories } from 'services/api/medical-categories.service';
 import { lookupMedicalServices } from 'services/api/medical-services.service';
 import { getBenefitPoliciesSelector, checkPolicyEditability } from 'services/api/benefit-policies.service';
 import { getActiveClaimContexts } from 'services/api/claim-contexts.service';
@@ -784,19 +784,14 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
     staleTime: 0
   });
 
-  // Fetch categories for selector from the same source used in MedicalCategoriesList
+  // Fetch the complete active canonical list. Do not share a query key with
+  // paginated category screens: a cached partial page would silently hide
+  // valid categories from coverage-rule creation.
   const { data: categories = [], isLoading: loadingCategories } = useQuery({
-    queryKey: ['medical-categories-all'],
-    queryFn: async () => {
-      const result = await getMedicalCategories({
-        page: 0,
-        size: 500,
-        sortBy: 'code',
-        sortDir: 'ASC',
-        active: true
-      });
-      return result?.items || [];
-    }
+    queryKey: ['medical-categories-active-coverage-selector'],
+    queryFn: getAllMedicalCategories,
+    staleTime: 0,
+    refetchOnMount: 'always'
   });
 
   // NOTE: Service name field now performs lightweight lookup while typing (duplicate hint only)
