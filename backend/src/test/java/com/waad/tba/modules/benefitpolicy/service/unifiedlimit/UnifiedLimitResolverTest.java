@@ -183,6 +183,31 @@ class UnifiedLimitResolverTest {
     }
 
     @Test
+    @DisplayName("G8 — an atomic counting method (PER_VISIT) refuses the whole occurrence, never splits it, even though a TIMES axis exists")
+    void g8AtomicCountingMethodWithOccurrenceDimensionRefusesWhole() {
+        // Unlike G2 (EACH_UNIT), this bucket DOES configure a TIMES axis, but
+        // the method is PER_VISIT -- indivisible. Requesting 3 against a
+        // remaining of 2 must refuse everything, not approve 2.
+        UnifiedLimitInput in = new UnifiedLimitInput(
+                700L, 908L, 500L, DATE, EncounterType.OUTPATIENT,
+                3, 0, CountingMethod.PER_VISIT, new BigDecimal("100.00"), new BigDecimal("300.00"),
+                null, ReservationEvaluationMode.NORMAL, null, null);
+        BucketLimitSnapshot bucket = new BucketLimitSnapshot(
+                938L, 700L,
+                null, null, null, null,
+                20, 18, 0, null, // times remaining 2 -- enough for neither 3 nor a split
+                null, null, null, null);
+
+        UnifiedLimitDecision d = UnifiedLimitResolver.resolve(in, List.of(bucket));
+
+        assertThat(d.status()).isEqualTo(UnifiedLimitStatus.EXHAUSTED);
+        assertThat(d.bindingConstraintType()).isEqualTo(BindingConstraintType.TIMES);
+        assertThat(d.approvedQuantity()).isZero();
+        assertThat(d.refusedQuantity()).isEqualTo(3);
+        assertThat(d.bindingAvailableAmount()).isEqualByComparingTo("0.00");
+    }
+
+    @Test
     @DisplayName("no buckets at all -> UNLIMITED, full request approved")
     void unlimitedWhenNoBucketApplies() {
         UnifiedLimitInput in = new UnifiedLimitInput(
