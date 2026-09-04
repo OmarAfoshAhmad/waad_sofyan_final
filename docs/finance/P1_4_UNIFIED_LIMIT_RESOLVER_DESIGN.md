@@ -1,0 +1,190 @@
+# P1.4 — تصميم `UnifiedLimitResolver`: النطاق، ثم المدخل، ثم الهيكل
+
+**الحالة:** P1.4.0 VERIFIED (بتوسيع نطاق موثَّق) · P1.4.1 للمراجعة — لا كود Java بعد.
+**يعتمد على:** `P1_UNIFIED_LIMIT_BASELINE.md` (P1.1)، `P1_UNIFIED_LIMIT_DECISION_CONTRACT.md` (P1.3، **لم يتغيّر** — هذا المستند يُفصّل شكل الاستدعاء، لا يعدّل معنى الناتج).
+
+---
+
+## P1.4.0 — Scope Amendment (بعد الجرد الحي)
+
+```text
+Canonical limit-decision scope يشمل الآن أربعة مصادر، لا ثلاثة:
+1. BenefitBucketLimitService        (times/days/amount + DivisibleLimitSplitter)
+2. ApplicableLimitResolver          (مشي السلسلة + BUCKET_POLICY_MISMATCH)
+3. EffectiveLimitResolver           (اختيار المصدر بالأولوية + فحص ملكية الوثيقة)
+4. ApplicableCountingLimitResolver  (عدّ المرات في مسار الموافقة المسبقة — مكتشف اليوم)
+
+Deferred integration (لا يبدأ الآن):
+- استبدال استدعاء PreAuthorizationDecisionBuilder فعلياً بالـResolver الموحَّد → P1.12
+
+Tracked ledger divergence (دين تقني مُسجَّل، ليس ضمن P1.4):
+- BenefitBucketLedgerService.addWithParents (نسخة خامسة من مشي السلسلة،
+  مستقلة عن BucketChainWalker) → يجب توحيدها مع BucketChainWalker في P1.11
+  (Snapshot = Ledger)، لا قبل ذلك.
+```
+
+**الفصل الملزم:** P1.4 يبني **القدرة** (الـResolver يفهم كل الأنواع الأربعة
+ويُنتج نفس قرار المبلغ والمرات الذي يحتاجه كل من المطالبة والموافقة المسبقة).
+P1.12 يُبدّل **المستدعي الفعلي** للموافقة المسبقة. الاثنان منفصلان عمداً — بناء
+القدرة ناقصة (بتجاهل احتياج الموافقة المسبقة) يعني تعديل عقد P1.3 لاحقاً،
+وهو ما نمنعه بهذا الفصل.
+
+---
+
+## P1.4.1 — عقد المدخل: `UnifiedLimitInput`
+
+### التمييز الذي يمنع اختراع Boolean غامض
+
+اكتشاف الجرد الحي: مطالبة عادية، ومطالبة محوَّلة من موافقة مسبقة، تقرآن
+الرصيد بدالتين مختلفتين تماماً في الكود اليوم (`LimitBalanceReader.read` مقابل
+`readForPreauthorizedClaim`) — ليس فرقاً في قيمة معامل، بل في **الصيغة
+الحسابية نفسها**:
+
+```text
+NORMAL:               reservableAvailable = actualRemaining - reserved
+PREAUTHORIZED_CLAIM:   availableForThisClaim = min(actualRemaining, reservableAvailable + ownActiveReservation)
+```
+
+(المصدر: `LimitBalanceReader.java:408-409` — الحجز الخاص بنفس الموافقة يُعاد
+إضافته ثم يُحدّ بالرصيد الفعلي، لا يُترك بلا سقف.)
+
+لموافقة مسبقة نفسها (لا مطالبة بعد)، لا يوجد "حجز خاص" لأنها هي نفسها من
+سيُنشئ الحجز — فهذا وضع ثالث منفصل، لا يمكن دمجه مع الاثنين أعلاه.
+
+```java
+public enum ReservationEvaluationMode {
+    /** مطالبة عادية، لا صلة لها بأي موافقة مسبقة سارية. */
+    NORMAL,
+    /** مطالبة تُحوَّل من موافقة مسبقة — حجزها الخاص لا يُحسب ضدها. */
+    PREAUTHORIZED_CLAIM,
+    /** إنشاء/تقييم موافقة مسبقة نفسها، قبل أي مطالبة. */
+    PREAUTH_RESERVATION
+}
+```
+
+**لماذا `enum` لا `boolean fromPreAuth`:** لأن الوضعين "مطالبة محوَّلة" و"إنشاء
+موافقة مسبقة" يحتاجان بيانات مختلفة (الأول يحتاج `preAuthorizationId` +
+`memberPolicyAssignmentId` موجودَين مسبقاً؛ الثاني لا يحتاج أياً منهما لأنه هو
+من سينشئهما). `boolean` واحد لا يستطيع حمل هذا الفرق دون حقل ثالث ضمني يُفسَّر
+حسب السياق — وهو بالضبط الغموض الممنوع في القاعدة 5 من P1.3.
+
+### الحقل الكامل
+
+```java
+public record UnifiedLimitInput(
+    Long policyId,
+    Long ruleId,
+    Long memberId,
+    LocalDate serviceDate,
+    EncounterType encounterType,
+
+    int requestedQuantity,
+    int requestedDays,
+    BigDecimal effectiveUnitPrice,   // لتحويل quantity المقبولة إلى bindingAvailableAmount (DivisibleLimitSplitter)
+    BigDecimal eligibleAmount,       // effectiveUnitPrice × requestedQuantity، أو المبلغ المؤهَّل المباشر إن لم يكن العدّ بالوحدة
+
+    Long excludeClaimId,             // null لغير المطالبات (PREAUTH_RESERVATION)
+
+    ReservationEvaluationMode reservationMode,
+    Long preAuthorizationId,             // مطلوب فقط عند PREAUTHORIZED_CLAIM
+    Long memberPolicyAssignmentId        // مطلوب فقط عند PREAUTHORIZED_CLAIM
+) {
+    public UnifiedLimitInput {
+        if (reservationMode == ReservationEvaluationMode.PREAUTHORIZED_CLAIM) {
+            if (preAuthorizationId == null || memberPolicyAssignmentId == null) {
+                throw new IllegalArgumentException(
+                    "PREAUTHORIZED_CLAIM requires preAuthorizationId and memberPolicyAssignmentId");
+            }
+        }
+    }
+}
+```
+
+هذا **أقل شكل يخدم الحالتين الحيّتين** (المطالبة والموافقة المسبقة) دون
+اختراع إطار جديد — كل حقل مطابق لمعامل فعلي موجود اليوم في أحد نقاط الاستدعاء
+الثلاث المجرودة (P1.4.0)، لا حقل واحد مُتخيَّل.
+
+---
+
+## G7 — الاختبار الذهبي السابع: مطالبة تملك حجزها الخاص
+
+مبني حرفياً على صيغة `readForPreauthorizedClaim` الفعلية (لا تصور نظري):
+
+```text
+Limit = 20
+Committed = 10
+Reserved (الإجمالي عبر كل الموافقات السارية) = 6
+   منها حجز هذه الموافقة بالذات (own) = 4
+
+Normal reservableAvailable  = 20 - 10 - 6 = 4          (لو عومِلت كمطالبة عادية — خطأ)
+PREAUTHORIZED_CLAIM available = min(actualRemaining, reservableAvailable + own)
+                             = min(20-10, 4+4)
+                             = min(10, 8)
+                             = 8                        (الصحيح)
+```
+
+**لماذا `min(actualRemaining, ...)` لا مجرد الجمع:** لو حُجزت 4 فقط بينما
+`committed` ارتفع لاحقاً حتى اقترب من `actualRemaining`، فإن `reservableAvailable + own`
+قد يتجاوز `actualRemaining` فعلياً — والحد الأعلى يمنع هذه المطالبة من أن
+"تستعيد" أكثر مما تبقّى واقعاً على الوثيقة، حتى لو كانت هي مالكة الحجز.
+
+### قاعدة نطاق `ownActiveReservation` — لا تعني "أي حجز لنفس المستفيد"
+
+مبنية حرفياً على معاملات `consumptionRepository.sumOwnActiveReservation`
+الفعلية (`LimitBalanceReader.java:402-404`):
+
+```text
+ownActiveReservation = مجموع الحجوزات التي تحقق الأربعة شروط معاً:
+  1. نفس preAuthorizationId  (هذه الموافقة المسبقة بالذات، لا أي موافقة أخرى لنفس العضو)
+  2. نفس memberPolicyAssignmentId (نفس تخصيص العضو للوثيقة وقت الحجز)
+  3. نفس bucketId (نفس الوعاء تحديداً، لا سقف آخر على نفس الوثيقة)
+  4. نفس نافذة period (periodStart/periodEnd) لهذا السقف
+  وحالتها "نشطة" فقط — لا الملغاة، ولا المعكوسة، ولا المنتهية،
+  ولا التي حُوِّلت بالفعل إلى استهلاك (Status.COMMITTED)
+```
+
+**لماذا هذا التحديد الصارم:** توسيع `ownActiveReservation` ليشمل "أي حجز لنفس
+المستفيد" يحوّل `PREAUTHORIZED_CLAIM` من استثناء ضيق (حرّر حجزك أنت فقط) إلى
+استثناء عام (حرّر كل حجوزاتك)، فتستطيع مطالبة واحدة تجاوز رصيد موافقات مسبقة
+أخرى سارية لنفس العضو لا علاقة لها بها. الشروط الأربعة معاً هي ما يمنع ذلك.
+
+### المعنى الحسابي الصريح لكل Mode (الصيغة، لا طريقة الكتابة النهائية)
+
+```text
+NORMAL:
+    available = Limit - Committed - ActiveReserved
+
+PREAUTHORIZED_CLAIM:
+    available = min(
+        Limit - Committed,
+        Limit - Committed - ActiveReserved + OwnActiveReservation
+    )
+
+PREAUTH_RESERVATION:
+    available = Limit - Committed - ActiveReserved
+```
+
+`NORMAL` و`PREAUTH_RESERVATION` متطابقتان حسابياً اليوم (كلتاهما "لا حجز خاص
+يُستثنى")، لكنهما تبقيان قيمتين منفصلتين في `enum` — ليس تكراراً، بل لأن معنى
+"لماذا لا يوجد استثناء" مختلف: الأولى لأن المطالبة لا صلة لها بأي موافقة
+أصلاً، والثانية لأن الموافقة نفسها لم تُنشئ حجزها بعد. لو تغيّر مستقبلاً حساب
+أحدهما (مثال: قاعدة عمل جديدة تخص تقييم الموافقات المسبقة فقط)، فالفصل هنا هو
+ما يجعل ذلك ممكناً دون المساس بالمطالبات العادية.
+
+سيُضاف G7 كاختبار صيغة صرفة إلى نفس ملف `UnifiedLimitDecisionGoldenTest.java`
+(G1-G6 موجودة، لا تُحذف) في P1.4.3.
+
+---
+
+## الخطوات التالية (بعد اعتماد هذا التصميم)
+
+```text
+P1.4.1 (هذا المستند)  → للمراجعة
+P1.4.2  → هيكل Java (UnifiedLimitInput, UnifiedLimitDecision, UnifiedLimitResolver) — غير مربوط بأي مسار حي
+P1.4.3  → G1-G7 عبر التنفيذ الفعلي (لا الصيغة الصرفة فقط) — يجب أن تُطابق جدول القسم 4 في P1.3 حرفياً
+P1.4.4  → مراجعة
+```
+
+لا تُنقل `PreAuthorizationDecisionBuilder` ولا `ClaimFinancialAdjudicationService`
+ولا `CoverageDecisionService` للمسار الجديد ضمن P1.4 — هذا يبقى Skeleton
+معزول قابل للحذف بسهولة لو ظهر عيب في التصميم قبل أي ربط حي.
