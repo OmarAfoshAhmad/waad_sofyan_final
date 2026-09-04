@@ -124,6 +124,15 @@ describe('claim batch entry safety boundary', () => {
     expect(entrySource).not.toContain('<ClaimEntryReadinessAlert');
   });
 
+  it('declares serviceDate before any effect reads it during the first render', () => {
+    const serviceDateState = entrySource.indexOf('const [serviceDate, setServiceDate] = useState(defaultDate);');
+    const serviceDateDebounce = entrySource.indexOf('setTimeout(() => setDebouncedServiceDate(serviceDate), 450)');
+
+    expect(serviceDateState).toBeGreaterThan(-1);
+    expect(serviceDateDebounce).toBeGreaterThan(-1);
+    expect(serviceDateState).toBeLessThan(serviceDateDebounce);
+  });
+
   /**
    * "Add a new service" used to post to /provider/my-contract/pricing, a
    * provider-portal endpoint retired behind @PreAuthorize("denyAll()") on the

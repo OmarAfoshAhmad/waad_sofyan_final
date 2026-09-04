@@ -212,21 +212,6 @@ export default function ClaimBatchEntry() {
   const [serviceSearchInput, setServiceSearchInput] = useState('');
   const [debouncedServiceSearch, setDebouncedServiceSearch] = useState('');
   const [debouncedServiceDate, setDebouncedServiceDate] = useState('');
-  useEffect(() => {
-    const t = setTimeout(() => setDebouncedMemberInput(memberInput), 350);
-    return () => clearTimeout(t);
-  }, [memberInput]);
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedServiceSearch(serviceSearchInput.trim()), 300);
-    return () => clearTimeout(timer);
-  }, [serviceSearchInput]);
-  useEffect(() => {
-    // MUI's segmented date field emits intermediate but valid years while the
-    // user is typing (for example 2020 on the way to 2026). Do not send those
-    // transient dates to the financial resolver.
-    const timer = setTimeout(() => setDebouncedServiceDate(serviceDate), 450);
-    return () => clearTimeout(timer);
-  }, [serviceDate]);
   const [diagnosis, setDiagnosis] = useState('');
   const [doctorName, setDoctorName] = useState('');
   const [complaint, setComplaint] = useState('');
@@ -317,6 +302,22 @@ export default function ClaimBatchEntry() {
   const defaultDate = '';
 
   const [serviceDate, setServiceDate] = useState(defaultDate);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedMemberInput(memberInput), 350);
+    return () => clearTimeout(t);
+  }, [memberInput]);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedServiceSearch(serviceSearchInput.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [serviceSearchInput]);
+  useEffect(() => {
+    // MUI's segmented date field emits intermediate but valid years while the
+    // user is typing (for example 2020 on the way to 2026). Do not send those
+    // transient dates to the financial resolver.
+    const timer = setTimeout(() => setDebouncedServiceDate(serviceDate), 450);
+    return () => clearTimeout(timer);
+  }, [serviceDate]);
 
   const memberRef = useRef(null);
   const diagnosisRef = useRef(null);
