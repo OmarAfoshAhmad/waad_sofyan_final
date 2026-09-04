@@ -1,6 +1,6 @@
 # P1.4 — تصميم `UnifiedLimitResolver`: النطاق، ثم المدخل، ثم الهيكل
 
-**الحالة:** P1.4.0 VERIFIED (بتوسيع نطاق موثَّق) · P1.4.1 للمراجعة — لا كود Java بعد.
+**الحالة:** P1.4.0 VERIFIED · P1.4.1 VERIFIED · P1.4.2 VERIFIED · P1.4.3 VERIFIED — هيكل معزول، صفر ربط حي.
 **يعتمد على:** `P1_UNIFIED_LIMIT_BASELINE.md` (P1.1)، `P1_UNIFIED_LIMIT_DECISION_CONTRACT.md` (P1.3، **لم يتغيّر** — هذا المستند يُفصّل شكل الاستدعاء، لا يعدّل معنى الناتج).
 
 ---
@@ -70,6 +70,13 @@ public enum ReservationEvaluationMode {
 
 ### الحقل الكامل
 
+**تحديث بعد P1.4.2 (تنفيذ فعلي كشف حقلاً ناقصاً):** `countingMethod` لم يُذكر
+هنا أصلاً، واتضح أنه **جزء من عقد الإدخال الفعلي**، لا تفصيل تنفيذي داخلي —
+دونه يستحيل التمييز بين G2 (قابل للتجزئة) وG3/G4 (ذرّي أو محكوم بوحدات
+صحيحة). القيم الفعلية الموجودة في المشروع اليوم هي `CountingMethod`
+(`EACH_UNIT, EACH_LINE, PER_VISIT, PER_DAY` — `DivisibleLimitSplitter`، P2):
+فقط `EACH_UNIT` قابل للتجزئة؛ الباقي ذرّي بالكامل مثل الأيام دائماً.
+
 ```java
 public record UnifiedLimitInput(
     Long policyId,
@@ -80,6 +87,7 @@ public record UnifiedLimitInput(
 
     int requestedQuantity,
     int requestedDays,
+    CountingMethod countingMethod,   // يحدد كيف يتحول قيد TIMES إلى قرار وحدات: EACH_UNIT قابل للتجزئة، الباقي ذرّي
     BigDecimal effectiveUnitPrice,   // لتحويل quantity المقبولة إلى bindingAvailableAmount (DivisibleLimitSplitter)
     BigDecimal eligibleAmount,       // effectiveUnitPrice × requestedQuantity، أو المبلغ المؤهَّل المباشر إن لم يكن العدّ بالوحدة
 
@@ -103,6 +111,32 @@ public record UnifiedLimitInput(
 هذا **أقل شكل يخدم الحالتين الحيّتين** (المطالبة والموافقة المسبقة) دون
 اختراع إطار جديد — كل حقل مطابق لمعامل فعلي موجود اليوم في أحد نقاط الاستدعاء
 الثلاث المجرودة (P1.4.0)، لا حقل واحد مُتخيَّل.
+
+### Invariant حسابي إلزامي — متى يوجد "وحدة" أصلاً (اكتشاف P1.4.2)
+
+تنفيذ G1 فعلياً كشف أن معادلة واحدة لا تكفي لكل من (مبلغ بلا أي قيد مرات) و
+(مبلغ محكوم بسعر وحدة مع قيد مرات) — الفرق **جوهري**، لا حالة حدّية لنفس
+المعادلة:
+
+```text
+IF times.configured == null:
+    AMOUNT limit هو قيد نقدي مستمر (continuous)، لا قيد وحدات.
+    approvedQuantity لا تتغيّر بسبب سقف المبلغ وحده — العدّ نفسه غير مقيَّد
+    هنا أصلاً، والرفض كله يقع على bindingAvailableAmount مباشرة.
+    bindingAvailableAmount = min(eligibleAmount, amount.remaining)
+
+IF times.configured != null:
+    الكمية تُحسم أولاً وفق countingMethod (EACH_UNIT قابل للتجزئة بوحدات
+    صحيحة فقط؛ غيره ذرّي)، مقارناً بين ما يسمح به سقف المرات وما يسمح به
+    سقف المبلغ محوَّلاً لوحدات صحيحة (floor(amount.remaining / effectiveUnitPrice)).
+    ثم bindingAvailableAmount يُشتق من approvedQuantity (DivisibleLimitSplitter).
+```
+
+**لماذا يُسجَّل كـ Invariant لا كتفصيل تنفيذي عابر:** أي Refactor مستقبلي قد
+يُبسّط الكود بتطبيق `floor(amount/unitPrice)` بشكل عام على كل قرار مبلغ —
+وهذا يكسر G1 تحديداً (مطالبة بلا مفهوم "وحدة" إطلاقاً، حيث المبلغ الجزئي
+600 من 1000 مقبول تماماً، لا يُقرَّب لأسفل لأقرب وحدة وهمية). هذا الشرط يجب
+أن يبقى صريحاً في أي تنفيذ لاحق لنفس المنطق.
 
 ---
 
@@ -176,15 +210,46 @@ PREAUTH_RESERVATION:
 
 ---
 
-## الخطوات التالية (بعد اعتماد هذا التصميم)
+## P1.4.2/P1.4.3 — النتائج التنفيذية (بعد الكتابة الفعلية)
+
+حزمة معزولة `benefitpolicy.service.unifiedlimit` — صفر تبعية لـSpring أو
+لأي مستدعٍ حي. الملفات: `ReservationEvaluationMode`, `UnifiedLimitStatus`,
+`BindingConstraintType`, `UnifiedLimitInput`, `BucketLimitSnapshot`,
+`UnifiedLimitDecision`, `UnifiedLimitResolver`، واختبار
+`UnifiedLimitResolverTest` (8 حالات: G1-G7 + "بلا سقف إطلاقاً").
+
+كل حالة تُثبِّت `status` و`bindingConstraintType` صراحة (لا شرطة `—`)، حتى
+يُثبِت الاختبار *لماذا* اتُّخذ القرار، لا الرقم النهائي فقط:
+
+| الاختبار | `status` | `bindingConstraintType` | `approvedQuantity`/`approvedDays` |
+|---|---|---|---|
+| G1 | `PARTIAL` | `AMOUNT` | الكمية كاملة (1) — الرفض كله في المال (600 من 1000) |
+| G2 (Physio) | `PARTIAL` | `TIMES` | 2 من 3 |
+| G3 | `EXHAUSTED` | `DAYS` | 0 من 1 يوم |
+| G4 | `PARTIAL` | `AMOUNT` | 2 من 5 (لا 2.5 — القيد الأضيق بالوحدات الصحيحة) |
+| G5 | `PARTIAL` | `TIMES` | 6 من 8 |
+| G6 | `BLOCKED` | `NONE` | لا شيء محسوب — `bindingAvailableAmount=null` (لا صفر) |
+| G7 | `LIMITED` | `NONE` | 8 من 8 (الحجز الخاص أُعيد بالكامل، محدوداً بالرصيد الفعلي) |
+| بلا سقف | `UNLIMITED` | `NONE` | الطلب كاملاً |
+
+**تحقق الانحدار:** حزمة `benefitpolicy`+`claim` كاملة، 549 اختباراً، فشل 2
+— كلاهما مُثبت مسبقاً في P1.1 وغير مرتبط بهذا العمل:
+`DirectClaimEntryRollbackIntegrationTest.aFailureAfterTheVisitInsertLeavesNeitherHalfOfTheCommand`
+و`DirectClaimEntryRollbackIntegrationTest.concurrentRetriesCreateOneVisitAndOneClaimAndReturnTheSameClaim`
+(يعتمدان على `DirectClaimEntryService.java`، ملف لم يُلمس، والاختبار يُموّه
+طبقة `claimService` بالكامل فلا يمكن لهذا العمل أن يكون سببه). أي فشل ثالث
+غير هذين في تشغيل مستقبلي يُعتبر انحداراً حقيقياً.
+
+---
+
+## الخطوات التالية
 
 ```text
-P1.4.1 (هذا المستند)  → للمراجعة
-P1.4.2  → هيكل Java (UnifiedLimitInput, UnifiedLimitDecision, UnifiedLimitResolver) — غير مربوط بأي مسار حي
-P1.4.3  → G1-G7 عبر التنفيذ الفعلي (لا الصيغة الصرفة فقط) — يجب أن تُطابق جدول القسم 4 في P1.3 حرفياً
-P1.4.4  → مراجعة
+P1.4.4  → مراجعة نهائية للتنفيذ قبل أول ربط حي
+P1.5    → مصدر واحد لقراءة الرصيد (يُغذّي BucketLimitSnapshot فعلياً من DB)
+P1.12   → استبدال EffectiveLimitResolver + ApplicableCountingLimitResolver في PreAuthorizationDecisionBuilder
 ```
 
 لا تُنقل `PreAuthorizationDecisionBuilder` ولا `ClaimFinancialAdjudicationService`
-ولا `CoverageDecisionService` للمسار الجديد ضمن P1.4 — هذا يبقى Skeleton
-معزول قابل للحذف بسهولة لو ظهر عيب في التصميم قبل أي ربط حي.
+ولا `CoverageDecisionService` للمسار الجديد بعد — هذا يبقى Skeleton معزول
+قابل للحذف بسهولة لو ظهر عيب في التصميم قبل أي ربط حي.
