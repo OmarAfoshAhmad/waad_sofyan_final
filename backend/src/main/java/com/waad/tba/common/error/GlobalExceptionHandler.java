@@ -311,6 +311,7 @@ public class GlobalExceptionHandler {
         log.error("Data integrity violation - Path: {}, TrackingId: {}", request.getRequestURI(), trackingId, ex);
 
         String messageAr = "خطأ في تكامل البيانات. العملية تنتهك أحد قيود قاعدة البيانات.";
+        String message = "Data integrity error. The operation violates a database constraint.";
         String rootMsg = ex.getRootCause() != null ? ex.getRootCause().getMessage() : ex.getMessage();
 
         if (rootMsg != null) {
@@ -322,6 +323,9 @@ public class GlobalExceptionHandler {
                 messageAr = "يوجد أكثر من مجموعة منافع بنفس الاسم داخل الوثيقة. استخدم الاستبدال الشامل أو عدّل الاسم/الكود في ملف القواعد.";
             } else if (rootMsg.contains("uq_benefit_bucket_policy_name_ar_ci")) {
                 messageAr = "يوجد أكثر من وعاء سقف بنفس الاسم داخل الوثيقة. استخدم الاستبدال الشامل أو عدّل الاسم/الكود في ملف القواعد.";
+            } else if (rootMsg.contains("uq_bpr_policy_category_claim_context_active")) {
+                messageAr = "توجد قاعدة مسبقاً لهذا التصنيف ضمن سياق قرار المطالبة المحدد.";
+                message = "A coverage rule already exists for this category and claim context.";
             } else if (rootMsg.contains("uq_benefit_bucket_policy_code") || rootMsg.contains("benefit_limit_buckets_policy_id_code_key")) {
                 messageAr = "كود وعاء السقف مكرر داخل الوثيقة. راجع عمود كود المجموعة/الوعاء في ملف قواعد التغطية.";
             } else if (rootMsg.contains("benefit_groups_policy_id_code_key")) {
@@ -343,7 +347,7 @@ public class GlobalExceptionHandler {
 
         ApiError error = ApiError.of(
                 ErrorCode.BUSINESS_RULE_VIOLATION,
-                "Data integrity error. The operation violates a database constraint.",
+                message,
                 request.getRequestURI(),
                 null,
                 now(),

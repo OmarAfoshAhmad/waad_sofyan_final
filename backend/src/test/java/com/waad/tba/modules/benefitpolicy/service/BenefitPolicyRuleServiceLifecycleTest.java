@@ -2,12 +2,16 @@ package com.waad.tba.modules.benefitpolicy.service;
 
 import com.waad.tba.common.exception.BusinessRuleException;
 import com.waad.tba.modules.benefitpolicy.dto.BenefitPolicyRuleResponseDto;
+import com.waad.tba.modules.benefitpolicy.dto.BenefitPolicyRuleUpdateDto;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicyRule;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRuleRepository;
 import com.waad.tba.modules.claimcontext.repository.ClaimContextDefinitionRepository;
+import com.waad.tba.modules.claimcontext.entity.ClaimContextDefinition;
+import com.waad.tba.modules.medicaltaxonomy.entity.MedicalCategory;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalCategoryRepository;
+import com.waad.tba.modules.providercontract.enums.EncounterType;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Query;
 import org.junit.jupiter.api.Test;
@@ -132,6 +136,41 @@ class BenefitPolicyRuleServiceLifecycleTest {
         BenefitPolicyRuleResponseDto deleted = BenefitPolicyRuleResponseDto.fromEntity(rule(22L, false, true));
         assertThat(deleted.getLifecycleStatus()).isEqualTo("DELETED");
         assertThat(deleted.isHardDeleteAllowed()).isTrue();
+    }
+
+    @Test
+    void updateRejectsDuplicateCategoryAndExactClaimContextBeforeDatabaseConstraint() {
+        BenefitPolicy policy = BenefitPolicy.builder().id(1L).name("Policy").build();
+        MedicalCategory category = MedicalCategory.builder().id(7L).code("CAT-LAB").name("تحاليل").build();
+        BenefitPolicyRule rule = BenefitPolicyRule.builder()
+                .id(40L)
+                .benefitPolicy(policy)
+                .medicalCategory(category)
+                .encounterType(EncounterType.OUTPATIENT)
+                .claimContextCode("OUTPATIENT")
+                .active(true)
+                .build();
+        ClaimContextDefinition maternity = ClaimContextDefinition.builder()
+                .code("MATERNITY")
+                .nameAr("ولادة وحمل")
+                .baseEncounterType(EncounterType.INPATIENT)
+                .active(true)
+                .build();
+
+        when(ruleRepository.findById(40L)).thenReturn(Optional.of(rule));
+        when(claimContextRepository.findById("MATERNITY")).thenReturn(Optional.of(maternity));
+        when(ruleRepository.existsNonDeletedExactContextRuleExcludingId(1L, 7L, "MATERNITY", 40L))
+                .thenReturn(true);
+
+        BenefitPolicyRuleUpdateDto update = BenefitPolicyRuleUpdateDto.builder()
+                .encounterType("INPATIENT")
+                .claimContextCode("MATERNITY")
+                .build();
+
+        assertThatThrownBy(() -> service().update(40L, update))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessage("توجد قاعدة مسبقاً لهذا التصنيف ضمن سياق «ولادة وحمل»");
+        verify(ruleRepository, never()).save(rule);
     }
 
     private BenefitPolicyRuleService service() {

@@ -2305,6 +2305,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
         }}
         policyId={policyId}
         categories={categories}
+        existingRules={rules}
         initialData={formModal.data}
         isEdit={formModal.isEdit}
         policyDefaultCoveragePercent={policyDefaultCoveragePercent}

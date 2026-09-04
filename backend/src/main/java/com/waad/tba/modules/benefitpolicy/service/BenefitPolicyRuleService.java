@@ -696,17 +696,34 @@ public class BenefitPolicyRuleService {
         BenefitPolicyRule rule = ruleRepository.findById(ruleId)
                 .orElseThrow(() -> new ResourceNotFoundException("Rule", "id", ruleId));
 
+        var requestedEncounterType = dto.getEncounterType() != null
+                ? parseEncounterType(dto.getEncounterType())
+                : rule.getEncounterType();
+        String requestedClaimContext = dto.getEncounterType() != null || dto.getClaimContextCode() != null
+                ? resolveClaimContext(dto.getClaimContextCode(), requestedEncounterType)
+                : rule.getClaimContextCode();
+
+        if (rule.getMedicalCategory() != null
+                && ruleRepository.existsNonDeletedExactContextRuleExcludingId(
+                        rule.getBenefitPolicy().getId(),
+                        rule.getMedicalCategory().getId(),
+                        requestedClaimContext,
+                        ruleId)) {
+            String contextLabel = claimContextRepository.findById(requestedClaimContext)
+                    .map(context -> context.getNameAr())
+                    .orElse(requestedClaimContext);
+            throw new BusinessRuleException("توجد قاعدة مسبقاً لهذا التصنيف ضمن سياق «" + contextLabel + "»");
+        }
+
         // Update fields if provided
         // Rule-level caps were retired by the bucket cutover; buckets are the only limit source.
         rule.setCoveragePercent(dto.getCoveragePercent());
         rule.setCopayPercentage(dto.getCopayPercentage());
         rule.setNotes(dto.getNotes());
 
-        if (dto.getEncounterType() != null) {
-            rule.setEncounterType(parseEncounterType(dto.getEncounterType()));
-        }
+        rule.setEncounterType(requestedEncounterType);
         if (dto.getEncounterType() != null || dto.getClaimContextCode() != null) {
-            rule.setClaimContextCode(resolveClaimContext(dto.getClaimContextCode(), rule.getEncounterType()));
+            rule.setClaimContextCode(requestedClaimContext);
         }
         if (dto.getInheritanceEnabled() != null) {
             rule.setInheritanceEnabled(dto.getInheritanceEnabled());

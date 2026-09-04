@@ -202,8 +202,8 @@ export const checkBulkCoverage = async (policyId, payload) => {
  * @param {string} payload.notes - Notes
  * @returns {Promise<Object>} Created rule
  */
-export const createPolicyRule = async (policyId, payload) => {
-  const response = await axiosClient.post(`/benefit-policies/${policyId}/rules`, payload);
+export const createPolicyRule = async (policyId, payload, config = {}) => {
+  const response = await axiosClient.post(`/benefit-policies/${policyId}/rules`, payload, config);
   return unwrap(response);
 };
 
@@ -242,8 +242,8 @@ export const initializeStandardRules = async (policyId) => {
  * @param {Object} payload - Updated rule data
  * @returns {Promise<Object>} Updated rule
  */
-export const updatePolicyRule = async (policyId, ruleId, payload) => {
-  const response = await axiosClient.put(`/benefit-policies/${policyId}/rules/${ruleId}`, payload);
+export const updatePolicyRule = async (policyId, ruleId, payload, config = {}) => {
+  const response = await axiosClient.put(`/benefit-policies/${policyId}/rules/${ruleId}`, payload, config);
   return unwrap(response);
 };
 

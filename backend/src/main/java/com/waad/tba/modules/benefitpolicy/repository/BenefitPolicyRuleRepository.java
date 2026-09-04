@@ -21,6 +21,21 @@ public interface BenefitPolicyRuleRepository extends JpaRepository<BenefitPolicy
     Optional<BenefitPolicyRule> findFirstByBenefitPolicyIdAndMedicalCategoryIdAndClaimContextCodeOrderByIdDesc(
             Long benefitPolicyId, Long medicalCategoryId, String claimContextCode);
 
+    @Query("""
+        SELECT CASE WHEN COUNT(r) > 0 THEN true ELSE false END
+        FROM BenefitPolicyRule r
+        WHERE r.benefitPolicy.id = :policyId
+          AND r.medicalCategory.id = :categoryId
+          AND r.claimContextCode = :claimContextCode
+          AND r.deleted = false
+          AND r.id <> :excludeRuleId
+        """)
+    boolean existsNonDeletedExactContextRuleExcludingId(
+            @Param("policyId") Long policyId,
+            @Param("categoryId") Long categoryId,
+            @Param("claimContextCode") String claimContextCode,
+            @Param("excludeRuleId") Long excludeRuleId);
+
   // ═══════════════════════════════════════════════════════════════════════════
   // FIND BY POLICY
   // ═══════════════════════════════════════════════════════════════════════════
