@@ -138,6 +138,39 @@ class ProviderExcelExportRoundTripIntegrationTest extends PostgresIntegrationTes
     }
 
     @Test
+    @DisplayName("inclusive two-year contract exports as 24 months")
+    void inclusiveTwoYearContractExportsAsTwentyFourMonths() throws Exception {
+        String s = suffix();
+        String exactProviderName = "مقدم عقد سنتين " + s;
+        long providerId = jdbc.queryForObject(
+                "INSERT INTO providers (name, license_number, provider_type, network_status,"
+                        + " allow_all_employers, active) VALUES (?, ?, 'PHARMACY', 'IN_NETWORK', true, true)"
+                        + " RETURNING id",
+                Long.class, exactProviderName, "TWO-YEAR-" + s);
+        jdbc.update("INSERT INTO provider_contracts (contract_code, contract_number, provider_id,"
+                        + " start_date, end_date, status, discount_percent, discount_before_rejection, active)"
+                        + " VALUES (?, ?, ?, DATE '2025-01-01', DATE '2026-12-31',"
+                        + " 'ACTIVE', 10.00, true, true)",
+                "TWO-YEAR-CON-" + s, "TWO-YEAR-NUM-" + s, providerId);
+
+        try (Workbook workbook = new XSSFWorkbook(new ByteArrayInputStream(exportService.exportProviders()))) {
+            Sheet sheet = workbook.getSheet("Data");
+            Row exported = null;
+            for (int i = 1; i <= sheet.getLastRowNum(); i++) {
+                Row candidate = sheet.getRow(i);
+                if (candidate != null && candidate.getCell(0) != null
+                        && exactProviderName.equals(candidate.getCell(0).getStringCellValue())) {
+                    exported = candidate;
+                    break;
+                }
+            }
+            assertThat(exported).isNotNull();
+            assertThat(exported.getCell(11).getStringCellValue()).isEqualTo("2025-01-01");
+            assertThat(exported.getCell(12).getStringCellValue()).isEqualTo("24");
+        }
+    }
+
+    @Test
     @DisplayName("no exported row carries a password, ever")
     void theInitialPasswordColumnIsAlwaysEmpty() throws Exception {
         byte[] bytes = exportService.exportProviders();

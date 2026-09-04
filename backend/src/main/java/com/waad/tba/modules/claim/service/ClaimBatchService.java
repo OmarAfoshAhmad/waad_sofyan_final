@@ -152,22 +152,20 @@ public class ClaimBatchService {
     }
 
     /**
-     * A claim batch represents the service period, not the entry month. It is
-     * therefore valid to enter August services in September only when the batch
-     * itself is the August batch. Using createdAt/current month here would bind
-     * coverage to clerical timing instead of the date the patient was treated.
+     * A batch represents the operational processing period. Late claims from
+     * an earlier service month may be entered into the currently open batch;
+     * coverage and limits are still adjudicated using the real service date.
+     * A future service date beyond the batch period remains invalid.
      */
-    public void validateServiceDateInsideBatch(ClaimBatch batch, LocalDate serviceDate) {
+    public void validateServiceDateNotAfterBatch(ClaimBatch batch, LocalDate serviceDate) {
         if (batch == null || serviceDate == null) {
             return;
         }
-        if (batch.getPeriodStart() != null && serviceDate.isBefore(batch.getPeriodStart())
-                || batch.getPeriodEnd() != null && serviceDate.isAfter(batch.getPeriodEnd())) {
+        if (batch.getPeriodEnd() != null && serviceDate.isAfter(batch.getPeriodEnd())) {
             throw new BusinessRuleException(
                     "تاريخ خدمة المطالبة " + serviceDate
-                            + " خارج فترة الدفعة [" + batch.getBatchCode() + "] "
-                            + batch.getPeriodStart() + " إلى " + batch.getPeriodEnd()
-                            + ". افتح دفعة شهر الخدمة الحقيقي لا شهر الإدخال.");
+                            + " لاحق لنهاية دفعة الإدخال [" + batch.getBatchCode() + "] "
+                            + batch.getPeriodEnd() + ". لا يمكن إدخال خدمة مستقبلية في دفعة أقدم.");
         }
     }
 
@@ -180,8 +178,8 @@ public class ClaimBatchService {
     @Scheduled(cron = "0 59 23 L * ?")
     @Transactional
     public void autoCloseExpiredBatches() {
-        log.info("🕒 Claim batch auto-close skipped: batches represent service periods, "
-                + "and late entry for a previous service month is a normal workflow. "
+        log.info("🕒 Claim batch auto-close skipped: batches represent processing periods, "
+                + "and entering claims for earlier service dates is a normal workflow. "
                 + "Close batches explicitly after operational review.");
     }
 

@@ -29,20 +29,29 @@ class ClaimBatchServiceDateWindowTest {
     }
 
     @Test
-    void augustServiceDateBelongsToAugustBatchEvenWhenEnteredLater() {
+    void serviceDateInsideTheProcessingBatchIsAccepted() {
         ClaimBatch august = batch("AUG-2026", LocalDate.of(2026, 8, 1), LocalDate.of(2026, 8, 31));
 
-        service.validateServiceDateInsideBatch(august, LocalDate.of(2026, 8, 31));
+        service.validateServiceDateNotAfterBatch(august, LocalDate.of(2026, 8, 31));
     }
 
     @Test
-    void augustServiceDateIsRejectedFromSeptemberBatch() {
+    void earlierServiceDateIsAcceptedInALaterProcessingBatch() {
         ClaimBatch september = batch("SEP-2026", LocalDate.of(2026, 9, 1), LocalDate.of(2026, 9, 30));
 
-        assertThatThrownBy(() -> service.validateServiceDateInsideBatch(september, LocalDate.of(2026, 8, 31)))
+        service.validateServiceDateNotAfterBatch(september, LocalDate.of(2026, 8, 31));
+        service.validateServiceDateNotAfterBatch(september, LocalDate.of(2026, 5, 1));
+    }
+
+    @Test
+    void serviceDateAfterProcessingBatchEndIsRejected() {
+        ClaimBatch september = batch("SEP-2026", LocalDate.of(2026, 9, 1), LocalDate.of(2026, 9, 30));
+
+        assertThatThrownBy(() -> service.validateServiceDateNotAfterBatch(
+                september, LocalDate.of(2026, 10, 1)))
                 .isInstanceOf(BusinessRuleException.class)
-                .hasMessageContaining("خارج فترة الدفعة")
-                .hasMessageContaining("افتح دفعة شهر الخدمة الحقيقي");
+                .hasMessageContaining("لاحق لنهاية دفعة الإدخال")
+                .hasMessageContaining("خدمة مستقبلية");
     }
 
     private ClaimBatch batch(String code, LocalDate start, LocalDate end) {

@@ -218,7 +218,11 @@ public class ProviderExcelExportService {
         if (start == null || end == null) {
             return null;
         }
-        long months = ChronoUnit.MONTHS.between(start, end);
+        // Contract end dates are inclusive while duration_months describes
+        // complete calendar months.  Measure against the exclusive boundary
+        // (end + 1 day), otherwise 2025-01-01..2025-12-31 is exported as 11
+        // months and becomes shorter again on every export/re-import cycle.
+        long months = ChronoUnit.MONTHS.between(start, end.plusDays(1));
         return months <= 0 ? null : String.valueOf(months);
     }
 
