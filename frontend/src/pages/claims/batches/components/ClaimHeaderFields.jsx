@@ -62,6 +62,8 @@ export const ClaimHeaderFields = ({
   setPreAuthId,
   serviceDate,
   setServiceDate,
+  serviceDateRef,
+  diagnosisRef,
   setIsDirty,
   financialSummary,
   currentCompanyCommitment = 0,
@@ -201,6 +203,7 @@ export const ClaimHeaderFields = ({
               size: 'small',
               variant: 'standard',
               error: showValidationErrors && !serviceDate,
+              inputRef: serviceDateRef,
               sx: dateFieldSx
             },
             // Sized through the slot the picker exposes, not through a class
@@ -231,6 +234,7 @@ export const ClaimHeaderFields = ({
             setIsDirty(true);
           }}
           error={showValidationErrors && !diagnosis?.trim()}
+          inputRef={diagnosisRef}
           sx={inlineSx}
         />
       </Box>

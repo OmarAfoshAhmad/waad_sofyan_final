@@ -312,6 +312,8 @@ export default function ClaimBatchEntry() {
   const [serviceDate, setServiceDate] = useState(defaultDate);
 
   const memberRef = useRef(null);
+  const diagnosisRef = useRef(null);
+  const serviceDateRef = useRef(null);
   const linesRef = useRef(lines);
   const saveQueueRef = useRef(Promise.resolve());
   const autosaveTimerRef = useRef(null);
@@ -1636,6 +1638,21 @@ export default function ClaimBatchEntry() {
     }
   };
 
+  // Scrolls the offending row into view and gives it a brief highlight, so a
+  // toast that names "line 3" of a long table actually gets the reader to
+  // line 3 instead of leaving them to scroll and count rows themselves.
+  const scrollToLine = (zeroBasedIndex) => {
+    const row = document.getElementById(`claim-line-row-${zeroBasedIndex}`);
+    if (!row) return;
+    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    row.style.transition = 'background-color 0.3s ease';
+    const previousBg = row.style.backgroundColor;
+    row.style.backgroundColor = 'rgba(211, 47, 47, 0.18)';
+    setTimeout(() => {
+      row.style.backgroundColor = previousBg;
+    }, 1600);
+  };
+
   const handleSave = async (resetAfter = false) => {
     if (isSavingRef.current) return;
 
@@ -1663,6 +1680,12 @@ export default function ClaimBatchEntry() {
         variant: 'error',
         autoHideDuration: 5000
       });
+      // Focus the first missing field, in the same order it was checked
+      // above, so the person reading the error lands on the field to fix
+      // instead of having to hunt for it across the form.
+      if (!member) memberRef.current?.focus();
+      else if (!diagnosis?.trim()) diagnosisRef.current?.focus();
+      else if (!serviceDate) serviceDateRef.current?.focus();
       return;
     }
 
@@ -1672,6 +1695,7 @@ export default function ClaimBatchEntry() {
         variant: 'error',
         autoHideDuration: 6000
       });
+      scrollToLine(invalidQuantityLines[0] - 1);
       return;
     }
 
@@ -1681,6 +1705,7 @@ export default function ClaimBatchEntry() {
         `لا يمكن الحفظ: الخدمات في البنود ${lineNumbers} لا تتوافق مع سياق المطالبة الحالي. احذفها أو أعد اختيار خدمات صالحة لهذا السياق.`,
         { variant: 'error', autoHideDuration: 7000 }
       );
+      scrollToLine(incompatibleContextLines[0].index);
       return;
     }
 
@@ -1692,14 +1717,15 @@ export default function ClaimBatchEntry() {
       return;
     }
 
-    const uncoveredLines = lines.filter(
+    const uncoveredLineIndex = lines.findIndex(
       (line) => (line.service || line.serviceName) && !line.rejected && (line.notCovered || (Number(line.coveragePercent) || 0) <= 0)
     );
-    if (!isClaimRejected && uncoveredLines.length > 0) {
+    if (!isClaimRejected && uncoveredLineIndex !== -1) {
       enqueueSnackbar('لا يمكن اعتماد مطالبة تحتوي خدمات غير مغطاة. غيّر سياق المطالبة أو ارفض البند/المطالبة بسبب واضح.', {
         variant: 'error',
         autoHideDuration: 7000
       });
+      scrollToLine(uncoveredLineIndex);
       return;
     }
 
@@ -2154,6 +2180,8 @@ export default function ClaimBatchEntry() {
                   onRetryMemberSearch={retryMemberSearch}
                   setMemberInput={setMemberInput}
                   memberRef={memberRef}
+                  diagnosisRef={diagnosisRef}
+                  serviceDateRef={serviceDateRef}
                   diagnosis={diagnosis}
                   setDiagnosis={setDiagnosis}
                   encounterType={encounterType}
@@ -2449,6 +2477,9 @@ export default function ClaimBatchEntry() {
                             المرفوض
                           </TH>
                         )}
+                        <TH align="center" w={75}>
+                          المقبول
+                        </TH>
                         {visibleColumns.companyShare && (
                           <TH align="center" w={105}>
                             حصة الشركة
@@ -2460,7 +2491,7 @@ export default function ClaimBatchEntry() {
                           </TH>
                         )}
                         <TH align="center" w={80}>
-                          الإجمالي
+                          المطلوب
                         </TH>
                         <TH align="left" w={40}></TH>
                       </TableRow>
