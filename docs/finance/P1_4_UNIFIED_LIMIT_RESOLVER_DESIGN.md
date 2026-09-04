@@ -242,13 +242,51 @@ PREAUTH_RESERVATION:
 
 ---
 
+---
+
+## P1.4.4 — Implementation Review Gate
+
+مراجعة الكود الفعلي (لا التوثيق) مقابل عشرة بنود. النتيجة: **Go مشروط**، لا
+Go كاملة بلا تحفظ — نقطتان حقيقيتان مسجَّلتان بدل إخفائهما.
+
+| البند | الحكم | الدليل |
+|---|---|---|
+| 1. Contract fidelity | ✅ مع تصحيح توثيقي | `UnifiedLimitDecision` لا يحمل company/copay/nonCovered (تحقق مباشر). **تناقض وُجد**: P1.3 §2 وصف `BLOCKED` بأنه "يُلقى كاستثناء"؛ التنفيذ يُعيده كقيمة عادية ضمن نفس النوع — وهذا **الأصح** (متّسق مع "خمس حالات ضمن enum واحد" في نفس القسم، ومع نقاء الدالة في البند 5). التصحيح توثيقي فقط، لا كودي. |
+| 2. Financial invariants | ✅ | `bindingAvailableAmount` يُشتق بعد حسم `approvedQuantity`/`approvedDays` دائماً — تحقق من ترتيب الأسطر الفعلي في `UnifiedLimitResolver.resolve`. |
+| 3. Reservation semantics | ⚠️ **فجوة مسجَّلة، مؤجَّلة عمداً** | G7 يُثبت الحساب الرياضي فقط (`min(actualRemaining, reservableAvailable+own)`). `BucketLimitSnapshot.amountOwnActiveReservation`/`timesOwnActiveReservation` رقم يُمرَّر جاهزاً من الخارج — الـResolver **لا يتحقق ولا يستطيع أن يتحقق بمعزل** من الشروط الأربعة (نفس `preAuthorizationId`/`memberPolicyAssignmentId`/`bucketId`/الفترة، القسم أعلاه). هذا إثبات لا يمكن إغلاقه إلا عند بناء الطبقة الفعلية التي تستدعي `consumptionRepository.sumOwnActiveReservation` — **ينتظر P1.5+**، لا يُدّعى إغلاقه هنا. |
+| 4. Divisibility semantics | ✅ (كانت فجوة، أُغلقت الآن) | كان `!divisible` (`EACH_LINE/PER_VISIT/PER_DAY` **مع** بُعد مرات موجود فعلياً) مكتوباً بلا اختبار. أُضيف **G8** يثبته: `PER_VISIT`، طلب 3 ومتبقٍ 2 → رفض كامل (`EXHAUSTED`, `approvedQuantity=0`)، لا قبول جزئي. |
+| 5. Dependency purity | ✅ | لا `@Service`/`@Component`/`@Transactional`/Repository في `UnifiedLimitResolver.java` — تحقق مباشر بقراءة الملف كاملاً. دالة `static` صرفة. |
+| 6. Error semantics | ✅ | `BLOCKED` قيمة إرجاع؛ `bindingAvailableAmount` يبقى `null` عند الحظر، لا `0` ولا `UNLIMITED` بديل — تحقق من `UnifiedLimitDecision.blocked()`. |
+| 7. Performance characteristics | ✅ ضمن حدود المرحلة | O(n) على عدد الأوعية لكل محور، بلا استعلام. يُقيَّم كاملاً فقط بعد P1.5 (عدد استعلامات بناء `BucketLimitSnapshot`). |
+| 8. Persistence readiness | جزئي، متوقَّع | الأنواع قابلة للتخزين المباشر؛ لم يُختبر لأن لا Persistence في هذا الـSkeleton — طبيعي لهذه المرحلة. |
+| 9. Legacy overlap analysis | ✅ لا تداخل | `DivisibleLimitSplitter` مُستخدَم كما هو. `BucketChainWalker` **لم يُستورد بعد عمداً** — مسؤولية طبقة بناء `BucketLimitSnapshot` في P1.5، لا هذا الـResolver. |
+| 10. Go/No-Go | **Go مشروط** | فجوة #4 أُغلقت الآن (G8). فجوة #3 تبقى **مفتوحة بالاسم**، مُرحَّلة لـP1.5 — ليست عيباً في المنطق، بل إثباتاً لا يمكن إنجازه بمعزل عن قاعدة بيانات حقيقية. |
+
+**نتيجة سبعة أسئلة المخاطر المحددة مسبقاً:**
+
+1. `remaining` يُحسب داخل الـResolver دائماً (`reduceAxis`)؛ `BucketLimitSnapshot` لا يحمله جاهزاً إطلاقاً — مصدر حقيقة واحد، لا ازدواجية.
+2. `bindingAvailableAmount` مشتق بعد قرار الكمية/الأيام — مؤكَّد (البند 2 أعلاه).
+3. G4 يُثبت صراحة `approvedQuantity=2` و`bindingAvailableAmount≠250.00` و`bindingConstraintType=AMOUNT`.
+4. G6: `bindingAvailableAmount=null` (ليس صفراً)، `bindingConstraintType=NONE`، لا مسار بديل — مؤكَّد بالاختبار.
+5. G7 يُثبت الحساب الرياضي فقط؛ **لا يُثبت** تطبيق الشروط الأربعة الفعلية على "own" — فجوة #3 أعلاه.
+6. `countingMethod` يحدد فرعاً كاملاً مختلفاً في القرار — مؤكَّد بـG2/G4 (قابل للتجزئة) مقابل G8 الجديد (ذرّي رغم وجود بُعد مرات).
+7. حالة `UNLIMITED` صريحة عبر `anyAxisConfigured`، تنطبق بنفس الآلية سواء كانت القائمة فارغة أو غير فارغة بأوعية بلا قيود — لا استنتاج غامض.
+
+**تحقق الانحدار بعد G8:** `UnifiedLimitResolverTest` — 9/9 ناجحة.
+
+---
+
 ## الخطوات التالية
 
 ```text
-P1.4.4  → مراجعة نهائية للتنفيذ قبل أول ربط حي
-P1.5    → مصدر واحد لقراءة الرصيد (يُغذّي BucketLimitSnapshot فعلياً من DB)
+P1.5.1  → ربط CoverageDecisionService بـ UnifiedLimitResolver فقط (لا B، لا PreAuth)
+          → مقارنة Preview قبل/بعد على G1-G7 حرفياً
+P1.5.2  → مصدر واحد لقراءة الرصيد (يُغذّي BucketLimitSnapshot فعلياً من DB،
+           يُثبت فجوة #3 أعلاه بالتزامن مع بناء قراءة "own" الحقيقية)
 P1.12   → استبدال EffectiveLimitResolver + ApplicableCountingLimitResolver في PreAuthorizationDecisionBuilder
 ```
+
+**لا تلمس `ClaimFinancialAdjudicationService` ولا `PreAuthorizationDecisionBuilder` في P1.5.1.** الربط الأول محصور بـ`CoverageDecisionService` (الأقرب لنظام A الحالي، الأقل مخاطرة) — Preview فقط، لا Save.
 
 لا تُنقل `PreAuthorizationDecisionBuilder` ولا `ClaimFinancialAdjudicationService`
 ولا `CoverageDecisionService` للمسار الجديد بعد — هذا يبقى Skeleton معزول
