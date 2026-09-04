@@ -40,6 +40,8 @@ public enum SystemPermission {
     PRICE_LIST_POST(PermissionCategory.CONTRACTS_PRICING, "ترحيل قوائم الأسعار للعقود", true),
     BENEFIT_POLICY_VIEW(PermissionCategory.BENEFITS, "عرض وثائق المنافع", false),
     BENEFIT_POLICY_MANAGE(PermissionCategory.BENEFITS, "إدارة وثائق المنافع", true),
+    BENEFIT_POLICY_ACTIVATE_WITH_GAPS(PermissionCategory.BENEFITS,
+            "تفعيل وثيقة تغطية رغم فجوات حرجة في القواعد", true),
     SETTLEMENT_VIEW(PermissionCategory.SETTLEMENTS, "عرض التسويات", true),
     SETTLEMENT_MANAGE(PermissionCategory.SETTLEMENTS, "إدارة التسويات", true),
     FINANCIAL_REPORT_VIEW(PermissionCategory.REPORTS, "عرض التقارير المالية", true),

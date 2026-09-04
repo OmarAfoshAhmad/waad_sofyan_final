@@ -47,11 +47,13 @@ import { useSnackbar } from 'notistack';
 import {
   getBenefitPolicyById,
   activateBenefitPolicy,
+  activateBenefitPolicyWithGapOverride,
   suspendBenefitPolicy,
   revertBenefitPolicyToDraft,
   cancelBenefitPolicy,
   deleteBenefitPolicy,
-  checkPolicyEditability
+  checkPolicyEditability,
+  getBenefitPolicyGapReport
 } from 'services/api/benefit-policies.service';
 import { countMembers } from 'services/api/unified-members.service';
 import { getPolicyRules } from 'services/api/benefit-policy-rules.service';
@@ -205,6 +207,7 @@ const BenefitPolicyView = () => {
     title: '',
     message: ''
   });
+  const [gapOverrideDialogOpen, setGapOverrideDialogOpen] = useState(false);
 
   // ═══════════════════════════════════════════════════════════════════════════
   // DATA FETCHING
@@ -232,6 +235,17 @@ const BenefitPolicyView = () => {
     staleTime: 0,
     refetchOnMount: 'always',
     refetchOnWindowFocus: 'always'
+  });
+
+  // P1: structural rule/bucket/claim-context gap report -- diagnostic only,
+  // read before activation so a rule pointing at a claim context that does
+  // not exist (and so can never apply to any claim) is visible up front
+  // rather than discovered only when activation itself refuses.
+  const { data: gapReport } = useQuery({
+    queryKey: ['benefit-policy-gap-report', id],
+    queryFn: () => getBenefitPolicyGapReport(id),
+    enabled: !!id,
+    staleTime: 0
   });
 
   const { data: benefitStructure = {} } = useQuery({
@@ -306,7 +320,31 @@ const BenefitPolicyView = () => {
       refetch();
     },
     onError: (err) => {
+      // A critical gap (a rule naming a claim context that is missing or
+      // disabled) refuses activation server-side with no ordinary override.
+      // Surface the dedicated override path instead of a dead end -- it
+      // requires its own permission and a mandatory reason, recorded in the
+      // audit trail; this dialog only offers it, the backend enforces both.
+      if (err.response?.data?.message?.includes('سياق مطالبة غير موجود أو معطّل')) {
+        setGapOverrideDialogOpen(true);
+        return;
+      }
       enqueueSnackbar(err.response?.data?.message || 'فشل تفعيل الوثيقة', { variant: 'error' });
+    }
+  });
+
+  const [gapOverrideReason, setGapOverrideReason] = useState('');
+  const activateWithGapOverrideMutation = useMutation({
+    mutationFn: () => activateBenefitPolicyWithGapOverride(id, gapOverrideReason),
+    onSuccess: async () => {
+      enqueueSnackbar('تم تفعيل الوثيقة رغم الفجوات الحرجة — سُجِّل السبب في سجل التدقيق', { variant: 'warning' });
+      setGapOverrideDialogOpen(false);
+      setGapOverrideReason('');
+      await queryClient.invalidateQueries({ queryKey: ['benefit-policy', id], exact: true });
+      refetch();
+    },
+    onError: (err) => {
+      enqueueSnackbar(err.response?.data?.message || 'فشل التفعيل مع التجاوز', { variant: 'error' });
     }
   });
 
@@ -577,6 +615,34 @@ const BenefitPolicyView = () => {
         }
       />
 
+      {/* P1: structural gap report -- diagnostic only, never blocks viewing.
+          Critical (rulesWithUnknownContext) is a real bug: that rule can
+          never apply to any claim. The rest is advisory, shown for
+          awareness, not as a warning severity. */}
+      {gapReport?.rulesWithUnknownContext?.length > 0 && (
+        <Alert severity="error" sx={{ mb: '0.75rem' }}>
+          <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+            {gapReport.rulesWithUnknownContext.length} قاعدة تغطية مرتبطة بسياق مطالبة غير معروف أو معطّل — لن
+            تُطبَّق أبداً على أي مطالبة:
+          </Typography>
+          {gapReport.rulesWithUnknownContext.map((g) => (
+            <Typography key={g.ruleId} variant="body2">
+              • {g.medicalCategoryCode || 'قاعدة #' + g.ruleId} ← سياق: {g.claimContextCode}
+            </Typography>
+          ))}
+        </Alert>
+      )}
+      {(gapReport?.rulesWithoutBucket?.length > 0 || gapReport?.bucketsWithoutRule?.length > 0) && (
+        <Alert severity="info" sx={{ mb: '0.75rem' }}>
+          <Typography variant="body2">
+            {gapReport.rulesWithoutBucket?.length > 0 &&
+              `${gapReport.rulesWithoutBucket.length} قاعدة تغطية بلا وعاء سقف مرتبط (يُطبَّق عليها السقف العام فقط). `}
+            {gapReport.bucketsWithoutRule?.length > 0 &&
+              `${gapReport.bucketsWithoutRule.length} وعاء سقف نشط لا تُحيل إليه أي قاعدة (لن يُقرأ أبداً).`}
+          </Typography>
+        </Alert>
+      )}
+
       {/* Tabs Navigation */}
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: '0.5rem', mt: -3 }}>
         <Tabs value={activeTab} onChange={handleTabChange} textColor="primary" indicatorColor="primary">
@@ -707,6 +773,63 @@ const BenefitPolicyView = () => {
         loading={isLoading_Action}
         confirmColor={dialogState.action === 'delete' || dialogState.action === 'cancel' ? 'error' : 'primary'}
       />
+
+      {/* Critical-gap override: activation refused a rule naming a claim
+          context that is missing or disabled -- that rule can never apply
+          to any claim. There is no ordinary override; this dedicated path
+          requires its own permission (enforced server-side -- a user
+          without it simply gets a 403 here) and a mandatory reason, which
+          the backend records in the audit trail alongside exactly which
+          gaps were overridden. The warning above stays visible regardless
+          of this dialog's state -- it is driven by the gap-report query,
+          not by whether an activation attempt failed. */}
+      <Dialog
+        open={gapOverrideDialogOpen}
+        onClose={() => {
+          setGapOverrideDialogOpen(false);
+          setGapOverrideReason('');
+        }}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>تفعيل رغم فجوات حرجة — يحتاج صلاحية وسبباً</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            توجد قاعدة تغطية أو أكثر مرتبطة بسياق مطالبة غير موجود أو معطّل، فلن تُطبَّق أبداً على أي مطالبة.
+            راجع تقرير الفجوات أعلاه لمعرفة أيّها. تفعيل الوثيقة رغم ذلك يحتاج صلاحية منفصلة وسبباً إلزامياً،
+            وسيُسجَّل في سجل التدقيق مع تحديد الفجوات المتجاوزة تحديداً.
+          </DialogContentText>
+          <TextField
+            fullWidth
+            multiline
+            minRows={2}
+            required
+            label="سبب التجاوز"
+            value={gapOverrideReason}
+            onChange={(e) => setGapOverrideReason(e.target.value)}
+            error={gapOverrideReason.trim().length === 0}
+            helperText={gapOverrideReason.trim().length === 0 ? 'إلزامي — لا يمكن المتابعة بلا سبب' : ' '}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setGapOverrideDialogOpen(false);
+              setGapOverrideReason('');
+            }}
+          >
+            إلغاء
+          </Button>
+          <Button
+            color="warning"
+            variant="contained"
+            disabled={gapOverrideReason.trim().length === 0 || activateWithGapOverrideMutation.isPending}
+            onClick={() => activateWithGapOverrideMutation.mutate()}
+          >
+            {activateWithGapOverrideMutation.isPending ? 'جارٍ التفعيل…' : 'تفعيل رغم ذلك'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </>
   );
 };

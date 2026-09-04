@@ -128,11 +128,18 @@ class BenefitPolicyQueryScalePerformanceIntegrationTest extends PostgresIntegrat
      * either way. A real N+1 would show up as roughly +20 statements (one
      * per row on the page), not a difference of two or three; that is the
      * property this test guards, not bit-for-bit identical counts.
+     *
+     * Warm the exact path before measuring so lazy metadata initialization is
+     * not charged only to the first measured page. The tolerance remains
+     * tight: a real per-row read would add roughly the page size (20).
      */
     @Test
     @DisplayName("listing a page of policies costs roughly the same whether the book holds 20 or 500")
     void listingQueryCountIsBoundedAcrossTheBook() {
         Statistics statistics = entityManagerFactory.unwrap(SessionFactory.class).getStatistics();
+
+        benefitPolicyService.findManagementPage(
+                true, null, null, "", PageRequest.of(0, 20));
 
         statistics.clear();
         var firstPage = benefitPolicyService.findManagementPage(

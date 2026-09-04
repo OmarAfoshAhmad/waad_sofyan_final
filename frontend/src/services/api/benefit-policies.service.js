@@ -199,13 +199,39 @@ export const updateBenefitPolicy = async (id, payload) => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * Activate a benefit policy
+ * Activate a benefit policy. Refuses closed, with no override, on a
+ * critical rule/context gap -- see activateBenefitPolicyWithGapOverride.
  * Endpoint: POST /api/benefit-policies/{id}/activate
  * @param {number} id - Policy ID
  * @returns {Promise<Object>} Activated policy
  */
 export const activateBenefitPolicy = async (id) => {
   const response = await axiosClient.post(`${BASE_URL}/${id}/activate`);
+  return unwrap(response);
+};
+
+/**
+ * The one, explicit way past a critical rule/context gap. Requires its own
+ * permission (BENEFIT_POLICY_ACTIVATE_WITH_GAPS) and a mandatory reason --
+ * the backend records exactly which gaps were overridden and why in the
+ * audit trail.
+ * Endpoint: POST /api/benefit-policies/{id}/activate-with-gap-override
+ * @param {number} id - Policy ID
+ * @param {string} reason - Mandatory, non-blank justification
+ * @returns {Promise<Object>} Activated policy
+ */
+export const activateBenefitPolicyWithGapOverride = async (id, reason) => {
+  const response = await axiosClient.post(`${BASE_URL}/${id}/activate-with-gap-override`, { reason });
+  return unwrap(response);
+};
+
+/**
+ * Structural rule/bucket/claim-context gap report for a policy, ahead of
+ * activation. Diagnostic only -- never writes.
+ * Endpoint: GET /api/benefit-policies/{id}/gap-report
+ */
+export const getBenefitPolicyGapReport = async (id) => {
+  const response = await axiosClient.get(`${BASE_URL}/${id}/gap-report`);
   return unwrap(response);
 };
 
@@ -345,6 +371,8 @@ export default {
   updateBenefitPolicy,
   // Lifecycle
   activateBenefitPolicy,
+  activateBenefitPolicyWithGapOverride,
+  getBenefitPolicyGapReport,
   deactivateBenefitPolicy,
   suspendBenefitPolicy,
   revertBenefitPolicyToDraft,
