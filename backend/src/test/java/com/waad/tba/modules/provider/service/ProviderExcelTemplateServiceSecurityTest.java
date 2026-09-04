@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -137,6 +138,24 @@ class ProviderExcelTemplateServiceSecurityTest {
         verify(contractService).create(captor.capture());
         assertEquals(0, captor.getValue().getDiscountPercent().compareTo(new java.math.BigDecimal("10.00")));
         assertTrue(captor.getValue().getDiscountBeforeRejection());
+        assertEquals(java.time.LocalDate.of(2025, 1, 1), captor.getValue().getStartDate());
+        assertEquals(java.time.LocalDate.of(2025, 12, 31), captor.getValue().getEndDate());
+    }
+
+    @Test
+    void providerImportDoesNotSilentlySkipARealProviderEnteredInExcelRowTwo() throws Exception {
+        when(providerRepository.findByName("مستشفى الاختبار")).thenReturn(Optional.empty());
+        when(providerRepository.save(any(Provider.class))).thenAnswer(invocation -> {
+            Provider provider = invocation.getArgument(0);
+            provider.setId(100L);
+            return provider;
+        });
+
+        ExcelImportResult result = service.importFromExcel(buildExcelFileWithFirstRealRow());
+
+        assertTrue(result.isSuccess());
+        assertEquals(1, result.getSummary().getCreated());
+        verify(contractService).create(any(ProviderContractCreateDto.class));
     }
 
     @Test
@@ -174,6 +193,47 @@ class ProviderExcelTemplateServiceSecurityTest {
         verify(userService).update(org.mockito.ArgumentMatchers.eq(700L), captor.capture());
         assertEquals("new-provider@example.com", captor.getValue().getEmail());
         assertEquals(100L, captor.getValue().getProviderId());
+    }
+
+    @Test
+    void providerReimportWithMultipleUsersUpdatesOnlyTheExplicitlyMatchingAccount() throws Exception {
+        Provider existing = Provider.builder().id(100L).name("مستشفى الاختبار")
+                .licenseNumber("HOS-100").providerType(Provider.ProviderType.HOSPITAL).active(false).build();
+        when(providerRepository.findByName("مستشفى الاختبار")).thenReturn(Optional.of(existing));
+        when(providerRepository.save(any(Provider.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(contractService.findByProvider(org.mockito.ArgumentMatchers.eq(100L), any()))
+                .thenReturn(org.springframework.data.domain.Page.empty());
+        when(userService.findByProviderId(100L)).thenReturn(List.of(
+                UserResponseDto.builder().id(700L).username("first").email("first@tpa.local").build(),
+                UserResponseDto.builder().id(701L).username("testprovider@tpa").email("second@tpa.local").build()));
+
+        service.importFromExcel(buildExcelFile("", ""));
+
+        ArgumentCaptor<UserUpdateDto> captor = ArgumentCaptor.forClass(UserUpdateDto.class);
+        verify(userService, times(1)).update(org.mockito.ArgumentMatchers.eq(701L), captor.capture());
+        verify(userService, never()).update(org.mockito.ArgumentMatchers.eq(700L), any(UserUpdateDto.class));
+        assertEquals("testprovider@tpa", captor.getValue().getUsername());
+        assertEquals("second@tpa.local", captor.getValue().getEmail());
+    }
+
+    @Test
+    void providerReimportWithMultipleUsersRejectsAmbiguousNewUsernameClearly() throws Exception {
+        Provider existing = Provider.builder().id(100L).name("مستشفى الاختبار")
+                .licenseNumber("HOS-100").providerType(Provider.ProviderType.HOSPITAL).active(false).build();
+        when(providerRepository.findByName("مستشفى الاختبار")).thenReturn(Optional.of(existing));
+        when(providerRepository.save(any(Provider.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(contractService.findByProvider(org.mockito.ArgumentMatchers.eq(100L), any()))
+                .thenReturn(org.springframework.data.domain.Page.empty());
+        when(userService.findByProviderId(100L)).thenReturn(List.of(
+                UserResponseDto.builder().id(700L).username("first").email("first@tpa.local").build(),
+                UserResponseDto.builder().id(701L).username("second").email("second@tpa.local").build()));
+
+        BusinessRuleException error = assertThrows(BusinessRuleException.class,
+                () -> service.importFromExcel(buildExcelFile("", "")));
+
+        assertTrue(error.getMessage().contains("مرتبط بأكثر من مستخدم"));
+        assertTrue(error.getMessage().contains("testprovider@tpa"));
+        verify(userService, never()).update(any(), any(UserUpdateDto.class));
     }
 
     @Test
@@ -266,7 +326,28 @@ class ProviderExcelTemplateServiceSecurityTest {
             row.createCell(3).setCellValue(timing);
             row.createCell(4).setCellValue("ACTIVE");
             row.createCell(5).setCellValue("01/01/2025");
-            row.createCell(6).setCellValue(24);
+            row.createCell(6).setCellValue(12);
+            workbook.write(output);
+            return new MockMultipartFile("file", "providers.xlsx",
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", output.toByteArray());
+        }
+    }
+
+    private MockMultipartFile buildExcelFileWithFirstRealRow() throws Exception {
+        try (XSSFWorkbook workbook = new XSSFWorkbook();
+             ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            var sheet = workbook.createSheet("Data");
+            var header = sheet.createRow(0);
+            String[] headers = {"provider_name", "provider_type", "username", "initial_password",
+                    "start_date", "duration_months"};
+            for (int i = 0; i < headers.length; i++) header.createCell(i).setCellValue(headers[i]);
+            var row = sheet.createRow(1);
+            row.createCell(0).setCellValue("مستشفى الاختبار");
+            row.createCell(1).setCellValue("HOSPITAL");
+            row.createCell(2).setCellValue("first-row-provider");
+            row.createCell(3).setCellValue("");
+            row.createCell(4).setCellValue("2025-01-01");
+            row.createCell(5).setCellValue("12");
             workbook.write(output);
             return new MockMultipartFile("file", "providers.xlsx",
                     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", output.toByteArray());

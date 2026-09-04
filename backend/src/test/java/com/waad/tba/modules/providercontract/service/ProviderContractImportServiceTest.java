@@ -211,4 +211,39 @@ class ProviderContractImportServiceTest {
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessageContaining("جلسة الاستيراد");
     }
+
+    @Test
+    void previewRejectsProviderImportTemplateInsteadOfParsingItsMetadataAsContracts() throws Exception {
+        try (XSSFWorkbook workbook = new XSSFWorkbook()) {
+            workbook.createSheet("Metadata").createRow(1).createCell(0)
+                    .setCellValue("Module / النموذج:");
+            workbook.createSheet("Data").createRow(0).createCell(0)
+                    .setCellValue("provider_name");
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            workbook.write(out);
+            MockMultipartFile file = new MockMultipartFile("file", "providers.xlsx",
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", out.toByteArray());
+
+            assertThatThrownBy(() -> importService.preview(file))
+                    .isInstanceOf(BusinessRuleException.class)
+                    .hasMessageContaining("ملف استيراد مقدمي الخدمة")
+                    .hasMessageContaining("شاشة مقدمي الخدمة");
+        }
+    }
+
+    @Test
+    void previewRejectsUnknownWorkbookInsteadOfFallingBackToFirstSheet() throws Exception {
+        try (XSSFWorkbook workbook = new XSSFWorkbook()) {
+            workbook.createSheet("Wrong Sheet").createRow(0).createCell(0).setCellValue("not a contract template");
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            workbook.write(out);
+            MockMultipartFile file = new MockMultipartFile("file", "wrong.xlsx",
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", out.toByteArray());
+
+            assertThatThrownBy(() -> importService.preview(file))
+                    .isInstanceOf(BusinessRuleException.class)
+                    .hasMessageContaining("بيانات العقود")
+                    .hasMessageContaining("نزّل قالب العقود");
+        }
+    }
 }

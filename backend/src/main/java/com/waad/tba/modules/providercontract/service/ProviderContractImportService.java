@@ -212,9 +212,15 @@ public class ProviderContractImportService {
 
         try (Workbook workbook = WorkbookFactory.create(file.getInputStream())) {
             Sheet sheet = workbook.getSheet(SHEET_NAME);
-            if (sheet == null) sheet = workbook.getSheetAt(0);
             if (sheet == null) {
-                throw new BusinessRuleException("لم يتم العثور على ورقة البيانات");
+                if (workbook.getSheet("Data") != null && workbook.getSheet("Metadata") != null) {
+                    throw new BusinessRuleException(
+                            "هذا ملف استيراد مقدمي الخدمة، وليس قالب استيراد العقود. "
+                                    + "ارفعه من شاشة مقدمي الخدمة؛ وسيُنشئ النظام مقدم الخدمة وعقده معاً.");
+                }
+                throw new BusinessRuleException(
+                        "قالب العقود غير صحيح: ورقة «" + SHEET_NAME
+                                + "» غير موجودة. نزّل قالب العقود من هذه النافذة ثم أعد المحاولة.");
             }
 
             int lastRow = sheet.getLastRowNum();

@@ -338,7 +338,11 @@ public class ProviderExcelTemplateService {
                 return buildErrorResult(summary, errors, "Mandatory columns missing");
             }
             
-            int firstDataRow = 2;
+            // A freshly downloaded template contains an example in Excel row 2,
+            // but users commonly replace that row with their first real provider.
+            // Skip it only while it is still recognisably the template example;
+            // never discard a real first record merely because of its row number.
+            int firstDataRow = isTemplateExampleRow(sheet.getRow(1)) ? 2 : 1;
             int lastRow = sheet.getLastRowNum();
             summary.setTotalRows(lastRow - firstDataRow + 1);
             
@@ -648,27 +652,70 @@ public class ProviderExcelTemplateService {
             return;
         }
         String requestedUsername = getCellValue(row, columns.get("username"));
-        for (var user : users) {
-            String username = requestedUsername == null || requestedUsername.isBlank()
-                    ? user.getUsername() : requestedUsername.trim();
-            String email = provider.getEmail() == null || provider.getEmail().isBlank()
-                    ? generateProviderUserEmail(username, provider.getLicenseNumber()) : provider.getEmail().trim();
-            userService.update(user.getId(), UserUpdateDto.builder()
-                    .username(username)
-                    .fullName(provider.getName())
-                    .email(email)
-                    .phone(provider.getPhone())
-                    .active(true)
-                    .userType("PROVIDER_STAFF")
-                    .providerId(provider.getId())
-                    .build());
+        String normalizedRequested = requestedUsername == null ? "" : requestedUsername.trim();
+
+        if (users.size() > 1) {
+            if (normalizedRequested.isBlank()) {
+                // The spreadsheet does not identify which account is authoritative.
+                // Provider/contract data can still be updated safely, but account
+                // identities must remain untouched.
+                log.info("[ProviderImport] Provider {} has {} linked users; preserving all accounts because username is blank",
+                        provider.getId(), users.size());
+                return;
+            }
+            var matchingUsers = users.stream()
+                    .filter(user -> user.getUsername() != null
+                            && user.getUsername().equalsIgnoreCase(normalizedRequested))
+                    .toList();
+            if (matchingUsers.size() != 1) {
+                throw new BusinessRuleException("المرفق «" + provider.getName() + "» مرتبط بأكثر من مستخدم ("
+                        + users.stream().map(com.waad.tba.modules.rbac.dto.UserResponseDto::getUsername)
+                                .filter(java.util.Objects::nonNull).sorted().collect(java.util.stream.Collectors.joining("، "))
+                        + "). اسم المستخدم في الملف «" + normalizedRequested
+                        + "» لا يطابق حساباً مرتبطاً؛ اترك الخانة فارغة للمحافظة على الحسابات أو أدخل أحد الأسماء الحالية.");
+            }
+            updateExistingProviderUser(provider, matchingUsers.get(0), matchingUsers.get(0).getUsername());
+            return;
         }
+
+        var user = users.get(0);
+        String username = normalizedRequested.isBlank() ? user.getUsername() : normalizedRequested;
+        updateExistingProviderUser(provider, user, username);
+    }
+
+    private void updateExistingProviderUser(Provider provider,
+            com.waad.tba.modules.rbac.dto.UserResponseDto user, String username) {
+        String email = provider.getEmail() == null || provider.getEmail().isBlank()
+                ? user.getEmail() : provider.getEmail().trim();
+        if (email == null || email.isBlank()) {
+            email = generateProviderUserEmail(username, provider.getLicenseNumber());
+        }
+        userService.update(user.getId(), UserUpdateDto.builder()
+                .username(username)
+                .fullName(provider.getName())
+                .email(email)
+                .phone(provider.getPhone())
+                .active(true)
+                .userType("PROVIDER_STAFF")
+                .providerId(provider.getId())
+                .build());
     }
 
     private String normalizeText(String value) {
         return value == null ? "" : value.replace('\u00A0', ' ')
                 .replaceAll("[\\u200E\\u200F\\u202A-\\u202E]", "")
                 .replaceAll("\\s+", " ").trim();
+    }
+
+    private boolean isTemplateExampleRow(Row row) {
+        if (row == null) return false;
+        String providerName = normalizeText(getCellValue(row, 0));
+        if (providerName.equalsIgnoreCase("example")) return true;
+        String providerType = normalizeText(getCellValue(row, 1));
+        String username = normalizeText(getCellValue(row, 7));
+        return "مستشفى السلام".equals(providerName)
+                && "HOSPITAL".equalsIgnoreCase(providerType)
+                && "ali_2026".equalsIgnoreCase(username);
     }
 
     private record ContractImportValues(BigDecimal discount, boolean beforeRejection,
