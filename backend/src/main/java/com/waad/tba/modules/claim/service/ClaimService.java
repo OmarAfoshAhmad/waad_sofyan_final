@@ -392,7 +392,7 @@ public class ClaimService {
                             + "؛ يجب أن تمر عبر دورة الاعتماد النظامية");
         }
 
-        Claim claim = claimMapper.toEntity(dto, visit, provider, preAuth, claimBatch);
+        Claim claim = claimMapper.toEntity(dto, visit, provider, preAuth, claimBatch, datedMemberContext);
         claim.setSubmissionSource(currentUser != null && "PROVIDER_STAFF".equals(currentUser.getUserType())
                 ? com.waad.tba.modules.claim.entity.ClaimSubmissionSource.PROVIDER_PORTAL
                 : com.waad.tba.modules.claim.entity.ClaimSubmissionSource.INTERNAL_DIRECT);

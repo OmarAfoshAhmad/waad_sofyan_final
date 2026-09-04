@@ -289,6 +289,29 @@ class BenefitPolicyServiceTest {
                 .hasMessageContaining("لا يمكن تعديل");
     }
 
+    // ═══════════════════════════════════════════════════════════════════
+    // V219: a claim whose historical policy_id could never be attributed
+    // (LEGACY_UNRESOLVED) names no policy_id, so countByPolicyId cannot see
+    // it against ANY policy -- including the one it might actually belong
+    // to. Editing that policy would look safe purely because the blocking
+    // claim is unattributed, not because it doesn't exist. Every policy of
+    // the affected employer must stay locked until that claim is reviewed.
+    // ═══════════════════════════════════════════════════════════════════
+
+    @Test
+    void update_policyWithAnUnresolvedLegacyClaimSomewhereInTheEmployer_isBlocked() {
+        when(benefitPolicyRepository.findById(10L)).thenReturn(Optional.of(policy));
+        when(claimRepository.countByPolicyId(10L)).thenReturn(0L);
+        when(preAuthorizationRepository.countByPolicyId(10L)).thenReturn(0L);
+        when(claimRepository.existsUnresolvedLegacyClaimForEmployer(employer.getId())).thenReturn(true);
+
+        BenefitPolicyUpdateDto dto = BenefitPolicyUpdateDto.builder().name("Renamed").build();
+
+        assertThatThrownBy(() -> benefitPolicyService.update(10L, dto))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("مطالبات تاريخية غير محسومة");
+    }
+
     @Test
     void update_policyNeverLinkedToAnyClaim_isEditable() {
         when(benefitPolicyRepository.findById(10L)).thenReturn(Optional.of(policy));

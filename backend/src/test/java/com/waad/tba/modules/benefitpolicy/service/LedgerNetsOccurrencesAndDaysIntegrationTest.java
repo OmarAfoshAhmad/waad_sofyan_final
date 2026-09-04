@@ -41,7 +41,8 @@ class LedgerNetsOccurrencesAndDaysIntegrationTest extends PostgresIntegrationTes
         return UUID.randomUUID().toString().substring(0, 8);
     }
 
-    private record World(long memberId, long policyId, long bucketId, long providerId) {}
+    private record World(long memberId, long policyId, long bucketId, long providerId,
+            long policyAssignmentId, long employerAssignmentId) {}
 
     private LocalDate periodStart() {
         return LocalDate.now().withDayOfYear(1);
@@ -64,9 +65,12 @@ class LedgerNetsOccurrencesAndDaysIntegrationTest extends PostgresIntegrationTes
                 + "benefit_policy_id, card_number, barcode, status, active) VALUES (" + employerId
                 + ", 'Net Member', " + policyId + ", 'NT" + s + "', 'NT" + s
                 + "', 'ACTIVE', true) RETURNING id", Long.class);
-        jdbc.update("INSERT INTO member_policy_assignments (member_id, policy_id, "
-                + "assignment_start_date, assignment_source) VALUES (?, ?, CURRENT_DATE - 60, 'MANUAL')",
-                memberId, policyId);
+        Long policyAssignmentId = jdbc.queryForObject("INSERT INTO member_policy_assignments (member_id, "
+                + "policy_id, assignment_start_date, assignment_source) VALUES (?, ?, CURRENT_DATE - 60, "
+                + "'MANUAL') RETURNING id", Long.class, memberId, policyId);
+        Long employerAssignmentId = jdbc.queryForObject("INSERT INTO member_employer_assignments (member_id, "
+                + "employer_id, assignment_start_date, assignment_reason, assignment_source) VALUES (?, ?, "
+                + "CURRENT_DATE - 60, 'test', 'MANUAL') RETURNING id", Long.class, memberId, employerId);
         Long groupId = jdbc.queryForObject("INSERT INTO benefit_groups (policy_id, code, name_ar, "
                 + "aggregation_mode) VALUES (" + policyId + ", 'NTG-" + s
                 + "', 'مجموعة', 'INDIVIDUAL') RETURNING id", Long.class);
@@ -77,7 +81,7 @@ class LedgerNetsOccurrencesAndDaysIntegrationTest extends PostgresIntegrationTes
                 + ", 5, 'ANNUAL', 'EACH_LINE', 'COMPANY_SHARE', true) RETURNING id", Long.class);
         Long providerId = jdbc.queryForObject("INSERT INTO providers (name, license_number, provider_type) "
                 + "VALUES ('Prov " + s + "', 'NTLIC-" + s + "', 'CLINIC') RETURNING id", Long.class);
-        return new World(memberId, policyId, bucketId, providerId);
+        return new World(memberId, policyId, bucketId, providerId, policyAssignmentId, employerAssignmentId);
     }
 
     /** A committed movement tied to a real claim on the given service date. */
@@ -87,9 +91,12 @@ class LedgerNetsOccurrencesAndDaysIntegrationTest extends PostgresIntegrationTes
                 + w.memberId() + ", " + w.providerId() + ", DATE '" + serviceDate + "') RETURNING id",
                 Long.class);
         Long claimId = jdbc.queryForObject("INSERT INTO claims (claim_number, member_id, provider_id, "
-                + "visit_id, service_date, requested_amount, status, claim_context_code) VALUES ('NTC-" + s + "', "
-                + w.memberId() + ", " + w.providerId() + ", " + visitId + ", DATE '" + serviceDate
-                + "', " + amount + ", 'APPROVED', 'OUTPATIENT') RETURNING id", Long.class);
+                + "visit_id, service_date, requested_amount, status, claim_context_code, policy_id, "
+                + "policy_assignment_id, employer_assignment_id, historical_context_status) VALUES ('NTC-"
+                + s + "', " + w.memberId() + ", " + w.providerId() + ", " + visitId + ", DATE '" + serviceDate
+                + "', " + amount + ", 'APPROVED', 'OUTPATIENT', " + w.policyId() + ", "
+                + w.policyAssignmentId() + ", " + w.employerAssignmentId() + ", 'RESOLVED') RETURNING id",
+                Long.class);
         Long lineId = jdbc.queryForObject("INSERT INTO claim_lines (claim_id, service_code, quantity, "
                 + "unit_price, total_price) VALUES (" + claimId + ", 'NTS-" + s + "', 1, " + amount
                 + ", " + amount + ") RETURNING id", Long.class);
@@ -330,9 +337,11 @@ class LedgerNetsOccurrencesAndDaysIntegrationTest extends PostgresIntegrationTes
         Long visitId = jdbc.queryForObject("INSERT INTO visits (member_id, provider_id, visit_date) VALUES ("
                 + w.memberId() + ", " + w.providerId() + ", DATE '" + day + "') RETURNING id", Long.class);
         Long claimId = jdbc.queryForObject("INSERT INTO claims (claim_number, member_id, provider_id, "
-                + "visit_id, service_date, requested_amount, status, claim_context_code) VALUES ('NTX-" + s + "', "
-                + w.memberId() + ", " + w.providerId() + ", " + visitId + ", DATE '" + day
-                + "', 100.00, 'APPROVED', 'OUTPATIENT') RETURNING id", Long.class);
+                + "visit_id, service_date, requested_amount, status, claim_context_code, policy_id, "
+                + "policy_assignment_id, employer_assignment_id, historical_context_status) VALUES ('NTX-"
+                + s + "', " + w.memberId() + ", " + w.providerId() + ", " + visitId + ", DATE '" + day
+                + "', 100.00, 'APPROVED', 'OUTPATIENT', " + w.policyId() + ", " + w.policyAssignmentId()
+                + ", " + w.employerAssignmentId() + ", 'RESOLVED') RETURNING id", Long.class);
         Long lineId = jdbc.queryForObject("INSERT INTO claim_lines (claim_id, service_code, quantity, "
                 + "unit_price, total_price) VALUES (" + claimId + ", 'NTXS-" + s
                 + "', 1, 100.00, 100.00) RETURNING id", Long.class);

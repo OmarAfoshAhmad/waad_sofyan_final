@@ -33,9 +33,58 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
          * cancelled claim still represents a financial event that happened
          * under this policy's configuration, so it must not become editable
          * again just because the claim was later voided.
+         *
+         * Reads c.policyId (V217's historical snapshot, resolved by
+         * serviceDate at claim creation), not the member's current policy
+         * pointer. member.benefitPolicy.id answers "what policy is this
+         * member on NOW" -- if the member transferred policies after the
+         * claim was created, that query would silently stop counting the
+         * claim against the policy it actually happened under, letting that
+         * policy's rules look editable again. See PreAuthorizationRepository
+         * #countByPolicyId, which already used its own dedicated policyId
+         * column for the same reason.
+         *
+         * A claim whose policyId could not be resolved (historicalContextStatus
+         * = LEGACY_UNRESOLVED) is invisible to this specific count -- it names
+         * no policy to count against. Do not "fix" this by falling back to the
+         * member's current pointer, which is exactly the bug this replaces.
+         * Callers gating a policy edit must ALSO check
+         * {@link #existsUnresolvedLegacyClaimForEmployer}, which is what
+         * covers this gap: an unresolved claim locks every policy of its
+         * employer rather than silently unlocking the one it actually
+         * belongs to.
          */
-        @Query("SELECT COUNT(c) FROM Claim c WHERE c.member.benefitPolicy.id = :policyId")
+        @Query("SELECT COUNT(c) FROM Claim c WHERE c.policyId = :policyId")
         long countByPolicyId(@Param("policyId") Long policyId);
+
+        /**
+         * Precautionary, employer-wide lock: true if this employer has ANY
+         * claim whose historical policy/assignment attribution is still
+         * LEGACY_UNRESOLVED (see V219, ClaimHistoricalContextStatus). Such a
+         * claim names no policy_id, so {@link #countByPolicyId} cannot see
+         * it -- without this check, editing that employer's policy rules
+         * would look safe purely because the one claim standing in the way
+         * is unattributed, not because it doesn't exist.
+         *
+         * Reads claimBatch.employerId first -- the batch a direct-entry claim
+         * was filed under names the employer that was true when the claim was
+         * created, exactly the same "don't trust the current pointer" reason
+         * V217 exists at all. member.employer.id (the CURRENT pointer) is
+         * used only as a fallback for the rare claim with no batch, and is
+         * itself still a precaution, not a source of truth: better to lock an
+         * employer that turns out unaffected than to silently unlock one that
+         * is, if the member has since transferred.
+         */
+        // LEFT JOIN is load-bearing, not stylistic: navigating c.claimBatch.
+        // employerId as a path expression compiles to an implicit INNER
+        // JOIN, which would silently drop every claim with no batch at all
+        // -- exactly the row the fallback half of this query exists to
+        // catch -- regardless of the OR clause.
+        @Query("SELECT COUNT(c) > 0 FROM Claim c LEFT JOIN c.claimBatch b WHERE c.historicalContextStatus = "
+                        + "com.waad.tba.modules.claim.entity.ClaimHistoricalContextStatus.LEGACY_UNRESOLVED "
+                        + "AND ((b IS NOT NULL AND b.employerId = :employerId) "
+                        + "OR (b IS NULL AND c.member.employer.id = :employerId))")
+        boolean existsUnresolvedLegacyClaimForEmployer(@Param("employerId") Long employerId);
 
 
         /** WAAD-FIN-1.0: the policy ceiling consumes settlement value, not insurer payment. */

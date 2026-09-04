@@ -87,7 +87,21 @@ public class ClaimMapper {
         }
 
         public Claim toEntity(ClaimCreateDto dto, Visit visit, Provider provider, PreAuthorization preAuth,
-                        ClaimBatch claimBatch) {
+                        ClaimBatch claimBatch,
+                        com.waad.tba.modules.member.service.MemberDatedContext datedMemberContext) {
+                // Every real caller already resolved this via MemberContextResolver
+                // #resolveForOrFail, which fails closed (throws) rather than
+                // returning null -- so a null here can only mean a caller was
+                // changed incorrectly. Reject it here, in the application layer,
+                // with a clear message: letting it through would build a claim
+                // with historicalContextStatus defaulting to RESOLVED and all
+                // three snapshot columns null, which V219's own CHECK constraint
+                // would then reject at INSERT with a much less legible error.
+                if (datedMemberContext == null) {
+                        throw new IllegalStateException(
+                                        "ARCHITECTURAL VIOLATION: toEntity requires a resolved MemberDatedContext; "
+                                                        + "every caller must resolve it via MemberContextResolver#resolveForOrFail first");
+                }
                 Claim claim = Claim.builder()
                                 .visit(visit)
                                 .member(visit.getMember())
@@ -97,6 +111,12 @@ public class ClaimMapper {
                                 .diagnosisCode(dto.getDiagnosisCode())
                                 .diagnosisDescription(dto.getDiagnosisDescription())
                                 .doctorName(dto.getDoctorName())
+                                // Historical identity snapshot (V217): captured once, from the same
+                                // dated resolution the caller already performed to authorize this
+                                // claim. Never re-resolved later -- see Claim.policyId javadoc.
+                                .policyId(datedMemberContext.policy().getId())
+                                .policyAssignmentId(datedMemberContext.policyAssignment().getId())
+                                .employerAssignmentId(datedMemberContext.employerAssignment().getId())
                                 // DRAFT, never APPROVED: the mapper only builds data. Financial approval
                                 // (amount limits, totalApproved > 0) is decided later by ClaimService via
                                 // ClaimStateMachine, after finalizeSnapshot has computed the real amount.

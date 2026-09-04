@@ -77,6 +77,28 @@ class DirectClaimIdentityAcrossV199MigrationTest {
             columns.next();
             hasContext = columns.getBoolean(1);
         }
+        boolean hasHistoricalContext;
+        try (ResultSet columns = statement.executeQuery("SELECT EXISTS (SELECT 1 FROM information_schema.columns "
+                + "WHERE table_name='claims' AND column_name='historical_context_status')")) {
+            columns.next();
+            hasHistoricalContext = columns.getBoolean(1);
+        }
+        if (hasHistoricalContext) {
+            // V219 onward: historical_context_status is NOT NULL and RESOLVED
+            // requires all three snapshot columns, so this world needs a real
+            // assignment too, not just a policy pointer on the member.
+            long policyAssignment = id(statement, "INSERT INTO member_policy_assignments(member_id,policy_id,"
+                    + "assignment_start_date,assignment_source) VALUES(" + member + "," + policy
+                    + ",CURRENT_DATE-1,'MANUAL') RETURNING id");
+            long employerAssignment = id(statement, "INSERT INTO member_employer_assignments(member_id,"
+                    + "employer_id,assignment_start_date,assignment_reason,assignment_source) VALUES(" + member
+                    + "," + employer + ",CURRENT_DATE-1,'test','MANUAL') RETURNING id");
+            return id(statement, "INSERT INTO claims(claim_number,member_id,provider_id,visit_id,service_date,"
+                    + "requested_amount,status,claim_context_code,policy_id,policy_assignment_id,"
+                    + "employer_assignment_id,historical_context_status) VALUES('CLM-V199-" + tag + "'," + member
+                    + "," + provider + "," + visit + ",CURRENT_DATE,100,'DRAFT','OUTPATIENT'," + policy + ","
+                    + policyAssignment + "," + employerAssignment + ",'RESOLVED') RETURNING id");
+        }
         if (hasContext) {
             return id(statement, "INSERT INTO claims(claim_number,member_id,provider_id,visit_id,service_date,"
                     + "requested_amount,status,claim_context_code) VALUES('CLM-V199-" + tag + "'," + member + "," + provider + ","

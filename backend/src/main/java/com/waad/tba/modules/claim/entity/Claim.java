@@ -230,6 +230,40 @@ public class Claim {
     private String claimContextCode;
 
     /**
+     * Historical identity snapshot: the policy/policy-assignment/employer-
+     * assignment resolved for this claim's member AT serviceDate, captured
+     * once at creation. Never re-derived after that -- a later re-resolution
+     * of the same dated question could legitimately disagree if the
+     * member's assignment history changed since (transfer, mid-term policy
+     * change), and a claim's own historical context must not drift.
+     * Permanently immutable once historicalContextStatus is RESOLVED
+     * (always true for a newly created claim), enforced by
+     * trg_claims_historical_context_guard regardless of the claim's own
+     * workflow status. A LEGACY_UNRESOLVED row (see below) may change these
+     * only once, atomically, in the single validated transition to
+     * RESOLVED -- never partially, and never while staying unresolved.
+     */
+    @Column(name = "policy_id")
+    private Long policyId;
+
+    @Column(name = "policy_assignment_id")
+    private Long policyAssignmentId;
+
+    @Column(name = "employer_assignment_id")
+    private Long employerAssignmentId;
+
+    /**
+     * Whether the three columns above are trustworthy (RESOLVED) or a
+     * pre-V217 legacy row this project could not attribute without
+     * guessing (LEGACY_UNRESOLVED). Always RESOLVED for any claim this
+     * application creates -- see {@link ClaimHistoricalContextStatus}.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "historical_context_status", length = 20, nullable = false)
+    @Builder.Default
+    private ClaimHistoricalContextStatus historicalContextStatus = ClaimHistoricalContextStatus.RESOLVED;
+
+    /**
      * Full coverage override: 100% coverage, no limits.
      * When TRUE, bypasses all service-specific limits (amount/times).
      */

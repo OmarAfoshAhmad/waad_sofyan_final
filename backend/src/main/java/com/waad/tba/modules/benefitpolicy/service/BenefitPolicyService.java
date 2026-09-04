@@ -375,9 +375,35 @@ public class BenefitPolicyService {
      */
     @Transactional(readOnly = true)
     public boolean canPolicyBeEdited(Long policyId) {
+        return policyEditBlockReason(policyId) == null;
+    }
+
+    /**
+     * Null when the policy is editable; otherwise the Arabic reason to
+     * surface, so a caller can tell "a real claim depends on this policy"
+     * apart from "an unresolved legacy claim might".
+     *
+     * Fails closed on a gap {@link ClaimRepository#countByPolicyId} cannot
+     * see: a claim whose historical policy_id could never be attributed
+     * (ClaimHistoricalContextStatus.LEGACY_UNRESOLVED, V219) names no
+     * policy_id at all, so it would otherwise vanish from every policy's
+     * lock count -- including the one it may actually belong to. Until that
+     * claim's attribution is reviewed and resolved, every policy of its
+     * employer is locked, not just the one guessed to be its target.
+     */
+    @Transactional(readOnly = true)
+    public String policyEditBlockReason(Long policyId) {
         long claimsCount = claimRepository.countByPolicyId(policyId);
         long preAuthCount = preAuthorizationRepository.countByPolicyId(policyId);
-        return claimsCount == 0 && preAuthCount == 0;
+        if (claimsCount > 0 || preAuthCount > 0) {
+            return "لا يمكن تعديل الوثيقة لارتباطها بمطالبات أو موافقات مسبقة فعلية.";
+        }
+        BenefitPolicy policy = benefitPolicyRepository.findById(policyId).orElse(null);
+        Long employerId = policy != null && policy.getEmployer() != null ? policy.getEmployer().getId() : null;
+        if (employerId != null && claimRepository.existsUnresolvedLegacyClaimForEmployer(employerId)) {
+            return "توجد مطالبات تاريخية غير محسومة تمنع تعديل الوثيقة حتى مراجعة إسنادها.";
+        }
+        return null;
     }
 
     /**
@@ -400,8 +426,10 @@ public class BenefitPolicyService {
         BenefitPolicy policy = benefitPolicyRepository.findById(id)
                 .orElseThrow(() -> new BusinessRuleException("Benefit policy not found: " + id));
 
-        if (!canPolicyBeEdited(id)) {
-            throw new BusinessRuleException("لا يمكن تعديل بيانات هذه الوثيقة مباشرة لارتباطها بمطالبات أو موافقات مسبقة فعلية؛ يجب إنشاء إصدار جديد.");
+        String editBlockReason = policyEditBlockReason(id);
+        if (editBlockReason != null) {
+            throw new BusinessRuleException(editBlockReason
+                    + " يجب إنشاء إصدار جديد بدلاً من التعديل المباشر.");
         }
 
         java.util.List<String> changedFields = new java.util.ArrayList<>();
@@ -601,9 +629,9 @@ public class BenefitPolicyService {
                 && policy.getStatus() != BenefitPolicyStatus.SUSPENDED) {
             throw new BusinessRuleException("لا يمكن إرجاع الوثيقة إلى مسودة إلا إذا كانت نشطة أو موقوفة مؤقتًا");
         }
-        if (!canPolicyBeEdited(id)) {
-            throw new BusinessRuleException(
-                    "لا يمكن إرجاع هذه الوثيقة إلى مسودة لارتباطها بمطالبات أو موافقات مسبقة فعلية");
+        String draftBlockReason = policyEditBlockReason(id);
+        if (draftBlockReason != null) {
+            throw new BusinessRuleException(draftBlockReason);
         }
         policy.setStatus(BenefitPolicyStatus.DRAFT);
         policy = benefitPolicyRepository.save(policy);
@@ -896,8 +924,10 @@ public class BenefitPolicyService {
         // status, so once a policy has ever been financially touched, its
         // rules/groups/buckets become permanently immutable — matching the
         // original behavior before this check was narrowed.
-        if (!canPolicyBeEdited(policyId)) {
-            throw new BusinessRuleException("إعداد قواعد ومجموعات الوثيقة متاح فقط للوثائق التي لم يصدر عليها أي مطالبات أو موافقات مسبقة فعلية.");
+        String structureBlockReason = policyEditBlockReason(policyId);
+        if (structureBlockReason != null) {
+            throw new BusinessRuleException(structureBlockReason
+                    + " إعداد قواعد ومجموعات الوثيقة متاح فقط للوثائق التي لم يصدر عليها أي مطالبات أو موافقات مسبقة فعلية.");
         }
     }
 

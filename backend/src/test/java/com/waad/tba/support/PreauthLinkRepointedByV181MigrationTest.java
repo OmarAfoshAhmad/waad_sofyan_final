@@ -123,12 +123,20 @@ class PreauthLinkRepointedByV181MigrationTest {
             long preauthId = id(c, "INSERT INTO pre_authorizations (member_id, provider_id, status, "
                     + "request_date, created_at, updated_at) VALUES (" + memberId + ", " + providerId
                     + ", 'APPROVED', now(), now(), now()) RETURNING id");
+            long policyAssignmentId = id(c, "INSERT INTO member_policy_assignments (member_id, policy_id, "
+                    + "assignment_start_date, assignment_source) VALUES (" + memberId + ", " + policyId
+                    + ", CURRENT_DATE - 30, 'MANUAL') RETURNING id");
+            long employerAssignmentId = id(c, "INSERT INTO member_employer_assignments (member_id, "
+                    + "employer_id, assignment_start_date, assignment_reason, assignment_source) VALUES ("
+                    + memberId + ", " + employerId + ", CURRENT_DATE - 30, 'test', 'MANUAL') RETURNING id");
 
             // The link conversion needs, which was impossible before V181.
             long claimId = id(c, "INSERT INTO claims (claim_number, member_id, provider_id, visit_id, "
-                    + "service_date, requested_amount, status, pre_authorization_id, claim_context_code) VALUES ('LCLM-" + s
-                    + "', " + memberId + ", " + providerId + ", " + visitId
-                    + ", CURRENT_DATE, 100.00, 'APPROVED', " + preauthId + ", 'OUTPATIENT') RETURNING id");
+                    + "service_date, requested_amount, status, pre_authorization_id, claim_context_code, "
+                    + "policy_id, policy_assignment_id, employer_assignment_id, historical_context_status) "
+                    + "VALUES ('LCLM-" + s + "', " + memberId + ", " + providerId + ", " + visitId
+                    + ", CURRENT_DATE, 100.00, 'APPROVED', " + preauthId + ", 'OUTPATIENT', " + policyId
+                    + ", " + policyAssignmentId + ", " + employerAssignmentId + ", 'RESOLVED') RETURNING id");
             assertThat(claimId).isPositive();
 
             exec("INSERT INTO pre_authorization_attachments (pre_authorization_id, file_name, "
@@ -158,11 +166,20 @@ class PreauthLinkRepointedByV181MigrationTest {
                     + "VALUES ('Prov2 " + s + "', 'L2LIC-" + s + "', 'CLINIC') RETURNING id");
             long visitId = id(c, "INSERT INTO visits (member_id, provider_id, visit_date) VALUES ("
                     + memberId + ", " + providerId + ", CURRENT_DATE) RETURNING id");
+            long policyAssignmentId = id(c, "INSERT INTO member_policy_assignments (member_id, policy_id, "
+                    + "assignment_start_date, assignment_source) VALUES (" + memberId + ", " + policyId
+                    + ", CURRENT_DATE - 30, 'MANUAL') RETURNING id");
+            long employerAssignmentId = id(c, "INSERT INTO member_employer_assignments (member_id, "
+                    + "employer_id, assignment_start_date, assignment_reason, assignment_source) VALUES ("
+                    + memberId + ", " + employerId + ", CURRENT_DATE - 30, 'test', 'MANUAL') RETURNING id");
 
             assertThatThrownBy(() -> exec("INSERT INTO claims (claim_number, member_id, provider_id, "
-                    + "visit_id, service_date, requested_amount, status, pre_authorization_id, claim_context_code) VALUES "
+                    + "visit_id, service_date, requested_amount, status, pre_authorization_id, "
+                    + "claim_context_code, policy_id, policy_assignment_id, employer_assignment_id, "
+                    + "historical_context_status) VALUES "
                     + "('L2CLM-" + s + "', " + memberId + ", " + providerId + ", " + visitId
-                    + ", CURRENT_DATE, 100.00, 'APPROVED', 987654321, 'OUTPATIENT')"))
+                    + ", CURRENT_DATE, 100.00, 'APPROVED', 987654321, 'OUTPATIENT', " + policyId + ", "
+                    + policyAssignmentId + ", " + employerAssignmentId + ", 'RESOLVED')"))
                     .hasMessageContaining("fk_claim_preauth");
         }
 

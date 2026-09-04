@@ -71,9 +71,12 @@ class LedgerRepresentsPreauthAndGeneralScopeIntegrationTest extends PostgresInte
             // The enrolment period a hold sits in. V187 requires every PREAUTH
             // row to name one, so a fixture without it writes a row production
             // can no longer write.
-            insert(c, "INSERT INTO member_policy_assignments (member_id, policy_id, "
+            long policyAssignmentId = insert(c, "INSERT INTO member_policy_assignments (member_id, policy_id, "
                     + "assignment_start_date, assignment_source) VALUES (" + memberId + ", " + policyId
                     + ", CURRENT_DATE - 30, 'MANUAL') RETURNING id");
+            long employerAssignmentId = insert(c, "INSERT INTO member_employer_assignments (member_id, "
+                    + "employer_id, assignment_start_date, assignment_reason, assignment_source) VALUES ("
+                    + memberId + ", " + employerId + ", CURRENT_DATE - 30, 'test', 'MANUAL') RETURNING id");
             insert(c, "INSERT INTO member_opening_balance_batches (batch_reference, reason, "
                     + "performed_by, source_reference) VALUES ('LG-BATCH-" + s
                     + "', 'رصيد افتتاحي للاختبار', 'tester', 'prior system export') RETURNING id");
@@ -93,8 +96,11 @@ class LedgerRepresentsPreauthAndGeneralScopeIntegrationTest extends PostgresInte
             long visitId = insert(c, "INSERT INTO visits (member_id, provider_id, visit_date) VALUES ("
                     + memberId + ", " + providerId + ", CURRENT_DATE - 5) RETURNING id");
             long claimId = insert(c, "INSERT INTO claims (claim_number, member_id, provider_id, visit_id, "
-                    + "service_date, requested_amount, status, claim_context_code) VALUES ('CLM-" + s + "', " + memberId
-                    + ", " + providerId + ", " + visitId + ", CURRENT_DATE - 5, 100.00, 'APPROVED', 'OUTPATIENT') RETURNING id");
+                    + "service_date, requested_amount, status, claim_context_code, policy_id, "
+                    + "policy_assignment_id, employer_assignment_id, historical_context_status) VALUES ('CLM-"
+                    + s + "', " + memberId + ", " + providerId + ", " + visitId
+                    + ", CURRENT_DATE - 5, 100.00, 'APPROVED', 'OUTPATIENT', " + policyId + ", "
+                    + policyAssignmentId + ", " + employerAssignmentId + ", 'RESOLVED') RETURNING id");
             long claimLineId = insert(c, "INSERT INTO claim_lines (claim_id, service_code, quantity, "
                     + "unit_price, total_price) VALUES (" + claimId + ", 'SVC-" + s
                     + "', 1, 100.00, 100.00) RETURNING id");

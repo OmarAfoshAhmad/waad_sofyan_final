@@ -51,6 +51,9 @@ class FinancialSummaryPerProviderParityIntegrationTest extends PostgresIntegrati
     }
 
     private long employerId;
+    private long policyId;
+    private long policyAssignmentId;
+    private long employerAssignmentId;
     private long providerA;
     private long providerB;
     private long providerC;
@@ -68,7 +71,7 @@ class FinancialSummaryPerProviderParityIntegrationTest extends PostgresIntegrati
         employerId = jdbc.queryForObject(
                 "INSERT INTO employers (code, name, active) VALUES (?, ?, true) RETURNING id",
                 Long.class, "PAR-" + s, "جهة تكافؤ الملخص " + s);
-        long policyId = jdbc.queryForObject(
+        policyId = jdbc.queryForObject(
                 "INSERT INTO benefit_policies (name, policy_code, employer_id, start_date, end_date,"
                         + " annual_limit, default_coverage_percent, status, active)"
                         + " VALUES (?, ?, ?, ?, ?, 100000, 100, 'ACTIVE', true) RETURNING id",
@@ -79,6 +82,15 @@ class FinancialSummaryPerProviderParityIntegrationTest extends PostgresIntegrati
                         + " status, active) VALUES (?, ?, ?, ?, ?, 'ACTIVE', true) RETURNING id",
                 // chk_members_barcode_equals_card_number: the two must be identical.
                 Long.class, employerId, policyId, "عضو تكافؤ", "PAR-C-" + s, "PAR-C-" + s);
+        policyAssignmentId = jdbc.queryForObject(
+                "INSERT INTO member_policy_assignments (member_id, policy_id, assignment_start_date,"
+                        + " assignment_source) VALUES (?, ?, ?, 'MANUAL') RETURNING id",
+                Long.class, memberId, policyId, LocalDate.now().minusYears(1));
+        employerAssignmentId = jdbc.queryForObject(
+                "INSERT INTO member_employer_assignments (member_id, employer_id, assignment_start_date,"
+                        + " assignment_reason, assignment_source) VALUES (?, ?, ?, 'test', 'MANUAL')"
+                        + " RETURNING id",
+                Long.class, memberId, employerId, LocalDate.now().minusYears(1));
 
         // Three deliberately different shapes, so a mapper that mixes up two
         // columns cannot pass by coincidence.
@@ -114,11 +126,13 @@ class FinancialSummaryPerProviderParityIntegrationTest extends PostgresIntegrati
                 Long.class, memberId, providerId, date);
         jdbc.update("INSERT INTO claims (claim_number, member_id, provider_id, visit_id, service_date,"
                         + " requested_amount, approved_amount, refused_amount, net_provider_amount,"
-                        + " company_discount_amount, status, claim_context_code, active)"
-                        + " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OUTPATIENT', true)",
+                        + " company_discount_amount, status, claim_context_code, active, policy_id,"
+                        + " policy_assignment_id, employer_assignment_id, historical_context_status)"
+                        + " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OUTPATIENT', true, ?, ?, ?, 'RESOLVED')",
                 "CLM-PAR-" + UUID.randomUUID().toString().substring(0, 12),
                 memberId, providerId, visitId, date,
-                requested, approved, refused, netProvider, discount, status);
+                requested, approved, refused, netProvider, discount, status,
+                policyId, policyAssignmentId, employerAssignmentId);
     }
 
     @Test
