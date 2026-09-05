@@ -215,6 +215,28 @@ class CoverageEngineServiceTest {
     }
 
     @Test
+    @DisplayName("مضاعفات الحمل: سقف 1500 يطبق على إجمالي الفاتورة قبل تقسيم 75%")
+    void pregnancyComplicationsAmountLimitCapsEligibleGrossBeforeCopay() {
+        coveredByRule(62L, 75, false);
+        useLimits(limit(603L, "سقف مضاعفات الحمل", "1500.00", "0.00"));
+
+        List<CoverageResult> results = calculateBulk(List.of(
+                line("C-SECTION", "1650.00"),
+                line("VENTILATOR", "300.00")), EncounterType.INPATIENT);
+
+        assertMoney("1125.00", results.stream().map(CoverageResult::getCompanyShare)
+                .reduce(BigDecimal.ZERO, BigDecimal::add));
+        assertMoney("375.00", results.stream().map(CoverageResult::getPatientShare)
+                .reduce(BigDecimal.ZERO, BigDecimal::add));
+        assertMoney("450.00", results.stream().map(CoverageResult::getLimitRefused)
+                .reduce(BigDecimal.ZERO, BigDecimal::add));
+        assertMoney("1500.00", results.stream()
+                .map(result -> result.getUsageDetails().getApprovedAmountForLimit())
+                .reduce(BigDecimal.ZERO, BigDecimal::add));
+        assertEquals("ELIGIBLE_AMOUNT", results.get(1).getUsageDetails().getConsumptionBasis());
+    }
+
+    @Test
     @DisplayName("العمليات والإيواء: مثال سقف 15000 يمنع التجاوز")
     void inpatientAndSurgeryLimitStopsExcess() {
         coveredByRule(70L, 100, false);
