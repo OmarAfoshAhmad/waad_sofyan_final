@@ -27,11 +27,13 @@ import com.waad.tba.modules.member.service.MemberContextResolver;
 import com.waad.tba.modules.member.service.MemberDatedContext;
 import com.waad.tba.modules.providercontract.entity.ProviderContract;
 import com.waad.tba.modules.providercontract.entity.ProviderContractTerm;
+import com.waad.tba.modules.providercontract.dto.ProviderContractPricingItemResponseDto;
 import com.waad.tba.modules.providercontract.service.EffectiveProviderContractResolver;
 import com.waad.tba.modules.providercontract.service.ProviderContractPricingItemService;
 import com.waad.tba.modules.benefitpolicy.service.LimitBalanceReader;
 import com.waad.tba.modules.preauthorization.repository.PreAuthorizationRepository;
 import com.waad.tba.modules.preauthorization.entity.PreAuthorization;
+import com.waad.tba.modules.medicaldictionary.service.MedicalDictionaryNormalizer;
 
 @ExtendWith(MockitoExtension.class)
 class ClaimEntryContextServiceTest {
@@ -44,6 +46,7 @@ class ClaimEntryContextServiceTest {
     @Mock com.waad.tba.modules.provider.repository.ProviderServiceRepository providerServiceRepository;
     @Mock com.waad.tba.modules.medicaltaxonomy.repository.MedicalServiceRepository medicalServiceRepository;
     @Mock com.waad.tba.modules.medicaltaxonomy.repository.MedicalCategoryRepository medicalCategoryRepository;
+    @Spy MedicalDictionaryNormalizer searchNormalizer = new MedicalDictionaryNormalizer();
     // Real, over a mock repository: this screen only asks the member/employer
     // question, which never reaches the provider network table. A stub here
     // would let the check pass without actually checking.
@@ -218,5 +221,46 @@ class ClaimEntryContextServiceTest {
         var result = service.findEffectiveServices(7L, 8L, 9L, date, pageable);
 
         assertThat(result.getContent()).isEmpty();
+    }
+
+    @Test
+    void manualAmountServiceSearchNormalizesArabicVariants() {
+        LocalDate date = LocalDate.of(2025, 8, 12);
+        Employer employer = Employer.builder().id(9L).name("جهة أ").build();
+        ProviderContract contract = ProviderContract.builder().id(41L).contractCode("CON-A")
+                .contractNumber("2025-A").startDate(LocalDate.of(2025, 1, 1))
+                .endDate(LocalDate.of(2025, 12, 31)).build();
+        ProviderContractTerm terms = ProviderContractTerm.builder().id(42L).contract(contract).build();
+        var pageable = PageRequest.of(0, 50);
+
+        when(memberContextResolver.resolveForOrFail(7L, date)).thenReturn(new MemberDatedContext(
+                7L, date,
+                MemberEmployerAssignment.builder().id(101L).build(), employer,
+                MemberPolicyAssignment.builder().id(202L).build(),
+                BenefitPolicy.builder().id(31L).policyCode("POL-A").name("وثيقة أ")
+                        .status(BenefitPolicyStatus.ACTIVE).build()));
+        when(contractResolver.resolve(8L, 9L, date))
+                .thenReturn(new EffectiveProviderContractResolver.ResolvedContract(contract, terms));
+        when(pricingItemService.findEffectiveInContract(41L, date, "فاتوره تحاليل", pageable))
+                .thenReturn(new PageImpl<>(java.util.List.of()));
+        when(providerServiceRepository.findServiceCodesByProviderId(8L))
+                .thenReturn(java.util.List.of("SYS-LAB-INVOICE"));
+        var category = com.waad.tba.modules.medicaltaxonomy.entity.MedicalCategory.builder()
+                .id(88L).code("CAT-COV-DIAG-FEES").name("Diagnostics").nameAr("أشعة وتحاليل ورسوم أطباء").build();
+        when(medicalServiceRepository.findByPricingModeAndActiveTrue(
+                com.waad.tba.modules.medicaltaxonomy.enums.PricingMode.MANUAL_AMOUNT))
+                .thenReturn(java.util.List.of(
+                        com.waad.tba.modules.medicaltaxonomy.entity.MedicalService.builder()
+                                .id(601L).code("SYS-LAB-INVOICE").name("فاتورة تحاليل طبية")
+                                .categoryId(88L)
+                                .pricingMode(com.waad.tba.modules.medicaltaxonomy.enums.PricingMode.MANUAL_AMOUNT)
+                                .build()));
+        when(medicalCategoryRepository.findAllById(java.util.Set.of(88L)))
+                .thenReturn(java.util.List.of(category));
+
+        var result = service.findEffectiveServices(7L, 8L, 9L, date, "فاتوره تحاليل", pageable);
+
+        assertThat(result.getContent()).extracting(ProviderContractPricingItemResponseDto::getServiceCode)
+                .containsExactly("SYS-LAB-INVOICE");
     }
 }

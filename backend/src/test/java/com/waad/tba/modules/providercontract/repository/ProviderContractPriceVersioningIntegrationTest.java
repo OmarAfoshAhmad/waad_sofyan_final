@@ -88,6 +88,19 @@ class ProviderContractPriceVersioningIntegrationTest extends PostgresIntegration
                 .isEqualTo(new BigDecimal("55.00"));
     }
 
+    @Test
+    void effectiveSearchNormalizesArabicAlefAndTehMarbutaVariants() {
+        ProviderContract contract = createContract();
+        savePrice(contract, "SRV-RAD", "أشعة مقطعية", "44.00",
+                LocalDate.of(2026, 1, 1), LocalDate.of(2027, 1, 1));
+
+        var page = pricingRepository.searchEffectiveByContractId(
+                contract.getId(), LocalDate.of(2026, 5, 1), "اشعه", "اشعه",
+                org.springframework.data.domain.PageRequest.of(0, 10));
+
+        assertThat(page.getContent()).hasSize(1);
+    }
+
     private ProviderContract createContract() {
         String suffix = UUID.randomUUID().toString().substring(0, 8);
         Provider provider = providerRepository.save(Provider.builder()

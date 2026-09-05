@@ -21,6 +21,7 @@ import com.waad.tba.modules.medicaltaxonomy.entity.MedicalService;
 import com.waad.tba.modules.medicaltaxonomy.enums.PricingMode;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalCategoryRepository;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalServiceRepository;
+import com.waad.tba.modules.medicaldictionary.service.MedicalDictionaryNormalizer;
 import com.waad.tba.modules.provider.repository.ProviderServiceRepository;
 import org.springframework.data.domain.PageImpl;
 import java.util.ArrayList;
@@ -47,6 +48,7 @@ public class ClaimEntryContextService {
     private final ProviderServiceRepository providerServiceRepository;
     private final MedicalServiceRepository medicalServiceRepository;
     private final MedicalCategoryRepository medicalCategoryRepository;
+    private final MedicalDictionaryNormalizer searchNormalizer;
 
     @Transactional(readOnly = true)
     public ClaimEntryContextDto resolve(Long memberId, Long providerId,
@@ -129,12 +131,12 @@ public class ClaimEntryContextService {
             return List.of();
         }
 
-        String normalizedQuery = query == null ? "" : query.trim().toLowerCase();
+        String normalizedQuery = searchNormalizer.normalize(query);
         List<MedicalService> standardServices = medicalServiceRepository
                 .findByPricingModeAndActiveTrue(PricingMode.MANUAL_AMOUNT).stream()
                 .filter(service -> providerServiceCodes.contains(service.getCode()))
                 .filter(service -> normalizedQuery.isBlank()
-                        || service.getName().toLowerCase().contains(normalizedQuery)
+                        || searchNormalizer.normalize(service.getName()).contains(normalizedQuery)
                         || service.getCode().toLowerCase().contains(normalizedQuery))
                 .toList();
         if (standardServices.isEmpty()) {

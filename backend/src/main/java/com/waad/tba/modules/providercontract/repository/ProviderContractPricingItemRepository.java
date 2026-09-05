@@ -80,11 +80,13 @@ public interface ProviderContractPricingItemRepository extends JpaRepository<Pro
                      "AND (p.effectiveFrom IS NULL OR p.effectiveFrom <= :date) " +
                      "AND (p.effectiveTo IS NULL OR :date < p.effectiveTo) " +
                      "AND (LOWER(p.serviceCode) LIKE LOWER(CONCAT('%', :query, '%')) " +
-                     "OR LOWER(p.serviceName) LIKE LOWER(CONCAT('%', :query, '%')))")
+                     "OR REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(LOWER(p.serviceName), 'أ', 'ا'), 'إ', 'ا'), 'آ', 'ا'), 'ى', 'ي'), 'ة', 'ه'), 'ؤ', 'و'), 'ئ', 'ي'), 'ـ', '') LIKE CONCAT('%', :normalizedQuery, '%') " +
+                     "OR REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(LOWER(p.categoryName), 'أ', 'ا'), 'إ', 'ا'), 'آ', 'ا'), 'ى', 'ي'), 'ة', 'ه'), 'ؤ', 'و'), 'ئ', 'ي'), 'ـ', '') LIKE CONCAT('%', :normalizedQuery, '%'))")
        Page<ProviderContractPricingItem> searchEffectiveByContractId(
                      @Param("contractId") Long contractId,
                      @Param("date") LocalDate date,
                      @Param("query") String query,
+                     @Param("normalizedQuery") String normalizedQuery,
                      Pageable pageable);
 
        /**
