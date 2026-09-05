@@ -690,6 +690,132 @@ class PreAuthorizationDecisionBuilderIntegrationTest extends PostgresIntegration
                 .hasMessageContaining("حد أيام");
     }
 
+    // ── P1.12.1 characterization: gaps the inventory found, pinned as-is ──
+
+    /**
+     * PA6 — today's PREAUTH_RESERVATION math has no "own reservation" concept
+     * at all: re-deciding a preauth against a hold IT ITSELF already placed
+     * treats that hold exactly like a foreign one, subtracted from what is
+     * reservable and never added back. Adding it back is
+     * {@code BucketLimitSnapshotAdapter.buildForPreauthorizedClaim}'s CLAIM
+     * CONVERSION formula -- a different consumer this builder never calls.
+     * Characterized, not asserted as correct: this is exactly the behavior
+     * P1.12's canonical PREAUTH_RESERVATION mode must preserve.
+     */
+    @Test
+    void reRunningTheBuilderTreatsItsOwnPriorHoldExactlyLikeAForeignOne() {
+        Scenario sc = scenario("1000", null, "1000.00", 100, null, LocalDate.now().plusDays(14));
+
+        // The SAME preauth already holds 600 against its OWN bucket -- forged
+        // directly against the ledger, without going through
+        // PreAuthReservationLedgerService, to isolate the BUILDER's own
+        // arithmetic from the ledger's write path.
+        jdbc.update("INSERT INTO benefit_bucket_consumptions (policy_id, member_id, bucket_id, preauth_id, "
+                + "preauth_line_id, period_start, period_end, approved_amount, times_consumed, "
+                + "calculation_version, idempotency_key, status, source_type, limit_scope, "
+                + "member_policy_assignment_id, created_at) VALUES ("
+                + "?, ?, ?, ?, (SELECT id FROM pre_authorization_lines WHERE pre_authorization_id = ?), "
+                + "DATE_TRUNC('year', CURRENT_DATE)::date, "
+                + "(DATE_TRUNC('year', CURRENT_DATE) + INTERVAL '1 year - 1 day')::date, "
+                + "600.00, 0, 1, ?, 'RESERVED', 'PREAUTH', 'BUCKET', "
+                + "(SELECT id FROM member_policy_assignments WHERE member_id = " + sc.memberId()
+                + " ORDER BY id LIMIT 1), now())",
+                sc.policyId(), sc.memberId(), sc.bucketId(), sc.preauthId(), sc.preauthId(), "SELF-" + suffix());
+
+        PreAuthorizationDecision decision = builder.build(sc.preauthId(), 1);
+        var bucketHold = decision.lines().get(0).limitHolds().stream()
+                .filter(h -> "BUCKET".equals(h.limitScope())).findFirst().orElseThrow();
+
+        assertThat(bucketHold.reservedBefore()).isEqualByComparingTo("600.00");
+        assertThat(bucketHold.reservableAvailableBefore())
+                .as("this preauth's OWN prior hold is subtracted, never added back")
+                .isEqualByComparingTo("400.00");
+        assertThat(decision.companyShareTotal()).isEqualByComparingTo("400.00");
+    }
+
+    /**
+     * PA7 — a bucket whose {@code policy_id} does not match the requested
+     * policy (a data-corruption shape that should never arise in practice)
+     * is refused today by {@code ApplicableLimitResolver}, reached
+     * TRANSITIVELY through {@code EffectiveLimitResolver} -- as a raw,
+     * untranslated {@code IllegalStateException}, not a
+     * {@code BusinessRuleException}. Characterized as today's EXTERNAL
+     * outcome, not as correct: CLAUDE.md's error policy (§11) forbids
+     * leaking technical exception types to a caller, and the canonical
+     * {@code UnifiedLimitResolver} already returns a structured
+     * {@code BLOCKED} decision for the identical condition instead.
+     */
+    @Test
+    void aBucketBelongingToADifferentPolicyLeaksARawTechnicalException() {
+        Scenario sc = scenario("1000000", null, "500.00", 80, null, LocalDate.now().plusDays(14));
+
+        Long otherEmployerId = jdbc.queryForObject("INSERT INTO employers (code, name) VALUES ('DB-OTHER-"
+                + suffix() + "', 'Other Co') RETURNING id", Long.class);
+        Long otherPolicyId = jdbc.queryForObject("INSERT INTO benefit_policies (name, policy_code, employer_id, "
+                + "annual_limit, default_coverage_percent, start_date, end_date, status, active) VALUES "
+                + "('Other Policy', 'OTHER-" + suffix() + "', " + otherEmployerId + ", 1000000, 80, "
+                + "CURRENT_DATE - 60, CURRENT_DATE + 365, 'ACTIVE', true) RETURNING id", Long.class);
+
+        // Data corruption: the bucket the rule links now belongs to a
+        // DIFFERENT policy than the one this pre-authorization is on.
+        jdbc.update("UPDATE benefit_limit_buckets SET policy_id = ? WHERE id = ?", otherPolicyId, sc.bucketId());
+
+        assertThatThrownBy(() -> builder.build(sc.preauthId(), 1))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("BUCKET_POLICY_MISMATCH");
+    }
+
+    /**
+     * PA10 — the occurrence dimension's own "before" balances
+     * ({@code timesLimit}/{@code committedTimesBefore}/
+     * {@code reservedTimesBefore}/{@code actualRemainingTimesBefore}/
+     * {@code reservableTimesBefore}) were never pinned to a concrete value
+     * anywhere in this suite -- only the DECIDED {@code timesReserved} was.
+     * Without these, a times-limited hold cannot be reconstructed after the
+     * fact the way an amount-limited one already can (see
+     * {@code everyHoldRecordsBothRemainingFiguresAndTheyDiffer}).
+     */
+    @Test
+    void everyHoldRecordsBothOccurrenceRemainingFiguresAndTheyDiffer() {
+        Scenario sc = scenario("1000000", null, "1000.00", 80, null, LocalDate.now().plusDays(14));
+        timesLimit(sc, 10, "EACH_UNIT");
+        commitTimes(sc, 3); // 3 of 10 already committed
+
+        // A foreign approval already holds 2 more.
+        Long otherPreauth = jdbc.queryForObject("INSERT INTO pre_authorizations (member_id, status, "
+                + "request_date, created_at, updated_at) VALUES (" + sc.memberId()
+                + ", 'APPROVED', now(), now(), now()) RETURNING id", Long.class);
+        Long otherLine = jdbc.queryForObject("INSERT INTO pre_authorization_lines (pre_authorization_id, "
+                + "requested_amount) VALUES (" + otherPreauth + ", 0.00) RETURNING id", Long.class);
+        jdbc.update("INSERT INTO benefit_bucket_consumptions (policy_id, member_id, bucket_id, preauth_id, "
+                + "preauth_line_id, period_start, period_end, approved_amount, times_consumed, "
+                + "calculation_version, idempotency_key, status, source_type, limit_scope, "
+                + "member_policy_assignment_id, created_at) VALUES ("
+                + "?, ?, ?, ?, ?, DATE_TRUNC('year', CURRENT_DATE)::date, "
+                + "(DATE_TRUNC('year', CURRENT_DATE) + INTERVAL '1 year - 1 day')::date, "
+                + "0.00, 2, 1, ?, 'RESERVED', 'PREAUTH', 'BUCKET', "
+                + "(SELECT id FROM member_policy_assignments WHERE member_id = " + sc.memberId()
+                + " ORDER BY id LIMIT 1), now())",
+                sc.policyId(), sc.memberId(), sc.bucketId(), otherPreauth, otherLine, "TIMES-HOLD-" + suffix());
+        jdbc.update("UPDATE pre_authorization_lines SET requested_quantity = 4, approved_quantity = 4 "
+                + "WHERE pre_authorization_id = ?", sc.preauthId());
+
+        PreAuthorizationDecision decision = builder.build(sc.preauthId(), 1);
+        var bucketHold = decision.lines().get(0).limitHolds().stream()
+                .filter(h -> "BUCKET".equals(h.limitScope())).findFirst().orElseThrow();
+
+        // 10 limit, 3 committed, 2 reserved by another approval -> 7 actually
+        // remaining (nothing consumed yet reduces it beyond the 3 committed),
+        // but only 5 is reservable. Recording only one of the five would make
+        // the times decision as unreproducible as the amount side would be
+        // without both of ITS "before" figures.
+        assertThat(bucketHold.timesLimit()).isEqualTo(10);
+        assertThat(bucketHold.committedTimesBefore()).isEqualTo(3);
+        assertThat(bucketHold.reservedTimesBefore()).isEqualTo(2);
+        assertThat(bucketHold.actualRemainingTimesBefore()).isEqualTo(7);
+        assertThat(bucketHold.reservableTimesBefore()).isEqualTo(5);
+    }
+
     /**
      * The import batch a seeded opening balance belongs to.
      *
