@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -105,6 +106,8 @@ class ClaimCountingLimitCharacterizationTest extends com.waad.tba.support.Postgr
     @Autowired private VisitRepository visitRepository;
     @Autowired private com.waad.tba.modules.rbac.repository.UserRepository userRepository;
     @Autowired private com.waad.tba.modules.benefitpolicy.service.BenefitBucketLedgerService ledgerService;
+    @org.springframework.test.context.bean.override.mockito.MockitoSpyBean
+    private BenefitConsumptionEntryWriter entryWriter;
 
     private String suffix;
     private Member member;
@@ -351,5 +354,89 @@ class ClaimCountingLimitCharacterizationTest extends com.waad.tba.support.Postgr
                 "SELECT COUNT(*) FROM benefit_bucket_consumptions WHERE claim_id = ?",
                 Long.class, claim.getId());
         assertThat(distinctKeys).as("no key is reused across movements").isEqualTo(allRows);
+    }
+
+    // ── P1.11.5: Reversal reads the ORIGINAL committed entry, never the
+    // current policy/bucket configuration ────────────────────────────────
+
+    @Test
+    @WithMockUser(username = "admin", roles = {"SUPER_ADMIN"})
+    @DisplayName("RV5 — reversal reads the ORIGINAL committed amount, not the bucket's CURRENT (since changed) configuration")
+    void reversalUsesTheHistoricalEntryNotTheCurrentBucketConfiguration() {
+        BenefitLimitBucket mixed = bucket("hist", "1000000", 9, CountingMethod.EACH_UNIT,
+                null, BenefitScopeType.CATEGORY, true);
+        ClaimViewDto claim = approveClaim(1, 3, "100.00");
+        assertThat(amountOn(claim.getId(), mixed.getId())).isEqualByComparingTo("300.00");
+        assertThat(timesOn(claim.getId(), mixed.getId())).isEqualTo(3);
+
+        // The policy changed AFTER this claim committed -- a smaller limit,
+        // a different counting method. A reversal that re-derived from the
+        // bucket's current shape instead of the original row would compute
+        // something new here; it must not.
+        jdbc.update("UPDATE benefit_limit_buckets SET amount_limit = 5, times_limit = 1, "
+                + "counting_method = 'EACH_LINE' WHERE id = ?", mixed.getId());
+
+        new TransactionTemplate(transactionManager)
+                .executeWithoutResult(status -> ledgerService.reverseClaim(claim.getId()));
+
+        BigDecimal reversedAmount = jdbc.queryForObject(
+                "SELECT COALESCE(SUM(approved_amount), 0) FROM benefit_bucket_consumptions "
+                        + "WHERE claim_id = ? AND bucket_id = ? AND status = 'REVERSED'",
+                BigDecimal.class, claim.getId(), mixed.getId());
+        Integer reversedTimes = jdbc.queryForObject(
+                "SELECT COALESCE(SUM(times_consumed), 0) FROM benefit_bucket_consumptions "
+                        + "WHERE claim_id = ? AND bucket_id = ? AND status = 'REVERSED'",
+                Integer.class, claim.getId(), mixed.getId());
+        assertThat(reversedAmount).as("reverses the ORIGINAL 300, not something derived from the new limit=5")
+                .isEqualByComparingTo("300.00");
+        assertThat(reversedTimes).as("reverses the ORIGINAL 3 occurrences, not the new EACH_LINE=1 shape")
+                .isEqualTo(3);
+    }
+
+    @Test
+    @WithMockUser(username = "admin", roles = {"SUPER_ADMIN"})
+    @DisplayName("RV7 — multi-target reversal is atomic: a failure reversing the SECOND bucket rolls back the first too")
+    void multiTargetReversalRollsBackEntirelyOnFailure() {
+        BenefitLimitBucket parent = bucket("rv7parent", null, 5, CountingMethod.EACH_LINE,
+                null, BenefitScopeType.GROUP, false);
+        BenefitLimitBucket child = bucket("rv7child", "1000000", null, CountingMethod.EACH_LINE,
+                parent, BenefitScopeType.CATEGORY, true);
+        ClaimViewDto claim = approveClaim(1, 1, "100.00");
+        assertThat(amountOn(claim.getId(), child.getId())).isEqualByComparingTo("100.00");
+        assertThat(timesOn(claim.getId(), parent.getId())).isEqualTo(1);
+
+        // Injected on the writer P1.11.0 confirmed is the SOLE append point
+        // for a reversal -- the one place a failure can be placed without
+        // inventing a second one. It fires on whichever bucket the loop
+        // reaches (child or parent; iteration order is not the point) --
+        // what matters is that ANY failure mid-loop leaves NEITHER
+        // compensating movement standing, not just the one that failed.
+        //
+        // appendClaimReversal is @Transactional(MANDATORY) -- even Mockito's
+        // own doThrow().when(spy) setup call reaches the real proxy, so the
+        // stubbing call itself needs an active transaction (never committed;
+        // only used to register the stub) -- see P1.11.4's identical finding.
+        new TransactionTemplate(transactionManager).executeWithoutResult(status ->
+                org.mockito.Mockito.doThrow(new RuntimeException("injected failure reversing a bucket"))
+                        .when(entryWriter).appendClaimReversal(
+                                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                                org.mockito.ArgumentMatchers.anyInt(), org.mockito.ArgumentMatchers.anyString(),
+                                org.mockito.ArgumentMatchers.any()));
+
+        org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class,
+                () -> new TransactionTemplate(transactionManager)
+                        .executeWithoutResult(status -> ledgerService.reverseClaim(claim.getId())));
+
+        // Neither reversal survives: the child's own compensating movement
+        // (which the loop wrote BEFORE hitting the parent's failure) must
+        // not remain committed on its own -- the whole attempt is one
+        // transaction.
+        long reversalRows = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM benefit_bucket_consumptions WHERE claim_id = ? AND status = 'REVERSED'",
+                Long.class, claim.getId());
+        assertThat(reversalRows).as("no partial reversal survives a mid-loop failure").isZero();
+        assertThat(amountOn(claim.getId(), child.getId()))
+                .as("the child's original commit is untouched, not half-reversed")
+                .isEqualByComparingTo("100.00");
     }
 }
