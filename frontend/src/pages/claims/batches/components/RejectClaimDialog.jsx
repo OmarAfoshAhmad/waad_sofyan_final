@@ -75,7 +75,7 @@ export function RejectClaimDialog({
               <FormControlLabel
                 value="full"
                 control={<Radio size="small" color="error" />}
-                label={<Typography sx={{ fontSize: '0.85rem', fontWeight: 600 }}>رفض كلي (حصة الشركة كاملاً)</Typography>}
+                label={<Typography sx={{ fontSize: '0.85rem', fontWeight: 600 }}>رفض كلي (التزام الشركة كاملاً)</Typography>}
               />
               <FormControlLabel
                 value="partial"
@@ -89,11 +89,11 @@ export function RejectClaimDialog({
                 fullWidth
                 size="small"
                 type="number"
-                label={`مبلغ الرفض من حصة الشركة (الحد الأقصى: ${(currentLine?.byCompany ?? 0).toFixed(2)} د.ل)`}
+                label={`مبلغ الرفض من التزام الشركة (الحد الأقصى: ${(currentLine?.byCompany ?? 0).toFixed(2)} د.ل)`}
                 value={manualRefusedAmountInput}
                 onChange={(e) => onManualRefusedAmountChange(e.target.value)}
                 inputProps={{ min: 0.01, max: currentLine?.byCompany ?? 0, step: 0.01 }}
-                helperText="يُطبَّق على حصة الشركة فقط — حصة المستفيد لا تتأثر"
+                helperText="يُطبَّق على التزام الشركة فقط — التزام المستفيد لا يتأثر"
                 error={parseFloat(manualRefusedAmountInput) > (currentLine?.byCompany ?? 0)}
                 sx={{ mt: 1.5 }}
                 autoFocus

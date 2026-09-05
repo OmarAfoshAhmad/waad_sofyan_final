@@ -33,8 +33,8 @@ import {
 import { isValidClaimQuantity, lineAcceptedAmount } from '../claim-entry-validation';
 
 const inlineSx = {
-  '& .MuiInputBase-root': { fontSize: '0.85rem', fontWeight: 400 },
-  '& input': { textAlign: 'center', py: 0.5 }
+  '& .MuiInputBase-root': { fontSize: '0.8rem', fontWeight: 400 },
+  '& input': { textAlign: 'center', py: 0.35 }
 };
 
 export const ClaimLineRow = ({
@@ -105,6 +105,9 @@ export const ClaimLineRow = ({
       <TableRow
         id={`claim-line-row-${idx}`}
         sx={{
+          '& .MuiTableCell-root': {
+            py: 0.55
+          },
           bgcolor: line.rejected
             ? alpha(theme.palette.error.main, 0.05)
             : line.notCovered
@@ -450,11 +453,6 @@ export const ClaimLineRow = ({
             </Typography>
           </TableCell>
         )}
-        <TableCell align="center">
-          <Typography variant="body2" sx={{ fontSize: '1.0rem', fontWeight: 800, color: 'primary.main' }}>
-            {line.total?.toFixed(2)}
-          </Typography>
-        </TableCell>
         <TableCell align="left">
           <Stack direction="row" spacing={0} justifyContent="flex-start" sx={{ '& .MuiIconButton-root': { p: 0.5 } }}>
             {onOpenClassificationReview && (
@@ -514,7 +512,7 @@ export const ClaimLineRow = ({
       </TableRow>
       {line.rejected && (
         <TableRow sx={{ bgcolor: alpha(theme.palette.error.main, 0.02) }}>
-          <TableCell colSpan={13} sx={{ py: 0.5 }}>
+          <TableCell colSpan={12} sx={{ py: 0.4 }}>
             <Typography variant="caption" color="error" fontWeight={500} sx={{ fontSize: '0.75rem', px: '1.0rem' }}>
               🚫 رفض كلي — {line.rejectionReason}
             </Typography>
@@ -523,7 +521,7 @@ export const ClaimLineRow = ({
       )}
       {!line.rejected && hasFinancialRefusal && (
         <TableRow sx={{ bgcolor: alpha(theme.palette.warning.main, 0.03) }}>
-          <TableCell colSpan={13} sx={{ py: 0.5 }}>
+          <TableCell colSpan={12} sx={{ py: 0.4 }}>
             <Typography variant="caption" color="warning.dark" fontWeight={500} sx={{ fontSize: '0.75rem', px: '1.0rem' }}>
               ⚠️ {financialRefusalLabel}: {effectiveFinancialRefusal.toFixed(2)} د.ل — {financialRefusalText}
             </Typography>
@@ -532,7 +530,7 @@ export const ClaimLineRow = ({
       )}
       {line.usageExceeded && !line.rejected && (
         <TableRow sx={{ bgcolor: alpha(theme.palette.warning.main, 0.05) }}>
-          <TableCell colSpan={13} sx={{ py: 0.5 }}>
+          <TableCell colSpan={12} sx={{ py: 0.4 }}>
             <Typography
               variant="caption"
               color={line.usageExhausted ? 'error.main' : 'warning.dark'}
@@ -553,7 +551,7 @@ export const ClaimLineRow = ({
                   const basis =
                     line.usageDetails.consumptionBasis === 'ELIGIBLE_AMOUNT'
                       ? 'إجمالي الخدمة المؤهلة قبل التحمل'
-                      : 'حصة الشركة بعد التحمل';
+                      : 'التزام الشركة بعد التحمل';
                   return ` (${basis}: مستخدم قبل السطر ${prev.toFixed(2)} + مطلوب ${curr.toFixed(2)} = ${total.toFixed(2)}؛ المقبول ${accepted.toFixed(2)} من حد ${limit.toFixed(2)} د.ل)`;
                 })()}
             </Typography>
@@ -562,7 +560,7 @@ export const ClaimLineRow = ({
       )}
       {line.requiresPreApproval && !line.rejected && (
         <TableRow sx={{ bgcolor: alpha(theme.palette.info.main, 0.05) }}>
-          <TableCell colSpan={13} sx={{ py: 0.5 }}>
+          <TableCell colSpan={12} sx={{ py: 0.4 }}>
             <Typography
               variant="caption"
               color="info.dark"
@@ -576,7 +574,7 @@ export const ClaimLineRow = ({
       )}
       {line.notCovered && !line.coveragePending && !line.rejected && (
         <TableRow sx={{ bgcolor: alpha(theme.palette.error.main, 0.07) }}>
-          <TableCell colSpan={13} sx={{ py: 0.5 }}>
+          <TableCell colSpan={12} sx={{ py: 0.4 }}>
             <Typography
               variant="caption"
               color="error.main"

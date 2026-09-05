@@ -73,9 +73,6 @@ import {
   Edit as EditIcon,
   Check as CheckIcon,
   ExpandMore as ExpandMoreIcon,
-  MedicalServices as MedicalServicesIcon,
-  LocalHospital as InpatientIcon,
-  Healing as OutpatientIcon,
   UnfoldLess as CompactIcon,
   UnfoldMore as ExpandIcon
 } from '@mui/icons-material';
@@ -164,7 +161,7 @@ const hasAcceptedCoverageDecision = (line) =>
 const inlineSx = {
   '& .MuiInput-root::before': { display: 'none' },
   '& .MuiInput-root::after': { borderBottomColor: '#1b5e20', borderBottomWidth: 1 },
-  '& input': { fontSize: '0.8rem', fontWeight: 500, textAlign: 'center' }
+  '& input': { fontSize: '0.78rem', fontWeight: 500, textAlign: 'center', py: 0.35 }
 };
 
 const TH = ({ children, align = 'center', w, sx: sxOver = {} }) => {
@@ -177,8 +174,8 @@ const TH = ({ children, align = 'center', w, sx: sxOver = {} }) => {
         color: theme.palette.primary.dark,
         fontWeight: 700,
         fontSize: '0.8rem',
-        py: 1,
-        px: '0.75rem',
+        py: 0.65,
+        px: '0.55rem',
         whiteSpace: 'nowrap',
         borderBottom: `2px solid ${alpha(theme.palette.primary.main, 0.3)}`,
         borderRight: `1px solid ${alpha(theme.palette.primary.main, 0.1)}`,
@@ -1488,24 +1485,6 @@ export default function ClaimBatchEntry() {
     [lines, encounterType]
   );
 
-  const contractedContextCounts = useMemo(() => {
-    return contractedServiceOptionsRaw.reduce(
-      (acc, service) => {
-        acc.total += 1;
-        const serviceContext = getServiceContext(service);
-        if (serviceContext === 'INPATIENT') {
-          acc.inpatient += 1;
-        } else if (serviceContext === 'OUTPATIENT') {
-          acc.outpatient += 1;
-        } else {
-          acc.any += 1;
-        }
-        return acc;
-      },
-      { total: 0, outpatient: 0, inpatient: 0, any: 0 }
-    );
-  }, [contractedServiceOptionsRaw]);
-
   const totals = useMemo(() => {
     return lines.reduce(
       (acc, l) => ({
@@ -1691,7 +1670,7 @@ export default function ClaimBatchEntry() {
       };
 
       if (rejectionMode === 'full') {
-        triggerConfirm('تأكيد رفض البند', 'هل تريد رفض هذا البند بالكامل (حصة الشركة ستصبح صفراً)؟', doUpdate);
+        triggerConfirm('تأكيد رفض البند', 'هل تريد رفض هذا البند بالكامل (التزام الشركة سيصبح صفراً)؟', doUpdate);
       } else {
         doUpdate();
       }
@@ -2225,9 +2204,22 @@ export default function ClaimBatchEntry() {
                 <Typography variant="caption" noWrap sx={{ minWidth: 0 }}>
                   {member?.fullName || 'لم يحدد مستفيد'} · {serviceDate || 'بلا تاريخ'} · {diagnosis?.trim() || 'بلا تشخيص'}
                 </Typography>
-                <Button size="small" startIcon={<ExpandIcon />} onClick={() => setHeaderExpanded(true)} sx={{ flexShrink: 0 }}>
-                  إظهار بيانات المطالبة
-                </Button>
+                <Stack direction="row" spacing={0.75} alignItems="center" sx={{ flexShrink: 0 }}>
+                  <Chip
+                    size="small"
+                    variant="outlined"
+                    label={`${lines.length} بند`}
+                    sx={{ height: 24, fontWeight: 700, fontSize: '0.72rem', borderColor: alpha(theme.palette.primary.main, 0.3) }}
+                  />
+                  <Tooltip title="إظهار/إخفاء الأعمدة">
+                    <IconButton size="small" onClick={handleOpenCols}>
+                      <ViewColumnIcon fontSize="small" color="primary" />
+                    </IconButton>
+                  </Tooltip>
+                  <Button size="small" startIcon={<ExpandIcon />} onClick={() => setHeaderExpanded(true)} sx={{ flexShrink: 0 }}>
+                    إظهار بيانات المطالبة
+                  </Button>
+                </Stack>
               </Box>
             )}
             <Collapse in={headerExpanded} timeout={160} unmountOnExit>
@@ -2263,7 +2255,16 @@ export default function ClaimBatchEntry() {
                   t={t}
                   showValidationErrors={showValidationErrors}
                 />
-                <Box sx={{ mt: 0.5 }}>
+                <Box
+                  sx={{
+                    mt: 0.5,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 1,
+                    flexWrap: 'wrap'
+                  }}
+                >
                   <ClaimAdditionalDetails
                     complaint={complaint}
                     setComplaint={setComplaint}
@@ -2275,14 +2276,65 @@ export default function ClaimBatchEntry() {
                     doctorName={doctorName}
                     setDoctorName={setDoctorName}
                   />
-                </Box>
-                <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 0.25 }}>
-                  <Button size="small" startIcon={<CompactIcon />} onClick={() => setHeaderExpanded(false)}>
-                    توسيع مساحة إدخال البنود
-                  </Button>
+                  <Stack direction="row" spacing={1} alignItems="center" sx={{ mr: 'auto' }}>
+                    <Chip
+                      size="small"
+                      variant="outlined"
+                      label={`${lines.length} بند`}
+                      sx={{ height: 26, fontWeight: 700, fontSize: '0.75rem', borderColor: alpha(theme.palette.primary.main, 0.3) }}
+                    />
+                    <Tooltip title="إظهار/إخفاء الأعمدة">
+                      <IconButton size="small" onClick={handleOpenCols}>
+                        <ViewColumnIcon fontSize="small" color="primary" />
+                      </IconButton>
+                    </Tooltip>
+                    <Button size="small" startIcon={<CompactIcon />} onClick={() => setHeaderExpanded(false)}>
+                      توسيع مساحة إدخال البنود
+                    </Button>
+                  </Stack>
                 </Box>
               </Box>
             </Collapse>
+            <Menu anchorEl={anchorElCols} open={Boolean(anchorElCols)} onClose={handleCloseCols}>
+              <MenuItem onClick={() => handleToggleColumn('coverage')}>
+                <ListItemIcon>
+                  <Checkbox checked={visibleColumns.coverage} size="small" />
+                </ListItemIcon>
+                <ListItemText primary="التحمل %" />
+              </MenuItem>
+              <MenuItem onClick={() => handleToggleColumn('benefitLimit')}>
+                <ListItemIcon>
+                  <Checkbox checked={visibleColumns.benefitLimit} size="small" />
+                </ListItemIcon>
+                <ListItemText primary="سقف المنفعة" />
+              </MenuItem>
+              <MenuItem onClick={() => handleToggleColumn('remainingLimit')}>
+                <ListItemIcon>
+                  <Checkbox checked={visibleColumns.remainingLimit} size="small" />
+                </ListItemIcon>
+                <ListItemText primary="المتبقي من السقف" />
+              </MenuItem>
+              <MenuItem onClick={() => handleToggleColumn('refused')}>
+                <ListItemIcon>
+                  <Checkbox checked={visibleColumns.refused} size="small" />
+                </ListItemIcon>
+                <ListItemText primary="المرفوض" />
+              </MenuItem>
+              {!isReviewer && (
+                <MenuItem onClick={() => handleToggleColumn('companyShare')}>
+                  <ListItemIcon>
+                    <Checkbox checked={visibleColumns.companyShare} size="small" />
+                  </ListItemIcon>
+                  <ListItemText primary="التزام الشركة" />
+                </MenuItem>
+              )}
+              <MenuItem onClick={() => handleToggleColumn('patientShare')}>
+                <ListItemIcon>
+                  <Checkbox checked={visibleColumns.patientShare} size="small" />
+                </ListItemIcon>
+                <ListItemText primary="التزام المستفيد" />
+              </MenuItem>
+            </Menu>
 
             <Divider />
 
@@ -2318,116 +2370,7 @@ export default function ClaimBatchEntry() {
                 <Typography variant="subtitle2" fontWeight={600} color="primary" sx={{ fontSize: '0.85rem' }}>
                   {t('claimEntry.serviceLines')}
                 </Typography>
-                <Chip
-                  size="small"
-                  variant="outlined"
-                  label={`${lines.length} بند`}
-                  sx={{ fontWeight: 400, fontSize: '0.75rem', borderColor: alpha(theme.palette.primary.main, 0.3) }}
-                />
-                <Chip
-                  size="small"
-                  icon={<MedicalServicesIcon sx={{ fontSize: '0.95rem !important' }} />}
-                  label={`إجمالي الخدمات ${contractedContextCounts.total}`}
-                  sx={{
-                    fontWeight: 800,
-                    fontSize: '0.72rem',
-                    color: theme.palette.primary.dark,
-                    bgcolor: alpha(theme.palette.primary.main, 0.1),
-                    borderColor: alpha(theme.palette.primary.main, 0.4),
-                    '& .MuiChip-icon': { color: theme.palette.primary.main }
-                  }}
-                  variant="outlined"
-                />
-                <Chip
-                  size="small"
-                  icon={<OutpatientIcon sx={{ fontSize: '0.95rem !important' }} />}
-                  label={`عيادات خارجية ${contractedContextCounts.outpatient}`}
-                  sx={{
-                    fontWeight: 700,
-                    fontSize: '0.72rem',
-                    color: theme.palette.success.dark,
-                    bgcolor: alpha(theme.palette.success.main, 0.1),
-                    borderColor: alpha(theme.palette.success.main, 0.35),
-                    '& .MuiChip-icon': { color: theme.palette.success.main }
-                  }}
-                  variant="outlined"
-                />
-                <Chip
-                  size="small"
-                  icon={<InpatientIcon sx={{ fontSize: '0.95rem !important' }} />}
-                  label={`إيواء ${contractedContextCounts.inpatient}`}
-                  sx={{
-                    fontWeight: 700,
-                    fontSize: '0.72rem',
-                    color: theme.palette.info.dark,
-                    bgcolor: alpha(theme.palette.info.main, 0.1),
-                    borderColor: alpha(theme.palette.info.main, 0.35),
-                    '& .MuiChip-icon': { color: theme.palette.info.main }
-                  }}
-                  variant="outlined"
-                />
-                {contractedContextCounts.any > 0 && (
-                  <Chip
-                    size="small"
-                    label={`تغطية عامة ${contractedContextCounts.any}`}
-                    sx={{
-                      fontWeight: 700,
-                      fontSize: '0.72rem',
-                      color: theme.palette.warning.dark,
-                      bgcolor: alpha(theme.palette.warning.main, 0.12),
-                      borderColor: alpha(theme.palette.warning.main, 0.4)
-                    }}
-                    variant="outlined"
-                  />
-                )}
               </Stack>
-              <Box>
-                <Tooltip title="إظهار/إخفاء الأعمدة">
-                  <IconButton size="small" onClick={handleOpenCols}>
-                    <ViewColumnIcon fontSize="small" color="primary" />
-                  </IconButton>
-                </Tooltip>
-                <Menu anchorEl={anchorElCols} open={Boolean(anchorElCols)} onClose={handleCloseCols}>
-                  <MenuItem onClick={() => handleToggleColumn('coverage')}>
-                    <ListItemIcon>
-                      <Checkbox checked={visibleColumns.coverage} size="small" />
-                    </ListItemIcon>
-                    <ListItemText primary="التحمل %" />
-                  </MenuItem>
-                  <MenuItem onClick={() => handleToggleColumn('benefitLimit')}>
-                    <ListItemIcon>
-                      <Checkbox checked={visibleColumns.benefitLimit} size="small" />
-                    </ListItemIcon>
-                    <ListItemText primary="سقف المنفعة" />
-                  </MenuItem>
-                  <MenuItem onClick={() => handleToggleColumn('remainingLimit')}>
-                    <ListItemIcon>
-                      <Checkbox checked={visibleColumns.remainingLimit} size="small" />
-                    </ListItemIcon>
-                    <ListItemText primary="المتبقي من السقف" />
-                  </MenuItem>
-                  <MenuItem onClick={() => handleToggleColumn('refused')}>
-                    <ListItemIcon>
-                      <Checkbox checked={visibleColumns.refused} size="small" />
-                    </ListItemIcon>
-                    <ListItemText primary="المرفوض" />
-                  </MenuItem>
-                  {!isReviewer && (
-                    <MenuItem onClick={() => handleToggleColumn('companyShare')}>
-                      <ListItemIcon>
-                        <Checkbox checked={visibleColumns.companyShare} size="small" />
-                      </ListItemIcon>
-                      <ListItemText primary="حصة الشركة" />
-                    </MenuItem>
-                  )}
-                  <MenuItem onClick={() => handleToggleColumn('patientShare')}>
-                    <ListItemIcon>
-                      <Checkbox checked={visibleColumns.patientShare} size="small" />
-                    </ListItemIcon>
-                    <ListItemText primary="حصة المشترك" />
-                  </MenuItem>
-                </Menu>
-              </Box>
             </Box>
 
             <Box
@@ -2539,17 +2482,14 @@ export default function ClaimBatchEntry() {
                         </TH>
                         {visibleColumns.companyShare && (
                           <TH align="center" w={105}>
-                            حصة الشركة
+                            التزام الشركة
                           </TH>
                         )}
                         {visibleColumns.patientShare && (
                           <TH align="center" w={105}>
-                            حصة المشترك
+                            التزام المستفيد
                           </TH>
                         )}
-                        <TH align="center" w={80}>
-                          المطلوب
-                        </TH>
                         <TH align="left" w={40}></TH>
                       </TableRow>
                     </TableHead>
@@ -2577,7 +2517,7 @@ export default function ClaimBatchEntry() {
                         />
                       ))}
                       <TableRow>
-                        <TableCell colSpan={12} sx={{ py: 0.5, borderRight: 'none' }}>
+                        <TableCell colSpan={12} sx={{ py: 0.35, borderRight: 'none' }}>
                           <Box sx={{ display: 'flex', justifyContent: 'flex-start' }}>
                             <Button
                               size="small"

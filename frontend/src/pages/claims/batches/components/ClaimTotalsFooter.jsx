@@ -47,7 +47,7 @@ export const ClaimTotalsFooter = ({
       sx={{
         flexShrink: 0,
         px: '1.25rem',
-        py: '0.75rem',
+        py: '0.55rem',
         borderTop: `2px solid ${showRejected ? theme.palette.error.light : theme.palette.divider}`,
         display: 'flex',
         gap: '1.0rem',
@@ -170,7 +170,7 @@ export const ClaimTotalsFooter = ({
         {visibleColumns.patientShare && (
           <Box sx={{ textAlign: 'center' }}>
             <Typography variant="caption" display="block" color="warning.dark" sx={{ fontSize: '0.8rem', fontWeight: 700 }}>
-              التزام المشترك
+              التزام المستفيد
             </Typography>
             <Typography variant="subtitle2" fontWeight={800} color="warning.dark" sx={{ fontSize: '1.15rem' }}>
               {totals.employee.toFixed(2)}
