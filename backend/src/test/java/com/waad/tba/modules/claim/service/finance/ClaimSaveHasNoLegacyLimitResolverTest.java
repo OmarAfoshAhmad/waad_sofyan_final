@@ -9,6 +9,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import com.waad.tba.modules.benefitpolicy.service.ApplicableLimitResolver;
+import com.waad.tba.modules.benefitpolicy.service.BenefitBucketLedgerService;
 import com.waad.tba.modules.benefitpolicy.service.EffectiveLimitResolver;
 import com.waad.tba.modules.benefitpolicy.service.LimitBalanceReader;
 
@@ -24,6 +25,16 @@ import com.waad.tba.modules.benefitpolicy.service.LimitBalanceReader;
  * this run. PreAuth (untouched by P1.6, migrates in P1.12) still legitimately
  * depends on {@code EffectiveLimitResolver} elsewhere -- this test is scoped
  * to the claim-save path only.
+ *
+ * P1.11.6 extends the same guard to {@link BenefitBucketLedgerService}
+ * (the sole live consumption writer), EXCEPT for {@code LimitBalanceReader}:
+ * that dependency is legitimate there -- {@code validatePolicyAnnualLimit}
+ * reads the ledger's OWN already-committed general ceiling as a
+ * concurrency-safety re-check against a target the canonical decision
+ * already produced, never to re-decide what to consume. Forbidding the
+ * dependency itself would wrongly outlaw that legitimate use; the ledger's
+ * unit test ({@code cw1_canonicalTargetIsExecutedLiterally}) is what proves
+ * the CONSUMED figure itself never comes from it.
  */
 class ClaimSaveHasNoLegacyLimitResolverTest {
 
@@ -31,22 +42,33 @@ class ClaimSaveHasNoLegacyLimitResolverTest {
             EffectiveLimitResolver.class, ApplicableLimitResolver.class, LimitBalanceReader.class,
             MultiLineMultiBucketEngine.class);
 
+    private static final List<Class<?>> RETIRED_FOR_LEDGER_COMMIT = List.of(
+            EffectiveLimitResolver.class, ApplicableLimitResolver.class, MultiLineMultiBucketEngine.class);
+
     @Test
     @DisplayName("SMD4a — ClaimFinancialAdjudicationService has no constructor dependency on the retired limit-resolution stack")
     void adjudicationServiceHasNoLegacyDependency() {
-        assertNoConstructorParameterOfType(ClaimFinancialAdjudicationService.class);
+        assertNoConstructorParameterOfType(ClaimFinancialAdjudicationService.class, RETIRED_FOR_CLAIM_SAVE);
     }
 
     @Test
     @DisplayName("SMD4b — ClaimLimitSnapshotFactory has no constructor dependency on the retired limit-resolution stack")
     void snapshotFactoryHasNoLegacyDependency() {
-        assertNoConstructorParameterOfType(ClaimLimitSnapshotFactory.class);
+        assertNoConstructorParameterOfType(ClaimLimitSnapshotFactory.class, RETIRED_FOR_CLAIM_SAVE);
     }
 
-    private void assertNoConstructorParameterOfType(Class<?> target) {
+    @Test
+    @DisplayName("P1.11.6 — BenefitBucketLedgerService has no constructor dependency on "
+            + "EffectiveLimitResolver/ApplicableLimitResolver/MultiLineMultiBucketEngine "
+            + "(LimitBalanceReader stays: a legitimate safety re-check, not a re-decision)")
+    void ledgerHasNoLegacyResolutionDependency() {
+        assertNoConstructorParameterOfType(BenefitBucketLedgerService.class, RETIRED_FOR_LEDGER_COMMIT);
+    }
+
+    private void assertNoConstructorParameterOfType(Class<?> target, List<Class<?>> forbidden) {
         for (Constructor<?> constructor : target.getDeclaredConstructors()) {
             for (Class<?> paramType : constructor.getParameterTypes()) {
-                assertThat(RETIRED_FOR_CLAIM_SAVE).as(
+                assertThat(forbidden).as(
                         "%s must not depend on retired %s -- claim save must resolve limits exactly once, "
                                 + "through UnifiedLimitResolver/BucketLimitSnapshotAdapter only",
                         target.getSimpleName(), paramType.getSimpleName())

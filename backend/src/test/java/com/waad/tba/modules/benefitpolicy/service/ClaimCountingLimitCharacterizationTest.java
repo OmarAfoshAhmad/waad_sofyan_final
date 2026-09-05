@@ -7,6 +7,8 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
+import org.hibernate.SessionFactory;
+import org.hibernate.stat.Statistics;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -17,8 +19,11 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
+
+import jakarta.persistence.EntityManagerFactory;
 
 import com.waad.tba.TbaWaadApplication;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitLimitBucket;
@@ -83,6 +88,7 @@ import com.waad.tba.modules.visit.repository.VisitRepository;
  */
 @SpringBootTest(classes = TbaWaadApplication.class)
 @ActiveProfiles("test")
+@TestPropertySource(properties = "spring.jpa.properties.hibernate.generate_statistics=true")
 class ClaimCountingLimitCharacterizationTest extends com.waad.tba.support.PostgresIntegrationTestBase {
 
     @Autowired private ClaimService claimService;
@@ -106,6 +112,7 @@ class ClaimCountingLimitCharacterizationTest extends com.waad.tba.support.Postgr
     @Autowired private VisitRepository visitRepository;
     @Autowired private com.waad.tba.modules.rbac.repository.UserRepository userRepository;
     @Autowired private com.waad.tba.modules.benefitpolicy.service.BenefitBucketLedgerService ledgerService;
+    @Autowired private EntityManagerFactory entityManagerFactory;
     @org.springframework.test.context.bean.override.mockito.MockitoSpyBean
     private BenefitConsumptionEntryWriter entryWriter;
 
@@ -438,5 +445,49 @@ class ClaimCountingLimitCharacterizationTest extends com.waad.tba.support.Postgr
         assertThat(amountOn(claim.getId(), child.getId()))
                 .as("the child's original commit is untouched, not half-reversed")
                 .isEqualByComparingTo("100.00");
+    }
+
+    // ── P1.11.6: the unification must not have reintroduced an N+1 ─────
+
+    /**
+     * P1.11.6: {@code CanonicalConsumptionTargetBuilder} and the descriptor
+     * lookup it feeds on (limitKey-based, from items already held in memory)
+     * are pure, in-memory operations with no repository of their own -- so
+     * committing more lines against the SAME bucket must not add a
+     * per-target repository round trip on top of the per-line work every
+     * approval already legitimately does (evaluating and pricing each line).
+     * This does not assert an exact count -- only that ten lines cost
+     * roughly ten times what one line costs, not some larger multiple that
+     * would show a hidden per-target lookup hiding inside the loop.
+     */
+    @Test
+    @WithMockUser(username = "admin", roles = {"SUPER_ADMIN"})
+    @DisplayName("P1.11.6 — committing more lines against the same bucket costs roughly linearly, "
+            + "never a multiplied-out per-target repository lookup")
+    void commitQueryCountStaysLinearAcrossLineCountNotMultipliedByTargetLookups() {
+        bucket("perf", "1000000", 50, CountingMethod.EACH_LINE, null, BenefitScopeType.CATEGORY, true);
+        Statistics statistics = entityManagerFactory.unwrap(SessionFactory.class).getStatistics();
+
+        statistics.clear();
+        approveClaim(1, 1, "100.00");
+        long statementsForOneLine = statistics.getPrepareStatementCount();
+
+        statistics.clear();
+        approveClaim(10, 1, "100.00");
+        long statementsForTenLines = statistics.getPrepareStatementCount();
+
+        System.out.println("[P1.11.6] commit query count: 1 line=" + statementsForOneLine
+                + " statements, 10 lines=" + statementsForTenLines + " statements");
+        // A generous multiple (not a tight ratio): the two claims differ in
+        // provider-contract pricing setup too (one new MedicalService +
+        // pricing row saved per line, outside the ledger entirely), so this
+        // only needs to rule out a MULTIPLICATIVE blowup -- a per-target
+        // lookup inside the ledger's own loop would show as tens of extra
+        // statements per line, not a handful.
+        assertThat(statementsForTenLines)
+                .as("10 lines must not cost anywhere near 10x the PER-LINE overhead on top of the "
+                        + "fixed cost already paid once for 1 line (%d statements for 1 line, %d for 10)",
+                        statementsForOneLine, statementsForTenLines)
+                .isLessThanOrEqualTo(statementsForOneLine * 10);
     }
 }

@@ -260,6 +260,93 @@ class PreAuthConversionHappensOnceIntegrationTest extends PostgresIntegrationTes
         return new Scenario(preauthId, memberId, policyId, bucketId, visitId, serviceId);
     }
 
+    /**
+     * P1.11.6 / FG6 (the R4 gap deferred from P1.11.4): the SAME fixture as
+     * {@link #scenarioWithQuantity}, but the bucket caps BOTH amount and
+     * times at once -- the one shape that exercises AMOUNT+TIMES conversion
+     * together instead of each dimension in isolation.
+     */
+    private Scenario scenarioWithQuantityAndTimesLimit(String amountLimit, int timesLimit, String unitPrice,
+            int coveragePercent, int preauthQuantity) {
+        String s = suffix();
+        String requestedAmount = new BigDecimal(unitPrice).multiply(BigDecimal.valueOf(preauthQuantity))
+                .toPlainString();
+        Long employerId = jdbc.queryForObject("INSERT INTO employers (code, name) VALUES ('CV-" + s
+                + "', 'Convert Co " + s + "') RETURNING id", Long.class);
+        Long policyId = jdbc.queryForObject("INSERT INTO benefit_policies (name, policy_code, employer_id, "
+                + "annual_limit, default_coverage_percent, start_date, end_date, status, active) VALUES "
+                + "('CVP-" + s + "', 'CVPOL-" + s + "', " + employerId + ", 1000000, " + coveragePercent
+                + ", CURRENT_DATE - 60, CURRENT_DATE + 365, 'ACTIVE', true) RETURNING id", Long.class);
+        Long memberId = jdbc.queryForObject("INSERT INTO members (employer_id, full_name, benefit_policy_id, "
+                + "card_number, barcode, status, active) VALUES (" + employerId + ", 'Convert Member', "
+                + policyId + ", 'CVC" + s + "', 'CVC" + s + "', 'ACTIVE', true) RETURNING id", Long.class);
+        jdbc.update("INSERT INTO member_policy_assignments (member_id, policy_id, assignment_start_date, "
+                + "assignment_source) VALUES (?, ?, CURRENT_DATE - 60, 'MANUAL')", memberId, policyId);
+        jdbc.update("INSERT INTO member_employer_assignments (member_id, employer_id, assignment_start_date, "
+                + "assignment_reason, assignment_source) VALUES (?, ?, CURRENT_DATE - 60, "
+                + "'test enrollment', 'MANUAL')", memberId, employerId);
+
+        Long categoryId = jdbc.queryForObject("INSERT INTO medical_categories (code, name, active) "
+                + "VALUES ('CVCAT-" + s + "', 'Convert Category', true) RETURNING id", Long.class);
+        Long serviceId = jdbc.queryForObject("INSERT INTO medical_services (code, name, category_id, "
+                + "cost, active) VALUES ('CVSRV-" + s + "', 'Convert Service', " + categoryId + ", "
+                + unitPrice + ", true) RETURNING id", Long.class);
+        Long ruleId = jdbc.queryForObject("INSERT INTO benefit_policy_rules (benefit_policy_id, "
+                + "medical_category_id, encounter_type, claim_context_code, coverage_percent, active, deleted) VALUES ("
+                + policyId + ", " + categoryId + ", 'OUTPATIENT', 'OUTPATIENT', " + coveragePercent
+                + ", true, false) RETURNING id", Long.class);
+        Long groupId = jdbc.queryForObject("INSERT INTO benefit_groups (policy_id, code, name_ar, "
+                + "context_type, aggregation_mode) VALUES (" + policyId + ", 'CVG-" + s
+                + "', 'مجموعة', 'OUTPATIENT', 'INDIVIDUAL') RETURNING id", Long.class);
+        Long bucketId = jdbc.queryForObject("INSERT INTO benefit_limit_buckets (policy_id, benefit_group_id, "
+                + "code, name_ar, amount_limit, times_limit, period_type, counting_method, consumption_basis, "
+                + "benefit_scope_type, context_type, active) VALUES (" + policyId + ", " + groupId
+                + ", 'CVB-" + s + "', 'وعاء', " + amountLimit + ", " + timesLimit
+                + ", 'ANNUAL', 'EACH_UNIT', 'COMPANY_SHARE', 'CATEGORY', 'OUTPATIENT', true) RETURNING id",
+                Long.class);
+        jdbc.update("INSERT INTO benefit_rule_buckets (rule_id, bucket_id) VALUES (?, ?)", ruleId, bucketId);
+
+        Long providerId = jdbc.queryForObject("INSERT INTO providers (name, license_number, provider_type, "
+                + "allow_all_employers) VALUES ('CvProv " + s + "', 'CVLIC-" + s
+                + "', 'CLINIC', true) RETURNING id", Long.class);
+        jdbc.update("INSERT INTO provider_accounts (provider_id, running_balance, total_approved, "
+                + "total_paid) VALUES (?, 0, 0, 0)", providerId);
+
+        Long contractId = jdbc.queryForObject("INSERT INTO provider_contracts (provider_id, contract_code, "
+                + "contract_number, start_date, end_date, discount_percent, "
+                + "discount_before_rejection, status, active) VALUES (" + providerId
+                + ", 'CVCON-" + s + "', 'CVCNT-" + s
+                + "', CURRENT_DATE - 60, CURRENT_DATE + 365, 0, false, 'ACTIVE', true) RETURNING id",
+                Long.class);
+        jdbc.update("INSERT INTO provider_contract_terms (contract_id, effective_from, discount_percent, "
+                + "discount_before_rejection, change_reason) VALUES (?, CURRENT_DATE - 60, 0, false, "
+                + "'test initial terms')", contractId);
+        jdbc.update("INSERT INTO provider_contract_pricing_items (contract_id, service_code, service_name, "
+                + "medical_category_id, base_price, contract_price, effective_from, active) "
+                + "VALUES (?, ?, ?, ?, "
+                + unitPrice + ", " + unitPrice + ", CURRENT_DATE - 60, true)",
+                contractId, "CVSRV-" + s, "Convert Service", categoryId);
+
+        Long visitId = jdbc.queryForObject("INSERT INTO visits (member_id, provider_id, visit_date, status) "
+                + "VALUES (" + memberId + ", " + providerId + ", CURRENT_DATE, 'REGISTERED') RETURNING id",
+                Long.class);
+
+        Long preauthId = jdbc.queryForObject("INSERT INTO pre_authorizations (member_id, policy_id, "
+                + "provider_id, service_category_id, status, request_date, expected_service_date, "
+                + "created_at, updated_at, version) VALUES (" + memberId + ", " + policyId + ", "
+                + providerId + ", " + categoryId
+                + ", 'SUBMITTED', now(), CURRENT_DATE, now(), now(), 0) RETURNING id", Long.class);
+        jdbc.update("INSERT INTO pre_authorization_lines (pre_authorization_id, provider_service_id, "
+                + "medical_service_id, medical_category_id, provider_service_code, service_name, "
+                + "contract_price, requested_amount, coverage_percentage, encounter_type, "
+                + "requested_quantity, approved_quantity) VALUES (?, " + serviceId + ", " + serviceId + ", "
+                + categoryId + ", ?, ?, " + requestedAmount + ", " + requestedAmount + ", " + coveragePercent
+                + ", 'OUTPATIENT', " + preauthQuantity + ", " + preauthQuantity + ")",
+                preauthId, "SVC-" + s, "Service " + s);
+
+        return new Scenario(preauthId, memberId, policyId, bucketId, visitId, serviceId);
+    }
+
     private ClaimViewDto claimAgainstQuantity(Scenario sc, int quantity) {
         return claimService.createClaim(ClaimCreateDto.builder()
                 .visitId(sc.visitId())
@@ -309,6 +396,26 @@ class PreAuthConversionHappensOnceIntegrationTest extends PostgresIntegrationTes
                 "SELECT COALESCE(SUM(approved_amount), 0) FROM benefit_bucket_consumptions "
                         + "WHERE member_id = ? AND bucket_id = ? AND status = 'COMMITTED' AND source_type = 'CLAIM'",
                 BigDecimal.class, memberId, bucketId);
+    }
+
+    /** Same as {@link #netReserved}, for the TIMES dimension (FG6). */
+    private int netReservedTimes(long memberId, long bucketId) {
+        return jdbc.queryForObject(
+                "SELECT COALESCE(SUM(c.times_consumed - COALESCE(r.released, 0)), 0) "
+                        + "FROM benefit_bucket_consumptions c LEFT JOIN ("
+                        + "  SELECT reversal_of_id, SUM(times_consumed) AS released "
+                        + "  FROM benefit_bucket_consumptions WHERE status='REVERSED' "
+                        + "  GROUP BY reversal_of_id) r ON r.reversal_of_id = c.id "
+                        + "WHERE c.member_id = ? AND c.bucket_id = ? AND c.status = 'RESERVED'",
+                Integer.class, memberId, bucketId);
+    }
+
+    /** Same as {@link #committedAmount}, for the TIMES dimension (FG6). */
+    private int committedTimes(long memberId, long bucketId) {
+        return jdbc.queryForObject(
+                "SELECT COALESCE(SUM(times_consumed), 0) FROM benefit_bucket_consumptions "
+                        + "WHERE member_id = ? AND bucket_id = ? AND status = 'COMMITTED' AND source_type = 'CLAIM'",
+                Integer.class, memberId, bucketId);
     }
 
     private ClaimViewDto claimAgainst(Scenario sc, BigDecimal amount) {
@@ -544,5 +651,45 @@ class PreAuthConversionHappensOnceIntegrationTest extends PostgresIntegrationTes
                 .as("the reservation must be exactly what it was before the failed attempt")
                 .isEqualByComparingTo("300.00");
         assertThat(preauthStatus(sc.preauthId())).isEqualTo("APPROVED");
+    }
+
+    @Test
+    @WithMockUser(username = "admin", roles = {"SUPER_ADMIN"})
+    @DisplayName("FG6/R4 — PreAuth AMOUNT+TIMES: a bucket capping BOTH dimensions nets them together at conversion, "
+            + "never one dimension only")
+    void conversionNetsBothAmountAndTimesTogetherWhenTheBucketCapsBothDimensions() {
+        // Reserve 4 units at 100 each: amount=400, times=4 (EACH_UNIT counts
+        // one occurrence per unit). The claim that actually arrives needs
+        // only 3: amount=300, times=3 -- the same "final < reservation"
+        // shape as R2, but with BOTH dimensions moving together instead of
+        // amount alone, which is exactly the gap P1.11.4 left open.
+        Scenario sc = scenarioWithQuantityAndTimesLimit("1000.00", 10, "100.00", 100, 4);
+        reservationLedger.approveAndReserve(sc.preauthId(), 0L, "reviewer");
+        assertThat(netReserved(sc.memberId(), sc.bucketId()))
+                .as("own reservation before conversion: amount = 4 units (400)").isEqualByComparingTo("400.00");
+        assertThat(netReservedTimes(sc.memberId(), sc.bucketId()))
+                .as("own reservation before conversion: times = 4").isEqualTo(4);
+
+        ClaimViewDto claim = claimAgainstQuantity(sc, 3);
+        assertThat(claim.getStatus()).isEqualTo(ClaimStatus.APPROVED);
+
+        // Reserved = R - O for BOTH dimensions: the own reservation (400 /
+        // 4) is released in full, never left partly outstanding because one
+        // dimension's math happened to be simpler than the other's.
+        assertThat(netReserved(sc.memberId(), sc.bucketId()))
+                .as("own reservation released in full: amount").isEqualByComparingTo("0.00");
+        assertThat(netReservedTimes(sc.memberId(), sc.bucketId()))
+                .as("own reservation released in full: times").isEqualTo(0);
+
+        // Committed = C + F for BOTH dimensions: the claim's own canonical
+        // decision (3 units) commits exactly 300 / 3, never the reservation's
+        // 400 / 4 and never the two dimensions drifting out of step with
+        // each other.
+        assertThat(committedAmount(sc.memberId(), sc.bucketId()))
+                .as("commit = claim's own canonical amount (300), not the reservation's (400)")
+                .isEqualByComparingTo("300.00");
+        assertThat(committedTimes(sc.memberId(), sc.bucketId()))
+                .as("commit = claim's own canonical times (3), not the reservation's (4)")
+                .isEqualTo(3);
     }
 }

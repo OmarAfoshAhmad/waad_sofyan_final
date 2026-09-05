@@ -551,6 +551,59 @@ class BenefitBucketLedgerServiceTest {
     }
 
     @Test
+    @DisplayName("CW5/FG3 — DAYS accepted: the ledger records exactly one day movement (a bare row, zero amount/times), "
+            + "never inferred from the bucket's own daysLimit configuration")
+    void cw5_dayAcceptedWritesExactlyOneBareRow() {
+        BenefitLimitBucket daysOnlyBucket = BenefitLimitBucket.builder()
+                .id(72L).policy(policy).code("DAYS-ONLY").nameAr("أيام")
+                .daysLimit(5).periodType(LimitPeriodType.ANNUAL)
+                .countingMethod(CountingMethod.EACH_LINE).consumptionBasis(ConsumptionBasis.ELIGIBLE_AMOUNT)
+                .active(true).build();
+        lenient().when(bucketRepository.findByIdForUpdate(72L)).thenReturn(Optional.of(daysOnlyBucket));
+
+        BucketLimitSnapshot daysSnapshot = new BucketLimitSnapshot(72L, 1L, LimitAxisType.DAYS,
+                CountingMethod.EACH_LINE, BigDecimal.valueOf(5), BigDecimal.ZERO, BigDecimal.ZERO,
+                BigDecimal.valueOf(5), PERIOD_START, PERIOD_END);
+        UnifiedLimitInput input = new UnifiedLimitInput(1L, 50L, 10L, claim.getServiceDate(),
+                EncounterType.OUTPATIENT, 0, 1, BigDecimal.ZERO, BigDecimal.ZERO, null,
+                ReservationEvaluationMode.NORMAL, null, null);
+        UnifiedLimitDecision decision = UnifiedLimitResolver.resolve(input, List.of(daysSnapshot));
+        assertThat(decision.approvedDays()).isEqualTo(1);
+        line.setUnifiedLimitDecision(decision);
+        line.setResolvedLimitItems(List.of(new ResolvedLimitItem(daysSnapshot, descriptorFor(72L))));
+        line.setLimitConsumption(BigDecimal.ZERO);
+
+        service.commitClaim(20L);
+
+        ArgumentCaptor<BenefitBucketConsumption> captor = ArgumentCaptor.forClass(BenefitBucketConsumption.class);
+        verify(consumptionRepository, times(1)).save(captor.capture());
+        assertEquals(0, BigDecimal.ZERO.compareTo(captor.getValue().getApprovedAmount()));
+        assertEquals(0, captor.getValue().getTimesConsumed());
+    }
+
+    @Test
+    @DisplayName("CW6/FG3 — DAYS rejected: no day, no amount, no times -> the ledger writes NOTHING for this bucket, "
+            + "never a phantom day inferred from daysLimit alone")
+    void cw6_dayRejectedWritesNothing() {
+        BucketLimitSnapshot daysSnapshot = new BucketLimitSnapshot(72L, 1L, LimitAxisType.DAYS,
+                CountingMethod.EACH_LINE, BigDecimal.valueOf(5), BigDecimal.valueOf(5), BigDecimal.ZERO,
+                BigDecimal.ZERO, PERIOD_START, PERIOD_END);
+        UnifiedLimitInput input = new UnifiedLimitInput(1L, 50L, 10L, claim.getServiceDate(),
+                EncounterType.OUTPATIENT, 0, 1, BigDecimal.ZERO, BigDecimal.ZERO, null,
+                ReservationEvaluationMode.NORMAL, null, null);
+        UnifiedLimitDecision decision = UnifiedLimitResolver.resolve(input, List.of(daysSnapshot));
+        assertThat(decision.approvedDays()).isZero();
+        line.setUnifiedLimitDecision(decision);
+        line.setResolvedLimitItems(List.of(new ResolvedLimitItem(daysSnapshot, descriptorFor(72L))));
+        line.setLimitConsumption(BigDecimal.ZERO);
+
+        service.commitClaim(20L);
+
+        verify(consumptionRepository, never()).save(any());
+        verify(bucketRepository, never()).findByIdForUpdate(anyLong());
+    }
+
+    @Test
     @DisplayName("P1.11.3 architectural guard — a normal commit (live decision present) never reaches legacyReconcileTargets' rule-bucket walk")
     void normalCommitNeverConsultsTheLegacyRuleBucketWalk() {
         // Exactly what every direct-entry or reviewed approval looks like
