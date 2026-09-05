@@ -167,10 +167,15 @@ export const claimsService = {
   },
 
   /** Resolve the member, policy and contract effective on one service date. */
-  getEntryContext: async ({ memberId, providerId, employerId, serviceDate }) => {
+  getEntryContext: async ({ memberId, providerId, employerId, serviceDate, signal }) => {
     try {
       const response = await axiosClient.get(`${BASE_URL}/entry-context`, {
-        params: { memberId, providerId, employerId, serviceDate }
+        params: { memberId, providerId, employerId, serviceDate },
+        signal,
+        // This expected business failure is owned by the claim page. Letting
+        // the global interceptor toast it as well produces duplicates and can
+        // surface a stale response after the operator has corrected the date.
+        suppressGlobalError: true
       });
       return unwrap(response);
     } catch (error) {

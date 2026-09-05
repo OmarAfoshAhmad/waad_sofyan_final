@@ -332,6 +332,8 @@ public class ProviderContractService {
         }
 
         // Validate dates if changed
+        LocalDate previousStartDate = contract.getStartDate();
+        LocalDate previousEndDate = contract.getEndDate();
         LocalDate startDate = dto.getStartDate() != null ? dto.getStartDate() : contract.getStartDate();
         LocalDate endDate = dto.getEndDate() != null ? dto.getEndDate() : contract.getEndDate();
 
@@ -396,6 +398,8 @@ public class ProviderContractService {
 
         contract.setUpdatedBy(getCurrentUsername());
         contract = contractRepository.save(contract);
+        alignActivePricingPeriodIfContractPeriodMoved(
+                contract, previousStartDate, previousEndDate, startDate, endDate);
         if (financialTermsChanged) {
             if (contract.getStatus() != ContractStatus.DRAFT
                     && (dto.getTermsChangeReason() == null || dto.getTermsChangeReason().isBlank())) {
@@ -414,6 +418,36 @@ public class ProviderContractService {
         log.info("Updated provider contract: {}", contract.getContractCode());
         logAudit("UPDATE", contract.getId(), "Updated contract " + contract.getContractCode());
         return ProviderContractResponseDto.fromEntity(contract);
+    }
+
+    private void alignActivePricingPeriodIfContractPeriodMoved(ProviderContract contract,
+            LocalDate previousStartDate, LocalDate previousEndDate,
+            LocalDate newStartDate, LocalDate newEndDate) {
+        if (contract == null || contract.getId() == null || previousStartDate == null || newStartDate == null) {
+            return;
+        }
+        LocalDate oldPriceEndExclusive = toPriceEndExclusive(previousEndDate);
+        LocalDate newPriceEndExclusive = toPriceEndExclusive(newEndDate);
+        if (previousStartDate.equals(newStartDate)
+                && java.util.Objects.equals(oldPriceEndExclusive, newPriceEndExclusive)) {
+            return;
+        }
+
+        long alignedActiveItems = pricingItemRepository.countActiveAlignedToPeriod(
+                contract.getId(), previousStartDate, oldPriceEndExclusive);
+        if (alignedActiveItems == 0) {
+            return;
+        }
+
+        int updated = pricingItemRepository.alignActivePricePeriod(
+                contract.getId(), previousStartDate, oldPriceEndExclusive, newStartDate, newPriceEndExclusive);
+        log.info("Aligned {} active pricing items for contract {} from {}..{} to {}..{}",
+                updated, contract.getContractCode(), previousStartDate, oldPriceEndExclusive,
+                newStartDate, newPriceEndExclusive);
+    }
+
+    private LocalDate toPriceEndExclusive(LocalDate contractEndDate) {
+        return contractEndDate == null ? null : contractEndDate.plusDays(1);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════

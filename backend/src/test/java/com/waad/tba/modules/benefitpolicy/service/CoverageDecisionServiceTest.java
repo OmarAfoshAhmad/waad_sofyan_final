@@ -136,38 +136,35 @@ class CoverageDecisionServiceTest {
     }
 
     /**
-     * P1: reproduces the real gap found auditing POL-2026-018. Actual
-     * C-section pricing items in production are classified CAT-COV-INPATIENT
-     * (general inpatient), not CAT-MAT-COMP -- the policy's only rule for
-     * PREGNANCY_COMPLICATIONS targets CAT-MAT-COMP specifically. Selecting
-     * "pregnancy complications" as the claim context on a real C-section line
-     * today fails closed with NO_BENEFIT_RULE -- safe (no silent miscoverage,
-     * matching maternityNeverFallsBackToTheGenericInpatientRule's own
-     * precedent), but not what a reviewer entering that claim would expect.
-     * The fix is a data change (a CAT-COV-INPATIENT + PREGNANCY_COMPLICATIONS
-     * rule, linked to the same complications bucket), not an engine change --
-     * this test exists to prove and pin today's behavior, and must be
-     * updated (not deleted) once that rule exists.
+     * Pregnancy complications are a claim-wide decision context, not a service
+     * category. A real C-section can remain classified as CAT-COV-INPATIENT,
+     * while the exact PREGNANCY_COMPLICATIONS rule decides coverage and points
+     * to the complications ceiling.
      */
     @Test
-    void pregnancyComplicationsContextOnAGenericInpatientCategoryFindsNoRuleToday() {
+    void pregnancyComplicationsContextCanCoverGenericInpatientCategoryWithExactContextRule() {
         MedicalCategory inpatientGeneral = category(55L, null, Set.of(CategoryContext.INPATIENT));
         inpatientGeneral.setCode("CAT-COV-INPATIENT");
+        BenefitPolicy policy = BenefitPolicy.builder().id(1L).build();
+        BenefitPolicyRule rule = BenefitPolicyRule.builder().id(41L).benefitPolicy(policy)
+                .medicalCategory(inpatientGeneral).coveragePercent(100).encounterType(EncounterType.INPATIENT)
+                .claimContextCode("PREGNANCY_COMPLICATIONS").active(true).deleted(false).build();
         when(categoryRepository.findById(55L)).thenReturn(Optional.of(inpatientGeneral));
-        when(policyRepository.findById(1L)).thenReturn(Optional.of(BenefitPolicy.builder().id(1L).build()));
+        when(policyRepository.findById(1L)).thenReturn(Optional.of(policy));
         when(claimContextRepository.findById("PREGNANCY_COMPLICATIONS")).thenReturn(Optional.of(
                 ClaimContextDefinition.builder().code("PREGNANCY_COMPLICATIONS").nameAr("مضاعفات الحمل")
                         .baseEncounterType(EncounterType.INPATIENT).active(true).build()));
         when(ruleRepository.findBestRuleForClaimContext(1L, 55L, null, "PREGNANCY_COMPLICATIONS"))
-                .thenReturn(Optional.empty());
+                .thenReturn(Optional.of(rule));
 
         var decision = service.resolve(CoverageDecisionRequest.builder().policyId(1L)
                 .serviceCategoryId(55L).memberId(7L)
                 .encounterType(EncounterType.INPATIENT).claimContextCode("PREGNANCY_COMPLICATIONS").build());
 
-        assertThat(decision.covered()).isFalse();
-        assertThat(decision.source()).isEqualTo(CoverageDecisionSource.NO_BENEFIT_RULE);
-        assertThat(decision.reasonCode()).isEqualTo("NO_BENEFIT_RULE");
+        assertThat(decision.covered()).isTrue();
+        assertThat(decision.coveragePercent()).isEqualTo(100);
+        assertThat(decision.source()).isEqualTo(CoverageDecisionSource.EXACT_CATEGORY_RULE);
+        assertThat(decision.appliedRule().getClaimContextCode()).isEqualTo("PREGNANCY_COMPLICATIONS");
     }
 
     @Test

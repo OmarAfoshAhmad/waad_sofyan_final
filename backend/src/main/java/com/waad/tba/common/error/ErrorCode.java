@@ -31,6 +31,8 @@ public enum ErrorCode {
     // === Member Errors ===
     MEMBER_ALREADY_EXISTS,
     MEMBER_NOT_ACTIVE,
+    /** No effective member coverage exists for the requested service date. */
+    MEMBER_NOT_COVERED_AT_SERVICE_DATE,
     
     // === Policy Errors (Phase 6) ===
     /** Policy is not active on the requested date */

@@ -83,6 +83,7 @@ describe('claim batch entry safety boundary', () => {
 
   it('blocks rather than merely warns about services from another claim context', () => {
     expect(entrySource).toContain('if (incompatibleContextLines.length > 0)');
+    expect(entrySource).toContain('!hasAcceptedCoverageDecision(line)');
     expect(entrySource).toContain('لا يمكن الحفظ: الخدمات في البنود');
     expect(entrySource).not.toContain('وسيتم احتسابها حسب قواعد التغطية المطابقة فقط');
   });
@@ -114,6 +115,28 @@ describe('claim batch entry safety boundary', () => {
   it('does not fetch employer details or a second approval context that this screen does not consume', () => {
     expect(entrySource).not.toContain('employersService.getById');
     expect(entrySource).not.toContain("['eligible-claim-preauths'");
+  });
+
+  it('debounces and cancels dated coverage checks and does not render a persistent readiness banner', () => {
+    expect(entrySource).toContain('setTimeout(() => setDebouncedServiceDate(serviceDate), 450)');
+    expect(entrySource).toContain('queryFn: ({ signal }) =>');
+    expect(entrySource).toContain('signal');
+    expect(entrySource).toContain('preventDuplicate: true');
+    expect(entrySource).not.toContain('<ClaimEntryReadinessAlert');
+  });
+
+  it('declares serviceDate before any effect reads it during the first render', () => {
+    const serviceDateState = entrySource.indexOf('const [serviceDate, setServiceDate] = useState(defaultDate);');
+    const serviceDateDebounce = entrySource.indexOf('setTimeout(() => setDebouncedServiceDate(serviceDate), 450)');
+
+    expect(serviceDateState).toBeGreaterThan(-1);
+    expect(serviceDateDebounce).toBeGreaterThan(-1);
+    expect(serviceDateState).toBeLessThan(serviceDateDebounce);
+  });
+
+  it('explains when a valid dated contract has no effective service prices', () => {
+    expect(entrySource).toContain('noEffectiveContractServicesForDate');
+    expect(entrySource).toContain('لا توجد أسعار خدمات فعالة في العقد بتاريخ الخدمة');
   });
 
   /**
