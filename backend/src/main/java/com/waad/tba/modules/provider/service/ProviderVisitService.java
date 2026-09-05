@@ -412,7 +412,8 @@ public class ProviderVisitService {
                    .memberStatus(member.getStatus() != null ? member.getStatus().name() : null);
             
             if (member.getEmployer() != null) {
-                builder.employerName(member.getEmployer().getName());
+                builder.employerId(member.getEmployer().getId())
+                       .employerName(member.getEmployer().getName());
             }
         }
         

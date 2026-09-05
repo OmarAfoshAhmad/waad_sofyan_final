@@ -1,5 +1,5 @@
 import { lazy } from 'react';
-import { Outlet, Navigate } from 'react-router-dom';
+import { Outlet, Navigate, useLocation } from 'react-router-dom';
 
 // project imports
 import Loadable from 'components/Loadable';
@@ -75,12 +75,16 @@ const VisitView = Loadable(lazy(() => import('pages/visits/VisitView')));
 // ==============================|| LAZY LOADING - PROVIDER PORTAL ||============================== //
 
 const ProviderEligibilityCheck = Loadable(lazy(() => import('pages/provider/ProviderEligibilityCheck')));
-const ProviderClaimsSubmission = Loadable(lazy(() => import('pages/provider/ProviderClaimsSubmission')));
 const ProviderPreAuthRequestForm = Loadable(lazy(() => import('pages/provider/ProviderPreAuthRequestForm')));
 const ProviderPreApprovalSubmission = Loadable(lazy(() => import('pages/provider/ProviderPreApprovalSubmission')));
 const ProviderVisitLog = Loadable(lazy(() => import('pages/provider/ProviderVisitLog')));
 const ProviderDocuments = Loadable(lazy(() => import('pages/provider/ProviderDocuments')));
 const ProviderPreAuthInbox = Loadable(lazy(() => import('pages/provider/PreAuthInbox')));
+
+const LegacyProviderClaimSubmitRedirect = () => {
+  const location = useLocation();
+  return <Navigate to={`/claims/batches/entry${location.search || ''}`} replace />;
+};
 
 // ==============================|| POLICIES MODULE REMOVED ||============================== //
 // Policy module deleted - NO Policy concept in backend. Use BenefitPolicy only.
@@ -806,11 +810,7 @@ const MainRoutes = {
         },
         {
           path: 'claims/submit',
-          element: (
-            <PermissionGuard isRouteGuard>
-              <ProviderClaimsSubmission />
-            </PermissionGuard>
-          )
+          element: <LegacyProviderClaimSubmitRedirect />
         },
         {
           path: 'pre-approvals/submit',

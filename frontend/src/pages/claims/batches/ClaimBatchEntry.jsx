@@ -212,6 +212,11 @@ export default function ClaimBatchEntry() {
   const month = parseInt(searchParams.get('month'));
   const year = parseInt(searchParams.get('year'));
   const initialClaimId = searchParams.get('claimId');
+  const initialMemberId = searchParams.get('memberId');
+  const initialMemberName = searchParams.get('memberName');
+  const initialMemberCardNumber = searchParams.get('cardNumber');
+  const initialServiceDate = searchParams.get('serviceDate') || searchParams.get('visitDate');
+  const initialVisitType = searchParams.get('visitType');
 
   // ── حالة النموذج ─────────────────────────────────────────────────────────
   const [member, setMember] = useState(null);
@@ -301,15 +306,27 @@ export default function ClaimBatchEntry() {
     setVisibleColumns((prev) => ({ ...prev, [col]: !prev[col] }));
   };
 
-  const [encounterType, setEncounterType] = useState('OUTPATIENT');
-  const [claimContextCode, setClaimContextCode] = useState('OUTPATIENT');
+  const initialEncounterType = initialVisitType === 'INPATIENT' ? 'INPATIENT' : 'OUTPATIENT';
+  const [encounterType, setEncounterType] = useState(initialEncounterType);
+  const [claimContextCode, setClaimContextCode] = useState(initialEncounterType);
   const [fullCoverage, setFullCoverage] = useState(false);
 
   // A batch period is not a service date. Guessing the first day silently
   // creates a financially valid claim on a date the operator never chose.
   const defaultDate = '';
 
-  const [serviceDate, setServiceDate] = useState(defaultDate);
+  const [serviceDate, setServiceDate] = useState(initialServiceDate || defaultDate);
+
+  useEffect(() => {
+    if (!initialMemberId || member?.id) return;
+    const hydratedMember = {
+      id: Number(initialMemberId),
+      fullName: initialMemberName || '',
+      cardNumber: initialMemberCardNumber || ''
+    };
+    setMember(hydratedMember);
+    setMemberInput(initialMemberName || initialMemberCardNumber || initialMemberId);
+  }, [initialMemberCardNumber, initialMemberId, initialMemberName, member?.id]);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedMemberInput(memberInput), 350);
@@ -669,18 +686,13 @@ export default function ClaimBatchEntry() {
   }, [memberSearchError, memberSearchQueryError, enqueueSnackbar]);
 
   useEffect(() => {
-    if (
-      !entryContextError ||
-      !entryContextFailure ||
-      !member?.id ||
-      !debouncedServiceDate ||
-      debouncedServiceDate !== serviceDate
-    ) return;
+    if (!entryContextError || !entryContextFailure || !member?.id || !debouncedServiceDate || debouncedServiceDate !== serviceDate) return;
     const normalized = normalizeApiError(entryContextFailure);
     const shortId = normalized.trackingId ? String(normalized.trackingId).split('-')[0] : null;
-    const message = normalized.code === 'MEMBER_NOT_COVERED_AT_SERVICE_DATE'
-      ? `المستفيد غير مغطى تأمينياً بتاريخ ${dayjs(debouncedServiceDate).format('DD/MM/YYYY')}.`
-      : normalized.message || 'تعذر التحقق من تغطية المستفيد في تاريخ الخدمة المحدد.';
+    const message =
+      normalized.code === 'MEMBER_NOT_COVERED_AT_SERVICE_DATE'
+        ? `المستفيد غير مغطى تأمينياً بتاريخ ${dayjs(debouncedServiceDate).format('DD/MM/YYYY')}.`
+        : normalized.message || 'تعذر التحقق من تغطية المستفيد في تاريخ الخدمة المحدد.';
     const toastKey = `${normalized.code}:${member.id}:${debouncedServiceDate}`;
     enqueueSnackbar(shortId ? `${message} (مرجع: ${shortId})` : message, {
       key: toastKey,
@@ -1436,7 +1448,9 @@ export default function ClaimBatchEntry() {
 
     await sendLineToMedicalDictionary(idx, selected.id);
     closeClassificationReviewDialog();
-    enqueueSnackbar('تم إرسال اقتراح التصنيف للمراجعة. لن يتغير حساب هذه المطالبة حتى يُعتمد التصنيف في مصدر الخدمة.', { variant: 'success' });
+    enqueueSnackbar('تم إرسال اقتراح التصنيف للمراجعة. لن يتغير حساب هذه المطالبة حتى يُعتمد التصنيف في مصدر الخدمة.', {
+      variant: 'success'
+    });
   }, [
     classificationReview.lineIndex,
     classificationReview.selectedCategoryId,
@@ -2368,8 +2382,8 @@ export default function ClaimBatchEntry() {
                     than through a notice parked on top of the table. */}
                 {noEffectiveContractServicesForDate && (
                   <Alert severity="warning" sx={{ m: 1.5, alignItems: 'center' }}>
-                    العقد والوثيقة صالحان لهذا التاريخ، لكن لا توجد أسعار خدمات فعالة في العقد بتاريخ الخدمة. راجع فترة سريان
-                    أسعار خدمات العقد.
+                    العقد والوثيقة صالحان لهذا التاريخ، لكن لا توجد أسعار خدمات فعالة في العقد بتاريخ الخدمة. راجع فترة سريان أسعار خدمات
+                    العقد.
                   </Alert>
                 )}
                 <TableContainer dir="rtl" sx={{ flex: 1, overflow: 'auto' }}>
@@ -2514,8 +2528,8 @@ export default function ClaimBatchEntry() {
         <DialogContent dividers>
           <Stack spacing={2}>
             <Alert severity="info">
-              التصنيف المالي لهذه المطالبة يؤخذ من مصدر الخدمة المعتمد في العقد أو القاموس النظامي. هذا الإجراء يرسل اقتراحاً
-              للمراجعة ولا يغيّر حساب المطالبة الحالية.
+              التصنيف المالي لهذه المطالبة يؤخذ من مصدر الخدمة المعتمد في العقد أو القاموس النظامي. هذا الإجراء يرسل اقتراحاً للمراجعة ولا
+              يغيّر حساب المطالبة الحالية.
             </Alert>
 
             <Box>

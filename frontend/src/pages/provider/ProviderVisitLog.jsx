@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useSnackbar } from 'notistack';
 
 // Material UI
 import {
@@ -188,6 +189,7 @@ const VISIT_TYPE_LABELS = {
 const ProviderVisitLog = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { enqueueSnackbar } = useSnackbar();
   const { flags } = useSystemConfig();
 
   const claimSubmissionEnabled = flags?.DIRECT_CLAIM_SUBMISSION_ENABLED !== false;
@@ -205,11 +207,11 @@ const ProviderVisitLog = () => {
 
   // Filters - Default date to TODAY
   const [showFilters, setShowFilters] = useState(true);
-  
+
   // Initialize from location state if we were redirected here (e.g. from registering a visit)
   const initialSearch = location.state?.newVisitId?.toString() || location.state?.memberName || '';
   const isRedirected = !!initialSearch;
-  
+
   const [searchQuery, setSearchQuery] = useState(initialSearch);
   const [dateFrom, setDateFrom] = useState(isRedirected ? null : dayjs()); // Clear dates if redirected to show the exact visit regardless of date
   const [dateTo, setDateTo] = useState(isRedirected ? null : dayjs());
@@ -277,11 +279,28 @@ const ProviderVisitLog = () => {
   };
 
   const handleCreateClaim = (visit) => {
+    const serviceDate = visit.visitDate || dayjs().format('YYYY-MM-DD');
+    const serviceDay = dayjs(serviceDate);
+    const targetProviderId = visit.providerId;
+    const targetEmployerId = visit.employerId;
+
+    if (!targetProviderId || !targetEmployerId || !visit.memberId || !serviceDay.isValid()) {
+      enqueueSnackbar('لا يمكن فتح إدخال المطالبة لأن الزيارة لا تحتوي على مقدم خدمة أو جهة عمل أو مستفيد صالح.', {
+        variant: 'warning'
+      });
+      return;
+    }
+
     if (visit.latestClaimId && ['DRAFT', 'NEEDS_CORRECTION'].includes(visit.latestClaimStatus)) {
       const params = new URLSearchParams({
         fromVisitLog: 'true',
         claimId: visit.latestClaimId,
         visitId: visit.visitId,
+        providerId: targetProviderId,
+        employerId: targetEmployerId,
+        month: serviceDay.month() + 1,
+        year: serviceDay.year(),
+        serviceDate,
         memberId: visit.memberId,
         memberName: visit.memberName || '',
         memberCivilId: visit.memberCivilId || '',
@@ -289,12 +308,12 @@ const ProviderVisitLog = () => {
         employer: visit.employerName || '',
         phone: visit.memberPhone || '',
         email: visit.memberEmail || '',
-        visitDate: visit.visitDate || '',
+        visitDate: serviceDate,
         visitTime: visit.createdAt?.split('T')[1]?.substring(0, 5) || '',
         visitType: visit.visitType || 'OUTPATIENT',
         providerName: visit.providerName || ''
       });
-      navigate(`/provider/claims/submit?${params.toString()}`);
+      navigate(`/claims/batches/entry?${params.toString()}`);
       return;
     }
 
@@ -302,6 +321,11 @@ const ProviderVisitLog = () => {
     const params = new URLSearchParams({
       fromVisitLog: 'true',
       visitId: visit.visitId,
+      providerId: targetProviderId,
+      employerId: targetEmployerId,
+      month: serviceDay.month() + 1,
+      year: serviceDay.year(),
+      serviceDate,
       memberId: visit.memberId,
       memberName: visit.memberName || '',
       memberCivilId: visit.memberCivilId || '',
@@ -309,12 +333,12 @@ const ProviderVisitLog = () => {
       employer: visit.employerName || '',
       phone: visit.memberPhone || '',
       email: visit.memberEmail || '',
-      visitDate: visit.visitDate || '',
+      visitDate: serviceDate,
       visitTime: visit.createdAt?.split('T')[1]?.substring(0, 5) || '',
       visitType: visit.visitType || 'OUTPATIENT',
       providerName: visit.providerName || ''
     });
-    navigate(`/provider/claims/submit?${params.toString()}`);
+    navigate(`/claims/batches/entry?${params.toString()}`);
   };
 
   const handleCreatePreAuth = (visit) => {
@@ -525,7 +549,7 @@ const ProviderVisitLog = () => {
                   {LABELS.createPreAuth}
                 </Button>
               )}
-              
+
               {/* Delete Visit */}
               {['REGISTERED', 'CANCELLED'].includes(visit.status) && visit.claimCount === 0 && visit.preAuthCount === 0 && (
                 <Button

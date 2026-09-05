@@ -100,6 +100,11 @@ public class ProviderVisitResponse {
     // ==================== EMPLOYER DATA ====================
     
     /**
+     * Employer ID
+     */
+    private Long employerId;
+
+    /**
      * Employer name
      */
     private String employerName;
