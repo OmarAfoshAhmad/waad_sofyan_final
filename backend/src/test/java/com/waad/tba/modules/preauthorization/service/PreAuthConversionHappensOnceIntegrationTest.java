@@ -14,6 +14,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -162,6 +163,114 @@ class PreAuthConversionHappensOnceIntegrationTest extends PostgresIntegrationTes
         return new Scenario(preauthId, memberId, policyId, bucketId, visitId, serviceId);
     }
 
+    /**
+     * P1.11.4: the SAME fixture as {@link #scenario}, but with the
+     * pre-authorization requesting {@code preauthQuantity} units at a fixed
+     * per-unit price -- so a converting claim can request a genuinely
+     * DIFFERENT quantity (R2/R3), something {@link #scenario}'s
+     * quantity-1-only shape cannot express (a claim's money always comes
+     * from the contract's fixed unit price times its own quantity, never
+     * from a client-supplied requestedTotal -- ClaimMapper never reads
+     * ClaimLineDto.requestedTotal for pricing).
+     */
+    private Scenario scenarioWithQuantity(String amountLimit, String unitPrice, int coveragePercent,
+            int preauthQuantity) {
+        String s = suffix();
+        String requestedAmount = new BigDecimal(unitPrice).multiply(BigDecimal.valueOf(preauthQuantity))
+                .toPlainString();
+        Long employerId = jdbc.queryForObject("INSERT INTO employers (code, name) VALUES ('CV-" + s
+                + "', 'Convert Co " + s + "') RETURNING id", Long.class);
+        Long policyId = jdbc.queryForObject("INSERT INTO benefit_policies (name, policy_code, employer_id, "
+                + "annual_limit, default_coverage_percent, start_date, end_date, status, active) VALUES "
+                + "('CVP-" + s + "', 'CVPOL-" + s + "', " + employerId + ", 1000000, " + coveragePercent
+                + ", CURRENT_DATE - 60, CURRENT_DATE + 365, 'ACTIVE', true) RETURNING id", Long.class);
+        Long memberId = jdbc.queryForObject("INSERT INTO members (employer_id, full_name, benefit_policy_id, "
+                + "card_number, barcode, status, active) VALUES (" + employerId + ", 'Convert Member', "
+                + policyId + ", 'CVC" + s + "', 'CVC" + s + "', 'ACTIVE', true) RETURNING id", Long.class);
+        jdbc.update("INSERT INTO member_policy_assignments (member_id, policy_id, assignment_start_date, "
+                + "assignment_source) VALUES (?, ?, CURRENT_DATE - 60, 'MANUAL')", memberId, policyId);
+        jdbc.update("INSERT INTO member_employer_assignments (member_id, employer_id, assignment_start_date, "
+                + "assignment_reason, assignment_source) VALUES (?, ?, CURRENT_DATE - 60, "
+                + "'test enrollment', 'MANUAL')", memberId, employerId);
+
+        Long categoryId = jdbc.queryForObject("INSERT INTO medical_categories (code, name, active) "
+                + "VALUES ('CVCAT-" + s + "', 'Convert Category', true) RETURNING id", Long.class);
+        Long serviceId = jdbc.queryForObject("INSERT INTO medical_services (code, name, category_id, "
+                + "cost, active) VALUES ('CVSRV-" + s + "', 'Convert Service', " + categoryId + ", "
+                + unitPrice + ", true) RETURNING id", Long.class);
+        Long ruleId = jdbc.queryForObject("INSERT INTO benefit_policy_rules (benefit_policy_id, "
+                + "medical_category_id, encounter_type, claim_context_code, coverage_percent, active, deleted) VALUES ("
+                + policyId + ", " + categoryId + ", 'OUTPATIENT', 'OUTPATIENT', " + coveragePercent
+                + ", true, false) RETURNING id", Long.class);
+        Long groupId = jdbc.queryForObject("INSERT INTO benefit_groups (policy_id, code, name_ar, "
+                + "context_type, aggregation_mode) VALUES (" + policyId + ", 'CVG-" + s
+                + "', 'مجموعة', 'OUTPATIENT', 'INDIVIDUAL') RETURNING id", Long.class);
+        Long bucketId = jdbc.queryForObject("INSERT INTO benefit_limit_buckets (policy_id, benefit_group_id, "
+                + "code, name_ar, amount_limit, period_type, counting_method, consumption_basis, "
+                + "benefit_scope_type, context_type, active) VALUES (" + policyId + ", " + groupId
+                + ", 'CVB-" + s + "', 'وعاء', " + amountLimit
+                + ", 'ANNUAL', 'EACH_UNIT', 'COMPANY_SHARE', 'CATEGORY', 'OUTPATIENT', true) RETURNING id",
+                Long.class);
+        jdbc.update("INSERT INTO benefit_rule_buckets (rule_id, bucket_id) VALUES (?, ?)", ruleId, bucketId);
+
+        Long providerId = jdbc.queryForObject("INSERT INTO providers (name, license_number, provider_type, "
+                + "allow_all_employers) VALUES ('CvProv " + s + "', 'CVLIC-" + s
+                + "', 'CLINIC', true) RETURNING id", Long.class);
+        jdbc.update("INSERT INTO provider_accounts (provider_id, running_balance, total_approved, "
+                + "total_paid) VALUES (?, 0, 0, 0)", providerId);
+
+        Long contractId = jdbc.queryForObject("INSERT INTO provider_contracts (provider_id, contract_code, "
+                + "contract_number, start_date, end_date, discount_percent, "
+                + "discount_before_rejection, status, active) VALUES (" + providerId
+                + ", 'CVCON-" + s + "', 'CVCNT-" + s
+                + "', CURRENT_DATE - 60, CURRENT_DATE + 365, 0, false, 'ACTIVE', true) RETURNING id",
+                Long.class);
+        jdbc.update("INSERT INTO provider_contract_terms (contract_id, effective_from, discount_percent, "
+                + "discount_before_rejection, change_reason) VALUES (?, CURRENT_DATE - 60, 0, false, "
+                + "'test initial terms')", contractId);
+        jdbc.update("INSERT INTO provider_contract_pricing_items (contract_id, service_code, service_name, "
+                + "medical_category_id, base_price, contract_price, effective_from, active) "
+                + "VALUES (?, ?, ?, ?, "
+                + unitPrice + ", " + unitPrice + ", CURRENT_DATE - 60, true)",
+                contractId, "CVSRV-" + s, "Convert Service", categoryId);
+
+        Long visitId = jdbc.queryForObject("INSERT INTO visits (member_id, provider_id, visit_date, status) "
+                + "VALUES (" + memberId + ", " + providerId + ", CURRENT_DATE, 'REGISTERED') RETURNING id",
+                Long.class);
+
+        Long preauthId = jdbc.queryForObject("INSERT INTO pre_authorizations (member_id, policy_id, "
+                + "provider_id, service_category_id, status, request_date, expected_service_date, "
+                + "created_at, updated_at, version) VALUES (" + memberId + ", " + policyId + ", "
+                + providerId + ", " + categoryId
+                + ", 'SUBMITTED', now(), CURRENT_DATE, now(), now(), 0) RETURNING id", Long.class);
+        // contract_price on a preauth line is the LINE's full contractual
+        // total (WaadFinancialEngine.Input.contractualPrice), not a per-unit
+        // price -- matching scenario()'s own precedent, where the same
+        // "requested" value is used for both columns. Passing the unit price
+        // here instead caps settlementBase to one unit's worth regardless of
+        // quantity.
+        jdbc.update("INSERT INTO pre_authorization_lines (pre_authorization_id, provider_service_id, "
+                + "medical_service_id, medical_category_id, provider_service_code, service_name, "
+                + "contract_price, requested_amount, coverage_percentage, encounter_type, "
+                + "requested_quantity, approved_quantity) VALUES (?, " + serviceId + ", " + serviceId + ", "
+                + categoryId + ", ?, ?, " + requestedAmount + ", " + requestedAmount + ", " + coveragePercent
+                + ", 'OUTPATIENT', " + preauthQuantity + ", " + preauthQuantity + ")",
+                preauthId, "SVC-" + s, "Service " + s);
+
+        return new Scenario(preauthId, memberId, policyId, bucketId, visitId, serviceId);
+    }
+
+    private ClaimViewDto claimAgainstQuantity(Scenario sc, int quantity) {
+        return claimService.createClaim(ClaimCreateDto.builder()
+                .visitId(sc.visitId())
+                .serviceDate(LocalDate.now())
+                .encounterType(EncounterType.OUTPATIENT)
+                .preAuthorizationId(sc.preauthId())
+                .lines(List.of(ClaimLineDto.builder()
+                        .medicalServiceId(sc.serviceId()).quantity(quantity).build()))
+                .build());
+    }
+
     private String preauthStatus(long preauthId) {
         return jdbc.queryForObject("SELECT status FROM pre_authorizations WHERE id = ?",
                 String.class, preauthId);
@@ -191,6 +300,14 @@ class PreAuthConversionHappensOnceIntegrationTest extends PostgresIntegrationTes
                         + "  FROM benefit_bucket_consumptions WHERE status='REVERSED' "
                         + "  GROUP BY reversal_of_id) r ON r.reversal_of_id = c.id "
                         + "WHERE c.member_id = ? AND c.bucket_id = ? AND c.status = 'RESERVED'",
+                BigDecimal.class, memberId, bucketId);
+    }
+
+    /** Sum of every COMMITTED (claim, not reservation) row for this member+bucket. */
+    private BigDecimal committedAmount(long memberId, long bucketId) {
+        return jdbc.queryForObject(
+                "SELECT COALESCE(SUM(approved_amount), 0) FROM benefit_bucket_consumptions "
+                        + "WHERE member_id = ? AND bucket_id = ? AND status = 'COMMITTED' AND source_type = 'CLAIM'",
                 BigDecimal.class, memberId, bucketId);
     }
 
@@ -317,5 +434,115 @@ class PreAuthConversionHappensOnceIntegrationTest extends PostgresIntegrationTes
         // writer at all would mean the conversion is keyed off something other
         // than the claim's own link.
         verify(reservationLedger, never()).releaseOnConversion(anyLong(), anyLong(), any());
+    }
+
+    // ── P1.11.4: Reservation -> Commit parity ───────────────────────────
+    // Committed = C + F, Reserved = R - O -- never C + O + F, and the
+    // reservation never survives conversion.
+
+    @Test
+    @WithMockUser(username = "admin", roles = {"SUPER_ADMIN"})
+    @DisplayName("R2 — the final claim consumes LESS than was reserved: the unused unit genuinely returns to available")
+    void finalClaimBelowReservationReturnsTheDifference() {
+        // Reserve 4 units at 100 each (400); the claim that actually arrives
+        // only needs 3 (300) -- e.g. one authorised session was never used.
+        Scenario sc = scenarioWithQuantity("1000.00", "100.00", 100, 4);
+        reservationLedger.approveAndReserve(sc.preauthId(), 0L, "reviewer");
+        assertThat(netReserved(sc.memberId(), sc.bucketId())).isEqualByComparingTo("400.00");
+
+        ClaimViewDto claim = claimAgainstQuantity(sc, 3);
+        assertThat(claim.getStatus()).isEqualTo(ClaimStatus.APPROVED);
+
+        // The FULL reservation is released (the preauth converts once, for
+        // whatever the claim actually used) -- never "release only what the
+        // claim happened to consume".
+        assertThat(netReserved(sc.memberId(), sc.bucketId()))
+                .as("release own reservation = 4 units (400), not capped to the claim's 3").isEqualByComparingTo("0.00");
+        // And the commit is the claim's own canonical consumption (3 units,
+        // 300) -- never the reserved amount (400) just because that is what
+        // was approved on the preauth.
+        assertThat(committedAmount(sc.memberId(), sc.bucketId()))
+                .as("commit actual = 3 units (300), not the reservation's 4 (400)")
+                .isEqualByComparingTo("300.00");
+        // Committed = C(0) + F(300); Reserved = R(400) - O(400) = 0.
+        // Never C + O + F = 700.
+    }
+
+    @Test
+    @WithMockUser(username = "admin", roles = {"SUPER_ADMIN"})
+    @DisplayName("R3 — the final claim consumes MORE than was reserved, but the bucket's free capacity allows it")
+    void finalClaimAboveReservationStillCommitsInFullWhenCapacityAllows() {
+        // Reserve 4 units (400) out of a 1000 ceiling; the claim needs 5
+        // (500) -- the extra unit draws on capacity nobody else reserved,
+        // exactly what buildForPreauthorizedClaim's
+        // "reservableAvailable + ownReservation" formula (P1.5.0b) allows.
+        Scenario sc = scenarioWithQuantity("1000.00", "100.00", 100, 4);
+        reservationLedger.approveAndReserve(sc.preauthId(), 0L, "reviewer");
+
+        ClaimViewDto claim = claimAgainstQuantity(sc, 5);
+        assertThat(claim.getStatus()).isEqualTo(ClaimStatus.APPROVED);
+
+        assertThat(netReserved(sc.memberId(), sc.bucketId())).isEqualByComparingTo("0.00");
+        assertThat(committedAmount(sc.memberId(), sc.bucketId()))
+                .as("the claim's own decision approved 5 units (500), not capped to the 4 (400) reserved")
+                .isEqualByComparingTo("500.00");
+    }
+
+    @Test
+    @WithMockUser(username = "admin", roles = {"SUPER_ADMIN"})
+    @DisplayName("R5 — converting one preauth's claim never releases a DIFFERENT preauth's own reservation")
+    void conversionNeverReleasesAForeignReservation() {
+        // Two independent members, two independent approvals against the
+        // SAME bucket shape -- releasing sc1's hold on sc1's conversion must
+        // never touch sc2's, even though both are "the same member's policy
+        // family" in spirit (different members here, but the guarantee is
+        // the same one P1.5.0b already proved for own-reservation reads:
+        // preauthId + allocation + bucket + period, never just "this bucket").
+        Scenario sc1 = scenario("1000.00", "300.00", 100);
+        Scenario sc2 = scenario("1000.00", "300.00", 100);
+        reservationLedger.approveAndReserve(sc1.preauthId(), 0L, "reviewer");
+        reservationLedger.approveAndReserve(sc2.preauthId(), 0L, "reviewer");
+        assertThat(netReserved(sc2.memberId(), sc2.bucketId())).isEqualByComparingTo("300.00");
+
+        ClaimViewDto claim1 = claimAgainst(sc1, new BigDecimal("300.00"));
+        assertThat(claim1.getStatus()).isEqualTo(ClaimStatus.APPROVED);
+
+        // sc1 converted; sc2's own, unrelated reservation must be untouched.
+        assertThat(netReserved(sc1.memberId(), sc1.bucketId())).isEqualByComparingTo("0.00");
+        assertThat(netReserved(sc2.memberId(), sc2.bucketId()))
+                .as("a different preauth's own reservation must survive an unrelated conversion")
+                .isEqualByComparingTo("300.00");
+        assertThat(preauthStatus(sc2.preauthId())).isEqualTo("APPROVED");
+        verify(reservationLedger, never()).releaseOnConversion(eq(sc2.preauthId()), anyLong(), any());
+    }
+
+    @Test
+    @WithMockUser(username = "admin", roles = {"SUPER_ADMIN"})
+    @DisplayName("Conversion is atomic: a failure after the claim commits but before the reservation release rolls back BOTH")
+    void conversionRollsBackBothMovementsTogetherOnFailure() {
+        Scenario sc = scenario("1000.00", "300.00", 100);
+        reservationLedger.approveAndReserve(sc.preauthId(), 0L, "reviewer");
+
+        // finalizer.finalizeConvertedClaim is @Transactional(MANDATORY) --
+        // even Mockito's own doThrow().when(spy) setup call reaches the real
+        // proxy for this bean, so the stubbing call itself needs an active
+        // transaction (never committed; only used to register the stub).
+        transactionTemplate.executeWithoutResult(tx -> org.mockito.Mockito
+                .doThrow(new RuntimeException("injected failure between commit and release"))
+                .when(finalizer).finalizeConvertedClaim(anyLong(), any()));
+
+        org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class, () -> claimAgainst(sc, new BigDecimal("300.00")));
+
+        // Nothing from this attempt survives: no claim consumption committed
+        // (commitClaim ran first, in the SAME transaction, and rolled back
+        // with everything after it), and the reservation is exactly as it
+        // was before the attempt -- never "released with no commit" and
+        // never "committed with the hold still live".
+        assertThat(committedAmount(sc.memberId(), sc.bucketId()))
+                .as("the claim's own consumption must not survive a rollback").isEqualByComparingTo("0.00");
+        assertThat(netReserved(sc.memberId(), sc.bucketId()))
+                .as("the reservation must be exactly what it was before the failed attempt")
+                .isEqualByComparingTo("300.00");
+        assertThat(preauthStatus(sc.preauthId())).isEqualTo("APPROVED");
     }
 }
