@@ -18,14 +18,11 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.multipart.MultipartFile;
 
 import com.waad.tba.common.dto.ApiResponse;
 import com.waad.tba.common.guard.FeatureGuard;
 import com.waad.tba.modules.provider.dto.EffectivePriceResponseDto;
-import com.waad.tba.modules.provider.dto.ProviderClaimRequest;
 import com.waad.tba.modules.provider.dto.ProviderClaimResponse;
 import com.waad.tba.modules.provider.dto.ProviderEligibilityRequest;
 import com.waad.tba.modules.provider.dto.ProviderEligibilityResponse;
@@ -261,7 +258,7 @@ public class ProviderPortalController {
         description = "Member not found"
     )
     public ResponseEntity<ProviderClaimResponse> submitClaim(
-            @Valid @RequestBody ProviderClaimRequest request) {
+            @RequestBody(required = false) Object ignoredLegacyRequest) {
 
         featureGuard.requireProviderPortal();
         featureGuard.requireDirectClaimSubmission();
@@ -330,9 +327,7 @@ public class ProviderPortalController {
         responseCode = "400",
         description = "Invalid file type, size exceeded, or claim validation failed"
     )
-    public ResponseEntity<ProviderClaimResponse> submitClaimWithAttachments(
-            @RequestPart("claim") String claimJson,
-            @RequestPart(value = "files", required = false) MultipartFile[] files) {
+    public ResponseEntity<ProviderClaimResponse> submitClaimWithAttachments() {
 
         featureGuard.requireProviderPortal();
         featureGuard.requireDirectClaimSubmission();
