@@ -371,5 +371,47 @@ class BenefitBucketLedgerServiceTest {
         assertEquals(LocalDate.of(2026, 3, 18), captor.getValue().getPeriodStart());
         assertEquals(LocalDate.of(2031, 3, 17), captor.getValue().getPeriodEnd());
     }
+
+    // ── P1.6: a TIMES-limited bucket commits what the decision APPROVED,
+    // never what was merely requested ──────────────────────────────────
+
+    private BenefitLimitBucket timesLimitedBucket() {
+        BenefitLimitBucket timesBucket = BenefitLimitBucket.builder()
+                .id(71L).policy(policy).code("PHYSIO").nameAr("جلسات العلاج الطبيعي")
+                .timesLimit(2).periodType(LimitPeriodType.ANNUAL).countingMethod(CountingMethod.EACH_UNIT)
+                .consumptionBasis(ConsumptionBasis.COMPANY_SHARE).active(true).build();
+        BenefitRuleBucket link = BenefitRuleBucket.builder().bucket(timesBucket).build();
+        lenient().when(ruleBucketRepository.findByRuleIdOrderByConsumptionOrder(50L)).thenReturn(List.of(link));
+        lenient().when(bucketRepository.findByIdForUpdate(71L)).thenReturn(Optional.of(timesBucket));
+        lenient().when(consumptionRepository.sumCommittedTimes(any(), any(), any(), any(), any())).thenReturn(0);
+        return timesBucket;
+    }
+
+    @Test
+    @DisplayName("P1.6 — الدفتر يستهلك الكمية المعتمدة (2) لا المطلوبة (3) لوعاء محدود بعدد المرات")
+    void commitClaimConsumesApprovedQuantityNotRequestedQuantity() {
+        timesLimitedBucket();
+        line.setQuantity(3);
+        line.setApprovedQuantity(2);
+
+        service.commitClaim(20L);
+
+        ArgumentCaptor<BenefitBucketConsumption> captor = ArgumentCaptor.forClass(BenefitBucketConsumption.class);
+        verify(consumptionRepository).save(captor.capture());
+        assertEquals(2, captor.getValue().getTimesConsumed());
+    }
+
+    @Test
+    @DisplayName("P1.6 — بلا approvedQuantity، الدفتر يفشل بوضوح ولا يستهلك الكمية المطلوبة كبديل صامت")
+    void commitClaimFailsClosedWhenApprovedQuantityMissingForATimesLimitedBucket() {
+        timesLimitedBucket();
+        line.setQuantity(3);
+        line.setApprovedQuantity(null);
+
+        IllegalStateException error = assertThrows(IllegalStateException.class, () -> service.commitClaim(20L));
+
+        assertTrue(error.getMessage().contains("TIMES_LEDGER_APPROVED_QUANTITY_MISSING"));
+        verify(consumptionRepository, never()).save(any());
+    }
 }
 

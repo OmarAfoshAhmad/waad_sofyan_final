@@ -276,9 +276,37 @@ public class BenefitBucketLedgerService {
      * definitions would let an approval hold one quantity and the claim that
      * follows consume another, leaving a residue at conversion.
      */
+    /**
+     * P1.6: a TIMES-limited bucket's consumption must reflect what the
+     * canonical decision actually APPROVED, never what was merely
+     * requested -- committing {@code line.getQuantity()} here let a claim
+     * whose own decision refused part of a times-limited quantity (e.g.
+     * Physio: 3 requested, only 2 approved) consume 3 occurrences from the
+     * ceiling anyway, silently overspending it by exactly the refused
+     * amount. No fallback to the requested quantity when approvedQuantity
+     * is missing: that fallback is what reintroduced this exact bug once
+     * already (see the P1.6 review that found it) -- a bucket that
+     * actually gates on TIMES must fail closed instead, since a decision
+     * with no approvedQuantity recorded is a caller defect, not "assume the
+     * whole request was approved".
+     */
     private int consumedTimes(BenefitLimitBucket bucket, ClaimLine line,
             Set<TimesLimitEvaluator.CountedKey> countedOnce, LocalDate serviceDate) {
-        int quantity = Math.max(1, line.getQuantity() == null ? 1 : line.getQuantity());
+        int quantity;
+        if (bucket.getTimesLimit() != null) {
+            if (line.getApprovedQuantity() == null) {
+                throw new IllegalStateException(
+                        "TIMES_LEDGER_APPROVED_QUANTITY_MISSING: bucket=" + bucket.getId()
+                                + " claimLine=" + line.getId()
+                                + " -- a TIMES-limited bucket cannot commit consumption for a line "
+                                + "whose canonical decision recorded no approvedQuantity");
+            }
+            quantity = Math.max(0, line.getApprovedQuantity());
+        } else {
+            // Informational only for a non-TIMES-limited bucket (nothing above
+            // gates on this value) -- unchanged from before P1.6.
+            quantity = Math.max(1, line.getQuantity() == null ? 1 : line.getQuantity());
+        }
         return timesLimitEvaluator.occurrencesFor(bucket, quantity, countedOnce, serviceDate);
     }
 
