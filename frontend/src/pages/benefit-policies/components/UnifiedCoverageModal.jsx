@@ -204,9 +204,17 @@ const UnifiedCoverageModal = ({
         (category) => Number(category.id) === Number(duplicateRule.medicalCategoryId || duplicateRule.categoryId)
       );
       const categoryName = duplicateCategory?.nameAr || duplicateCategory?.name || duplicateRule.medicalCategoryName || 'التصنيف المحدد';
-      enqueueSnackbar(`توجد قاعدة مسبقاً للتصنيف «${categoryName}» ضمن سياق «${contextName(claimContextCode)}»`, {
+      const activeRaw = duplicateRule.active;
+      const isInactive =
+        activeRaw === false || activeRaw === 0 || activeRaw === '0' || String(activeRaw).toLowerCase() === 'false';
+      enqueueSnackbar(
+        isInactive
+          ? `توجد قاعدة معطّلة مسبقاً للتصنيف «${categoryName}» ضمن سياق «${contextName(claimContextCode)}». افتح سلة المحذوفات/المعطّلة وأعد تفعيلها بدلاً من إنشاء نسخة مكررة.`
+          : `توجد قاعدة مسبقاً للتصنيف «${categoryName}» ضمن سياق «${contextName(claimContextCode)}»`,
+        {
         variant: 'warning'
-      });
+        }
+      );
       return;
     }
 

@@ -21,6 +21,8 @@ describe('unified coverage modal claim-context boundary', () => {
     expect(tabSource).toContain('existingRules={rules}');
     expect(modalSource).toContain('const duplicateRule = findDuplicateRule()');
     expect(modalSource).toContain('توجد قاعدة مسبقاً للتصنيف');
+    expect(modalSource).toContain('توجد قاعدة معطّلة مسبقاً');
+    expect(modalSource).toContain('أعد تفعيلها بدلاً من إنشاء نسخة مكررة');
     expect(modalSource).not.toContain('Data integrity error');
     expect(modalSource).toContain('{ suppressGlobalError: true }');
   });
@@ -29,5 +31,11 @@ describe('unified coverage modal claim-context boundary', () => {
     expect(tabSource).toContain('queryFn: getAllMedicalCategories');
     expect(tabSource).toContain("queryKey: ['medical-categories-active-coverage-selector']");
     expect(tabSource).not.toContain('size: 500');
+  });
+
+  it('does not present inactive buckets as active claim-engine ceilings', () => {
+    expect(tabSource).toContain('activeAppliedBucketLinks');
+    expect(tabSource).toContain('وعاء معطّل');
+    expect(tabSource).toContain('محرك المطالبات لا يطبّق الأوعية المعطلة');
   });
 });

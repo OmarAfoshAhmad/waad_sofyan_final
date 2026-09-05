@@ -1338,7 +1338,8 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
           const label = context?.nameAr
             || (rule.encounterType === 'INPATIENT' ? 'إيواء' : rule.encounterType === 'ANY' ? 'عام' : 'عيادات خارجية');
           const isCritical = criticalGapRuleIds.has(rule.id);
-          const hasNoBucket = rule.bucketLinks?.length === 0 && !rule.groupSource;
+          const hasNoBucket = rule.appliedBucketLinks?.length === 0 && !rule.groupSource;
+          const hasInactiveBucket = rule.inactiveBucketLinks?.length > 0 && !rule.groupSource;
           return (
             <Stack direction="row" spacing={0.5} alignItems="center" justifyContent="center" flexWrap="wrap">
               <Chip size="small" variant="outlined" color={isCritical ? 'error' : 'default'} label={label}
@@ -1351,6 +1352,11 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
               {!isCritical && hasNoBucket && (
                 <Tooltip title="لا يوجد وعاء سقف مرتبط بهذه القاعدة — يُطبَّق السقف العام فقط">
                   <Chip size="small" variant="outlined" color="warning" label="بلا وعاء" sx={{ height: 20, fontSize: '0.65rem' }} />
+                </Tooltip>
+              )}
+              {!isCritical && hasInactiveBucket && (
+                <Tooltip title="يوجد وعاء مرتبط لكنه معطّل، ومحرك المطالبات لا يطبّق الأوعية المعطلة">
+                  <Chip size="small" variant="outlined" color="error" label="وعاء معطّل" sx={{ height: 20, fontSize: '0.65rem' }} />
                 </Tooltip>
               )}
             </Stack>
@@ -1376,17 +1382,17 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
           );
         }
         case 'daysLimit': {
-          const limit = rule.groupSource ? rule.bucket : rule.individualLimitLink?.bucket;
+          const limit = rule.groupSource ? rule.bucket : rule.displayBucket;
           if (!limit || limit.daysLimit == null) return '-';
           return `${limit.daysLimit} يوم`;
         }
         case 'timesLimit': {
-          const limit = rule.groupSource ? rule.bucket : rule.individualLimitLink?.bucket;
+          const limit = rule.groupSource ? rule.bucket : rule.displayBucket;
           if (!limit || limit.timesLimit == null) return '-';
           return `${limit.timesLimit} مرة`;
         }
         case 'amountLimit': {
-          const limit = rule.groupSource ? rule.bucket : rule.individualLimitLink?.bucket;
+          const limit = rule.groupSource ? rule.bucket : rule.displayBucket;
           if (!limit) {
             return (
               <Chip
@@ -1423,7 +1429,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
           );
         }
         case 'limitPeriod': {
-          const limit = rule.groupSource ? rule.bucket : rule.individualLimitLink?.bucket;
+          const limit = rule.groupSource ? rule.bucket : rule.displayBucket;
           if (!limit) return '-';
           const periodMap = {
             POLICY_PERIOD: 'خلال الوثيقة',
@@ -1632,8 +1638,15 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
       // its aggregation mode is INDIVIDUAL.
       const individualLimitLinks = bucketLinks.filter((link) => String(link.groupCode || '').startsWith('AUTO-BEN-'));
       const individualLimitLink = individualLimitLinks[0] || null;
-      const individualLimit = individualLimitLink?.bucket || null;
+      const individualLimit = individualLimitLink?.bucket?.active === false ? null : individualLimitLink?.bucket || null;
       const groupBucketLinks = bucketLinks.filter((link) => !String(link.groupCode || '').startsWith('AUTO-BEN-'));
+      const appliedBucketLinks = bucketLinks;
+      const activeAppliedBucketLinks = appliedBucketLinks.filter((link) => link.bucket?.active !== false);
+      const displayBucket =
+        individualLimit ||
+        activeAppliedBucketLinks.map((link) => link.bucket).find((bucket) => bucket?.amountLimit != null) ||
+        activeAppliedBucketLinks.map((link) => link.bucket).find((bucket) => bucket?.timesLimit != null || bucket?.daysLimit != null) ||
+        null;
       const linkSearch = groupBucketLinks.map((link) => `${link.groupName || ''} ${link.bucket?.nameAr || ''}`).join(' ');
       const linkedDaysLimits = bucketLinks.map((link) => link.bucket?.daysLimit).filter((value) => value !== null && value !== undefined);
       const uniqueDaysLimits = [...new Set(linkedDaysLimits)];
@@ -1656,11 +1669,14 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
         parentNameAr,
         changedAt,
         bucketLinks: groupBucketLinks,
+        appliedBucketLinks: activeAppliedBucketLinks,
+        inactiveBucketLinks: appliedBucketLinks.filter((link) => link.bucket?.active === false),
         individualLimitLink,
-        amountLimit: individualLimit?.amountLimit ?? null,
-        timesLimit: individualLimit?.timesLimit ?? null,
-        limitPeriod: individualLimit?.periodType ?? null,
-        limitPeriodValue: individualLimit?.periodValue ?? null,
+        displayBucket,
+        amountLimit: displayBucket?.amountLimit ?? null,
+        timesLimit: displayBucket?.timesLimit ?? null,
+        limitPeriod: displayBucket?.periodType ?? null,
+        limitPeriodValue: displayBucket?.periodValue ?? null,
         daysLimit: uniqueDaysLimits.length > 0 ? Math.min(...uniqueDaysLimits) : null,
         daysLimitLabel,
         isLinked: bucketLinks.length > 0,
@@ -1711,6 +1727,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
           effectiveCoveragePercent: null,
           requiresPreApproval: !!group.requiresPreApproval,
           bucketLinks,
+          appliedBucketLinks: bucketLinks,
           daysLimitLabel: days.length ? days.map((value) => `${value} يوم`).join('، ') : null,
           amountLimit: primaryBucket?.amountLimit ?? null,
           timesLimit: primaryBucket?.timesLimit ?? null,
@@ -1746,7 +1763,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
       groups: activeRules.filter((rule) => rule.groupSource).length,
       individuals: activeRules.filter((rule) => !rule.groupSource).length,
       byContext,
-      gaps: activeRules.filter((rule) => rule.bucketLinks?.length === 0 || gapRuleIds.has(rule.id)).length
+      gaps: activeRules.filter((rule) => rule.appliedBucketLinks?.length === 0 || gapRuleIds.has(rule.id)).length
     };
   }, [normalizedRules, gapRuleIds]);
 
@@ -1768,7 +1785,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
     }
 
     if (showGapsOnly) {
-      statusFiltered = statusFiltered.filter((r) => r.bucketLinks.length === 0 || gapRuleIds.has(r.id));
+      statusFiltered = statusFiltered.filter((r) => r.appliedBucketLinks?.length === 0 || gapRuleIds.has(r.id));
     }
 
     const filtered = !query ? statusFiltered : statusFiltered.filter((rule) => rule.searchable.includes(query));
