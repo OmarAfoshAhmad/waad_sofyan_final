@@ -1,4 +1,4 @@
-package com.waad.tba.modules.claim.service.finance;
+package com.waad.tba.modules.benefitpolicy.service.unifiedlimit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -14,37 +14,20 @@ import com.waad.tba.modules.benefitpolicy.entity.ClaimLineLimitSnapshot;
 import com.waad.tba.modules.benefitpolicy.enums.BeneficiaryScopeType;
 import com.waad.tba.modules.benefitpolicy.enums.BenefitScopeType;
 import com.waad.tba.modules.benefitpolicy.enums.CountingMethod;
-import com.waad.tba.modules.benefitpolicy.service.unifiedlimit.BindingConstraintType;
-import com.waad.tba.modules.benefitpolicy.service.unifiedlimit.BucketLimitSnapshot;
-import com.waad.tba.modules.benefitpolicy.service.unifiedlimit.CanonicalConsumptionTarget;
-import com.waad.tba.modules.benefitpolicy.service.unifiedlimit.LimitAxisType;
-import com.waad.tba.modules.benefitpolicy.service.unifiedlimit.ReservationEvaluationMode;
-import com.waad.tba.modules.benefitpolicy.service.unifiedlimit.ResolvedLimitDescriptor;
-import com.waad.tba.modules.benefitpolicy.service.unifiedlimit.ResolvedLimitItem;
-import com.waad.tba.modules.benefitpolicy.service.unifiedlimit.UnifiedLimitDecision;
-import com.waad.tba.modules.benefitpolicy.service.unifiedlimit.UnifiedLimitInput;
-import com.waad.tba.modules.benefitpolicy.service.unifiedlimit.UnifiedLimitResolver;
-import com.waad.tba.modules.benefitpolicy.service.unifiedlimit.UnifiedLimitStatus;
 import com.waad.tba.modules.providercontract.enums.EncounterType;
 
 /**
  * P1.11.1 — the CanonicalConsumptionTarget contract: every movement a
  * ledger writer will ever need is fully decided here, from
- * UnifiedLimitDecision + WaadFinancialEngine.Result + ResolvedLimitItem
- * alone. No wiring into BenefitBucketLedgerService yet (P1.11.2) — these
- * are pure gates on the contract itself.
+ * UnifiedLimitDecision + the financial engine's own limitConsumption +
+ * ResolvedLimitItem alone. No wiring into BenefitBucketLedgerService yet
+ * (P1.11.2) — these are pure gates on the contract itself.
  */
 class CanonicalConsumptionTargetBuilderTest {
 
     private static final LocalDate SERVICE_DATE = LocalDate.of(2026, 3, 1);
     private static final LocalDate PERIOD_START = LocalDate.of(2026, 1, 1);
     private static final LocalDate PERIOD_END = LocalDate.of(2026, 12, 31);
-
-    private static WaadFinancialEngine.Result financialWithConsumption(BigDecimal limitConsumption) {
-        return new WaadFinancialEngine().evaluate(new WaadFinancialEngine.Input(
-                new BigDecimal("600.00"), new BigDecimal("600.00"), WaadFinancialEngine.LimitMode.LIMITED,
-                limitConsumption, 100, BigDecimal.ZERO, false, BigDecimal.ZERO, false, 1));
-    }
 
     private static ResolvedLimitDescriptor descriptorFor(String limitKey, Long bucketId, Long groupId) {
         return new ResolvedLimitDescriptor(limitKey, bucketId, ClaimLineLimitSnapshot.SourceType.POLICY_DEFAULT,
@@ -53,7 +36,7 @@ class CanonicalConsumptionTargetBuilderTest {
     }
 
     @Test
-    @DisplayName("CT1 — Amount: the decision's own money consumption (from WaadFinancialEngine) lands on the target unchanged")
+    @DisplayName("CT1 — Amount: the decision's own money consumption lands on the target unchanged")
     void ct1_amount() {
         BucketLimitSnapshot amountSnapshot = new BucketLimitSnapshot(910L, 700L, LimitAxisType.AMOUNT,
                 CountingMethod.EACH_LINE, BigDecimal.valueOf(1000), BigDecimal.ZERO, BigDecimal.ZERO,
@@ -64,7 +47,7 @@ class CanonicalConsumptionTargetBuilderTest {
         var items = List.of(new ResolvedLimitItem(amountSnapshot, descriptorFor("BUCKET:910", 910L, 11L)));
 
         List<CanonicalConsumptionTarget> targets = CanonicalConsumptionTargetBuilder.build(
-                decision, financialWithConsumption(new BigDecimal("600.00")), items, SERVICE_DATE);
+                decision, new BigDecimal("600.00"), items, SERVICE_DATE);
 
         assertThat(targets).hasSize(1);
         assertThat(targets.get(0).amountToConsume()).isEqualByComparingTo("600.00");
@@ -85,7 +68,7 @@ class CanonicalConsumptionTargetBuilderTest {
         var items = List.of(new ResolvedLimitItem(timesSnapshot, descriptorFor("BUCKET:920", 920L, 12L)));
 
         List<CanonicalConsumptionTarget> targets = CanonicalConsumptionTargetBuilder.build(
-                decision, financialWithConsumption(new BigDecimal("200.00")), items, SERVICE_DATE);
+                decision, new BigDecimal("200.00"), items, SERVICE_DATE);
 
         assertThat(targets).hasSize(1);
         assertThat(targets.get(0).timesToConsume()).isEqualTo(2);
@@ -105,7 +88,7 @@ class CanonicalConsumptionTargetBuilderTest {
         var items = List.of(new ResolvedLimitItem(daysSnapshot, descriptorFor("BUCKET:930", 930L, 13L)));
 
         List<CanonicalConsumptionTarget> targets = CanonicalConsumptionTargetBuilder.build(
-                decision, financialWithConsumption(BigDecimal.ZERO), items, SERVICE_DATE);
+                decision, BigDecimal.ZERO, items, SERVICE_DATE);
 
         assertThat(targets).isEmpty();
     }
@@ -123,7 +106,7 @@ class CanonicalConsumptionTargetBuilderTest {
         var items = List.of(new ResolvedLimitItem(daysSnapshot, descriptorFor("BUCKET:940", 940L, 14L)));
 
         List<CanonicalConsumptionTarget> targets = CanonicalConsumptionTargetBuilder.build(
-                decision, financialWithConsumption(BigDecimal.ZERO), items, SERVICE_DATE);
+                decision, BigDecimal.ZERO, items, SERVICE_DATE);
 
         assertThat(targets).hasSize(1);
         assertThat(targets.get(0).consumeDay()).isTrue();
@@ -146,7 +129,7 @@ class CanonicalConsumptionTargetBuilderTest {
                 new ResolvedLimitItem(parent, descriptorFor("BUCKET:951", 951L, 15L)));
 
         List<CanonicalConsumptionTarget> targets = CanonicalConsumptionTargetBuilder.build(
-                decision, financialWithConsumption(new BigDecimal("600.00")), items, SERVICE_DATE);
+                decision, new BigDecimal("600.00"), items, SERVICE_DATE);
 
         assertThat(targets).hasSize(2);
         assertThat(targets).extracting(CanonicalConsumptionTarget::limitKey)
@@ -159,25 +142,23 @@ class CanonicalConsumptionTargetBuilderTest {
     void ct6_sharedParentStableIdentity() {
         // Two lines under two different rules both reach the same shared
         // parent bucket (951) -- the key must not depend on which rule got there.
-        BucketLimitSnapshot sharedParentViaRuleA = new BucketLimitSnapshot(951L, 700L, LimitAxisType.AMOUNT,
+        BucketLimitSnapshot sharedParent = new BucketLimitSnapshot(951L, 700L, LimitAxisType.AMOUNT,
                 CountingMethod.EACH_LINE, BigDecimal.valueOf(5000), BigDecimal.ZERO, BigDecimal.ZERO,
                 BigDecimal.valueOf(5000), PERIOD_START, PERIOD_END);
         UnifiedLimitInput inputA = new UnifiedLimitInput(700L, 42L, 500L, SERVICE_DATE, EncounterType.OUTPATIENT,
                 0, 0, BigDecimal.ZERO, new BigDecimal("100.00"), null, ReservationEvaluationMode.NORMAL, null, null);
-        UnifiedLimitDecision decisionA = UnifiedLimitResolver.resolve(inputA, List.of(sharedParentViaRuleA));
-        var itemsA = List.of(new ResolvedLimitItem(sharedParentViaRuleA, descriptorFor("BUCKET:951", 951L, 15L)));
+        UnifiedLimitDecision decisionA = UnifiedLimitResolver.resolve(inputA, List.of(sharedParent));
+        var itemsA = List.of(new ResolvedLimitItem(sharedParent, descriptorFor("BUCKET:951", 951L, 15L)));
 
         UnifiedLimitInput inputB = new UnifiedLimitInput(700L, 43L, 500L, SERVICE_DATE, EncounterType.OUTPATIENT,
                 0, 0, BigDecimal.ZERO, new BigDecimal("200.00"), null, ReservationEvaluationMode.NORMAL, null, null);
-        UnifiedLimitDecision decisionB = UnifiedLimitResolver.resolve(inputB, List.of(sharedParentViaRuleA));
-        var itemsB = List.of(new ResolvedLimitItem(sharedParentViaRuleA, descriptorFor("BUCKET:951", 951L, 15L)));
+        UnifiedLimitDecision decisionB = UnifiedLimitResolver.resolve(inputB, List.of(sharedParent));
+        var itemsB = List.of(new ResolvedLimitItem(sharedParent, descriptorFor("BUCKET:951", 951L, 15L)));
 
         String keyA = CanonicalConsumptionTargetBuilder.build(
-                decisionA, financialWithConsumption(new BigDecimal("100.00")), itemsA, SERVICE_DATE)
-                .get(0).limitKey();
+                decisionA, new BigDecimal("100.00"), itemsA, SERVICE_DATE).get(0).limitKey();
         String keyB = CanonicalConsumptionTargetBuilder.build(
-                decisionB, financialWithConsumption(new BigDecimal("200.00")), itemsB, SERVICE_DATE)
-                .get(0).limitKey();
+                decisionB, new BigDecimal("200.00"), itemsB, SERVICE_DATE).get(0).limitKey();
 
         assertThat(keyA).isEqualTo(keyB).isEqualTo("BUCKET:951");
     }
@@ -197,7 +178,7 @@ class CanonicalConsumptionTargetBuilderTest {
                         BeneficiaryScopeType.MEMBER, 42L, null, "ANNUAL", PERIOD_START, PERIOD_END)));
 
         List<CanonicalConsumptionTarget> targets = CanonicalConsumptionTargetBuilder.build(
-                decision, financialWithConsumption(new BigDecimal("150.00")), items, SERVICE_DATE);
+                decision, new BigDecimal("150.00"), items, SERVICE_DATE);
 
         assertThat(targets).hasSize(1);
         assertThat(targets.get(0).bucketId()).isNull();
@@ -224,7 +205,7 @@ class CanonicalConsumptionTargetBuilderTest {
         var items = List.of(new ResolvedLimitItem(evaluatedOnly, descriptorFor("BUCKET:960", 960L, 16L)));
 
         List<CanonicalConsumptionTarget> targets = CanonicalConsumptionTargetBuilder.build(
-                decision, financialWithConsumption(BigDecimal.ZERO), items, SERVICE_DATE);
+                decision, BigDecimal.ZERO, items, SERVICE_DATE);
 
         assertThat(targets).isEmpty();
     }
@@ -240,7 +221,7 @@ class CanonicalConsumptionTargetBuilderTest {
         UnifiedLimitDecision decision = UnifiedLimitResolver.resolve(input, List.of(amountSnapshot));
 
         assertThatThrownBy(() -> CanonicalConsumptionTargetBuilder.build(
-                decision, financialWithConsumption(new BigDecimal("100.00")), List.of(), SERVICE_DATE))
+                decision, new BigDecimal("100.00"), List.of(), SERVICE_DATE))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("CANONICAL_CONSUMPTION_TARGET_MISSING_DESCRIPTOR");
     }

@@ -49,15 +49,25 @@ public class BenefitConsumptionEntryWriter {
 
     private final BenefitBucketConsumptionRepository consumptionRepository;
 
-    /** A claim consuming a bucket. */
+    /**
+     * A claim consuming a bucket.
+     *
+     * @param dayConsumed P1.11: DAYS has no numeric column of its own (this
+     *                    product tracks it purely by whether a COMMITTED row
+     *                    exists for a given bucket+service date) -- but a
+     *                    day-only movement (no money, no occurrence) still
+     *                    needs the row to actually get written, so this is
+     *                    the third legitimate reason {@code appendClaimCommit}
+     *                    accepts to record something, alongside amount/times.
+     */
     public BenefitBucketConsumption appendClaimCommit(
             Claim claim, ClaimLine line, BenefitPolicy policy, Long memberId, BenefitLimitBucket bucket,
-            LocalDate periodStart, LocalDate periodEnd, BigDecimal amount, int times,
+            LocalDate periodStart, LocalDate periodEnd, BigDecimal amount, int times, boolean dayConsumed,
             Integer calculationVersion, String idempotencyKey) {
 
         requireClaimShape(claim, line, bucket, idempotencyKey);
         requireNonNegativeDimensions(amount, times);
-        requireSomeMovement(amount, times);
+        requireSomeMovement(amount, times, dayConsumed);
 
         return consumptionRepository.save(BenefitBucketConsumption.builder()
                 .claim(claim).claimLine(line).policy(policy).memberId(memberId).bucket(bucket)
@@ -343,9 +353,13 @@ public class BenefitConsumptionEntryWriter {
     }
 
     private void requireSomeMovement(BigDecimal amount, int times) {
-        if (amount.signum() == 0 && times == 0) {
+        requireSomeMovement(amount, times, false);
+    }
+
+    private void requireSomeMovement(BigDecimal amount, int times, boolean dayConsumed) {
+        if (amount.signum() == 0 && times == 0 && !dayConsumed) {
             throw new IllegalArgumentException(
-                    "A movement with neither an amount nor an occurrence records nothing");
+                    "A movement with neither an amount, an occurrence, nor a day records nothing");
         }
     }
 

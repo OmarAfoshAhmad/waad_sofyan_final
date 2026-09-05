@@ -187,8 +187,12 @@ public class ClaimFinancialAdjudicationService {
         }
 
         List<BucketLimitSnapshot> beforeLine = context.adjustForNextLine(adapterResult.snapshots());
+        Optional<BucketLimitSnapshot> primaryTimesSnapshot = beforeLine.stream()
+                .filter(s -> s.limitType() == com.waad.tba.modules.benefitpolicy.service.unifiedlimit.LimitAxisType.TIMES)
+                .findFirst();
+        int requestedQuantity = requestedQuantity(primaryTimesSnapshot, quantity, context);
         UnifiedLimitInput input = new UnifiedLimitInput(policy.getId(), line.getAppliedRuleId(), memberId,
-                serviceDate, claim.getEncounterType(), quantity, 0, effectiveUnitPrice, eligibleAmount,
+                serviceDate, claim.getEncounterType(), requestedQuantity, 0, effectiveUnitPrice, eligibleAmount,
                 claim.getId(),
                 isPreauthorized ? ReservationEvaluationMode.PREAUTHORIZED_CLAIM : ReservationEvaluationMode.NORMAL,
                 isPreauthorized ? claim.getPreAuthorization().getId() : null,
@@ -197,6 +201,40 @@ public class ClaimFinancialAdjudicationService {
         UnifiedLimitDecision decision = UnifiedLimitResolver.resolve(input, beforeLine);
         context.recordLineConsumption(beforeLine, decision, serviceDate);
         return new CanonicalLimitEvaluation(decision, adapterResult.items());
+    }
+
+    /**
+     * P1.11.2: mirrors {@code CoverageEngineService.requestedQuantity()}
+     * exactly -- found missing here while wiring the ledger to trust
+     * {@code decision.approvedQuantity()} directly (P1.11.2's canonical
+     * commit path has no batch-wide "already counted" fallback of its own
+     * any more, unlike the retired ledger logic it replaced). Without this,
+     * a PER_VISIT/PER_DAY bucket's atomic-once-per-decision rule held on
+     * Save-A's own resolve but silently broke the moment a line fell back
+     * to this fresh resolve (e.g. every direct-entry approval, which always
+     * re-resolves under the member lock): each line requested (and got
+     * approved) its own occurrence independently, since nothing here yet
+     * asked whether an earlier line in the SAME fresh-resolve batch had
+     * already claimed it.
+     */
+    private int requestedQuantity(Optional<BucketLimitSnapshot> primaryTimesSnapshot, int rawQuantity,
+            ClaimLimitEvaluationContext context) {
+        if (primaryTimesSnapshot.isEmpty()) {
+            return Math.max(1, rawQuantity);
+        }
+        BucketLimitSnapshot snapshot = primaryTimesSnapshot.get();
+        var method = snapshot.countingMethod() != null ? snapshot.countingMethod()
+                : com.waad.tba.modules.benefitpolicy.enums.CountingMethod.EACH_LINE;
+        if (method == com.waad.tba.modules.benefitpolicy.enums.CountingMethod.EACH_UNIT) {
+            return Math.max(1, rawQuantity);
+        }
+        if (method == com.waad.tba.modules.benefitpolicy.enums.CountingMethod.PER_VISIT
+                || method == com.waad.tba.modules.benefitpolicy.enums.CountingMethod.PER_DAY) {
+            boolean alreadyThisBatch = context.timesAlreadyConsumedThisBatch(
+                    snapshot.bucketId(), snapshot.periodStart(), snapshot.periodEnd());
+            return alreadyThisBatch ? 0 : 1;
+        }
+        return 1;
     }
 
     private void apply(ClaimLine line, WaadFinancialEngine.Result r, UnifiedLimitDecision decision) {

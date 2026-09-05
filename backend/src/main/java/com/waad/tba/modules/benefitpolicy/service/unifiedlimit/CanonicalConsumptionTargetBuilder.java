@@ -1,11 +1,6 @@
-package com.waad.tba.modules.claim.service.finance;
+package com.waad.tba.modules.benefitpolicy.service.unifiedlimit;
 
 import com.waad.tba.modules.benefitpolicy.enums.CountingMethod;
-import com.waad.tba.modules.benefitpolicy.service.unifiedlimit.BucketLimitSnapshot;
-import com.waad.tba.modules.benefitpolicy.service.unifiedlimit.CanonicalConsumptionTarget;
-import com.waad.tba.modules.benefitpolicy.service.unifiedlimit.ResolvedLimitDescriptor;
-import com.waad.tba.modules.benefitpolicy.service.unifiedlimit.ResolvedLimitItem;
-import com.waad.tba.modules.benefitpolicy.service.unifiedlimit.UnifiedLimitDecision;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -15,17 +10,24 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * P1.11.1: turns {@code UnifiedLimitDecision.consumptionTargets()} (numeric,
- * per-axis, P1.3-pure) plus {@code WaadFinancialEngine.Result} (the ONE
- * money authority, P1.6) plus each bucket's {@link ResolvedLimitDescriptor}
- * (P1.6.x) into complete, per-bucket {@link CanonicalConsumptionTarget}
- * instructions -- one merged AMOUNT+TIMES+DAYS row per real bucket or the
- * synthetic POLICY_GENERAL ceiling, matching exactly the shape
- * {@code BenefitConsumptionEntryWriter.appendClaimCommit} already writes
- * (one movement, both dimensions, never split).
+ * P1.11.1/.2: turns {@code UnifiedLimitDecision.consumptionTargets()}
+ * (numeric, per-axis, P1.3-pure) plus the ONE money value the financial
+ * engine already computed for this line ({@code WaadFinancialEngine.Result.limitConsumption()},
+ * passed in as a plain {@code BigDecimal} so this stays a benefitpolicy-only
+ * type with no dependency on the claim module) plus each bucket's
+ * {@link ResolvedLimitDescriptor} (P1.6.x) into complete, per-bucket
+ * {@link CanonicalConsumptionTarget} instructions -- one merged
+ * AMOUNT+TIMES+DAYS row per real bucket or the synthetic POLICY_GENERAL
+ * ceiling, matching exactly the shape
+ * {@code BenefitConsumptionEntryWriter.appendClaimCommit} writes (one
+ * movement, every dimension, never split).
  *
  * Deliberately pure and stateless: no repository, no entity, no Spring
- * bean. {@link #occurrencesFor} is the ONE place
+ * bean, so both {@code ClaimFinancialAdjudicationService} (claim module)
+ * and {@code BenefitBucketLedgerService} (benefitpolicy module) can call
+ * it without a layering violation in either direction.
+ *
+ * {@link #occurrencesFor} is the ONE place
  * {@code decision.approvedQuantity()} is converted into what a given
  * counting method actually counts as -- lifted here from
  * {@code TimesLimitEvaluator} (used only by the ledger's own PER_VISIT/
@@ -49,7 +51,7 @@ public final class CanonicalConsumptionTargetBuilder {
      *         that produced the decision), never silently skipped.
      */
     public static List<CanonicalConsumptionTarget> build(UnifiedLimitDecision decision,
-            WaadFinancialEngine.Result financial, List<ResolvedLimitItem> items, LocalDate serviceDate) {
+            BigDecimal amountConsumed, List<ResolvedLimitItem> items, LocalDate serviceDate) {
         Map<String, ResolvedLimitDescriptor> descriptorByKey = new LinkedHashMap<>();
         for (ResolvedLimitItem item : items) {
             descriptorByKey.putIfAbsent(item.descriptor().limitKey(), item.descriptor());
@@ -61,7 +63,7 @@ public final class CanonicalConsumptionTargetBuilder {
             Accumulator acc = byKey.computeIfAbsent(key,
                     k -> new Accumulator(target.bucketId(), target.periodStart(), target.periodEnd()));
             switch (target.limitType()) {
-                case AMOUNT -> acc.amountToConsume = financial.limitConsumption();
+                case AMOUNT -> acc.amountToConsume = amountConsumed;
                 case TIMES -> acc.timesToConsume = occurrencesFor(target.countingMethod(), decision.approvedQuantity());
                 case DAYS -> acc.consumeDay = decision.approvedDays() > 0;
             }

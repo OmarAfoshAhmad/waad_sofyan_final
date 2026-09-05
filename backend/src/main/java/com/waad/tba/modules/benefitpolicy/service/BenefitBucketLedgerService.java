@@ -2,9 +2,12 @@ package com.waad.tba.modules.benefitpolicy.service;
 
 import com.waad.tba.modules.benefitpolicy.entity.*;
 import com.waad.tba.modules.benefitpolicy.enums.ConsumptionBasis;
-import com.waad.tba.modules.benefitpolicy.enums.CountingMethod;
 import com.waad.tba.modules.benefitpolicy.enums.LimitPeriodType;
 import com.waad.tba.modules.benefitpolicy.repository.*;
+import com.waad.tba.modules.benefitpolicy.service.unifiedlimit.CanonicalConsumptionTarget;
+import com.waad.tba.modules.benefitpolicy.service.unifiedlimit.CanonicalConsumptionTargetBuilder;
+import com.waad.tba.modules.benefitpolicy.service.unifiedlimit.ResolvedLimitItem;
+import com.waad.tba.modules.benefitpolicy.service.unifiedlimit.UnifiedLimitDecision;
 import com.waad.tba.modules.claim.entity.Claim;
 import com.waad.tba.modules.claim.entity.ClaimLine;
 import com.waad.tba.modules.claim.repository.ClaimRepository;
@@ -18,13 +21,28 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.temporal.TemporalAdjusters;
-import java.time.temporal.ChronoUnit;
 import java.util.*;
 
 /**
  * Append-only, idempotent balance ledger for shared and hierarchical limits.
  * Entries are created only after claim approval and are neutralized on reversal.
+ *
+ * P1.11.2: an EXECUTOR, not a second decision-maker. For every line whose
+ * canonical decision is still available (every claim approved through the
+ * live P1.6 path -- 100% of real-time approvals), the ONLY question this
+ * class asks is {@code CanonicalConsumptionTarget}'s own fields:
+ * limitKey/bucketId/amountToConsume/timesToConsume/consumeDay/period are
+ * never recomputed here. No {@code approvedQuantity}, no
+ * {@code countingMethod}, no rule/bucket-chain walk, no coverage or
+ * financial decision type is known to this class for that path. The one
+ * thing it still legitimately does per target is a CONCURRENCY-SAFETY
+ * re-check against the bucket's own configured ceiling (locked, then
+ * compared) -- verifying the already-decided instruction still fits, never
+ * deciding a different one.
+ *
+ * See {@link #legacyReconcileTargets} for the one documented, bounded
+ * exception (a historical claim reloaded independently for
+ * {@code reconcileApprovedClaim} carries no live decision at all).
  */
 @Slf4j
 @Service
@@ -98,49 +116,47 @@ public class BenefitBucketLedgerService {
                     "يوجد للمستفيد مطالبة معتمدة سابقة لم تُرحّل استهلاكها إلى السقف العام في دفتر المنافع. "
                     + "تم إيقاف الاعتماد لمنع تجاوز السقف؛ راجع سلامة دفتر المنافع ثم أعد المحاولة.");
         }
-        Set<TimesLimitEvaluator.CountedKey> countedOnce = new HashSet<>();
-        Set<Long> validatedDays = new HashSet<>();
 
         for (ClaimLine line : claim.getLines()) {
-            if (line.getAppliedRuleId() == null || amount(line).signum() <= 0) continue;
+            if (line.getAppliedRuleId() == null) continue;
 
-            // The general ceiling, once per line and before its buckets.
-            //
-            // The ledger could not previously say what a claim had spent
-            // against the policy's own annual limit -- that figure was summed
-            // out of claim_lines while the ceiling's reservations lived here,
-            // so the two halves of "limit - committed - reserved" came from
-            // different places. Anything general that is not a claim, which is
-            // precisely what an imported opening balance is, fell into the gap
-            // between them and was invisible to every decision.
-            postGeneralCeiling(claim, line, policy, memberId, serviceDate);
+            List<CanonicalConsumptionTarget> targets = line.getUnifiedLimitDecision() != null
+                    ? CanonicalConsumptionTargetBuilder.build(line.getUnifiedLimitDecision(),
+                            line.getLimitConsumption() == null ? BigDecimal.ZERO : line.getLimitConsumption(),
+                            line.getResolvedLimitItems() == null ? List.of() : line.getResolvedLimitItems(),
+                            serviceDate)
+                    : legacyReconcileTargets(line, policy, serviceDate);
 
-            LinkedHashMap<Long, BenefitLimitBucket> buckets = new LinkedHashMap<>();
-            for (BenefitRuleBucket link : ruleBucketRepository.findByRuleIdOrderByConsumptionOrder(line.getAppliedRuleId())) {
-                addWithParents(link.getBucket(), buckets);
-            }
-            for (BenefitLimitBucket candidate : buckets.values()) {
-                if (isLegacyPolicyAnnualMirror(candidate, policy)) continue;
-                BenefitLimitBucket bucket = bucketRepository.findByIdForUpdate(candidate.getId()).orElseThrow();
-                if (!bucket.isActive()) continue;
-                String key = "CLAIM:" + claimId + ":LINE:" + line.getId() + ":BUCKET:" + bucket.getId() + ":V" + line.getCalculationVersion();
+            for (CanonicalConsumptionTarget target : targets) {
+                String key = "CLAIM:" + claimId + ":LINE:" + line.getId()
+                        + ":TARGET:" + target.limitKey() + ":V" + line.getCalculationVersion();
                 if (consumptionRepository.existsByIdempotencyKey(key)) continue;
-                Period period = period(bucket, policy, serviceDate);
-                int times = consumedTimes(bucket, line, countedOnce, serviceDate);
-                BigDecimal consumedAmount;
-                if (bucket.getAmountLimit() != null) {
-                    consumedAmount = Optional.ofNullable(line.getLimitConsumption()).orElseThrow(() ->
-                            new IllegalStateException("CANONICAL_LIMIT_CONSUMPTION_MISSING: claimLine=" + line.getId()));
-                } else {
-                    // Count/day-only buckets retain their historical informational
-                    // amount; their monetary meaning is deliberately not invented.
-                    consumedAmount = bucket.getConsumptionBasis() == ConsumptionBasis.COMPANY_SHARE
-                            ? amount(line) : eligibleAmount(line);
+
+                BigDecimal amount = target.amountToConsume() == null ? BigDecimal.ZERO : target.amountToConsume();
+                int times = target.timesToConsume() == null ? 0 : target.timesToConsume();
+
+                if (target.bucketId() == null) {
+                    // POLICY_GENERAL: a scope, not a bucket -- nothing to lock or
+                    // look up. validatePolicyAnnualLimit() above already verified
+                    // the claim's own total fits before any row was written.
+                    if (amount.signum() <= 0) continue;
+                    entryWriter.appendClaimGeneralCommit(claim, line, policy, memberId,
+                            target.periodFrom(), target.periodTo(), amount, line.getCalculationVersion(), key);
+                    continue;
                 }
-                validateAvailableBalance(bucket, memberId, serviceDate, period, consumedAmount, times,
-                        validatedDays.add(bucket.getId()));
+
+                BenefitLimitBucket bucket = bucketRepository.findByIdForUpdate(target.bucketId()).orElseThrow();
+                if (!bucket.isActive() || isLegacyPolicyAnnualMirror(bucket, policy)) continue;
+
+                // The one legitimate re-check left: does this ALREADY-DECIDED
+                // instruction still fit the bucket's OWN configured ceiling,
+                // now that this transaction holds its lock? Never a different
+                // instruction -- only a safety comparison against what target
+                // already says to consume.
+                validateAvailableBalance(bucket, memberId, target.serviceDate(), target.periodFrom(), target.periodTo(),
+                        amount, times, target.consumeDay());
                 entryWriter.appendClaimCommit(claim, line, policy, memberId, bucket,
-                        period.start(), period.end(), consumedAmount, times,
+                        target.periodFrom(), target.periodTo(), amount, times, target.consumeDay(),
                         line.getCalculationVersion(), key);
             }
         }
@@ -153,33 +169,6 @@ public class BenefitBucketLedgerService {
                 && bucket.getAmountLimit().compareTo(policy.getAnnualLimit()) == 0
                 && ("B-GENERAL".equalsIgnoreCase(bucket.getCode())
                     || (bucket.getBenefitGroup() != null && "G-GENERAL".equalsIgnoreCase(bucket.getBenefitGroup().getCode())));
-    }
-
-    /**
-     * The policy's general annual ceiling, spent by one claim line.
-     *
-     * The window is the calendar year of the service date, which is what
-     * BucketPeriodCalculator returns for an ANNUAL period -- the same window
-     * the reservation rows and the balance reader already use. Deriving it any
-     * other way here would put the committed and reserved halves of one
-     * ceiling in different periods.
-     */
-    private void postGeneralCeiling(Claim claim, ClaimLine line, BenefitPolicy policy, Long memberId,
-            LocalDate serviceDate) {
-
-        if (policy.getAnnualLimit() == null || policy.getAnnualLimit().signum() <= 0) return;
-
-        BigDecimal consumed = line.getLimitConsumption();
-        if (consumed == null || consumed.signum() <= 0) return;
-
-        String key = "CLAIM:" + claim.getId() + ":LINE:" + line.getId()
-                + ":GENERAL:V" + line.getCalculationVersion();
-        if (consumptionRepository.existsByIdempotencyKey(key)) return;
-
-        LocalDate start = LocalDate.of(serviceDate.getYear(), 1, 1);
-        LocalDate end = LocalDate.of(serviceDate.getYear(), 12, 31);
-        entryWriter.appendClaimGeneralCommit(claim, line, policy, memberId, start, end, consumed,
-                line.getCalculationVersion(), key);
     }
 
     private void validatePolicyAnnualLimit(Claim claim, BenefitPolicy policy, Long memberId, LocalDate serviceDate) {
@@ -262,6 +251,85 @@ public class BenefitBucketLedgerService {
         }
     }
 
+    /**
+     * P1.11.2's one documented, bounded exception: {@link #reconcileApprovedClaim}
+     * repairs an ALREADY approved historical claim, reloaded independently in
+     * its own transaction -- it never carries a live
+     * {@code ClaimLine.unifiedLimitDecision}/{@code resolvedLimitItems} from
+     * any in-flight request (those are {@code @Transient}, request-scoped
+     * carriers, not a persisted source of truth). This reconstructs the same
+     * {@link CanonicalConsumptionTarget} SHAPE the canonical path would have
+     * produced, from what a historical line actually has on disk
+     * (appliedRuleId, approvedQuantity, limitConsumption) and the same
+     * rule-to-bucket walk {@code BenefitBucketLimitService} uses elsewhere --
+     * not a second, independently-invented resolution algorithm.
+     *
+     * <pre>
+     * Reason:                no transient decision survives past the
+     *                        original request that produced it
+     * Canonical replacement: none needed once every claim's own approval
+     *                        runs through the live P1.6 canonical path --
+     *                        true for every claim approved after P1.6
+     * Who still depends on it: BenefitLedgerAdminController.reconcileApprovedClaim,
+     *                        ClaimLegacyReconciliationService (both act
+     *                        ONLY on historical claims, never new approvals)
+     * New code may use it?  NO
+     * Removal condition:     no claim lacking a live decision can ever
+     *                        reach commitClaim again (confirmed against
+     *                        production data, or the reconcile endpoint
+     *                        itself is retired)
+     * Target removal milestone: P1.11.3 or later, once confirmed safe
+     * </pre>
+     */
+    private List<CanonicalConsumptionTarget> legacyReconcileTargets(ClaimLine line, BenefitPolicy policy,
+            LocalDate serviceDate) {
+        if (amount(line).signum() <= 0) return List.of();
+
+        LinkedHashMap<Long, BenefitLimitBucket> buckets = new LinkedHashMap<>();
+        for (BenefitRuleBucket link : ruleBucketRepository.findByRuleIdOrderByConsumptionOrder(line.getAppliedRuleId())) {
+            addWithParents(link.getBucket(), buckets);
+        }
+
+        List<CanonicalConsumptionTarget> targets = new ArrayList<>();
+        Set<TimesLimitEvaluator.CountedKey> countedOnce = new HashSet<>();
+        for (BenefitLimitBucket bucket : buckets.values()) {
+            if (isLegacyPolicyAnnualMirror(bucket, policy) || !bucket.isActive()) continue;
+            Period period = period(bucket, policy, serviceDate);
+            int times = legacyConsumedTimes(bucket, line, countedOnce, serviceDate);
+            BigDecimal bucketAmount;
+            if (bucket.getAmountLimit() != null) {
+                bucketAmount = Optional.ofNullable(line.getLimitConsumption()).orElseThrow(() ->
+                        new IllegalStateException("CANONICAL_LIMIT_CONSUMPTION_MISSING: claimLine=" + line.getId()));
+            } else {
+                bucketAmount = bucket.getConsumptionBasis() == ConsumptionBasis.COMPANY_SHARE
+                        ? amount(line) : eligibleAmount(line);
+            }
+            // Historical claims predate the approvedDays-aware decision
+            // (P1.11) entirely -- preserved exactly as this ledger always
+            // behaved for a legacy claim: a days-limited bucket gets a row
+            // whenever the line itself had positive money, since that is
+            // the only signal a pre-P1.11 claim ever recorded.
+            boolean consumeDay = bucket.getDaysLimit() != null;
+            if (bucketAmount.signum() <= 0 && times == 0 && !consumeDay) continue;
+
+            targets.add(new CanonicalConsumptionTarget(
+                    com.waad.tba.modules.benefitpolicy.service.unifiedlimit.ResolvedLimitDescriptor.bucketKey(bucket.getId()),
+                    bucket.getId(), bucketAmount.signum() > 0 ? bucketAmount : null, times > 0 ? times : null,
+                    consumeDay, serviceDate, period.start(), period.end(), null));
+        }
+
+        BigDecimal generalAmount = line.getLimitConsumption();
+        if (policy.getAnnualLimit() != null && policy.getAnnualLimit().signum() > 0
+                && generalAmount != null && generalAmount.signum() > 0) {
+            LocalDate yearStart = LocalDate.of(serviceDate.getYear(), 1, 1);
+            LocalDate yearEnd = LocalDate.of(serviceDate.getYear(), 12, 31);
+            targets.add(new CanonicalConsumptionTarget(
+                    com.waad.tba.modules.benefitpolicy.service.unifiedlimit.ResolvedLimitDescriptor.policyGeneralKey(policy.getId()),
+                    null, generalAmount, null, false, serviceDate, yearStart, yearEnd, null));
+        }
+        return targets;
+    }
+
     private void addWithParents(BenefitLimitBucket bucket, Map<Long, BenefitLimitBucket> target) {
         BenefitLimitBucket current = bucket;
         while (current != null) {
@@ -270,53 +338,30 @@ public class BenefitBucketLedgerService {
         }
     }
 
-    /**
-     * Delegates to the shared evaluator so claims and pre-authorizations have
-     * ONE definition of how many occurrences a decision consumes. Two
-     * definitions would let an approval hold one quantity and the claim that
-     * follows consume another, leaving a residue at conversion.
-     */
-    /**
-     * P1.6: a TIMES-limited bucket's consumption must reflect what the
-     * canonical decision actually APPROVED, never what was merely
-     * requested -- committing {@code line.getQuantity()} here let a claim
-     * whose own decision refused part of a times-limited quantity (e.g.
-     * Physio: 3 requested, only 2 approved) consume 3 occurrences from the
-     * ceiling anyway, silently overspending it by exactly the refused
-     * amount. No fallback to the requested quantity when approvedQuantity
-     * is missing: that fallback is what reintroduced this exact bug once
-     * already (see the P1.6 review that found it) -- a bucket that
-     * actually gates on TIMES must fail closed instead, since a decision
-     * with no approvedQuantity recorded is a caller defect, not "assume the
-     * whole request was approved".
-     */
-    private int consumedTimes(BenefitLimitBucket bucket, ClaimLine line,
+    /** Legacy-path-only occurrence counting -- see {@link #legacyReconcileTargets}. */
+    private int legacyConsumedTimes(BenefitLimitBucket bucket, ClaimLine line,
             Set<TimesLimitEvaluator.CountedKey> countedOnce, LocalDate serviceDate) {
-        int quantity;
-        if (bucket.getTimesLimit() != null) {
-            if (line.getApprovedQuantity() == null) {
-                throw new IllegalStateException(
-                        "TIMES_LEDGER_APPROVED_QUANTITY_MISSING: bucket=" + bucket.getId()
-                                + " claimLine=" + line.getId()
-                                + " -- a TIMES-limited bucket cannot commit consumption for a line "
-                                + "whose canonical decision recorded no approvedQuantity");
-            }
-            quantity = Math.max(0, line.getApprovedQuantity());
-        } else {
-            // Informational only for a non-TIMES-limited bucket (nothing above
-            // gates on this value) -- unchanged from before P1.6.
-            quantity = Math.max(1, line.getQuantity() == null ? 1 : line.getQuantity());
+        if (bucket.getTimesLimit() == null) {
+            return 0;
         }
+        if (line.getApprovedQuantity() == null) {
+            throw new IllegalStateException(
+                    "TIMES_LEDGER_APPROVED_QUANTITY_MISSING: bucket=" + bucket.getId()
+                            + " claimLine=" + line.getId()
+                            + " -- a TIMES-limited bucket cannot commit consumption for a line "
+                            + "whose canonical decision recorded no approvedQuantity");
+        }
+        int quantity = Math.max(0, line.getApprovedQuantity());
         return timesLimitEvaluator.occurrencesFor(bucket, quantity, countedOnce, serviceDate);
     }
 
     private void validateAvailableBalance(BenefitLimitBucket bucket, Long memberId, LocalDate serviceDate,
-                                          Period period, BigDecimal consumedAmount, int consumedTimes,
-                                          boolean validateDay) {
+                                          LocalDate periodStart, LocalDate periodEnd,
+                                          BigDecimal consumedAmount, int consumedTimes, boolean consumeDay) {
         BigDecimal usedAmount = consumptionRepository.sumCommittedAmount(memberId, bucket.getId(),
-                period.start(), period.end(), null);
+                periodStart, periodEnd, null);
         Integer usedTimes = consumptionRepository.sumCommittedTimes(memberId, bucket.getId(),
-                period.start(), period.end(), null);
+                periodStart, periodEnd, null);
 
         if (bucket.getAmountLimit() != null
                 && usedAmount.add(consumedAmount).compareTo(bucket.getAmountLimit()) > 0) {
@@ -328,10 +373,10 @@ public class BenefitBucketLedgerService {
             throw new BusinessRuleException("تغير الرصيد أثناء الاعتماد وتجاوز حد المرات للوعاء «"
                     + bucket.getNameAr() + "». أعد احتساب المطالبة ثم حاول مجددًا.");
         }
-        if (validateDay && bucket.getDaysLimit() != null
+        if (consumeDay && bucket.getDaysLimit() != null
                 && !consumptionRepository.existsCommittedForServiceDay(memberId, bucket.getId(), serviceDate, null)) {
             long usedDays = consumptionRepository.countCommittedServiceDays(memberId, bucket.getId(),
-                    period.start(), period.end(), null);
+                    periodStart, periodEnd, null);
             if (usedDays + 1 > bucket.getDaysLimit()) {
                 throw new BusinessRuleException("تغير الرصيد أثناء الاعتماد وتجاوز حد الأيام للوعاء «"
                         + bucket.getNameAr() + "». أعد احتساب المطالبة ثم حاول مجددًا.");
@@ -360,4 +405,3 @@ public class BenefitBucketLedgerService {
 
     private record Period(LocalDate start, LocalDate end) {}
 }
-

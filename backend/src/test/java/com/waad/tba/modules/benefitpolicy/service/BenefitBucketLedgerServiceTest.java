@@ -3,11 +3,20 @@ package com.waad.tba.modules.benefitpolicy.service;
 import com.waad.tba.modules.benefitpolicy.entity.*;
 import com.waad.tba.modules.benefitpolicy.enums.*;
 import com.waad.tba.modules.benefitpolicy.repository.*;
+import com.waad.tba.modules.benefitpolicy.service.unifiedlimit.BucketLimitSnapshot;
+import com.waad.tba.modules.benefitpolicy.service.unifiedlimit.LimitAxisType;
+import com.waad.tba.modules.benefitpolicy.service.unifiedlimit.ReservationEvaluationMode;
+import com.waad.tba.modules.benefitpolicy.service.unifiedlimit.ResolvedLimitDescriptor;
+import com.waad.tba.modules.benefitpolicy.service.unifiedlimit.ResolvedLimitItem;
+import com.waad.tba.modules.benefitpolicy.service.unifiedlimit.UnifiedLimitDecision;
+import com.waad.tba.modules.benefitpolicy.service.unifiedlimit.UnifiedLimitInput;
+import com.waad.tba.modules.benefitpolicy.service.unifiedlimit.UnifiedLimitResolver;
 import com.waad.tba.modules.claim.entity.Claim;
 import com.waad.tba.modules.claim.entity.ClaimLine;
 import com.waad.tba.modules.claim.repository.ClaimRepository;
 import com.waad.tba.modules.employer.entity.Employer;
 import com.waad.tba.modules.member.entity.Member;
+import com.waad.tba.modules.providercontract.enums.EncounterType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -21,6 +30,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -412,6 +422,132 @@ class BenefitBucketLedgerServiceTest {
 
         assertTrue(error.getMessage().contains("TIMES_LEDGER_APPROVED_QUANTITY_MISSING"));
         verify(consumptionRepository, never()).save(any());
+    }
+
+    // ── P1.11.2: the canonical path -- a line carrying a live
+    // UnifiedLimitDecision must be executed exactly as its
+    // CanonicalConsumptionTarget says, with zero re-derivation ──────────
+
+    private static final LocalDate PERIOD_START = LocalDate.of(2026, 1, 1);
+    private static final LocalDate PERIOD_END = LocalDate.of(2026, 12, 31);
+
+    private ResolvedLimitDescriptor descriptorFor(Long bucketId) {
+        return new ResolvedLimitDescriptor(ResolvedLimitDescriptor.bucketKey(bucketId), bucketId,
+                ClaimLineLimitSnapshot.SourceType.POLICY_DEFAULT, BenefitScopeType.CATEGORY,
+                BeneficiaryScopeType.MEMBER, 50L, 9L, "ANNUAL", PERIOD_START, PERIOD_END);
+    }
+
+    /** Wires the line with a REAL, resolver-produced decision for one AMOUNT bucket. */
+    private void giveLineACanonicalAmountDecision(Long bucketId, BigDecimal configured, BigDecimal consumed) {
+        BucketLimitSnapshot snapshot = new BucketLimitSnapshot(bucketId, 1L, LimitAxisType.AMOUNT,
+                CountingMethod.EACH_LINE, configured, BigDecimal.ZERO, BigDecimal.ZERO, configured,
+                PERIOD_START, PERIOD_END);
+        UnifiedLimitInput input = new UnifiedLimitInput(1L, 50L, 10L, claim.getServiceDate(),
+                EncounterType.OUTPATIENT, 0, 0, BigDecimal.ZERO, consumed, null,
+                ReservationEvaluationMode.NORMAL, null, null);
+        UnifiedLimitDecision decision = UnifiedLimitResolver.resolve(input, List.of(snapshot));
+        line.setUnifiedLimitDecision(decision);
+        line.setResolvedLimitItems(List.of(new ResolvedLimitItem(snapshot, descriptorFor(bucketId))));
+        line.setLimitConsumption(consumed);
+    }
+
+    @Test
+    @DisplayName("CW1 — canonical only: what lands on the ledger row is exactly the target's own amount, ignoring companyShare/eligibleAmount entirely")
+    void cw1_canonicalTargetIsExecutedLiterally() {
+        when(consumptionRepository.sumCommittedAmount(any(), any(), any(), any(), any())).thenReturn(BigDecimal.ZERO);
+        giveLineACanonicalAmountDecision(70L, new BigDecimal("1500.00"), new BigDecimal("777.00"));
+        // Legacy-only fields the canonical path must NEVER consult:
+        line.setCompanyShare(new BigDecimal("1.00"));
+        line.setTotalPrice(new BigDecimal("1.00"));
+        line.setLimitRefused(new BigDecimal("1.00"));
+
+        service.commitClaim(20L);
+
+        ArgumentCaptor<BenefitBucketConsumption> captor = ArgumentCaptor.forClass(BenefitBucketConsumption.class);
+        verify(consumptionRepository).save(captor.capture());
+        assertEquals(0, new BigDecimal("777.00").compareTo(captor.getValue().getApprovedAmount()));
+        // The rule-bucket walk is never consulted on the canonical path.
+        verify(ruleBucketRepository, never()).findByRuleIdOrderByConsumptionOrder(anyLong());
+    }
+
+    @Test
+    @DisplayName("CW2 — no evaluated-but-unconsumed write: an empty canonical target list writes nothing at all")
+    void cw2_emptyTargetsWriteNothing() {
+        // A BLOCKED decision has consumptionTargets() == List.of() by construction.
+        UnifiedLimitDecision blocked = UnifiedLimitDecision.blocked(50L, List.of("TEST_BLOCK"));
+        line.setUnifiedLimitDecision(blocked);
+        line.setResolvedLimitItems(List.of(new ResolvedLimitItem(
+                new BucketLimitSnapshot(70L, 1L, LimitAxisType.AMOUNT, CountingMethod.EACH_LINE,
+                        new BigDecimal("1500.00"), BigDecimal.ZERO, BigDecimal.ZERO, new BigDecimal("1500.00"),
+                        PERIOD_START, PERIOD_END),
+                descriptorFor(70L))));
+
+        service.commitClaim(20L);
+
+        verify(consumptionRepository, never()).save(any());
+        verify(bucketRepository, never()).findByIdForUpdate(anyLong());
+    }
+
+    @Test
+    @DisplayName("CW3 — POLICY_GENERAL: no bucket fetch, no synthetic bucket entity")
+    void cw3_policyGeneralNeedsNoBucketLookup() {
+        BucketLimitSnapshot general = new BucketLimitSnapshot(null, 1L, LimitAxisType.AMOUNT,
+                CountingMethod.EACH_LINE, new BigDecimal("1000000.00"), BigDecimal.ZERO, BigDecimal.ZERO,
+                new BigDecimal("1000000.00"), PERIOD_START, PERIOD_END);
+        UnifiedLimitInput input = new UnifiedLimitInput(1L, 50L, 10L, claim.getServiceDate(),
+                EncounterType.OUTPATIENT, 0, 0, BigDecimal.ZERO, new BigDecimal("300.00"), null,
+                ReservationEvaluationMode.NORMAL, null, null);
+        UnifiedLimitDecision decision = UnifiedLimitResolver.resolve(input, List.of(general));
+        line.setUnifiedLimitDecision(decision);
+        line.setResolvedLimitItems(List.of(new ResolvedLimitItem(general,
+                new ResolvedLimitDescriptor(ResolvedLimitDescriptor.policyGeneralKey(1L), null,
+                        ClaimLineLimitSnapshot.SourceType.POLICY_DEFAULT, BenefitScopeType.POLICY_GENERAL,
+                        BeneficiaryScopeType.MEMBER, 50L, null, "ANNUAL", PERIOD_START, PERIOD_END))));
+        line.setLimitConsumption(new BigDecimal("300.00"));
+
+        service.commitClaim(20L);
+
+        verify(bucketRepository, never()).findByIdForUpdate(anyLong());
+        ArgumentCaptor<BenefitBucketConsumption> captor = ArgumentCaptor.forClass(BenefitBucketConsumption.class);
+        verify(consumptionRepository).save(captor.capture());
+        assertNull(captor.getValue().getBucket());
+        assertEquals(BenefitBucketConsumption.LimitScope.POLICY_GENERAL, captor.getValue().getLimitScope());
+    }
+
+    @Test
+    @DisplayName("CW4 — child + parent both consumed as separate rows, each carrying the SAME money the decision approved")
+    void cw4_childAndParentBothWrittenAsGiven() {
+        BenefitLimitBucket parent = BenefitLimitBucket.builder()
+                .id(71L).policy(policy).code("PARENT").nameAr("أصل")
+                .amountLimit(new BigDecimal("50000.00")).periodType(LimitPeriodType.ANNUAL)
+                .countingMethod(CountingMethod.EACH_LINE).consumptionBasis(ConsumptionBasis.ELIGIBLE_AMOUNT)
+                .active(true).build();
+        lenient().when(bucketRepository.findByIdForUpdate(71L)).thenReturn(Optional.of(parent));
+
+        BucketLimitSnapshot child = new BucketLimitSnapshot(70L, 1L, LimitAxisType.AMOUNT, CountingMethod.EACH_LINE,
+                new BigDecimal("1500.00"), BigDecimal.ZERO, BigDecimal.ZERO, new BigDecimal("1500.00"),
+                PERIOD_START, PERIOD_END);
+        BucketLimitSnapshot parentSnapshot = new BucketLimitSnapshot(71L, 1L, LimitAxisType.AMOUNT,
+                CountingMethod.EACH_LINE, new BigDecimal("50000.00"), BigDecimal.ZERO, BigDecimal.ZERO,
+                new BigDecimal("50000.00"), PERIOD_START, PERIOD_END);
+        UnifiedLimitInput input = new UnifiedLimitInput(1L, 50L, 10L, claim.getServiceDate(),
+                EncounterType.OUTPATIENT, 0, 0, BigDecimal.ZERO, new BigDecimal("200.00"), null,
+                ReservationEvaluationMode.NORMAL, null, null);
+        UnifiedLimitDecision decision = UnifiedLimitResolver.resolve(input, List.of(child, parentSnapshot));
+        line.setUnifiedLimitDecision(decision);
+        line.setResolvedLimitItems(List.of(
+                new ResolvedLimitItem(child, descriptorFor(70L)),
+                new ResolvedLimitItem(parentSnapshot, descriptorFor(71L))));
+        line.setLimitConsumption(new BigDecimal("200.00"));
+
+        service.commitClaim(20L);
+
+        ArgumentCaptor<BenefitBucketConsumption> captor = ArgumentCaptor.forClass(BenefitBucketConsumption.class);
+        verify(consumptionRepository, times(2)).save(captor.capture());
+        assertThat(captor.getAllValues()).allSatisfy(row ->
+                assertEquals(0, new BigDecimal("200.00").compareTo(row.getApprovedAmount())));
+        assertThat(captor.getAllValues()).extracting(row -> row.getBucket().getId())
+                .containsExactlyInAnyOrder(70L, 71L);
     }
 }
 
