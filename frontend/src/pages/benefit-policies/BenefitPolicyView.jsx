@@ -761,6 +761,8 @@ const BenefitPolicyView = () => {
           policyId={id}
           policyStatus={policy?.status}
           policyDefaultCoveragePercent={policy?.defaultCoveragePercent}
+          policyStartDate={policy?.startDate}
+          policyEndDate={policy?.endDate}
         />
       )}
 

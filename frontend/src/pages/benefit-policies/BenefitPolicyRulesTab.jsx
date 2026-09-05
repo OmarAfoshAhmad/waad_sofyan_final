@@ -57,6 +57,7 @@ import { useSnackbar } from 'notistack';
 import MainCard from 'components/MainCard';
 import UnifiedCoverageModal from './components/UnifiedCoverageModal';
 import { UnifiedMedicalTable } from 'components/common';
+import { formatDate } from 'utils/formatters';
 
 import {
   getPolicyRules,
@@ -720,7 +721,7 @@ CategoryCoverageModal.propTypes = {
  *
  * Displays and manages coverage rules for a benefit policy
  */
-const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePercent, onOpenStructure }) => {
+const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePercent, policyStartDate, policyEndDate, onOpenStructure }) => {
   const queryClient = useQueryClient();
   const { enqueueSnackbar } = useSnackbar();
 
@@ -805,6 +806,13 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
     staleTime: 0,
     refetchOnMount: 'always'
   });
+  // Coverage-rule creation must use the canonical active dictionary only.
+  // Legacy/disabled/deleted categories may remain in old rules for audit
+  // visibility, but they should not appear as choices for new clean rules.
+  const activeCoverageCategories = useMemo(
+    () => categories.filter((cat) => cat?.active !== false && cat?.deleted !== true),
+    [categories]
+  );
 
   // The same canonical, active claim-context list the rule form already
   // uses -- lifted here too, for the context badge and the context filter.
@@ -2025,6 +2033,17 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
                 قواعد التغطية التفصيلية
               </Typography>
             </Stack>
+            {(policyStartDate || policyEndDate) && (
+              <Tooltip title="هذه فترة الوثيقة نفسها، وليست مدة وعاء السقف">
+                <Chip
+                  size="small"
+                  color="success"
+                  variant="outlined"
+                  label={`مدة الوثيقة: ${policyStartDate ? formatDate(policyStartDate) : '—'} → ${policyEndDate ? formatDate(policyEndDate) : '—'}`}
+                  sx={{ height: '2rem', fontWeight: 700 }}
+                />
+              </Tooltip>
+            )}
           </Stack>
         }
         secondary={
@@ -2381,7 +2400,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
           queryClient.invalidateQueries({ queryKey: ['benefit-structure', policyId] });
         }}
         policyId={policyId}
-        categories={categories}
+        categories={activeCoverageCategories}
         existingRules={rules}
         initialData={formModal.data}
         isEdit={formModal.isEdit}
@@ -2717,6 +2736,8 @@ BenefitPolicyRulesTab.propTypes = {
   policyId: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
   policyStatus: PropTypes.string,
   policyDefaultCoveragePercent: PropTypes.number,
+  policyStartDate: PropTypes.string,
+  policyEndDate: PropTypes.string,
   onOpenStructure: PropTypes.func
 };
 
