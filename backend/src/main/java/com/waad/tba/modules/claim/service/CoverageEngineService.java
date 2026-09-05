@@ -3,10 +3,18 @@ package com.waad.tba.modules.claim.service;
 import com.waad.tba.modules.benefitpolicy.dto.BenefitPolicyRuleResponseDto;
 import com.waad.tba.modules.benefitpolicy.dto.CoverageDecisionRequest;
 import com.waad.tba.modules.benefitpolicy.dto.CoverageLimitSnapshot;
-import com.waad.tba.modules.benefitpolicy.service.CoverageDecisionService;
-import com.waad.tba.modules.benefitpolicy.service.DivisibleLimitSplitter;
 import com.waad.tba.modules.benefitpolicy.enums.ConsumptionBasis;
 import com.waad.tba.modules.benefitpolicy.enums.CountingMethod;
+import com.waad.tba.modules.benefitpolicy.service.CoverageDecisionService;
+import com.waad.tba.modules.benefitpolicy.service.unifiedlimit.BucketLimitSnapshot;
+import com.waad.tba.modules.benefitpolicy.service.unifiedlimit.BucketLimitSnapshotAdapter;
+import com.waad.tba.modules.benefitpolicy.service.unifiedlimit.ClaimLimitEvaluationContext;
+import com.waad.tba.modules.benefitpolicy.service.unifiedlimit.LimitAxisType;
+import com.waad.tba.modules.benefitpolicy.service.unifiedlimit.ReservationEvaluationMode;
+import com.waad.tba.modules.benefitpolicy.service.unifiedlimit.UnifiedLimitDecision;
+import com.waad.tba.modules.benefitpolicy.service.unifiedlimit.UnifiedLimitInput;
+import com.waad.tba.modules.benefitpolicy.service.unifiedlimit.UnifiedLimitResolver;
+import com.waad.tba.modules.benefitpolicy.service.unifiedlimit.BindingConstraintType;
 import com.waad.tba.modules.claim.dto.engine.BulkCoverageEngineRequest;
 import com.waad.tba.modules.claim.dto.engine.ClaimLineInput;
 import com.waad.tba.modules.claim.dto.engine.CoverageResult;
@@ -18,16 +26,38 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.util.*;
 
 /**
  * 🛡️ CENTRAL FINANCIAL COVERAGE ENGINE (SINGLE SOURCE OF TRUTH)
- * 
+ *
  * Provides Unified Financial Calculations for both:
  * 1. UI Live Preview (BatchEntry / BatchGrid)
  * 2. Backend Entity Mapping (ClaimMapper)
- * 
+ *
  * LAW: All financial calculations MUST flow through evaluateLine().
+ *
+ * P1.5.1 live wiring: the quantity/times/days DECISION itself
+ * (previously {@code computeBucketUsage}'s own occurrence-split and
+ * amount-ceiling arithmetic) is now made by {@code UnifiedLimitResolver},
+ * fed by {@link BucketLimitSnapshotAdapter} (reusing the SAME applicable
+ * buckets {@code coverageDecisionService.resolve} already resolved -- rule
+ * and bucket selection happen exactly once per line, never twice) and kept
+ * batch-aware across the lines of one claim by
+ * {@link ClaimLimitEvaluationContext} (this evaluateLine's replacement for
+ * the old {@code BatchUsageAccumulator}). {@code CoverageDecisionService}
+ * remains responsible for rule resolution ONLY -- it never decided
+ * quantity, and still does not.
+ *
+ * Two behavior changes are intended by this wiring, not regressions: a
+ * RESERVED amount from another in-flight decision is now actually
+ * subtracted (never checked before), and a bucket owned by a different
+ * policy now blocks the line instead of being silently evaluated.
+ *
+ * {@code ClaimFinancialAdjudicationService} ("Engine B") still runs after
+ * this on the SAVE path and still recomputes money from scratch --
+ * unchanged by this step (tracked as P1.6).
  */
 @Slf4j
 @Service
@@ -36,6 +66,7 @@ public class CoverageEngineService {
 
     private final CoverageDecisionService coverageDecisionService;
     private final ProviderContractPricingItemRepository pricingItemRepository;
+    private final BucketLimitSnapshotAdapter bucketLimitSnapshotAdapter;
 
     private static final BigDecimal ZERO = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
     private static final BigDecimal HUNDRED = BigDecimal.valueOf(100);
@@ -48,12 +79,12 @@ public class CoverageEngineService {
             return List.of();
         }
 
-        Map<AccumulatorKey, BatchUsageAccumulator> batchUsageContext = new HashMap<>();
+        ClaimLimitEvaluationContext context = new ClaimLimitEvaluationContext();
         List<CoverageResult> results = new ArrayList<>(request.getLines().size());
 
         for (ClaimLineInput line : request.getLines()) {
             try {
-                CoverageResult result = evaluateLine(request, line, batchUsageContext);
+                CoverageResult result = evaluateLine(request, line, context);
                 results.add(result);
             } catch (Exception e) {
                 log.error("[COVERAGE-ENGINE] Failed to calculate lineId={}, pricingItemId={}, serviceId={}, categoryId={}: {}",
@@ -73,7 +104,7 @@ public class CoverageEngineService {
 
     public CoverageResult calculateSingle(BulkCoverageEngineRequest request, ClaimLineInput line) {
         try {
-            return evaluateLine(request, line, new HashMap<>());
+            return evaluateLine(request, line, new ClaimLimitEvaluationContext());
         } catch (Exception e) {
             log.error("[COVERAGE-ENGINE] Failed to calculate single lineId={}, pricingItemId={}: {}",
                     line != null ? line.getLineId() : null,
@@ -90,7 +121,7 @@ public class CoverageEngineService {
     public CoverageResult evaluateLine(
             BulkCoverageEngineRequest request,
             ClaimLineInput line,
-            Map<AccumulatorKey, BatchUsageAccumulator> batchUsageContext) {
+            ClaimLimitEvaluationContext context) {
 
         BigDecimal quantity = bd(line.getQuantity());
         BigDecimal enteredUnitPrice = scale2(defaultIfNull(line.getEnteredUnitPrice(), ZERO));
@@ -144,9 +175,9 @@ public class CoverageEngineService {
                 line,
                 ruleOpt,
                 coverageDecision.limitsOrEmpty(),
-                resolvedCategoryId,
-                batchUsageContext,
-                effectiveTotal);
+                context,
+                effectiveTotal,
+                effectiveUnitPrice);
 
         BigDecimal limitRefused = usageComputation.limitRefused();
 
@@ -160,6 +191,8 @@ public class CoverageEngineService {
                 reasons.add("تجاوز عدد المرات المسموح بها");
             } else if ("USAGE_DAYS_LIMIT_EXCEEDED".equals(usageComputation.refusalReason())) {
                 reasons.add("تجاوز عدد أيام الاستفادة المسموح بها");
+            } else if ("USAGE_BUCKET_CONFIGURATION_ERROR".equals(usageComputation.refusalReason())) {
+                reasons.add("خطأ في إعداد سقف المنفعة لهذه الخدمة");
             } else {
                 reasons.add("تجاوز سقف المبلغ المسموح به");
             }
@@ -236,17 +269,17 @@ public class CoverageEngineService {
             ClaimLineInput line,
             Optional<BenefitPolicyRuleResponseDto> ruleOpt,
             List<CoverageLimitSnapshot> bucketLimits,
-            Long resolvedCategoryId,
-            Map<AccumulatorKey, BatchUsageAccumulator> batchUsageContext,
-            BigDecimal effectiveTotal) {
+            ClaimLimitEvaluationContext context,
+            BigDecimal effectiveTotal,
+            BigDecimal effectiveUnitPrice) {
 
         if (request.getMemberId() == null) {
             return new UsageComputation(ZERO, null, null);
         }
 
         if (!bucketLimits.isEmpty()) {
-            return computeBucketUsage(line, ruleOpt, bucketLimits, batchUsageContext, effectiveTotal,
-                    request.getServiceDate());
+            return computeUsageViaUnifiedLimitResolver(request, line, ruleOpt, bucketLimits, context,
+                    effectiveTotal, effectiveUnitPrice);
         }
 
         // Full bucket cutover: an unlinked rule has no usage ceiling. Never fall back
@@ -284,178 +317,205 @@ public class CoverageEngineService {
                 });
     }
 
-    private UsageComputation computeBucketUsage(
+    /**
+     * P1.5.1: replaces the old {@code computeBucketUsage}'s own
+     * occurrence-split/amount-ceiling arithmetic with
+     * {@code UnifiedLimitResolver}. Bucket selection is NOT repeated here --
+     * {@code limits} is the exact list {@code coverageDecisionService.resolve}
+     * already produced for this line, handed straight to the adapter.
+     */
+    private UsageComputation computeUsageViaUnifiedLimitResolver(
+            BulkCoverageEngineRequest request,
             ClaimLineInput line,
             Optional<BenefitPolicyRuleResponseDto> ruleOpt,
             List<CoverageLimitSnapshot> limits,
-            Map<AccumulatorKey, BatchUsageAccumulator> batchUsageContext,
+            ClaimLimitEvaluationContext context,
             BigDecimal effectiveTotal,
-            java.time.LocalDate serviceDate) {
+            BigDecimal effectiveUnitPrice) {
 
         int coveragePercent = ruleOpt.map(BenefitPolicyRuleResponseDto::getEffectiveCoveragePercent).orElse(0);
-        BigDecimal greatestRefusal = ZERO;
-        boolean timesExceeded = false;
-        boolean amountExceeded = false;
-        boolean daysExceeded = false;
-        CoverageLimitSnapshot constraining = limits.get(0);
-        BigDecimal constrainingUsedBefore = ZERO;
-        BigDecimal constrainingRequestedBasis = ZERO;
-        Integer constrainingApprovedUnits = null;
-        Integer constrainingRefusedUnits = null;
-        boolean constrainingInitialized = false;
+        Long ruleId = ruleOpt.map(BenefitPolicyRuleResponseDto::getId).orElse(null);
 
-        // Per-limit occurrence units actually approved, computed here and
-        // reused verbatim in the accumulation pass below -- never derived
-        // from the line-level approvedGross, which reflects the MOST
-        // restrictive limit across the whole line and would otherwise credit
-        // every bucket with the full requested count even when this specific
-        // bucket's own times-limit refused part of it.
-        long[] unitsToAdd = new long[limits.size()];
+        BucketLimitSnapshotAdapter.Result adapterResult = bucketLimitSnapshotAdapter
+                .buildForNormalClaimFromResolvedLimits(request.getPolicyId(), request.getMemberId(), limits,
+                        request.getExcludeClaimId());
 
-        for (int i = 0; i < limits.size(); i++) {
-            CoverageLimitSnapshot limit = limits.get(i);
-            AccumulatorKey key = accumulatorKey(limit, serviceDate);
-            BatchUsageAccumulator acc = batchUsageContext.computeIfAbsent(key, ignored -> new BatchUsageAccumulator());
-            CountingMethod method = limit.countingMethod() != null ? limit.countingMethod() : CountingMethod.EACH_LINE;
-            long usedTimes = (limit.usedTimes() == null ? 0 : limit.usedTimes()) + acc.addedCount;
-            long requestedTimes = requestedTimes(method, line, acc);
-            boolean thisTimesExceeded = limit.timesLimit() != null
-                    && usedTimes + requestedTimes > limit.timesLimit();
-            boolean thisDaysExceeded = limit.daysLimit() != null
-                    && !limit.serviceDayAlreadyUsed() && !acc.addedDay
-                    && limit.usedDays() + 1 > limit.daysLimit();
-
-            BigDecimal occurrenceRefusal = ZERO;
-            BigDecimal coveredGrossAfterOccurrence = effectiveTotal;
-            Integer approvedUnits = null;
-            Integer refusedUnits = null;
-            unitsToAdd[i] = requestedTimes;
-
-            if (thisDaysExceeded) {
-                // A day is not half-spent -- indivisible regardless of method.
-                occurrenceRefusal = effectiveTotal;
-                coveredGrossAfterOccurrence = ZERO;
-                unitsToAdd[i] = 0;
-            } else if (thisTimesExceeded) {
-                long remainingTimes = Math.max(0, limit.timesLimit() - usedTimes);
-                DivisibleLimitSplitter.UnitSplit split = DivisibleLimitSplitter.splitUnits(
-                        method, (int) requestedTimes, remainingTimes);
-                BigDecimal covered = DivisibleLimitSplitter.coveredAmountFor(effectiveTotal, split);
-                occurrenceRefusal = maxZero(scale2(effectiveTotal.subtract(covered)));
-                coveredGrossAfterOccurrence = covered;
-                approvedUnits = split.coveredUnits();
-                refusedUnits = split.refusedUnits();
-                unitsToAdd[i] = split.coveredUnits();
-            }
-
-            boolean thisAmountExceeded = false;
-            BigDecimal amountRefusalGross = ZERO;
-            BigDecimal usedAmount = scale2(defaultIfNull(limit.usedAmount(), ZERO).add(acc.addedAmount));
-            // Audit fields always reflect the full line, independent of any
-            // occurrence-based split -- unchanged from before partial
-            // acceptance existed.
-            BigDecimal requestedBasis = basisAmount(limit.consumptionBasis(), effectiveTotal, coveragePercent);
-            if (!constrainingInitialized) {
-                constraining = limit;
-                constrainingUsedBefore = usedAmount;
-                constrainingRequestedBasis = requestedBasis;
-                constrainingInitialized = true;
-            }
-            // The financial ceiling still applies to whatever the occurrence
-            // split already covers -- a session limit allowing 5 of 8 units
-            // does not exempt those 5 from a lower amount cap.
-            if (limit.amountLimit() != null && coveredGrossAfterOccurrence.signum() > 0) {
-                BigDecimal checkBasis = basisAmount(limit.consumptionBasis(), coveredGrossAfterOccurrence, coveragePercent);
-                BigDecimal available = maxZero(scale2(limit.amountLimit().subtract(usedAmount)));
-                if (checkBasis.compareTo(available) > 0) {
-                    thisAmountExceeded = true;
-                    BigDecimal refusedBasis = scale2(checkBasis.subtract(available));
-                    amountRefusalGross = toGrossRefusal(limit.consumptionBasis(), refusedBasis, coveragePercent);
-                }
-            }
-            BigDecimal refusal = maxZero(scale2(occurrenceRefusal.add(amountRefusalGross)));
-
-            if (refusal.compareTo(greatestRefusal) > 0) {
-                greatestRefusal = min(effectiveTotal, refusal);
-                constraining = limit;
-                timesExceeded = thisTimesExceeded;
-                amountExceeded = thisAmountExceeded;
-                daysExceeded = thisDaysExceeded;
-                constrainingUsedBefore = usedAmount;
-                constrainingRequestedBasis = requestedBasis;
-                constrainingApprovedUnits = approvedUnits;
-                constrainingRefusedUnits = refusedUnits;
-            }
+        if (adapterResult.blocked()) {
+            // P1.3 §2 (intended correction, not a regression): a structural
+            // bucket/policy mismatch now halts the line instead of being
+            // silently evaluated -- computeBucketUsage never checked this at all.
+            log.error("[COVERAGE-ENGINE] {} for lineId={}", adapterResult.blockReason(), line.getLineId());
+            UsageDetails blockedDetails = UsageDetails.builder()
+                    .ruleId(ruleId).hasLimit(true).exceeded(true).build();
+            return new UsageComputation(effectiveTotal, "USAGE_BUCKET_CONFIGURATION_ERROR", blockedDetails);
         }
 
-        BigDecimal approvedGross = maxZero(scale2(effectiveTotal.subtract(greatestRefusal)));
-        for (int i = 0; i < limits.size(); i++) {
-            CoverageLimitSnapshot limit = limits.get(i);
-            BatchUsageAccumulator acc = batchUsageContext.get(accumulatorKey(limit, serviceDate));
-            // Occurrence consumption follows this bucket's OWN times outcome
-            // (unitsToAdd), never the line-level approvedGross: the two axes
-            // -- occurrences and money -- are enforced independently.
-            acc.addedCount += unitsToAdd[i];
-            if (approvedGross.signum() > 0) {
-                acc.addedAmount = scale2(acc.addedAmount.add(
-                        basisAmount(limit.consumptionBasis(), approvedGross, coveragePercent)));
-                if (!limit.serviceDayAlreadyUsed()) acc.addedDay = true;
-            }
+        List<BucketLimitSnapshot> baseSnapshots = adapterResult.snapshots();
+        List<BucketLimitSnapshot> beforeLine = context.adjustForNextLine(baseSnapshots);
+
+        // ── requestedDays: a day is newly requested only if neither the DB
+        // nor an earlier line in this batch already accounted for today's
+        // date on this bucket -- mirrors `!serviceDayAlreadyUsed && !addedDay`. ──
+        boolean dbDayAlreadyUsed = limits.stream().anyMatch(CoverageLimitSnapshot::serviceDayAlreadyUsed);
+        boolean batchDayAlreadyConsumed = beforeLine.stream()
+                .filter(s -> s.limitType() == LimitAxisType.DAYS)
+                .anyMatch(s -> context.dayAlreadyConsumedThisBatch(
+                        s.bucketId(), s.periodStart(), s.periodEnd(), request.getServiceDate()));
+        boolean hasDaysAxis = beforeLine.stream().anyMatch(s -> s.limitType() == LimitAxisType.DAYS);
+        int requestedDays = hasDaysAxis && !dbDayAlreadyUsed && !batchDayAlreadyConsumed ? 1 : 0;
+
+        // ── requestedQuantity: mirrors the old per-bucket requestedTimes()
+        // rule, applied using the first TIMES-configuring bucket's own
+        // countingMethod (P1.5.2 moved countingMethod to the bucket; a line
+        // touching two TIMES buckets with two different methods is a
+        // confirmed-but-deferred edge case, see P1_5_1A doc §5 item 1). ──
+        Optional<BucketLimitSnapshot> primaryTimesSnapshot = beforeLine.stream()
+                .filter(s -> s.limitType() == LimitAxisType.TIMES).findFirst();
+        int requestedQuantity = requestedQuantity(primaryTimesSnapshot, line, context);
+
+        UnifiedLimitInput input = new UnifiedLimitInput(
+                request.getPolicyId(), ruleId, request.getMemberId(), request.getServiceDate(),
+                request.getEncounterType(), requestedQuantity, requestedDays, effectiveUnitPrice, effectiveTotal,
+                request.getExcludeClaimId(), ReservationEvaluationMode.NORMAL, null, null);
+
+        UnifiedLimitDecision decision = UnifiedLimitResolver.resolve(input, beforeLine);
+
+        if (decision.status() == com.waad.tba.modules.benefitpolicy.service.unifiedlimit.UnifiedLimitStatus.BLOCKED) {
+            // P1.3 §2: BLOCKED must never surface as an ordinary approval --
+            // bindingAvailableAmount is null here (not computed at all, not
+            // zero), so it must be handled explicitly, not defaulted to
+            // "unlimited money" below. This is the resolver's OWN
+            // independent guard (defense-in-depth beyond the adapter's own
+            // check above), so reaching it here is not expected in
+            // practice, but must still refuse safely if it ever fires.
+            log.error("[COVERAGE-ENGINE] {} for lineId={}", decision.decisionReasons(), line.getLineId());
+            UsageDetails blockedDetails = UsageDetails.builder()
+                    .ruleId(ruleId).hasLimit(true).exceeded(true).build();
+            return new UsageComputation(effectiveTotal, "USAGE_BUCKET_CONFIGURATION_ERROR", blockedDetails);
         }
 
-        // Every applicable bucket (including the annual/general parent) has
-        // already participated in enforcement above. The line-level display,
-        // however, must expose only limits directly linked to this benefit.
-        // General/parent ceilings belong in the policy summary, not in the
-        // "benefit limit" column.
-        CoverageLimitSnapshot amountDisplay = limits.stream()
-                .filter(CoverageLimitSnapshot::directlyLinked)
-                .filter(limit -> limit.amountLimit() != null)
-                .min(Comparator.comparing(CoverageLimitSnapshot::amountLimit))
-                .orElse(null);
-        CoverageLimitSnapshot timesDisplay = limits.stream()
-                .filter(CoverageLimitSnapshot::directlyLinked)
-                .filter(limit -> limit.timesLimit() != null)
-                .min(Comparator.comparing(CoverageLimitSnapshot::timesLimit))
-                .orElse(null);
-        CoverageLimitSnapshot daysDisplay = limits.stream()
-                .filter(CoverageLimitSnapshot::directlyLinked)
-                .filter(limit -> limit.daysLimit() != null)
-                .min(Comparator.comparing(CoverageLimitSnapshot::daysLimit))
-                .orElse(null);
+        // UnifiedLimitResolver/ClaimLimitEvaluationContext are deliberately
+        // money-ownership-blind (P1.3 §0) -- they only ever see gross
+        // amounts. Converting into what each bucket's OWN consumption is
+        // actually measured in (COMPANY_SHARE vs ELIGIBLE_AMOUNT) is this
+        // caller's job, since only it knows each bucket's consumptionBasis.
+        Map<Long, ConsumptionBasis> basisByBucketId = new HashMap<>();
+        for (CoverageLimitSnapshot l : limits) {
+            if (l.bucketId() != null) basisByBucketId.put(l.bucketId(), l.consumptionBasis());
+        }
+        context.recordLineConsumption(beforeLine, decision, request.getServiceDate(),
+                bucketId -> {
+                    ConsumptionBasis basis = basisByBucketId.getOrDefault(bucketId, ConsumptionBasis.ELIGIBLE_AMOUNT);
+                    BigDecimal gross = decision.bindingAvailableAmount() == null ? ZERO : decision.bindingAvailableAmount();
+                    return basisAmount(basis, gross, coveragePercent);
+                });
+        List<BucketLimitSnapshot> afterLine = context.adjustForNextLine(baseSnapshots);
 
-        BatchUsageAccumulator amountAcc = amountDisplay == null ? null
-                : batchUsageContext.get(accumulatorKey(amountDisplay, serviceDate));
-        BatchUsageAccumulator timesAcc = timesDisplay == null ? null
-                : batchUsageContext.get(accumulatorKey(timesDisplay, serviceDate));
+        BigDecimal bindingAvailable = decision.bindingAvailableAmount() == null ? effectiveTotal
+                : decision.bindingAvailableAmount();
+        BigDecimal limitRefused = maxZero(scale2(effectiveTotal.subtract(bindingAvailable)));
+
+        boolean timesExceeded = decision.bindingConstraintType() == BindingConstraintType.TIMES;
+        boolean amountExceeded = decision.bindingConstraintType() == BindingConstraintType.AMOUNT;
+        boolean daysExceeded = decision.bindingConstraintType() == BindingConstraintType.DAYS;
+
+        // Display: only directly-linked limits are shown as "the" benefit
+        // limit for this service -- a general/parent ceiling still enforces
+        // (via UnifiedLimitResolver above, over every applicable bucket) but
+        // is never shown as if it were this service's own limit.
+        CoverageLimitSnapshot amountDisplay = limits.stream().filter(CoverageLimitSnapshot::directlyLinked)
+                .filter(l -> l.amountLimit() != null).min(Comparator.comparing(CoverageLimitSnapshot::amountLimit))
+                .orElse(null);
+        CoverageLimitSnapshot timesDisplay = limits.stream().filter(CoverageLimitSnapshot::directlyLinked)
+                .filter(l -> l.timesLimit() != null).min(Comparator.comparing(CoverageLimitSnapshot::timesLimit))
+                .orElse(null);
+        CoverageLimitSnapshot daysDisplay = limits.stream().filter(CoverageLimitSnapshot::directlyLinked)
+                .filter(l -> l.daysLimit() != null).min(Comparator.comparing(CoverageLimitSnapshot::daysLimit))
+                .orElse(null);
+        CoverageLimitSnapshot constraining = amountDisplay != null ? amountDisplay
+                : timesDisplay != null ? timesDisplay
+                : daysDisplay != null ? daysDisplay
+                : limits.get(0);
+
+        BigDecimal usedAmountBeforeLine = amountDisplay == null ? ZERO
+                : findAxis(beforeLine, amountDisplay.bucketId(), LimitAxisType.AMOUNT)
+                        .map(BucketLimitSnapshot::committed).orElse(scale2(defaultIfNull(amountDisplay.usedAmount(), ZERO)));
         BigDecimal finalAmount = amountDisplay == null ? ZERO
-                : scale2(defaultIfNull(amountDisplay.usedAmount(), ZERO).add(amountAcc.addedAmount));
+                : findAxis(afterLine, amountDisplay.bucketId(), LimitAxisType.AMOUNT)
+                        .map(BucketLimitSnapshot::committed).orElse(usedAmountBeforeLine);
         long finalTimes = timesDisplay == null ? 0
-                : (timesDisplay.usedTimes() == null ? 0 : timesDisplay.usedTimes()) + timesAcc.addedCount;
+                : findAxis(afterLine, timesDisplay.bucketId(), LimitAxisType.TIMES)
+                        .map(s -> s.committed().longValue())
+                        .orElse((long) (timesDisplay.usedTimes() == null ? 0 : timesDisplay.usedTimes()));
+        long usedDaysAfter = daysDisplay == null ? 0
+                : findAxis(afterLine, daysDisplay.bucketId(), LimitAxisType.DAYS)
+                        .map(s -> s.committed().longValue())
+                        .orElse((long) (daysDisplay.usedDays() == null ? 0 : daysDisplay.usedDays()));
+
+        BigDecimal requestedBasis = basisAmount(constraining.consumptionBasis(), effectiveTotal, coveragePercent);
+        BigDecimal approvedGross = maxZero(scale2(effectiveTotal.subtract(limitRefused)));
+
+        Integer approvedUnits = decision.approvedQuantity() != requestedQuantity ? decision.approvedQuantity() : null;
+        Integer refusedUnits = decision.refusedQuantity() > 0 ? decision.refusedQuantity() : null;
+
         UsageDetails details = UsageDetails.builder()
-                .ruleId(ruleOpt.map(BenefitPolicyRuleResponseDto::getId).orElse(null))
+                .ruleId(ruleId)
                 .bucketId(constraining.bucketId()).bucketName(constraining.bucketName())
                 .hasLimit(true)
                 .timesLimit(timesDisplay == null ? null : timesDisplay.timesLimit())
                 .amountLimit(amountDisplay == null ? null : amountDisplay.amountLimit())
                 .daysLimit(daysDisplay == null ? null : daysDisplay.daysLimit())
                 .usedCount((int) Math.min(Integer.MAX_VALUE, finalTimes)).usedAmount(finalAmount)
-                .consumptionBasis(constraining.consumptionBasis() == null
-                        ? null : constraining.consumptionBasis().name())
-                .usedAmountBeforeLine(constrainingUsedBefore)
-                .requestedAmountForLimit(constrainingRequestedBasis)
+                .consumptionBasis(constraining.consumptionBasis() == null ? null : constraining.consumptionBasis().name())
+                .usedAmountBeforeLine(usedAmountBeforeLine)
+                .requestedAmountForLimit(requestedBasis)
                 .approvedAmountForLimit(basisAmount(constraining.consumptionBasis(), approvedGross, coveragePercent))
-                .usedDays(daysDisplay == null ? 0 : daysDisplay.usedDays()
-                        + (batchUsageContext.get(accumulatorKey(daysDisplay, serviceDate)).addedDay ? 1 : 0))
+                .usedDays((int) usedDaysAfter)
                 .remainingAmount(amountDisplay == null ? null
                         : maxZero(scale2(amountDisplay.amountLimit().subtract(finalAmount))))
                 .timesExceeded(timesExceeded).amountExceeded(amountExceeded).daysExceeded(daysExceeded)
                 .exceeded(timesExceeded || amountExceeded || daysExceeded)
-                .approvedUnits(constrainingApprovedUnits).refusedUnits(constrainingRefusedUnits).build();
+                .approvedUnits(approvedUnits).refusedUnits(refusedUnits)
+                .build();
+
         String reason = timesExceeded ? "USAGE_TIMES_LIMIT_EXCEEDED"
                 : daysExceeded ? "USAGE_DAYS_LIMIT_EXCEEDED"
                 : amountExceeded ? "USAGE_AMOUNT_LIMIT_EXCEEDED" : null;
-        return new UsageComputation(greatestRefusal, reason, details);
+
+        return new UsageComputation(limitRefused, reason, details);
+    }
+
+    private static Optional<BucketLimitSnapshot> findAxis(List<BucketLimitSnapshot> snapshots, Long bucketId,
+            LimitAxisType axisType) {
+        if (bucketId == null) return Optional.empty();
+        return snapshots.stream()
+                .filter(s -> axisType == s.limitType() && bucketId.equals(s.bucketId()))
+                .findFirst();
+    }
+
+    /**
+     * Mirrors the old per-bucket {@code requestedTimes()} rule exactly:
+     * EACH_UNIT asks for the line's own quantity; PER_VISIT/PER_DAY ask for
+     * one occurrence only the first time this bucket is touched in the
+     * batch (the whole claim shares one visit/day), zero afterward; every
+     * other method (EACH_LINE, or no TIMES axis at all) always asks for one.
+     */
+    private int requestedQuantity(Optional<BucketLimitSnapshot> primaryTimesSnapshot, ClaimLineInput line,
+            ClaimLimitEvaluationContext context) {
+        if (primaryTimesSnapshot.isEmpty()) {
+            return Math.max(1, line.getQuantity() == null ? 1 : line.getQuantity());
+        }
+        BucketLimitSnapshot snapshot = primaryTimesSnapshot.get();
+        CountingMethod method = snapshot.countingMethod() != null ? snapshot.countingMethod() : CountingMethod.EACH_LINE;
+        if (method == CountingMethod.EACH_UNIT) {
+            return Math.max(1, line.getQuantity() == null ? 1 : line.getQuantity());
+        }
+        if (method == CountingMethod.PER_VISIT || method == CountingMethod.PER_DAY) {
+            boolean alreadyThisBatch = context.timesAlreadyConsumedThisBatch(
+                    snapshot.bucketId(), snapshot.periodStart(), snapshot.periodEnd());
+            return alreadyThisBatch ? 0 : 1;
+        }
+        return 1;
     }
 
     private CoverageResult fallbackFailedResult(ClaimLineInput line, Exception e) {
@@ -489,44 +549,9 @@ public class CoverageEngineService {
         return message == null || message.isBlank() ? "خطأ داخلي في محرك التغطية" : message;
     }
 
-    private long requestedTimes(CountingMethod method, ClaimLineInput line, BatchUsageAccumulator acc) {
-        CountingMethod effectiveMethod = method != null ? method : CountingMethod.EACH_LINE;
-        if (effectiveMethod == CountingMethod.EACH_UNIT) {
-            return Math.max(1, line.getQuantity() == null ? 1 : line.getQuantity());
-        }
-        if (effectiveMethod == CountingMethod.PER_VISIT || effectiveMethod == CountingMethod.PER_DAY) {
-            return acc.addedCount == 0 ? 1 : 0;
-        }
-        return 1;
-    }
-
     private BigDecimal basisAmount(ConsumptionBasis basis, BigDecimal gross, int coveragePercent) {
         if (basis == ConsumptionBasis.ELIGIBLE_AMOUNT) return scale2(gross);
         return scale2(gross.multiply(BigDecimal.valueOf(coveragePercent)).divide(HUNDRED, 2, RoundingMode.HALF_UP));
-    }
-
-    private BigDecimal toGrossRefusal(ConsumptionBasis basis, BigDecimal refusedBasis, int coveragePercent) {
-        if (basis == ConsumptionBasis.ELIGIBLE_AMOUNT || coveragePercent <= 0) return scale2(refusedBasis);
-        return scale2(refusedBasis.multiply(HUNDRED)
-                .divide(BigDecimal.valueOf(coveragePercent), 2, RoundingMode.HALF_UP));
-    }
-
-    /**
-     * bucketId alone is not enough: a batch accumulator keyed only on it
-     * would merge two different limit cycles on the same bucket (e.g. an
-     * annual reset) or two different service dates into one running total.
-     * Today's public API resolves one service date per request, so
-     * serviceDate never actually varies within a call -- this key is
-     * defense-in-depth against that assumption changing, not a fix for a
-     * reachable bug today.
-     */
-    public record AccumulatorKey(Long bucketId, java.time.LocalDate periodStart, java.time.LocalDate periodEnd,
-                                  java.time.LocalDate serviceDate, CountingMethod countingMethod) {
-    }
-
-    private AccumulatorKey accumulatorKey(CoverageLimitSnapshot limit, java.time.LocalDate serviceDate) {
-        CountingMethod method = limit.countingMethod() != null ? limit.countingMethod() : CountingMethod.EACH_LINE;
-        return new AccumulatorKey(limit.bucketId(), limit.periodStart(), limit.periodEnd(), serviceDate, method);
     }
 
     private BigDecimal resolveEffectiveUnitPrice(BigDecimal enteredUnitPrice, BigDecimal contractPrice) {
@@ -584,11 +609,5 @@ public class CoverageEngineService {
             BigDecimal limitRefused,
             String refusalReason,
             CoverageResult.UsageDetails usageDetails) {
-    }
-
-    public static class BatchUsageAccumulator {
-        public long addedCount = 0;
-        public BigDecimal addedAmount = BigDecimal.ZERO;
-        public boolean addedDay = false;
     }
 }

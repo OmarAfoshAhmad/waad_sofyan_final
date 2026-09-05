@@ -85,6 +85,19 @@ public final class ClaimLimitEvaluationContext {
     }
 
     /**
+     * Whether an earlier line in this same context already contributed ANY
+     * occurrence to this (bucket, period)'s TIMES axis. Callers use this for
+     * an atomic, claim-wide-single-occurrence counting method (PER_VISIT,
+     * PER_DAY as a TIMES method) where the whole batch shares one occurrence
+     * -- exactly today's {@code acc.addedCount == 0 ? 1 : 0} rule, scoped
+     * correctly per bucket rather than read from a shared flag.
+     */
+    public boolean timesAlreadyConsumedThisBatch(Long bucketId, LocalDate periodStart, LocalDate periodEnd) {
+        PendingUsage usage = pending.get(new PendingKey(bucketId, periodStart, periodEnd));
+        return usage != null && usage.pendingTimes > 0;
+    }
+
+    /**
      * Returns a new list with every AMOUNT/TIMES snapshot's
      * {@code committed}/{@code remaining} reduced by whatever this context
      * has recorded so far for that (bucket, period). Never mutates
@@ -134,13 +147,38 @@ public final class ClaimLimitEvaluationContext {
      */
     public void recordLineConsumption(List<BucketLimitSnapshot> lineSnapshots, UnifiedLimitDecision decision,
             LocalDate serviceDate) {
+        recordLineConsumption(lineSnapshots, decision, serviceDate, null);
+    }
+
+    /**
+     * Same as {@link #recordLineConsumption(List, UnifiedLimitDecision, LocalDate)},
+     * but lets the caller convert the decision's gross
+     * {@code bindingAvailableAmount} into whatever unit a given bucket's own
+     * consumption is actually measured in (e.g. COMPANY_SHARE vs
+     * ELIGIBLE_AMOUNT) before it is added to that bucket's pending total.
+     * {@link UnifiedLimitResolver} and this context are deliberately
+     * money-ownership-blind (P1.3 §0) -- they only ever see gross amounts;
+     * the caller (which already knows each bucket's consumptionBasis) is
+     * where that conversion belongs, not here.
+     *
+     * @param amountBasisAdjuster given a bucket id, returns the amount to
+     *                            record for its AMOUNT axis; {@code null}
+     *                            means "record the gross amount as-is"
+     */
+    public void recordLineConsumption(List<BucketLimitSnapshot> lineSnapshots, UnifiedLimitDecision decision,
+            LocalDate serviceDate, java.util.function.Function<Long, BigDecimal> amountBasisAdjuster) {
         for (BucketLimitSnapshot snapshot : lineSnapshots) {
             switch (snapshot.limitType()) {
                 case AMOUNT -> {
                     if (decision.bindingAvailableAmount() != null
                             && decision.bindingAvailableAmount().signum() > 0) {
-                        PendingUsage usage = pending.computeIfAbsent(keyOf(snapshot), k -> new PendingUsage());
-                        usage.pendingAmount = usage.pendingAmount.add(decision.bindingAvailableAmount());
+                        BigDecimal toRecord = amountBasisAdjuster == null
+                                ? decision.bindingAvailableAmount()
+                                : amountBasisAdjuster.apply(snapshot.bucketId());
+                        if (toRecord != null && toRecord.signum() > 0) {
+                            PendingUsage usage = pending.computeIfAbsent(keyOf(snapshot), k -> new PendingUsage());
+                            usage.pendingAmount = usage.pendingAmount.add(toRecord);
+                        }
                     }
                 }
                 case TIMES -> {

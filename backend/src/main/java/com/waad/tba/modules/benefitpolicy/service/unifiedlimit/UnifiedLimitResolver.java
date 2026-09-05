@@ -66,15 +66,22 @@ public final class UnifiedLimitResolver {
         //     the service is priced and capped as a continuous amount. The
         //     occurrence count itself is never refused; only money is.
         // (b) One or more TIMES axes exist (G2/G4, and CM1-CM3 for more than
-        //     one bucket): a unit has a real, fixed price, so AMOUNT can only
-        //     ever afford WHOLE units -- 2.5 sessions is not a purchasable
-        //     quantity (G4). Each TIMES-configuring bucket decides its OWN
-        //     contribution using its OWN countingMethod (P1.5.2/P1.3
-        //     Amendment #1 -- countingMethod is bucket metadata, not a
-        //     decision-wide input) against the ONE shared AMOUNT capacity;
-        //     only the already-computed contributions are then compared,
-        //     tightest wins -- never one bucket's method applied to
-        //     another's remaining.
+        //     one bucket): a unit has a real, fixed price ONLY when the
+        //     amount ceiling constraining it lives on the SAME bucket --
+        //     that is the one case where "money can only buy whole units" is
+        //     actually true (G4: one bucket sells a priced session). A
+        //     SEPARATE/general/parent amount ceiling on a DIFFERENT bucket
+        //     is not a per-unit price relationship at all (a plain policy-
+        //     wide cap coexisting with an unrelated occurrence limit) --
+        //     found the hard way while wiring this into CoverageEngineService:
+        //     the old per-bucket combinedCapacity used ONE globally-shared
+        //     amount capacity, which silently turned "50 left on the annual
+        //     ceiling" into "afford zero whole $100 sessions" and refused a
+        //     line the old computeBucketUsage always partially approved.
+        //     Each TIMES-configuring bucket therefore only ever divides by
+        //     an amount snapshot sharing its OWN bucketId; any other amount
+        //     ceiling is applied afterward, as a continuous cap on the
+        //     already-decided quantity's money -- never a further quantity cut.
         int approvedQuantity;
         int refusedQuantity;
         BindingConstraintType quantityBindingType;
@@ -86,21 +93,22 @@ public final class UnifiedLimitResolver {
         if (!occurrenceDimensionExists) {
             approvedQuantity = input.requestedQuantity();
             refusedQuantity = 0;
-            quantityBindingType = amount.configured() != null
-                    && amount.remaining().compareTo(scale2(input.eligibleAmount())) < 0
-                    ? BindingConstraintType.AMOUNT : BindingConstraintType.NONE;
+            quantityBindingType = BindingConstraintType.NONE;
         } else {
-            int unitsAffordableByAmount = amount.remaining() == null || input.effectiveUnitPrice() == null
-                    || input.effectiveUnitPrice().signum() <= 0
-                    ? Integer.MAX_VALUE
-                    : amount.remaining().max(BigDecimal.ZERO)
-                            .divideToIntegralValue(input.effectiveUnitPrice()).intValue();
-
             approvedQuantity = input.requestedQuantity();
             quantityBindingType = BindingConstraintType.NONE;
             for (BucketLimitSnapshot ts : timesSnapshots) {
                 int unitsAffordableByThisBucket = ts.remaining().max(BigDecimal.ZERO).intValue();
-                int combinedCapacity = Math.min(unitsAffordableByThisBucket, unitsAffordableByAmount);
+                BucketLimitSnapshot sameBucketAmount = snapshots.stream()
+                        .filter(s -> s.limitType() == LimitAxisType.AMOUNT
+                                && java.util.Objects.equals(s.bucketId(), ts.bucketId()))
+                        .findFirst().orElse(null);
+                int unitsAffordableBySameBucketAmount = sameBucketAmount == null
+                        || input.effectiveUnitPrice() == null || input.effectiveUnitPrice().signum() <= 0
+                        ? Integer.MAX_VALUE
+                        : sameBucketAmount.remaining().max(BigDecimal.ZERO)
+                                .divideToIntegralValue(input.effectiveUnitPrice()).intValue();
+                int combinedCapacity = Math.min(unitsAffordableByThisBucket, unitsAffordableBySameBucketAmount);
                 boolean divisible = ts.countingMethod() == CountingMethod.EACH_UNIT;
                 int approvedByThisBucket = !divisible
                         ? (input.requestedQuantity() <= combinedCapacity ? input.requestedQuantity() : 0)
@@ -108,7 +116,7 @@ public final class UnifiedLimitResolver {
                 if (approvedByThisBucket < approvedQuantity) {
                     approvedQuantity = approvedByThisBucket;
                     quantityBindingBucketId = ts.bucketId();
-                    quantityBindingType = unitsAffordableByAmount < unitsAffordableByThisBucket
+                    quantityBindingType = unitsAffordableBySameBucketAmount < unitsAffordableByThisBucket
                             ? BindingConstraintType.AMOUNT : BindingConstraintType.TIMES;
                 }
             }
@@ -123,35 +131,51 @@ public final class UnifiedLimitResolver {
         int approvedDays = daysFit ? input.requestedDays() : 0;
         int refusedDays = input.requestedDays() - approvedDays;
 
-        // ── binding: quantity/amount constraint wins unless only days bound (simple first cut; revisit if a real case needs both at once) ──
-        BindingConstraintType bindingConstraintType = quantityBindingType != BindingConstraintType.NONE
+        // ── money for whatever quantity was just decided, BEFORE any
+        // separate/general amount ceiling is applied ──
+        BigDecimal moneyForApprovedQuantity;
+        if (!occurrenceDimensionExists || (quantityBindingType == BindingConstraintType.NONE
+                && approvedQuantity >= input.requestedQuantity())) {
+            moneyForApprovedQuantity = scale2(input.eligibleAmount());
+        } else {
+            var split = new DivisibleLimitSplitter.UnitSplit(approvedQuantity, refusedQuantity);
+            moneyForApprovedQuantity = DivisibleLimitSplitter.coveredAmountFor(scale2(input.eligibleAmount()), split);
+        }
+
+        // ── the GLOBAL amount ceiling (tightest across every AMOUNT-configured
+        // bucket, same-bucket ones included) applied as a final continuous cap.
+        // A same-bucket ceiling was already reflected in combinedCapacity above,
+        // so this is a no-op there (moneyForApprovedQuantity already fits); a
+        // separate/general ceiling binds here for the first time. ──
+        BigDecimal moneyAfterGeneralCeiling = amount.configured() == null
+                ? moneyForApprovedQuantity
+                : moneyForApprovedQuantity.min(scale2(amount.remaining().max(BigDecimal.ZERO)));
+        boolean generalAmountCeilingBinds = amount.configured() != null
+                && moneyAfterGeneralCeiling.compareTo(moneyForApprovedQuantity) < 0;
+
+        BindingConstraintType bindingConstraintTypeBeforeDays = quantityBindingType != BindingConstraintType.NONE
                 ? quantityBindingType
+                : (generalAmountCeilingBinds ? BindingConstraintType.AMOUNT : BindingConstraintType.NONE);
+
+        // ── binding: quantity/amount constraint wins unless only days bound (simple first cut; revisit if a real case needs both at once) ──
+        BindingConstraintType bindingConstraintType = bindingConstraintTypeBeforeDays != BindingConstraintType.NONE
+                ? bindingConstraintTypeBeforeDays
                 : (refusedDays > 0 ? BindingConstraintType.DAYS : BindingConstraintType.NONE);
 
         // P1.5.2: for a quantity-bound decision, use the bucket whose OWN
         // calculation was actually tightest (tracked above), not merely the
-        // first applied bucket -- DAYS-bound still falls back to that
-        // placeholder since days binding is not tracked per-bucket here.
+        // first applied bucket -- a general-ceiling or DAYS-bound decision
+        // still falls back to that placeholder since neither is tracked
+        // per-bucket here.
         Long bindingBucketId = bindingConstraintType == BindingConstraintType.NONE ? null
                 : bindingConstraintType == quantityBindingType && quantityBindingBucketId != null
                         ? quantityBindingBucketId
                         : appliedBucketIds.isEmpty() ? null : appliedBucketIds.get(0);
 
         // ── the ONE money number that reaches WaadFinancialEngine (P1.3 rule 3) ──
-        BigDecimal bindingAvailableAmount;
-        if (bindingConstraintType == BindingConstraintType.DAYS) {
-            bindingAvailableAmount = approvedDays > 0 ? scale2(input.eligibleAmount()) : BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
-        } else if (!occurrenceDimensionExists) {
-            // G1: no unit to split -- AMOUNT caps the money continuously.
-            bindingAvailableAmount = amount.configured() == null
-                    ? scale2(input.eligibleAmount())
-                    : scale2(input.eligibleAmount()).min(scale2(amount.remaining().max(BigDecimal.ZERO)));
-        } else if (quantityBindingType == BindingConstraintType.NONE) {
-            bindingAvailableAmount = scale2(input.eligibleAmount());
-        } else {
-            var split = new DivisibleLimitSplitter.UnitSplit(approvedQuantity, refusedQuantity);
-            bindingAvailableAmount = DivisibleLimitSplitter.coveredAmountFor(scale2(input.eligibleAmount()), split);
-        }
+        BigDecimal bindingAvailableAmount = bindingConstraintType == BindingConstraintType.DAYS
+                ? (approvedDays > 0 ? scale2(input.eligibleAmount()) : BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP))
+                : moneyAfterGeneralCeiling;
 
         // Whether anything was actually refused. For the no-occurrence-dimension
         // shape (G1) refusedQuantity is always 0 by construction (the count

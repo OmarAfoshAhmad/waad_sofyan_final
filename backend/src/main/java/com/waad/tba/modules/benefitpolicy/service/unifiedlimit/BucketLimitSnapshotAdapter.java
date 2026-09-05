@@ -1,5 +1,6 @@
 package com.waad.tba.modules.benefitpolicy.service.unifiedlimit;
 
+import com.waad.tba.modules.benefitpolicy.dto.CoverageLimitSnapshot;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitBucketConsumption.Status;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitBucketConsumptionRepository;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitLimitBucketRepository;
@@ -76,7 +77,17 @@ public class BucketLimitSnapshotAdapter {
             LocalDate serviceDate, EncounterType encounterType, Long excludeClaimId) {
         List<BenefitBucketLimitService.LimitSnapshot> applicable =
                 bucketLimitService.findApplicable(ruleId, memberId, serviceDate, encounterType, excludeClaimId);
+        return validateAndScope(policyId, applicable);
+    }
 
+    /**
+     * P1.5.1: the shared validation step, usable whether the applicable list
+     * was just fetched (normal/preauth adapter entry points) or was already
+     * resolved once by a caller such as {@code CoverageDecisionService}
+     * (see {@link #buildForNormalClaimFromResolvedLimits}) -- rule/bucket
+     * selection happens exactly once per line either way, never twice.
+     */
+    private Selection validateAndScope(Long policyId, List<BenefitBucketLimitService.LimitSnapshot> applicable) {
         List<Long> realBucketIds = applicable.stream()
                 .map(BenefitBucketLimitService.LimitSnapshot::bucketId)
                 .filter(Objects::nonNull).distinct().toList();
@@ -104,6 +115,13 @@ public class BucketLimitSnapshotAdapter {
             }
         }
         return new Selection(applicable, owningPolicyByBucket, realBucketIds, null);
+    }
+
+    private static BenefitBucketLimitService.LimitSnapshot fromCoverageLimitSnapshot(CoverageLimitSnapshot s) {
+        return new BenefitBucketLimitService.LimitSnapshot(s.bucketId(), s.bucketName(), s.amountLimit(),
+                s.timesLimit(), s.daysLimit(), s.usedAmount(), s.usedTimes(), s.usedDays(),
+                s.serviceDayAlreadyUsed(), s.countingMethod(), s.consumptionBasis(), s.directlyLinked(),
+                s.periodStart(), s.periodEnd());
     }
 
     /** The exact query LimitBalanceReader.read uses internally to see RESERVED amounts, bulk across buckets. */
@@ -134,7 +152,32 @@ public class BucketLimitSnapshotAdapter {
 
         Selection selection = selectApplicableBuckets(policyId, ruleId, memberId, serviceDate, encounterType, excludeClaimId);
         if (selection.blocked()) return Result.blocked(selection.blockReason());
+        return buildNormalSnapshots(selection, policyId, memberId, excludeClaimId);
+    }
 
+    /**
+     * P1.5.1 live wiring: {@code CoverageDecisionService.resolve} already
+     * resolved the rule and called {@code BenefitBucketLimitService.findApplicable}
+     * once per line -- this entry point takes that SAME output
+     * ({@code CoverageDecision.limits}) instead of re-discovering applicable
+     * buckets, so rule+bucket selection happens exactly once per line, never
+     * twice. Everything else (BUCKET_POLICY_MISMATCH check, RESERVED read,
+     * per-axis snapshot building) is identical to {@link #buildForNormalClaim}.
+     */
+    @Transactional(readOnly = true)
+    public Result buildForNormalClaimFromResolvedLimits(Long policyId, Long memberId,
+            List<CoverageLimitSnapshot> resolvedLimits, Long excludeClaimId) {
+        Objects.requireNonNull(policyId, "policyId is required");
+        Objects.requireNonNull(memberId, "memberId is required");
+
+        List<BenefitBucketLimitService.LimitSnapshot> applicable =
+                resolvedLimits.stream().map(BucketLimitSnapshotAdapter::fromCoverageLimitSnapshot).toList();
+        Selection selection = validateAndScope(policyId, applicable);
+        if (selection.blocked()) return Result.blocked(selection.blockReason());
+        return buildNormalSnapshots(selection, policyId, memberId, excludeClaimId);
+    }
+
+    private Result buildNormalSnapshots(Selection selection, Long policyId, Long memberId, Long excludeClaimId) {
         Map<String, BigDecimal> reservedAmountByKey =
                 reservedAmountByBucketPeriod(memberId, selection.realBucketIds(), excludeClaimId);
 

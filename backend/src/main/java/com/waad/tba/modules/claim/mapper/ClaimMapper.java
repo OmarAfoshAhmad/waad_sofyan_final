@@ -19,8 +19,6 @@ import com.waad.tba.modules.providercontract.entity.ProviderContractPricingItem;
 import com.waad.tba.modules.providercontract.repository.ProviderContractPricingItemRepository;
 import com.waad.tba.modules.providercontract.service.EffectiveProviderContractResolver;
 import com.waad.tba.modules.claim.service.CoverageEngineService;
-import com.waad.tba.modules.claim.service.CoverageEngineService.BatchUsageAccumulator;
-import com.waad.tba.modules.claim.service.CoverageEngineService.AccumulatorKey;
 import com.waad.tba.modules.claim.service.finance.ClaimFinancialAdjudicationService;
 import com.waad.tba.modules.claim.service.finance.ClaimFinancialInvariantGuard;
 import com.waad.tba.modules.claim.service.finance.ClaimFinancialTotals;
@@ -162,7 +160,7 @@ public class ClaimMapper {
         private void processEngineCalculations(Claim claim, List<ClaimLineDto> lineDtos) {
                 var effectivePolicy = resolvePolicy(claim.getMember(), claim.getServiceDate());
                 Long policyId = effectivePolicy != null ? effectivePolicy.getId() : null;
-                Map<AccumulatorKey, BatchUsageAccumulator> batchUsageContext = new HashMap<>();
+                var batchUsageContext = new com.waad.tba.modules.benefitpolicy.service.unifiedlimit.ClaimLimitEvaluationContext();
 
                 BulkCoverageEngineRequest engineRequest = BulkCoverageEngineRequest.builder()
                                 .policyId(policyId)

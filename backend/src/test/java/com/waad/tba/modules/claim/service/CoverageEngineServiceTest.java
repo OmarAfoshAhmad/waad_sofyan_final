@@ -5,11 +5,16 @@ import com.waad.tba.modules.benefitpolicy.dto.CoverageDecision;
 import com.waad.tba.modules.benefitpolicy.dto.CoverageDecisionSource;
 import com.waad.tba.modules.benefitpolicy.dto.CoverageDecisionRequest;
 import com.waad.tba.modules.benefitpolicy.dto.CoverageLimitSnapshot;
+import com.waad.tba.modules.benefitpolicy.entity.BenefitLimitBucket;
+import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy;
 import com.waad.tba.modules.benefitpolicy.enums.ConsumptionBasis;
 import com.waad.tba.modules.benefitpolicy.enums.CountingMethod;
+import com.waad.tba.modules.benefitpolicy.repository.BenefitBucketConsumptionRepository;
+import com.waad.tba.modules.benefitpolicy.repository.BenefitLimitBucketRepository;
 import com.waad.tba.modules.benefitpolicy.service.BenefitBucketLimitService;
 import com.waad.tba.modules.benefitpolicy.service.BenefitBucketLimitService.LimitSnapshot;
 import com.waad.tba.modules.benefitpolicy.service.CoverageDecisionService;
+import com.waad.tba.modules.benefitpolicy.service.unifiedlimit.BucketLimitSnapshotAdapter;
 import com.waad.tba.modules.claim.dto.engine.BulkCoverageEngineRequest;
 import com.waad.tba.modules.claim.dto.engine.ClaimLineInput;
 import com.waad.tba.modules.claim.dto.engine.CoverageResult;
@@ -26,9 +31,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
 
@@ -43,6 +50,11 @@ class CoverageEngineServiceTest {
 
     @Mock CoverageDecisionService decisionService;
     @Mock ProviderContractPricingItemRepository pricingItemRepository;
+    @Mock BenefitBucketLimitService bucketLimitService;
+    @Mock BenefitLimitBucketRepository bucketRepository;
+    @Mock BenefitBucketConsumptionRepository consumptionRepository;
+
+    private static final Long POLICY_ID = 1L;
 
     private CoverageEngineService engine;
     private Long configuredRuleId;
@@ -52,7 +64,41 @@ class CoverageEngineServiceTest {
 
     @BeforeEach
     void setUp() {
-        engine = new CoverageEngineService(decisionService, pricingItemRepository);
+        var adapter = new BucketLimitSnapshotAdapter(bucketLimitService, bucketRepository, consumptionRepository);
+        engine = new CoverageEngineService(decisionService, pricingItemRepository, adapter);
+        // Every bucket in these fixtures belongs to POLICY_ID unless a test
+        // (G6) overrides this to prove BUCKET_POLICY_MISMATCH. Answers
+        // dynamically for whatever bucket ids are actually requested --
+        // these 32+ fixtures use dozens of distinct ids, none of which
+        // exist as real rows, so a fixed stub can't cover them all.
+        lenient().when(bucketRepository.findAllById(any())).thenAnswer(invocation -> {
+            BenefitPolicy policy = BenefitPolicy.builder().id(POLICY_ID).build();
+            Iterable<Long> ids = invocation.getArgument(0);
+            List<BenefitLimitBucket> buckets = new java.util.ArrayList<>();
+            if (ids == null) return buckets; // Mockito's own when(...) recording call passes null
+            for (Long id : ids) {
+                buckets.add(BenefitLimitBucket.builder().id(id).code("B" + id).nameAr("وعاء").policy(policy).build());
+            }
+            return buckets;
+        });
+        // No RESERVED amount/times anywhere by default -- these 32
+        // pre-existing scenarios never modeled a reservation at all; G5
+        // below overrides this for the one scenario that does.
+        lenient().when(consumptionRepository.aggregateAmountBalances(any(), any(), any())).thenReturn(List.of());
+        lenient().when(consumptionRepository.sumReservedTimes(any(), anyLong(), any(), any())).thenReturn(null);
+    }
+
+    /**
+     * P1.5.1 live wiring's own performance gate, proven across every test in
+     * this class (34 scenarios, including the multi-line batches): rule and
+     * bucket selection happen exactly once per line, inside
+     * CoverageDecisionService.resolve() -- BucketLimitSnapshotAdapter never
+     * calls BenefitBucketLimitService.findApplicable a second time. If any
+     * test ever exercises that method, this fails for the whole class.
+     */
+    @org.junit.jupiter.api.AfterEach
+    void bucketSelectionIsNeverRepeated() {
+        org.mockito.Mockito.verifyNoInteractions(bucketLimitService);
     }
 
     @Test
@@ -608,17 +654,92 @@ class CoverageEngineServiceTest {
                 result.getCompanyShare().add(result.getLimitRefused()));
     }
 
-    @Test
-    @DisplayName("مفتاح التراكم يفرّق بين تاريخي خدمة مختلفين لنفس الوعاء تحت PER_DAY")
-    void accumulatorKeyDistinguishesDifferentServiceDatesForTheSameBucket() {
-        var keyDay1 = new CoverageEngineService.AccumulatorKey(
-                77L, LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31),
-                LocalDate.of(2026, 3, 1), CountingMethod.PER_DAY);
-        var keyDay2 = new CoverageEngineService.AccumulatorKey(
-                77L, LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31),
-                LocalDate.of(2026, 3, 2), CountingMethod.PER_DAY);
+    // ═══════════════════════════════════════════════════════════════════
+    // P1.5.1: intended corrections (not regressions) -- computeBucketUsage
+    // never checked either of these; UnifiedLimitResolver/BucketLimitSnapshotAdapter do.
+    // ═══════════════════════════════════════════════════════════════════
 
-        assertNotEquals(keyDay1, keyDay2);
+    @Test
+    @DisplayName("G5 — a RESERVED amount from another in-flight decision is now actually subtracted")
+    void reservedAmountFromAnotherDecisionIsSubtracted() {
+        coveredByRule(200L, 100, false);
+        useLimits(limit(2001L, "سقف بانتظار حجز آخر", "500.00", "0.00"));
+        // 200 already RESERVED by another decision -- computeBucketUsage had
+        // no concept of this at all; the wiring must now see it.
+        var reservedRow = org.mockito.Mockito.mock(
+                BenefitBucketConsumptionRepository.BucketAmountBalanceProjection.class);
+        lenient().when(reservedRow.getBucketId()).thenReturn(2001L);
+        lenient().when(reservedRow.getPeriodStart()).thenReturn(null);
+        lenient().when(reservedRow.getPeriodEnd()).thenReturn(null);
+        lenient().when(reservedRow.getStatus()).thenReturn("RESERVED");
+        lenient().when(reservedRow.getAmount()).thenReturn(new BigDecimal("200.00"));
+        when(consumptionRepository.aggregateAmountBalances(any(), any(), any())).thenReturn(List.of(reservedRow));
+
+        CoverageResult result = calculate(line("RESERVED-AWARE", "400.00"), EncounterType.OUTPATIENT);
+
+        // 500 configured - 0 committed - 200 reserved = 300 actually available.
+        assertMoney("300.00", result.getCompanyShare());
+        assertMoney("100.00", result.getLimitRefused());
+    }
+
+    @Test
+    @DisplayName("G6 — a bucket owned by a different policy blocks the line instead of being silently evaluated")
+    void bucketOwnedByDifferentPolicyBlocksTheLine() {
+        coveredByRule(201L, 100, false);
+        useLimits(limit(2011L, "وعاء ينتمي لوثيقة أخرى", "1000.00", "0.00"));
+        BenefitPolicy foreignPolicy = BenefitPolicy.builder().id(999L).build();
+        when(bucketRepository.findAllById(any())).thenReturn(List.of(
+                BenefitLimitBucket.builder().id(2011L).code("FOREIGN").nameAr("وعاء").policy(foreignPolicy).build()));
+
+        CoverageResult result = calculate(line("POLICY-MISMATCH", "150.00"), EncounterType.OUTPATIENT);
+
+        // computeBucketUsage never checked bucket ownership -- this line
+        // would previously have been silently evaluated against a foreign
+        // policy's own bucket. It must now refuse in full instead.
+        assertMoney("0.00", result.getCompanyShare());
+        assertMoney("150.00", result.getLimitRefused());
+        assertTrue(result.getUsageDetails().isExceeded());
+    }
+
+    @Test
+    @DisplayName("بوابة العلاج الطبيعي (Physio): سعر=100، مطلوب=3، متبقٍ=2، تغطية=75% -> معتمد=2، مسموح=200، مرفوض=100")
+    void physioGoldenGateThroughLiveWiring() {
+        coveredByRule(202L, 75, false);
+        useLimits(new LimitSnapshot(
+                2021L, "جلسات العلاج الطبيعي", null, 20, null,
+                BigDecimal.ZERO, 18, 0, false,
+                CountingMethod.EACH_UNIT, ConsumptionBasis.ELIGIBLE_AMOUNT));
+        ClaimLineInput input = line("PHYSIO-GOLDEN", "100.00");
+        input.setQuantity(3);
+
+        CoverageResult result = calculate(input, EncounterType.OUTPATIENT);
+
+        assertEquals(2, result.getUsageDetails().getApprovedUnits());
+        assertEquals(1, result.getUsageDetails().getRefusedUnits());
+        assertMoney("200.00", result.getUsageDetails().getApprovedAmountForLimit());
+        assertMoney("100.00", result.getLimitRefused());
+        // 200 allowed at 75% coverage: 150 company, 50 patient.
+        assertMoney("150.00", result.getCompanyShare());
+        assertMoney("50.00", result.getPatientShare());
+    }
+
+    @Test
+    @DisplayName("عدد الاستعلامات: مطالبة من 3 بنود على نفس الوعاء -> نداء واحد للسياسة ونداء واحد للأرصدة لكل سطر، لا مضاعفة")
+    void queryCountForAMultiLineClaimIsBoundedPerLineNotPerBucket() {
+        coveredByRule(210L, 100, false);
+        useLimits(limit(2101L, "سقف مشترك", "1000.00", "0.00"));
+
+        calculateBulk(List.of(line("Q-1", "50.00"), line("Q-2", "50.00"), line("Q-3", "50.00")),
+                EncounterType.OUTPATIENT);
+
+        // One bucket ownership read and one balance read PER LINE (batched
+        // across that line's own buckets, never per bucket) -- exactly the
+        // same per-line cost the old computeBucketUsage path already had via
+        // CoverageDecisionService's own single findApplicable call; nothing
+        // new was added, and nothing is repeated per bucket within a line.
+        verify(bucketRepository, org.mockito.Mockito.times(3)).findAllById(any());
+        verify(consumptionRepository, org.mockito.Mockito.times(3)).aggregateAmountBalances(any(), any(), any());
+        verify(decisionService, org.mockito.Mockito.times(3)).resolve(any());
     }
 
     private void coveredByRule(Long ruleId, int percent, boolean preApproval) {
