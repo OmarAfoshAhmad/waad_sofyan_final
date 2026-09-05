@@ -49,13 +49,24 @@ public class TimesLimitEvaluator {
 
     public int occurrencesFor(BenefitLimitBucket bucket, int approvedQuantity,
             Set<CountedKey> alreadyCounted, java.time.LocalDate serviceDate) {
+        return occurrencesFor(bucket.getCountingMethod(), bucket.getId(), approvedQuantity,
+                alreadyCounted, serviceDate);
+    }
+
+    /**
+     * The bucket-less core (P1.12.2): identical arithmetic, for a caller that
+     * already holds a resolved bucket's {@code countingMethod}/{@code id} as
+     * plain values (e.g. {@code BucketLimitSnapshot}, which carries both)
+     * rather than the entity itself -- so a pure mapper never needs to fetch
+     * one just to translate an already-approved quantity into occurrences.
+     */
+    public int occurrencesFor(CountingMethod countingMethod, Long bucketId, int approvedQuantity,
+            Set<CountedKey> alreadyCounted, java.time.LocalDate serviceDate) {
 
         if (approvedQuantity <= 0) {
             return 0;
         }
-        CountingMethod method = bucket.getCountingMethod() == null
-                ? CountingMethod.EACH_LINE
-                : bucket.getCountingMethod();
+        CountingMethod method = countingMethod == null ? CountingMethod.EACH_LINE : countingMethod;
 
         return switch (method) {
             case EACH_UNIT -> approvedQuantity;
@@ -69,7 +80,7 @@ public class TimesLimitEvaluator {
             // counts distinct service dates across a stay -- that stays a
             // closed failure for pre-authorizations, which carry one expected
             // date and no admission or discharge.
-            case PER_VISIT, PER_DAY -> alreadyCounted.add(new CountedKey(bucket.getId(), serviceDate)) ? 1 : 0;
+            case PER_VISIT, PER_DAY -> alreadyCounted.add(new CountedKey(bucketId, serviceDate)) ? 1 : 0;
         };
     }
 }

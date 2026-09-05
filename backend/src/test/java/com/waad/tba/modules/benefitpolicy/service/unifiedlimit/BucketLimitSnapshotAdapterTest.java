@@ -226,6 +226,107 @@ class BucketLimitSnapshotAdapterTest {
         verify(consumptionRepository).aggregateAmountBalances(MEMBER_ID, List.of(931L), excludeClaimId);
     }
 
+    // ── P1.12.2: buildForPreauthReservation ─────────────────────────────
+
+    @Test
+    @DisplayName("PR1 — AMOUNT: identical arithmetic to buildForNormalClaim -- a RESERVED row "
+            + "(even one placed by this same pre-authorization) simply reduces what is reservable, "
+            + "there is no own-reservation add-back (P1.12.1 PA6 parity)")
+    void pr1AmountUsesTheSameArithmeticAsNormalClaimWithNoOwnReservationConcept() {
+        LimitSnapshot snapshot = new LimitSnapshot(931L, "b", new BigDecimal("1000.00"), null, null,
+                new BigDecimal("300.00"), 0, 0, false, CountingMethod.EACH_LINE, ConsumptionBasis.ELIGIBLE_AMOUNT,
+                true, PERIOD_START, PERIOD_END);
+        when(bucketLimitService.findApplicable(RULE_ID, MEMBER_ID, SERVICE_DATE, EncounterType.OUTPATIENT, null))
+                .thenReturn(List.of(snapshot));
+        BenefitLimitBucket bucket = bucketOwnedBy(931L, POLICY_ID);
+        bucket.setConsumptionBasis(ConsumptionBasis.ELIGIBLE_AMOUNT);
+        when(bucketRepository.findAllById(any())).thenReturn(java.util.List.of(bucket));
+        var row = mockAmountRow(931L, PERIOD_START, PERIOD_END, "RESERVED", new BigDecimal("100.00"));
+        when(consumptionRepository.aggregateAmountBalances(eq(MEMBER_ID), any(), eq(null)))
+                .thenReturn(List.of(row));
+
+        var outcome = adapter.buildForPreauthReservation(POLICY_ID, RULE_ID, MEMBER_ID, SERVICE_DATE,
+                EncounterType.OUTPATIENT);
+
+        assertThat(outcome.evaluation().blocked()).isFalse();
+        BucketLimitSnapshot s = outcome.evaluation().snapshots().get(0);
+        assertThat(s.configured()).isEqualByComparingTo("1000.00");
+        assertThat(s.committed()).isEqualByComparingTo("300.00");
+        assertThat(s.activeReserved()).isEqualByComparingTo("100.00");
+        assertThat(s.remaining()).isEqualByComparingTo("600.00"); // 1000 - 300 - 100, whoever placed the 100
+
+        // The bucket's own configured measure travels alongside its identity,
+        // read from the same entity already fetched for BUCKET_POLICY_MISMATCH.
+        assertThat(outcome.measures()).containsExactly(
+                new ResolvedLimitMeasure(ResolvedLimitDescriptor.bucketKey(931L), ConsumptionBasis.ELIGIBLE_AMOUNT));
+    }
+
+    @Test
+    @DisplayName("PR2 — TIMES: read exactly like buildForNormalClaim")
+    void pr2TimesReadsReservedTimesDirectly() {
+        LimitSnapshot snapshot = new LimitSnapshot(932L, "b", null, 20, null,
+                BigDecimal.ZERO, 10, 0, false, CountingMethod.EACH_UNIT, ConsumptionBasis.COMPANY_SHARE,
+                true, PERIOD_START, PERIOD_END);
+        when(bucketLimitService.findApplicable(RULE_ID, MEMBER_ID, SERVICE_DATE, EncounterType.OUTPATIENT, null))
+                .thenReturn(List.of(snapshot));
+        when(bucketRepository.findAllById(any())).thenReturn(java.util.List.of(bucketOwnedBy(932L, POLICY_ID)));
+        when(consumptionRepository.aggregateAmountBalances(eq(MEMBER_ID), any(), eq(null))).thenReturn(List.of());
+        when(consumptionRepository.sumReservedTimes(MEMBER_ID, 932L, PERIOD_START, PERIOD_END)).thenReturn(4);
+
+        var outcome = adapter.buildForPreauthReservation(POLICY_ID, RULE_ID, MEMBER_ID, SERVICE_DATE,
+                EncounterType.OUTPATIENT);
+
+        BucketLimitSnapshot s = outcome.evaluation().snapshots().get(0);
+        assertThat(s.limitType()).isEqualTo(LimitAxisType.TIMES);
+        assertThat(s.remaining()).isEqualByComparingTo("6"); // 20 - 10 - 4
+    }
+
+    @Test
+    @DisplayName("PR3 — a bucket with a days limit blocks the WHOLE decision, structured, not thrown "
+            + "(P1.12.1 PA4 preserved as a genuine constraint, P1.12.1 PA7's raw-exception style deliberately NOT repeated)")
+    void pr3DayLimitedBucketBlocksInsteadOfThrowing() {
+        LimitSnapshot amountOnly = new LimitSnapshot(940L, "money", new BigDecimal("1000.00"), null, null,
+                BigDecimal.ZERO, 0, 0, false, CountingMethod.EACH_LINE, ConsumptionBasis.ELIGIBLE_AMOUNT,
+                true, PERIOD_START, PERIOD_END);
+        LimitSnapshot dayLimited = new LimitSnapshot(941L, "days", null, null, 5,
+                BigDecimal.ZERO, 0, 0, false, CountingMethod.PER_DAY, ConsumptionBasis.ELIGIBLE_AMOUNT,
+                true, PERIOD_START, PERIOD_END);
+        when(bucketLimitService.findApplicable(RULE_ID, MEMBER_ID, SERVICE_DATE, EncounterType.OUTPATIENT, null))
+                .thenReturn(List.of(amountOnly, dayLimited));
+        when(bucketRepository.findAllById(any())).thenReturn(java.util.List.of(
+                bucketOwnedBy(940L, POLICY_ID),
+                BenefitLimitBucket.builder().id(941L).code("B941").nameAr("أيام")
+                        .policy(BenefitPolicy.builder().id(POLICY_ID).build()).daysLimit(5).build()));
+
+        var outcome = adapter.buildForPreauthReservation(POLICY_ID, RULE_ID, MEMBER_ID, SERVICE_DATE,
+                EncounterType.OUTPATIENT);
+
+        assertThat(outcome.evaluation().blocked()).isTrue();
+        assertThat(outcome.evaluation().snapshots()).isEmpty();
+        assertThat(outcome.evaluation().blockReason()).contains("PREAUTH_DAY_LIMIT_UNSUPPORTED");
+        assertThat(outcome.measures()).isEmpty();
+        // Blocked before any balance is read -- same discipline as BUCKET_POLICY_MISMATCH.
+        verify(consumptionRepository, org.mockito.Mockito.never()).aggregateAmountBalances(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("PR4 — a wrong-policy bucket blocks structurally, same as buildForNormalClaim "
+            + "(P1.12.1 PA7's target behavior, not today's raw IllegalStateException)")
+    void pr4WrongPolicyBucketBlocksStructurally() {
+        LimitSnapshot snapshot = new LimitSnapshot(936L, "b", new BigDecimal("100.00"), null, null,
+                BigDecimal.ZERO, 0, 0, false, CountingMethod.EACH_LINE, ConsumptionBasis.ELIGIBLE_AMOUNT,
+                true, PERIOD_START, PERIOD_END);
+        when(bucketLimitService.findApplicable(RULE_ID, MEMBER_ID, SERVICE_DATE, EncounterType.OUTPATIENT, null))
+                .thenReturn(List.of(snapshot));
+        when(bucketRepository.findAllById(any())).thenReturn(java.util.List.of(bucketOwnedBy(936L, 701L)));
+
+        var outcome = adapter.buildForPreauthReservation(POLICY_ID, RULE_ID, MEMBER_ID, SERVICE_DATE,
+                EncounterType.OUTPATIENT);
+
+        assertThat(outcome.evaluation().blocked()).isTrue();
+        assertThat(outcome.evaluation().blockReason()).contains("BUCKET_POLICY_MISMATCH");
+    }
+
     private BenefitBucketConsumptionRepository.BucketAmountBalanceProjection mockAmountRow(
             Long bucketId, LocalDate start, LocalDate end, String status, BigDecimal amount) {
         var row = org.mockito.Mockito.mock(BenefitBucketConsumptionRepository.BucketAmountBalanceProjection.class);

@@ -396,6 +396,76 @@ public class BucketLimitSnapshotAdapter {
         return Result.of(result);
     }
 
+    /**
+     * PREAUTH_RESERVATION mode (P1.12.2): creating or evaluating a
+     * pre-authorization itself, before any claim exists to own a
+     * reservation yet. Reuses {@link #buildNormalSnapshots}'s exact
+     * arithmetic verbatim -- every active reservation reduces what is
+     * reservable, INCLUDING one this very pre-authorization already
+     * placed. There is no "own reservation" concept here, unlike
+     * {@link #buildForPreauthorizedClaim}'s conversion formula --
+     * confirmed as today's actual {@code PreAuthorizationDecisionBuilder}
+     * behavior by P1.12.1's characterization (PA6:
+     * {@code reRunningTheBuilderTreatsItsOwnPriorHoldExactlyLikeAForeignOne}).
+     * A future own-reservation-aware PREAUTH_RESERVATION would be a
+     * deliberate behavior CHANGE, not a bug fix.
+     *
+     * DAYS is refused outright (blocked, never silently computed and
+     * ignored): a pre-authorization carries one expected service date with
+     * no admission/discharge behind it, so a day limit cannot be honestly
+     * evaluated for it -- P1.12.1's PA4, preserved here as a genuine
+     * business constraint carried over unchanged from
+     * {@code PreAuthorizationDecisionBuilder.rejectUnsupportedDayLimit},
+     * not a temporary implementation gap. Unlike that method, the refusal
+     * here is a structured {@link Result#blocked} outcome, not a thrown
+     * exception -- P1.12.1's PA7 finding is that the OTHER current refusal
+     * (BUCKET_POLICY_MISMATCH) leaks a raw {@code IllegalStateException};
+     * routing both refusals through the same {@code blocked} channel here
+     * is a deliberate improvement over that legacy behavior, not parity
+     * with it.
+     */
+    /**
+     * {@code measures}: the reservation-measurement basis for every REAL
+     * bucket touched (P1.12.2), paired by limitKey -- see
+     * {@link ResolvedLimitMeasure}. Empty whenever {@code evaluation} is
+     * blocked, and absent an entry for the synthetic POLICY_GENERAL ceiling
+     * (no bucket, no configured basis of its own; a PreAuth-specific mapper
+     * always measures it as the company share).
+     */
+    public record PreauthReservationEvaluation(Result evaluation, List<ResolvedLimitMeasure> measures) {
+        static PreauthReservationEvaluation blocked(String reason) {
+            return new PreauthReservationEvaluation(Result.blocked(reason), List.of());
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public PreauthReservationEvaluation buildForPreauthReservation(Long policyId, Long ruleId, Long memberId,
+            LocalDate serviceDate, EncounterType encounterType) {
+        Objects.requireNonNull(policyId, "policyId is required");
+        Objects.requireNonNull(ruleId, "ruleId is required");
+        Objects.requireNonNull(memberId, "memberId is required");
+
+        Selection selection = selectApplicableBuckets(policyId, ruleId, memberId, serviceDate, encounterType, null);
+        if (selection.blocked()) return PreauthReservationEvaluation.blocked(selection.blockReason());
+
+        Optional<BenefitLimitBucket> dayLimited = selection.realBucketIds().stream()
+                .map(selection.bucketsById()::get)
+                .filter(bucket -> bucket != null && bucket.getDaysLimit() != null)
+                .findFirst();
+        if (dayLimited.isPresent()) {
+            return PreauthReservationEvaluation.blocked("PREAUTH_DAY_LIMIT_UNSUPPORTED: bucket id="
+                    + dayLimited.get().getId() + " carries a days limit; a pre-authorization has one expected "
+                    + "service date with no admission/discharge behind it and cannot honestly reserve a day");
+        }
+
+        Result evaluation = buildNormalSnapshots(selection, policyId, ruleId, memberId, null);
+        List<ResolvedLimitMeasure> measures = selection.realBucketIds().stream()
+                .map(id -> new ResolvedLimitMeasure(ResolvedLimitDescriptor.bucketKey(id),
+                        selection.bucketsById().get(id).getConsumptionBasis()))
+                .toList();
+        return new PreauthReservationEvaluation(evaluation, measures);
+    }
+
     private static String balanceKey(Long bucketId, LocalDate periodStart, LocalDate periodEnd) {
         return bucketId + "|" + periodStart + "|" + periodEnd;
     }
