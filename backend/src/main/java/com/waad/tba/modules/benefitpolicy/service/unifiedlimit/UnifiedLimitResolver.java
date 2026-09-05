@@ -62,16 +62,26 @@ public final class UnifiedLimitResolver {
         // ── quantity ──────────────────────────────────────────────────
         // Two genuinely different shapes, not one formula with an edge case:
         //
-        // (a) No TIMES axis configured at all (G1): there is no "unit" --
+        // (a) No TIMES axis configured at all (G1/CM4): there is no "unit" --
         //     the service is priced and capped as a continuous amount. The
         //     occurrence count itself is never refused; only money is.
-        // (b) A TIMES axis exists (G2/G4): a unit has a real, fixed price,
-        //     so AMOUNT can only ever afford WHOLE units -- 2.5 sessions is
-        //     not a purchasable quantity (G4).
+        // (b) One or more TIMES axes exist (G2/G4, and CM1-CM3 for more than
+        //     one bucket): a unit has a real, fixed price, so AMOUNT can only
+        //     ever afford WHOLE units -- 2.5 sessions is not a purchasable
+        //     quantity (G4). Each TIMES-configuring bucket decides its OWN
+        //     contribution using its OWN countingMethod (P1.5.2/P1.3
+        //     Amendment #1 -- countingMethod is bucket metadata, not a
+        //     decision-wide input) against the ONE shared AMOUNT capacity;
+        //     only the already-computed contributions are then compared,
+        //     tightest wins -- never one bucket's method applied to
+        //     another's remaining.
         int approvedQuantity;
         int refusedQuantity;
         BindingConstraintType quantityBindingType;
-        boolean occurrenceDimensionExists = times.configured() != null;
+        Long quantityBindingBucketId = null;
+        List<BucketLimitSnapshot> timesSnapshots = snapshots.stream()
+                .filter(s -> s.limitType() == LimitAxisType.TIMES && s.configured() != null).toList();
+        boolean occurrenceDimensionExists = !timesSnapshots.isEmpty();
 
         if (!occurrenceDimensionExists) {
             approvedQuantity = input.requestedQuantity();
@@ -80,27 +90,27 @@ public final class UnifiedLimitResolver {
                     && amount.remaining().compareTo(scale2(input.eligibleAmount())) < 0
                     ? BindingConstraintType.AMOUNT : BindingConstraintType.NONE;
         } else {
-            int unitsAffordableByTimes = times.remaining().max(BigDecimal.ZERO).intValue();
             int unitsAffordableByAmount = amount.remaining() == null || input.effectiveUnitPrice() == null
                     || input.effectiveUnitPrice().signum() <= 0
                     ? Integer.MAX_VALUE
                     : amount.remaining().max(BigDecimal.ZERO)
                             .divideToIntegralValue(input.effectiveUnitPrice()).intValue();
 
-            boolean divisible = input.countingMethod() == CountingMethod.EACH_UNIT;
-            if (!divisible) {
-                // Atomic occurrence (EACH_LINE/PER_VISIT/PER_DAY): either the
-                // whole request fits under both axes, or none of it is approved.
-                boolean fits = input.requestedQuantity() <= unitsAffordableByTimes
-                        && input.requestedQuantity() <= unitsAffordableByAmount;
-                approvedQuantity = fits ? input.requestedQuantity() : 0;
-                quantityBindingType = fits ? BindingConstraintType.NONE
-                        : (unitsAffordableByAmount < unitsAffordableByTimes ? BindingConstraintType.AMOUNT : BindingConstraintType.TIMES);
-            } else {
-                int tightest = Math.min(input.requestedQuantity(), Math.min(unitsAffordableByTimes, unitsAffordableByAmount));
-                approvedQuantity = Math.max(0, tightest);
-                quantityBindingType = approvedQuantity >= input.requestedQuantity() ? BindingConstraintType.NONE
-                        : (unitsAffordableByAmount <= unitsAffordableByTimes ? BindingConstraintType.AMOUNT : BindingConstraintType.TIMES);
+            approvedQuantity = input.requestedQuantity();
+            quantityBindingType = BindingConstraintType.NONE;
+            for (BucketLimitSnapshot ts : timesSnapshots) {
+                int unitsAffordableByThisBucket = ts.remaining().max(BigDecimal.ZERO).intValue();
+                int combinedCapacity = Math.min(unitsAffordableByThisBucket, unitsAffordableByAmount);
+                boolean divisible = ts.countingMethod() == CountingMethod.EACH_UNIT;
+                int approvedByThisBucket = !divisible
+                        ? (input.requestedQuantity() <= combinedCapacity ? input.requestedQuantity() : 0)
+                        : Math.min(input.requestedQuantity(), combinedCapacity);
+                if (approvedByThisBucket < approvedQuantity) {
+                    approvedQuantity = approvedByThisBucket;
+                    quantityBindingBucketId = ts.bucketId();
+                    quantityBindingType = unitsAffordableByAmount < unitsAffordableByThisBucket
+                            ? BindingConstraintType.AMOUNT : BindingConstraintType.TIMES;
+                }
             }
             refusedQuantity = input.requestedQuantity() - approvedQuantity;
         }
@@ -118,8 +128,14 @@ public final class UnifiedLimitResolver {
                 ? quantityBindingType
                 : (refusedDays > 0 ? BindingConstraintType.DAYS : BindingConstraintType.NONE);
 
+        // P1.5.2: for a quantity-bound decision, use the bucket whose OWN
+        // calculation was actually tightest (tracked above), not merely the
+        // first applied bucket -- DAYS-bound still falls back to that
+        // placeholder since days binding is not tracked per-bucket here.
         Long bindingBucketId = bindingConstraintType == BindingConstraintType.NONE ? null
-                : appliedBucketIds.isEmpty() ? null : appliedBucketIds.get(0);
+                : bindingConstraintType == quantityBindingType && quantityBindingBucketId != null
+                        ? quantityBindingBucketId
+                        : appliedBucketIds.isEmpty() ? null : appliedBucketIds.get(0);
 
         // ── the ONE money number that reaches WaadFinancialEngine (P1.3 rule 3) ──
         BigDecimal bindingAvailableAmount;

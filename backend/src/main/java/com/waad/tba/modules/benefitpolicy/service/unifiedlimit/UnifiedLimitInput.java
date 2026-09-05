@@ -1,6 +1,5 @@
 package com.waad.tba.modules.benefitpolicy.service.unifiedlimit;
 
-import com.waad.tba.modules.benefitpolicy.enums.CountingMethod;
 import com.waad.tba.modules.providercontract.enums.EncounterType;
 
 import java.math.BigDecimal;
@@ -26,15 +25,6 @@ public record UnifiedLimitInput(
 
         int requestedQuantity,
         int requestedDays,
-        /**
-         * Not named in P1.3/P1.4.1 -- found missing while writing this
-         * skeleton (P1.4.2). Only EACH_UNIT is divisible (DivisibleLimitSplitter,
-         * P2); every other method is one atomic occurrence, exactly like days
-         * always are. Needed to reproduce G2/G4 vs G3 correctly, so it is
-         * added here rather than hard-coding EACH_UNIT -- flagged in the
-         * P1.4.2 report for the design doc to catch up.
-         */
-        CountingMethod countingMethod,
         /** Used to translate an approved quantity into a money amount (DivisibleLimitSplitter). */
         BigDecimal effectiveUnitPrice,
         /** The eligible amount for the whole line, before any limit is applied. */

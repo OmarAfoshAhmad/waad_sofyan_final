@@ -1,5 +1,7 @@
 package com.waad.tba.modules.benefitpolicy.service.unifiedlimit;
 
+import com.waad.tba.modules.benefitpolicy.enums.CountingMethod;
+
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
@@ -26,6 +28,16 @@ public record BucketLimitSnapshot(
         /** The policy this bucket actually belongs to -- checked against UnifiedLimitInput.policyId (BUCKET_POLICY_MISMATCH). */
         Long owningPolicyId,
         LimitAxisType limitType,
+        /**
+         * P1.5.2 (P1.3 Amendment #1): the bucket's OWN counting method --
+         * {@code BenefitLimitBucket.countingMethod} is a column on the
+         * bucket, not a property of the line/decision. Two TIMES snapshots
+         * on the same line may legitimately carry two different values here;
+         * {@link UnifiedLimitResolver} decides divisibility per snapshot,
+         * never once for the whole decision. Meaningless for DAYS (always
+         * atomic, P1.3 §1.3) -- carried for symmetry only.
+         */
+        CountingMethod countingMethod,
         BigDecimal configured,
         BigDecimal committed,
         BigDecimal activeReserved,

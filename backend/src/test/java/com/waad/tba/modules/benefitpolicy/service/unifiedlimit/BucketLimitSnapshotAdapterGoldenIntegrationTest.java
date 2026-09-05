@@ -93,7 +93,7 @@ class BucketLimitSnapshotAdapterGoldenIntegrationTest {
         List<BucketLimitSnapshot> snapshots = snapshotsFor(900L, EncounterType.OUTPATIENT, ls);
 
         UnifiedLimitInput in = new UnifiedLimitInput(POLICY_ID, 900L, MEMBER_ID, SERVICE_DATE, EncounterType.OUTPATIENT,
-                1, 0, CountingMethod.EACH_LINE, new BigDecimal("1000.00"), new BigDecimal("1000.00"),
+                1, 0, new BigDecimal("1000.00"), new BigDecimal("1000.00"),
                 null, ReservationEvaluationMode.NORMAL, null, null);
         UnifiedLimitDecision d = UnifiedLimitResolver.resolve(in, snapshots);
 
@@ -114,7 +114,7 @@ class BucketLimitSnapshotAdapterGoldenIntegrationTest {
         List<BucketLimitSnapshot> snapshots = snapshotsFor(901L, EncounterType.OUTPATIENT, ls);
 
         UnifiedLimitInput in = new UnifiedLimitInput(POLICY_ID, 901L, MEMBER_ID, SERVICE_DATE, EncounterType.OUTPATIENT,
-                3, 0, CountingMethod.EACH_UNIT, new BigDecimal("100.00"), new BigDecimal("300.00"),
+                3, 0, new BigDecimal("100.00"), new BigDecimal("300.00"),
                 null, ReservationEvaluationMode.NORMAL, null, null);
         UnifiedLimitDecision d = UnifiedLimitResolver.resolve(in, snapshots);
 
@@ -135,7 +135,7 @@ class BucketLimitSnapshotAdapterGoldenIntegrationTest {
         List<BucketLimitSnapshot> snapshots = snapshotsFor(902L, EncounterType.INPATIENT, ls);
 
         UnifiedLimitInput in = new UnifiedLimitInput(POLICY_ID, 902L, MEMBER_ID, SERVICE_DATE, EncounterType.INPATIENT,
-                1, 1, CountingMethod.PER_DAY, new BigDecimal("300.00"), new BigDecimal("300.00"),
+                1, 1, new BigDecimal("300.00"), new BigDecimal("300.00"),
                 null, ReservationEvaluationMode.NORMAL, null, null);
         UnifiedLimitDecision d = UnifiedLimitResolver.resolve(in, snapshots);
 
@@ -158,7 +158,7 @@ class BucketLimitSnapshotAdapterGoldenIntegrationTest {
         assertThat(snapshots).hasSize(2); // one AMOUNT row, one TIMES row, same bucket
 
         UnifiedLimitInput in = new UnifiedLimitInput(POLICY_ID, 903L, MEMBER_ID, SERVICE_DATE, EncounterType.OUTPATIENT,
-                5, 0, CountingMethod.EACH_UNIT, new BigDecimal("100.00"), new BigDecimal("500.00"),
+                5, 0, new BigDecimal("100.00"), new BigDecimal("500.00"),
                 null, ReservationEvaluationMode.NORMAL, null, null);
         UnifiedLimitDecision d = UnifiedLimitResolver.resolve(in, snapshots);
 
@@ -179,7 +179,7 @@ class BucketLimitSnapshotAdapterGoldenIntegrationTest {
         List<BucketLimitSnapshot> snapshots = snapshotsFor(904L, EncounterType.OUTPATIENT, ls);
 
         UnifiedLimitInput in = new UnifiedLimitInput(POLICY_ID, 904L, MEMBER_ID, SERVICE_DATE, EncounterType.OUTPATIENT,
-                8, 0, CountingMethod.EACH_UNIT, new BigDecimal("50.00"), new BigDecimal("400.00"),
+                8, 0, new BigDecimal("50.00"), new BigDecimal("400.00"),
                 null, ReservationEvaluationMode.NORMAL, null, null);
         UnifiedLimitDecision d = UnifiedLimitResolver.resolve(in, snapshots);
 
@@ -225,7 +225,7 @@ class BucketLimitSnapshotAdapterGoldenIntegrationTest {
         List<BucketLimitSnapshot> snapshots = snapshotsFor(908L, EncounterType.OUTPATIENT, ls);
 
         UnifiedLimitInput in = new UnifiedLimitInput(POLICY_ID, 908L, MEMBER_ID, SERVICE_DATE, EncounterType.OUTPATIENT,
-                3, 0, CountingMethod.PER_VISIT, new BigDecimal("100.00"), new BigDecimal("300.00"),
+                3, 0, new BigDecimal("100.00"), new BigDecimal("300.00"),
                 null, ReservationEvaluationMode.NORMAL, null, null);
         UnifiedLimitDecision d = UnifiedLimitResolver.resolve(in, snapshots);
 

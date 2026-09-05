@@ -162,7 +162,7 @@ public final class ClaimLimitEvaluationContext {
     private static BucketLimitSnapshot withCommittedAndRemaining(
             BucketLimitSnapshot snapshot, BigDecimal committed, BigDecimal remaining) {
         return new BucketLimitSnapshot(snapshot.bucketId(), snapshot.owningPolicyId(), snapshot.limitType(),
-                snapshot.configured(), committed, snapshot.activeReserved(), remaining,
+                snapshot.countingMethod(), snapshot.configured(), committed, snapshot.activeReserved(), remaining,
                 snapshot.periodStart(), snapshot.periodEnd());
     }
 }
