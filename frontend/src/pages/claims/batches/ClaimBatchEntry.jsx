@@ -2265,32 +2265,34 @@ export default function ClaimBatchEntry() {
                     flexWrap: 'wrap'
                   }}
                 >
-                  <ClaimAdditionalDetails
-                    complaint={complaint}
-                    setComplaint={setComplaint}
-                    setIsDirty={setIsDirty}
-                    preAuthResults={preAuthResults}
-                    searchingPreAuth={searchingPreAuth}
-                    preAuthId={preAuthId}
-                    setPreAuthId={setPreAuthId}
-                    doctorName={doctorName}
-                    setDoctorName={setDoctorName}
-                  />
-                  <Stack direction="row" spacing={1} alignItems="center" sx={{ mr: 'auto' }}>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <ClaimAdditionalDetails
+                      complaint={complaint}
+                      setComplaint={setComplaint}
+                      setIsDirty={setIsDirty}
+                      preAuthResults={preAuthResults}
+                      searchingPreAuth={searchingPreAuth}
+                      preAuthId={preAuthId}
+                      setPreAuthId={setPreAuthId}
+                      doctorName={doctorName}
+                      setDoctorName={setDoctorName}
+                    />
                     <Chip
                       size="small"
                       variant="outlined"
                       label={`${lines.length} بند`}
                       sx={{ height: 26, fontWeight: 700, fontSize: '0.75rem', borderColor: alpha(theme.palette.primary.main, 0.3) }}
                     />
+                  </Stack>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <Button size="small" startIcon={<CompactIcon />} onClick={() => setHeaderExpanded(false)}>
+                      توسيع مساحة إدخال البنود
+                    </Button>
                     <Tooltip title="إظهار/إخفاء الأعمدة">
                       <IconButton size="small" onClick={handleOpenCols}>
                         <ViewColumnIcon fontSize="small" color="primary" />
                       </IconButton>
                     </Tooltip>
-                    <Button size="small" startIcon={<CompactIcon />} onClick={() => setHeaderExpanded(false)}>
-                      توسيع مساحة إدخال البنود
-                    </Button>
                   </Stack>
                 </Box>
               </Box>
@@ -2353,25 +2355,6 @@ export default function ClaimBatchEntry() {
                 المطالبة الحالي. احذفها أو أعد اختيار خدمات صالحة لهذا السياق.
               </Alert>
             )}
-
-            <Box
-              sx={{
-                flexShrink: 0,
-                px: '1.25rem',
-                py: 0.75,
-                bgcolor: alpha(theme.palette.primary.main, 0.04),
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                borderBottom: `1px solid ${theme.palette.divider}`
-              }}
-            >
-              <Stack direction="row" spacing={1} alignItems="center">
-                <Typography variant="subtitle2" fontWeight={600} color="primary" sx={{ fontSize: '0.85rem' }}>
-                  {t('claimEntry.serviceLines')}
-                </Typography>
-              </Stack>
-            </Box>
 
             <Box
               sx={{
