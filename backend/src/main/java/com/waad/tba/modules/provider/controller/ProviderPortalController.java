@@ -8,6 +8,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -264,31 +265,8 @@ public class ProviderPortalController {
 
         featureGuard.requireProviderPortal();
         featureGuard.requireDirectClaimSubmission();
-        
-        String provider = authorizationService.getCurrentUser() != null 
-            ? authorizationService.getCurrentUser().getUsername() 
-            : "UNKNOWN";
-        
-        log.info("🏥 Provider claim submission: provider={}, memberId={}, amount={}, type={}", 
-                 provider, 
-                 request.getMemberId(), 
-                 request.getClaimedAmount(),
-                 request.getClaimType());
-        
-        ProviderClaimResponse response = providerClaimsService.submitClaim(request, provider);
-        
-        if (response.getSuccess()) {
-            log.info("✅ Claim submitted: claimId={}, ref={}, status={}", 
-                     response.getClaimId(), 
-                     response.getClaimReferenceNumber(),
-                     response.getStatusCode());
-        } else {
-            log.warn("❌ Claim submission failed: member={}, reason={}", 
-                     request.getMemberId(), 
-                     response.getMessage());
-        }
-        
-        return ResponseEntity.ok(response);
+        log.warn("Blocked legacy provider claim endpoint /api/provider/claims/submit. Use /api/claims/direct-entry.");
+        return legacyClaimSubmissionGone();
     }
     
     /**
@@ -358,42 +336,15 @@ public class ProviderPortalController {
 
         featureGuard.requireProviderPortal();
         featureGuard.requireDirectClaimSubmission();
-        
-        String provider = authorizationService.getCurrentUser() != null 
-            ? authorizationService.getCurrentUser().getUsername() 
-            : "UNKNOWN";
-        
-        int fileCount = files != null ? files.length : 0;
-        log.info("🏥 Provider claim submission with {} attachment(s): provider={}", 
-                 fileCount, provider);
-        
-        try {
-            // Delegate to service layer (handles JSON parsing, validation, file upload, and transaction)
-            ProviderClaimResponse response = providerClaimsService.submitClaimWithAttachments(
-                claimJson, files, provider);
-            
-            if (response.getSuccess()) {
-                log.info("✅ Claim with attachments submitted: claimId={}, ref={}, files={}", 
-                         response.getClaimId(), 
-                         response.getClaimReferenceNumber(),
-                         fileCount);
-            } else {
-                log.warn("❌ Claim with attachments failed: reason={}", 
-                         response.getMessage());
-            }
-            
-            return ResponseEntity.ok(response);
-            
-        } catch (Exception e) {
-            log.error("❌ Error submitting claim with attachments", e);
-            
-            ProviderClaimResponse errorResponse = ProviderClaimResponse.builder()
+        log.warn("Blocked legacy provider claim endpoint /api/provider/submit-claim-with-attachments. Use /api/claims/direct-entry.");
+        return legacyClaimSubmissionGone();
+    }
+
+    private ResponseEntity<ProviderClaimResponse> legacyClaimSubmissionGone() {
+        return ResponseEntity.status(HttpStatus.GONE).body(ProviderClaimResponse.builder()
                 .success(false)
-                .message("حدث خطأ أثناء رفع المرفقات")
-                .build();
-            
-            return ResponseEntity.badRequest().body(errorResponse);
-        }
+                .message("تم إيقاف مسار إدخال مطالبات مقدم الخدمة القديم لأنه لا يستخدم قواعد التغطية والسقوف الجديدة بدقة. الرجاء استخدام شاشة إدخال المطالبات الجديدة.")
+                .build());
     }
     
     // ═══════════════════════════════════════════════════════════════════════════
