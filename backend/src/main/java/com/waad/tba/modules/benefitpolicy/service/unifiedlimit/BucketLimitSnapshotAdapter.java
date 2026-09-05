@@ -2,6 +2,10 @@ package com.waad.tba.modules.benefitpolicy.service.unifiedlimit;
 
 import com.waad.tba.modules.benefitpolicy.dto.CoverageLimitSnapshot;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitBucketConsumption.Status;
+import com.waad.tba.modules.benefitpolicy.entity.BenefitLimitBucket;
+import com.waad.tba.modules.benefitpolicy.entity.ClaimLineLimitSnapshot;
+import com.waad.tba.modules.benefitpolicy.enums.BeneficiaryScopeType;
+import com.waad.tba.modules.benefitpolicy.enums.BenefitScopeType;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitBucketConsumptionRepository;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitLimitBucketRepository;
 import com.waad.tba.modules.benefitpolicy.service.BenefitBucketLimitService;
@@ -29,6 +33,15 @@ import java.util.Optional;
  * added as the bulk form of two single-bucket queries {@code LimitBalanceReader}
  * already used, not a new concept.
  *
+ * P1.6.x: also the sole producer of {@link ResolvedLimitDescriptor} --
+ * captured here, once, from the same {@link BenefitLimitBucket} entities
+ * this class already fetches for the BUCKET_POLICY_MISMATCH check, and
+ * paired with each bucket's numeric {@link BucketLimitSnapshot} as a
+ * {@link ResolvedLimitItem}. This is the ONE place bucket/rule/group/
+ * period/scope/source are all known at once; nothing downstream
+ * (CoverageEngineService, ClaimFinancialAdjudicationService,
+ * ClaimLimitSnapshotFactory) may re-read them.
+ *
  * Why NOT {@code EffectiveLimitResolver}/{@code LimitBalanceReader.read}
  * (found while building P1.5.0a, corrects the design docs' original plan):
  * {@code ApplicableLimitResolver.resolve} silently {@code continue}s past
@@ -55,9 +68,22 @@ public class BucketLimitSnapshotAdapter {
     private final BenefitLimitBucketRepository bucketRepository;
     private final BenefitBucketConsumptionRepository consumptionRepository;
 
-    public record Result(List<BucketLimitSnapshot> snapshots, boolean blocked, String blockReason) {
-        public static Result of(List<BucketLimitSnapshot> snapshots) {
-            return new Result(snapshots, false, null);
+    /**
+     * {@code items}: every resolved limit this result touched, numeric
+     * balance and descriptive identity paired together (P1.6.x) -- see
+     * {@link ResolvedLimitItem}. {@code snapshots()} is a plain projection
+     * for the numeric-only callers ({@code UnifiedLimitResolver},
+     * {@code ClaimLimitEvaluationContext}) that were never meant to see
+     * descriptive metadata (P1.3 money-ownership-blind boundary) -- not a
+     * second source, just a one-line view of the same list.
+     */
+    public record Result(List<ResolvedLimitItem> items, boolean blocked, String blockReason) {
+        public List<BucketLimitSnapshot> snapshots() {
+            return items.stream().map(ResolvedLimitItem::numericSnapshot).toList();
+        }
+
+        public static Result of(List<ResolvedLimitItem> items) {
+            return new Result(items, false, null);
         }
 
         public static Result blocked(String reason) {
@@ -67,7 +93,7 @@ public class BucketLimitSnapshotAdapter {
 
     /** Bucket selection + BUCKET_POLICY_MISMATCH validation, shared by every reservation mode. */
     private record Selection(List<BenefitBucketLimitService.LimitSnapshot> applicable,
-            Map<Long, Long> owningPolicyByBucket, List<Long> realBucketIds, String blockReason) {
+            Map<Long, BenefitLimitBucket> bucketsById, List<Long> realBucketIds, String blockReason) {
         boolean blocked() {
             return blockReason != null;
         }
@@ -98,23 +124,52 @@ public class BucketLimitSnapshotAdapter {
         // One findAllById call for every distinct bucket -- not one findById
         // per bucket -- BenefitLimitBucketRepository already extends
         // JpaRepository, so this is not a new query, just the bulk form of
-        // the one already used here.
-        Map<Long, Long> owningPolicyByBucket = new HashMap<>();
+        // the one already used here. These SAME entities are also the sole
+        // source of every ResolvedLimitDescriptor built below -- no second
+        // fetch for descriptive metadata.
+        Map<Long, BenefitLimitBucket> bucketsById = new HashMap<>();
         if (!realBucketIds.isEmpty()) {
             for (var bucket : bucketRepository.findAllById(realBucketIds)) {
-                owningPolicyByBucket.put(bucket.getId(),
-                        bucket.getPolicy() == null ? null : bucket.getPolicy().getId());
+                bucketsById.put(bucket.getId(), bucket);
             }
         }
         for (Long bucketId : realBucketIds) {
-            Long owningPolicyId = owningPolicyByBucket.get(bucketId);
+            BenefitLimitBucket bucket = bucketsById.get(bucketId);
+            Long owningPolicyId = bucket == null || bucket.getPolicy() == null ? null : bucket.getPolicy().getId();
             if (owningPolicyId != null && !owningPolicyId.equals(policyId)) {
                 return new Selection(null, null, null, "BUCKET_POLICY_MISMATCH: bucket id=" + bucketId
                         + " belongs to policy id=" + owningPolicyId
                         + ", not the requested policy id=" + policyId);
             }
         }
-        return new Selection(applicable, owningPolicyByBucket, realBucketIds, null);
+        return new Selection(applicable, bucketsById, realBucketIds, null);
+    }
+
+    /**
+     * The descriptor for one applicable entry -- a real bucket's own
+     * scope/beneficiary/group/period, or the synthetic POLICY_GENERAL
+     * ceiling's fixed constants (no bucket row exists to read them from:
+     * every policy-general ceiling is tracked per member today, no
+     * policy-general FAMILY sharing exists). {@code ruleId} is the one
+     * value this method cannot read off the bucket -- it is the rule this
+     * whole resolution was performed for, identical for every descriptor
+     * built in the same call.
+     */
+    private static ResolvedLimitDescriptor descriptorFor(Long bucketId, BenefitLimitBucket bucket, Long policyId,
+            Long ruleId, LocalDate periodStart, LocalDate periodEnd) {
+        if (bucketId == null) {
+            return new ResolvedLimitDescriptor(ResolvedLimitDescriptor.policyGeneralKey(policyId), null,
+                    ClaimLineLimitSnapshot.SourceType.POLICY_DEFAULT, BenefitScopeType.POLICY_GENERAL,
+                    BeneficiaryScopeType.MEMBER, ruleId, null, "ANNUAL", periodStart, periodEnd);
+        }
+        return new ResolvedLimitDescriptor(ResolvedLimitDescriptor.bucketKey(bucketId), bucketId,
+                // The override mechanism (EMPLOYER_OVERRIDE/MEMBER_OVERRIDE) is not
+                // activated in the canonical stack today (ADR-008) -- every real
+                // decision resolves as the policy's own default.
+                ClaimLineLimitSnapshot.SourceType.POLICY_DEFAULT,
+                bucket.getBenefitScopeType(), bucket.getBeneficiaryScopeType(), ruleId,
+                bucket.getBenefitGroup() == null ? null : bucket.getBenefitGroup().getId(),
+                bucket.getPeriodType().name(), periodStart, periodEnd);
     }
 
     private static BenefitBucketLimitService.LimitSnapshot fromCoverageLimitSnapshot(CoverageLimitSnapshot s) {
@@ -152,7 +207,7 @@ public class BucketLimitSnapshotAdapter {
 
         Selection selection = selectApplicableBuckets(policyId, ruleId, memberId, serviceDate, encounterType, excludeClaimId);
         if (selection.blocked()) return Result.blocked(selection.blockReason());
-        return buildNormalSnapshots(selection, policyId, memberId, excludeClaimId);
+        return buildNormalSnapshots(selection, policyId, ruleId, memberId, excludeClaimId);
     }
 
     /**
@@ -165,7 +220,7 @@ public class BucketLimitSnapshotAdapter {
      * per-axis snapshot building) is identical to {@link #buildForNormalClaim}.
      */
     @Transactional(readOnly = true)
-    public Result buildForNormalClaimFromResolvedLimits(Long policyId, Long memberId,
+    public Result buildForNormalClaimFromResolvedLimits(Long policyId, Long ruleId, Long memberId,
             List<CoverageLimitSnapshot> resolvedLimits, Long excludeClaimId) {
         Objects.requireNonNull(policyId, "policyId is required");
         Objects.requireNonNull(memberId, "memberId is required");
@@ -174,17 +229,22 @@ public class BucketLimitSnapshotAdapter {
                 resolvedLimits.stream().map(BucketLimitSnapshotAdapter::fromCoverageLimitSnapshot).toList();
         Selection selection = validateAndScope(policyId, applicable);
         if (selection.blocked()) return Result.blocked(selection.blockReason());
-        return buildNormalSnapshots(selection, policyId, memberId, excludeClaimId);
+        return buildNormalSnapshots(selection, policyId, ruleId, memberId, excludeClaimId);
     }
 
-    private Result buildNormalSnapshots(Selection selection, Long policyId, Long memberId, Long excludeClaimId) {
+    private Result buildNormalSnapshots(Selection selection, Long policyId, Long ruleId, Long memberId,
+            Long excludeClaimId) {
         Map<String, BigDecimal> reservedAmountByKey =
                 reservedAmountByBucketPeriod(memberId, selection.realBucketIds(), excludeClaimId);
 
-        List<BucketLimitSnapshot> result = new ArrayList<>();
+        List<ResolvedLimitItem> result = new ArrayList<>();
         for (var snapshot : selection.applicable()) {
             Long bucketId = snapshot.bucketId();
-            Long owningPolicyId = bucketId == null ? policyId : selection.owningPolicyByBucket().get(bucketId);
+            BenefitLimitBucket bucket = bucketId == null ? null : selection.bucketsById().get(bucketId);
+            Long owningPolicyId = bucketId == null ? policyId : bucket == null || bucket.getPolicy() == null
+                    ? null : bucket.getPolicy().getId();
+            ResolvedLimitDescriptor descriptor = descriptorFor(bucketId, bucket, policyId, ruleId,
+                    snapshot.periodStart(), snapshot.periodEnd());
 
             if (snapshot.amountLimit() != null) {
                 BigDecimal committed = orZero(snapshot.usedAmount());
@@ -194,9 +254,9 @@ public class BucketLimitSnapshotAdapter {
                         : reservedAmountByKey.getOrDefault(
                                 balanceKey(bucketId, snapshot.periodStart(), snapshot.periodEnd()), BigDecimal.ZERO);
                 BigDecimal remaining = snapshot.amountLimit().subtract(committed).subtract(reserved);
-                result.add(new BucketLimitSnapshot(bucketId, owningPolicyId, LimitAxisType.AMOUNT, snapshot.countingMethod(),
-                        snapshot.amountLimit(), committed, reserved, remaining,
-                        snapshot.periodStart(), snapshot.periodEnd()));
+                result.add(new ResolvedLimitItem(new BucketLimitSnapshot(bucketId, owningPolicyId, LimitAxisType.AMOUNT,
+                        snapshot.countingMethod(), snapshot.amountLimit(), committed, reserved, remaining,
+                        snapshot.periodStart(), snapshot.periodEnd()), descriptor));
             }
 
             if (snapshot.timesLimit() != null && bucketId != null) {
@@ -204,10 +264,10 @@ public class BucketLimitSnapshotAdapter {
                 int reservedTimes = Optional.ofNullable(consumptionRepository.sumReservedTimes(
                         memberId, bucketId, snapshot.periodStart(), snapshot.periodEnd())).orElse(0);
                 int remaining = snapshot.timesLimit() - committedTimes - reservedTimes;
-                result.add(new BucketLimitSnapshot(bucketId, owningPolicyId, LimitAxisType.TIMES, snapshot.countingMethod(),
-                        BigDecimal.valueOf(snapshot.timesLimit()), BigDecimal.valueOf(committedTimes),
-                        BigDecimal.valueOf(reservedTimes), BigDecimal.valueOf(remaining),
-                        snapshot.periodStart(), snapshot.periodEnd()));
+                result.add(new ResolvedLimitItem(new BucketLimitSnapshot(bucketId, owningPolicyId, LimitAxisType.TIMES,
+                        snapshot.countingMethod(), BigDecimal.valueOf(snapshot.timesLimit()),
+                        BigDecimal.valueOf(committedTimes), BigDecimal.valueOf(reservedTimes),
+                        BigDecimal.valueOf(remaining), snapshot.periodStart(), snapshot.periodEnd()), descriptor));
             }
 
             if (snapshot.daysLimit() != null && bucketId != null) {
@@ -217,10 +277,10 @@ public class BucketLimitSnapshotAdapter {
                 // exist, not because it was measured and happened to be zero.
                 int committedDays = Optional.ofNullable(snapshot.usedDays()).orElse(0);
                 int remaining = snapshot.daysLimit() - committedDays;
-                result.add(new BucketLimitSnapshot(bucketId, owningPolicyId, LimitAxisType.DAYS, snapshot.countingMethod(),
-                        BigDecimal.valueOf(snapshot.daysLimit()), BigDecimal.valueOf(committedDays),
-                        BigDecimal.ZERO, BigDecimal.valueOf(remaining),
-                        snapshot.periodStart(), snapshot.periodEnd()));
+                result.add(new ResolvedLimitItem(new BucketLimitSnapshot(bucketId, owningPolicyId, LimitAxisType.DAYS,
+                        snapshot.countingMethod(), BigDecimal.valueOf(snapshot.daysLimit()),
+                        BigDecimal.valueOf(committedDays), BigDecimal.ZERO, BigDecimal.valueOf(remaining),
+                        snapshot.periodStart(), snapshot.periodEnd()), descriptor));
             }
         }
         return Result.of(result);
@@ -279,11 +339,14 @@ public class BucketLimitSnapshotAdapter {
             }
         }
 
-        List<BucketLimitSnapshot> result = new ArrayList<>();
+        List<ResolvedLimitItem> result = new ArrayList<>();
         for (var snapshot : selection.applicable()) {
             Long bucketId = snapshot.bucketId();
             if (bucketId == null) continue; // the synthetic general ceiling has no preauth-scoped hold to convert
-            Long owningPolicyId = selection.owningPolicyByBucket().get(bucketId);
+            BenefitLimitBucket bucket = selection.bucketsById().get(bucketId);
+            Long owningPolicyId = bucket == null || bucket.getPolicy() == null ? null : bucket.getPolicy().getId();
+            ResolvedLimitDescriptor descriptor = descriptorFor(bucketId, bucket, policyId, ruleId,
+                    snapshot.periodStart(), snapshot.periodEnd());
             String key = balanceKey(bucketId, snapshot.periodStart(), snapshot.periodEnd());
 
             if (snapshot.amountLimit() != null) {
@@ -296,9 +359,9 @@ public class BucketLimitSnapshotAdapter {
                 BigDecimal reservableAvailable = actualRemaining.subtract(allActiveReserved);
                 BigDecimal availableForThisClaim = reservableAvailable.add(own).min(actualRemaining);
 
-                result.add(new BucketLimitSnapshot(bucketId, owningPolicyId, LimitAxisType.AMOUNT, snapshot.countingMethod(),
-                        configured, committed, allActiveReserved, availableForThisClaim,
-                        snapshot.periodStart(), snapshot.periodEnd()));
+                result.add(new ResolvedLimitItem(new BucketLimitSnapshot(bucketId, owningPolicyId, LimitAxisType.AMOUNT,
+                        snapshot.countingMethod(), configured, committed, allActiveReserved, availableForThisClaim,
+                        snapshot.periodStart(), snapshot.periodEnd()), descriptor));
             }
 
             if (snapshot.timesLimit() != null) {
@@ -312,10 +375,10 @@ public class BucketLimitSnapshotAdapter {
                 int reservableAvailable = actualRemaining - allActiveReserved;
                 int availableForThisClaim = Math.min(actualRemaining, reservableAvailable + own);
 
-                result.add(new BucketLimitSnapshot(bucketId, owningPolicyId, LimitAxisType.TIMES, snapshot.countingMethod(),
-                        BigDecimal.valueOf(configured), BigDecimal.valueOf(committed),
+                result.add(new ResolvedLimitItem(new BucketLimitSnapshot(bucketId, owningPolicyId, LimitAxisType.TIMES,
+                        snapshot.countingMethod(), BigDecimal.valueOf(configured), BigDecimal.valueOf(committed),
                         BigDecimal.valueOf(allActiveReserved), BigDecimal.valueOf(availableForThisClaim),
-                        snapshot.periodStart(), snapshot.periodEnd()));
+                        snapshot.periodStart(), snapshot.periodEnd()), descriptor));
             }
 
             if (snapshot.daysLimit() != null) {
@@ -324,10 +387,10 @@ public class BucketLimitSnapshotAdapter {
                 // preauthorized claim to reclaim on this axis either.
                 int committedDays = Optional.ofNullable(snapshot.usedDays()).orElse(0);
                 int remaining = snapshot.daysLimit() - committedDays;
-                result.add(new BucketLimitSnapshot(bucketId, owningPolicyId, LimitAxisType.DAYS, snapshot.countingMethod(),
-                        BigDecimal.valueOf(snapshot.daysLimit()), BigDecimal.valueOf(committedDays),
-                        BigDecimal.ZERO, BigDecimal.valueOf(remaining),
-                        snapshot.periodStart(), snapshot.periodEnd()));
+                result.add(new ResolvedLimitItem(new BucketLimitSnapshot(bucketId, owningPolicyId, LimitAxisType.DAYS,
+                        snapshot.countingMethod(), BigDecimal.valueOf(snapshot.daysLimit()),
+                        BigDecimal.valueOf(committedDays), BigDecimal.ZERO, BigDecimal.valueOf(remaining),
+                        snapshot.periodStart(), snapshot.periodEnd()), descriptor));
             }
         }
         return Result.of(result);

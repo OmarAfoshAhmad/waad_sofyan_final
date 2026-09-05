@@ -40,7 +40,21 @@ public record UnifiedLimitDecision(
         BindingConstraintType bindingConstraintType,
         Long bindingBucketId,
         BigDecimal bindingAvailableAmount,
-        UnifiedLimitStatus status) {
+        UnifiedLimitStatus status,
+
+        /**
+         * P1.6: the subset of the snapshots this decision was resolved
+         * against that ACTUALLY received consumption -- never "every bucket
+         * the resolver happened to read." A bucket the resolver merely
+         * evaluated (a parent ceiling that turned out not to bind, an axis
+         * nobody's request touched) is not a consumption target; recording
+         * it as one would misrepresent a read as a financial effect (found
+         * while designing P1.6's snapshot writer). Exists so a consumer
+         * like ClaimLimitSnapshotFactory can write an accurate append-only
+         * record without re-deriving "what was consumed" itself -- the
+         * resolver is the one place that already knows.
+         */
+        List<BucketLimitSnapshot> consumptionTargets) {
 
     /**
      * Same four fields, same meaning, for AMOUNT/TIMES/DAYS alike.
@@ -72,6 +86,6 @@ public record UnifiedLimitDecision(
                 0, 0, 0,
                 LimitAxis.unconfigured(), LimitAxis.unconfigured(), LimitAxis.unconfigured(),
                 BindingConstraintType.NONE, null, null,
-                UnifiedLimitStatus.BLOCKED);
+                UnifiedLimitStatus.BLOCKED, List.of());
     }
 }

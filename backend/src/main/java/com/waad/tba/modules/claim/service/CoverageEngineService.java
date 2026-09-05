@@ -250,6 +250,8 @@ public class CoverageEngineService {
                 .notCovered(notCovered)
                 .requiresPreApproval(requiresPreApproval)
                 .usageDetails(usageComputation.usageDetails())
+                .unifiedLimitDecision(usageComputation.unifiedLimitDecision())
+                .resolvedLimitItems(usageComputation.resolvedLimitItems())
                 .approvedTotal(approvedTotal)
                 .companyShare(companyShare)
                 .patientShare(patientShare)
@@ -337,7 +339,7 @@ public class CoverageEngineService {
         Long ruleId = ruleOpt.map(BenefitPolicyRuleResponseDto::getId).orElse(null);
 
         BucketLimitSnapshotAdapter.Result adapterResult = bucketLimitSnapshotAdapter
-                .buildForNormalClaimFromResolvedLimits(request.getPolicyId(), request.getMemberId(), limits,
+                .buildForNormalClaimFromResolvedLimits(request.getPolicyId(), ruleId, request.getMemberId(), limits,
                         request.getExcludeClaimId());
 
         if (adapterResult.blocked()) {
@@ -347,7 +349,8 @@ public class CoverageEngineService {
             log.error("[COVERAGE-ENGINE] {} for lineId={}", adapterResult.blockReason(), line.getLineId());
             UsageDetails blockedDetails = UsageDetails.builder()
                     .ruleId(ruleId).hasLimit(true).exceeded(true).build();
-            return new UsageComputation(effectiveTotal, "USAGE_BUCKET_CONFIGURATION_ERROR", blockedDetails);
+            var blockedDecision = UnifiedLimitDecision.blocked(ruleId, List.of(adapterResult.blockReason()));
+            return new UsageComputation(effectiveTotal, "USAGE_BUCKET_CONFIGURATION_ERROR", blockedDetails, blockedDecision);
         }
 
         List<BucketLimitSnapshot> baseSnapshots = adapterResult.snapshots();
@@ -391,24 +394,22 @@ public class CoverageEngineService {
             log.error("[COVERAGE-ENGINE] {} for lineId={}", decision.decisionReasons(), line.getLineId());
             UsageDetails blockedDetails = UsageDetails.builder()
                     .ruleId(ruleId).hasLimit(true).exceeded(true).build();
-            return new UsageComputation(effectiveTotal, "USAGE_BUCKET_CONFIGURATION_ERROR", blockedDetails);
+            return new UsageComputation(effectiveTotal, "USAGE_BUCKET_CONFIGURATION_ERROR", blockedDetails, decision);
         }
 
         // UnifiedLimitResolver/ClaimLimitEvaluationContext are deliberately
         // money-ownership-blind (P1.3 §0) -- they only ever see gross
-        // amounts. Converting into what each bucket's OWN consumption is
-        // actually measured in (COMPANY_SHARE vs ELIGIBLE_AMOUNT) is this
-        // caller's job, since only it knows each bucket's consumptionBasis.
-        Map<Long, ConsumptionBasis> basisByBucketId = new HashMap<>();
-        for (CoverageLimitSnapshot l : limits) {
-            if (l.bucketId() != null) basisByBucketId.put(l.bucketId(), l.consumptionBasis());
-        }
-        context.recordLineConsumption(beforeLine, decision, request.getServiceDate(),
-                bucketId -> {
-                    ConsumptionBasis basis = basisByBucketId.getOrDefault(bucketId, ConsumptionBasis.ELIGIBLE_AMOUNT);
-                    BigDecimal gross = decision.bindingAvailableAmount() == null ? ZERO : decision.bindingAvailableAmount();
-                    return basisAmount(basis, gross, coveragePercent);
-                });
+        // amounts. consumptionBasis is NOT converted here: BenefitBucketLedgerService
+        // (the sole writer of the real, persisted benefit_bucket_consumptions
+        // ledger) always records line.getLimitConsumption() -- the gross
+        // amount -- for every amount-configured bucket, regardless of that
+        // bucket's own consumptionBasis; COMPANY_SHARE only changes what the
+        // bucket is DISPLAYED as tracking, not what actually gets committed.
+        // Converting to company-share here would make this in-claim batch
+        // preview subtract a different unit than what commit-time persists,
+        // silently drifting a multi-line claim's second+ line away from the
+        // real remaining balance it will be adjudicated against later.
+        context.recordLineConsumption(beforeLine, decision, request.getServiceDate());
         List<BucketLimitSnapshot> afterLine = context.adjustForNextLine(baseSnapshots);
 
         BigDecimal bindingAvailable = decision.bindingAvailableAmount() == null ? effectiveTotal
@@ -482,7 +483,7 @@ public class CoverageEngineService {
                 : daysExceeded ? "USAGE_DAYS_LIMIT_EXCEEDED"
                 : amountExceeded ? "USAGE_AMOUNT_LIMIT_EXCEEDED" : null;
 
-        return new UsageComputation(limitRefused, reason, details);
+        return new UsageComputation(limitRefused, reason, details, decision, adapterResult.items());
     }
 
     private static Optional<BucketLimitSnapshot> findAxis(List<BucketLimitSnapshot> snapshots, Long bucketId,
@@ -608,6 +609,16 @@ public class CoverageEngineService {
     public record UsageComputation(
             BigDecimal limitRefused,
             String refusalReason,
-            CoverageResult.UsageDetails usageDetails) {
+            CoverageResult.UsageDetails usageDetails,
+            UnifiedLimitDecision unifiedLimitDecision,
+            List<com.waad.tba.modules.benefitpolicy.service.unifiedlimit.ResolvedLimitItem> resolvedLimitItems) {
+        public UsageComputation(BigDecimal limitRefused, String refusalReason, CoverageResult.UsageDetails usageDetails) {
+            this(limitRefused, refusalReason, usageDetails, null, List.of());
+        }
+
+        public UsageComputation(BigDecimal limitRefused, String refusalReason,
+                CoverageResult.UsageDetails usageDetails, UnifiedLimitDecision unifiedLimitDecision) {
+            this(limitRefused, refusalReason, usageDetails, unifiedLimitDecision, List.of());
+        }
     }
 }

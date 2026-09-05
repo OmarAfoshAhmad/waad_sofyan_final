@@ -405,6 +405,37 @@ public class ClaimLine {
     @Column(name = "approved_quantity")
     private Integer approvedQuantity;
 
+    /**
+     * P1.6: carries the exact decision UnifiedLimitResolver made for this
+     * line from Save-A (CoverageEngineService.evaluateLine, within the same
+     * request/transaction) straight to ClaimFinancialAdjudicationService,
+     * so B never re-resolves the limit for a line Save-A already decided.
+     * Deliberately {@code @Transient} -- this is not a new source of truth,
+     * only an in-memory carrier for the current request; a line loaded
+     * fresh from the database (e.g. the approval-time re-verification path)
+     * naturally has this null, which is exactly when
+     * ClaimFinancialAdjudicationService must resolve fresh through the same
+     * canonical resolver instead.
+     */
+    @Transient
+    private com.waad.tba.modules.benefitpolicy.service.unifiedlimit.UnifiedLimitDecision unifiedLimitDecision;
+
+    /**
+     * P1.6.x: every resolved limit from the same resolution that produced
+     * {@link #unifiedLimitDecision} -- each entry pairs one bucket's numeric
+     * balance with its {@code ResolvedLimitDescriptor} (identity/description:
+     * benefitScopeType, beneficiaryScopeType, benefitGroupId, periodType,
+     * sourceType). Deliberately separate from the decision itself (a pure
+     * "what is allowed" answer must not carry persistence-shaped metadata)
+     * and deliberately NOT re-read by {@code ClaimLimitSnapshotFactory} from
+     * the database -- same lifecycle as {@link #unifiedLimitDecision}: set
+     * once per request by whichever side (Save-A or a fresh canonical
+     * resolve) produced the decision, null on a freshly loaded line.
+     */
+    @Transient
+    private java.util.List<com.waad.tba.modules.benefitpolicy.service.unifiedlimit.ResolvedLimitItem>
+            resolvedLimitItems;
+
     // ==================== LIFECYCLE HOOKS ====================
 
     @PrePersist

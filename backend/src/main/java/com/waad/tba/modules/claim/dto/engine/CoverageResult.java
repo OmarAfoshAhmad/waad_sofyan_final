@@ -29,6 +29,29 @@ public class CoverageResult {
     /** نفس lineId المُرسَل في الطلب — للمطابقة في الـ Frontend */
     private String lineId;
 
+    /**
+     * P1.6: the exact decision UnifiedLimitResolver made for this line,
+     * carried in-memory from Save-A (CoverageEngineService.evaluateLine)
+     * straight to ClaimFinancialAdjudicationService within the same
+     * request/transaction -- never flattened onto ClaimLine and
+     * reconstructed from it. Null on the Preview-only /analyze path (no
+     * caller needs it there) and on any line with no applicable limits at
+     * all. Never serialized -- internal transport only.
+     */
+    @JsonIgnore
+    private com.waad.tba.modules.benefitpolicy.service.unifiedlimit.UnifiedLimitDecision unifiedLimitDecision;
+
+    /**
+     * P1.6.x: every resolved limit (numeric balance + descriptive identity,
+     * paired) from the same resolution -- see
+     * {@code ClaimLine.resolvedLimitItems} javadoc. Travels alongside
+     * {@link #unifiedLimitDecision} the same way, for the same reason.
+     * Never serialized -- internal transport only.
+     */
+    @JsonIgnore
+    private java.util.List<com.waad.tba.modules.benefitpolicy.service.unifiedlimit.ResolvedLimitItem>
+            resolvedLimitItems;
+
     /** كود الخدمة (للتدقيق والترابط) */
     private String serviceCode;
 

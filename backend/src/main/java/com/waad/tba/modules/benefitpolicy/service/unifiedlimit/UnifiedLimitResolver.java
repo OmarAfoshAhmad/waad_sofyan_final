@@ -208,12 +208,27 @@ public final class UnifiedLimitResolver {
                     + " approvedQuantity=" + approvedQuantity + " approvedDays=" + approvedDays);
         }
 
+        // P1.6: every snapshot that actually received consumption for this
+        // decision -- mirrors ClaimLimitEvaluationContext.recordLineConsumption's
+        // own per-axis check exactly (same three conditions), so "what was
+        // consumed" has exactly one definition, computed once, here.
+        List<BucketLimitSnapshot> consumptionTargets = new ArrayList<>();
+        for (BucketLimitSnapshot snapshot : snapshots) {
+            boolean consumed = switch (snapshot.limitType()) {
+                case AMOUNT -> bindingAvailableAmount != null && bindingAvailableAmount.signum() > 0;
+                case TIMES -> approvedQuantity > 0;
+                case DAYS -> approvedDays > 0;
+            };
+            if (consumed) consumptionTargets.add(snapshot);
+        }
+
         return new UnifiedLimitDecision(
                 input.ruleId(), appliedBucketIds, reasons,
                 input.requestedQuantity(), approvedQuantity, refusedQuantity,
                 input.requestedDays(), approvedDays, refusedDays,
                 amount, times, days,
-                bindingConstraintType, bindingBucketId, bindingAvailableAmount, status);
+                bindingConstraintType, bindingBucketId, bindingAvailableAmount, status,
+                List.copyOf(consumptionTargets));
     }
 
     /**

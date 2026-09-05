@@ -506,6 +506,11 @@ public class ClaimMapper {
                                                                                         : result.getRefusalReason()))
                                         .approvedQuantity(null)
                                         .build();
+                        // P1.6: hand the exact decision this line was just evaluated
+                        // against straight to ClaimFinancialAdjudicationService --
+                        // never flattened onto persisted columns and reconstructed.
+                        line.setUnifiedLimitDecision(result.getUnifiedLimitDecision());
+                        line.setResolvedLimitItems(result.getResolvedLimitItems());
 
                         lines.add(line);
                         totalRequestedAmount = totalRequestedAmount.add(lineRequestedTotal);

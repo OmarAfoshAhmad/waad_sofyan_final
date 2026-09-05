@@ -67,9 +67,18 @@ public class ClaimFinancialSnapshotService {
             Member lockedMember = memberRepository.findByIdWithLock(claim.getMember().getId())
                     .orElseThrow(() -> new ResourceNotFoundException("Member", "id", claim.getMember().getId()));
 
-            // The draft calculation is only a preview. Approval must resolve the
-            // balances again after locking this member, then derive every claim total
-            // from those freshly adjudicated canonical line results.
+            // The draft calculation is only a preview, and its unifiedLimitDecision
+            // rider was computed BEFORE this lock was acquired -- reusing it here
+            // would let two concurrent claims for the same member each adjudicate
+            // against the pre-lock balance and jointly exceed the annual ceiling,
+            // exactly what the lock above exists to prevent. Clearing it forces
+            // ClaimFinancialAdjudicationService to re-resolve every line fresh,
+            // through the same canonical resolver, now that this member is locked.
+            claim.getLines().forEach(line -> line.setUnifiedLimitDecision(null));
+
+            // Approval must resolve the balances again after locking this member,
+            // then derive every claim total from those freshly adjudicated
+            // canonical line results.
             var adjudication = financialAdjudicationService.adjudicate(claim);
             ClaimFinancialTotals.aggregate(claim);
 

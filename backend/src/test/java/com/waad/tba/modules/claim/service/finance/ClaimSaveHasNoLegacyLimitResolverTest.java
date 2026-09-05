@@ -1,0 +1,57 @@
+package com.waad.tba.modules.claim.service.finance;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.lang.reflect.Constructor;
+import java.util.List;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+import com.waad.tba.modules.benefitpolicy.service.ApplicableLimitResolver;
+import com.waad.tba.modules.benefitpolicy.service.EffectiveLimitResolver;
+import com.waad.tba.modules.benefitpolicy.service.LimitBalanceReader;
+
+/**
+ * P1.6.x architectural proof: {@link ClaimFinancialAdjudicationService} (the
+ * sole live adjudicator for claim save) and {@link ClaimLimitSnapshotFactory}
+ * (the sole writer of {@code claim_line_limit_snapshots}) do not merely avoid
+ * CALLING the retired limit-resolution stack at runtime -- they do not even
+ * DEPEND on it. A class with no {@code EffectiveLimitResolver}/
+ * {@code ApplicableLimitResolver}/{@code MultiLineMultiBucketEngine}
+ * constructor parameter cannot invoke one, which is a stronger guarantee
+ * than a {@code verifyNoInteractions} on a mock that happens not to fire
+ * this run. PreAuth (untouched by P1.6, migrates in P1.12) still legitimately
+ * depends on {@code EffectiveLimitResolver} elsewhere -- this test is scoped
+ * to the claim-save path only.
+ */
+class ClaimSaveHasNoLegacyLimitResolverTest {
+
+    private static final List<Class<?>> RETIRED_FOR_CLAIM_SAVE = List.of(
+            EffectiveLimitResolver.class, ApplicableLimitResolver.class, LimitBalanceReader.class,
+            MultiLineMultiBucketEngine.class);
+
+    @Test
+    @DisplayName("SMD4a — ClaimFinancialAdjudicationService has no constructor dependency on the retired limit-resolution stack")
+    void adjudicationServiceHasNoLegacyDependency() {
+        assertNoConstructorParameterOfType(ClaimFinancialAdjudicationService.class);
+    }
+
+    @Test
+    @DisplayName("SMD4b — ClaimLimitSnapshotFactory has no constructor dependency on the retired limit-resolution stack")
+    void snapshotFactoryHasNoLegacyDependency() {
+        assertNoConstructorParameterOfType(ClaimLimitSnapshotFactory.class);
+    }
+
+    private void assertNoConstructorParameterOfType(Class<?> target) {
+        for (Constructor<?> constructor : target.getDeclaredConstructors()) {
+            for (Class<?> paramType : constructor.getParameterTypes()) {
+                assertThat(RETIRED_FOR_CLAIM_SAVE).as(
+                        "%s must not depend on retired %s -- claim save must resolve limits exactly once, "
+                                + "through UnifiedLimitResolver/BucketLimitSnapshotAdapter only",
+                        target.getSimpleName(), paramType.getSimpleName())
+                        .doesNotContain(paramType);
+            }
+        }
+    }
+}
