@@ -224,3 +224,36 @@ MUST NOT derive approvedQuantity — ولا approvedDays مستقبلاً — ب
   حقل `sourceType` ضمنياً عبر `appliedBucketIds`/`decisionReasons` دون
   الالتزام بتفعيلها الآن — قرار منفصل إن احتجناه لاحقاً.
 - Policy Revision — خارج نطاق P1 بالكامل (ADR-008 §8، مؤجَّل).
+
+---
+
+## 6. Amendment #1 (P1.5.2) — countingMethod ينتقل من مستوى القرار إلى مستوى الوعاء
+
+**تاريخ:** أثناء مراجعة P1.5.1a، قبل أي Wiring حي.
+
+**OLD (P1.4.1، غير موثق صراحة هنا لكن ضمنياً مفترض عبر
+`UnifiedLimitInput.countingMethod`):** `countingMethod` قيمة واحدة تخص القرار/السطر
+كله.
+
+**NEW:** `countingMethod` بيانات وصفية (metadata) تخص **الوعاء (Bucket)**، لا
+القرار. تُقرأ من `BucketLimitSnapshot.countingMethod()` لكل صف على حدة، وليس
+من `UnifiedLimitInput` إطلاقاً (الحقل حُذف منه).
+
+**السبب — مُثبت من الكود، وليس افتراضاً:**
+- `BenefitLimitBucket.countingMethod` عمود على كيان الوعاء نفسه.
+- `BenefitBucketLimitService.LimitSnapshot` يحمل `countingMethod` واحداً لكل
+  وعاء مُطبَّق، مقروءاً من ذلك الوعاء تحديداً.
+- المحرك الحي `CoverageEngineService.computeBucketUsage` يقرأ
+  `limit.countingMethod()` **داخل حلقته على كل وعاء**، وليس مرة واحدة للسطر —
+  أي أن سطراً واحداً يمر عبر أكثر من وعاء يمكن أن يرى أكثر من طريقة عدّ
+  فعلياً في الإنتاج الحالي.
+
+**الأثر على `UnifiedLimitResolver`:** قرار القابلية للتجزئة (divisible/atomic)
+يُحسب الآن لكل وعاء TIMES على حدة باستخدام `countingMethod` الخاص به، ثم
+تؤخذ أضيق نتيجة عبر كل الأوعية (تماماً كما تُؤخذ أضيق `remaining` أصلاً) — لا
+ينتشر أسلوب وعاء إلى وعاء آخر. مُثبت بحالات CM1–CM5
+(`docs/finance/P1_5_2_BUCKET_LEVEL_COUNTING_METHOD.md`).
+
+هذا **ليس فشلاً في P1.3** — بل تنقيح (refinement) ثبت بالكود بعد اعتماد
+العقد الأصلي، تماماً كما ثبتت إضافة `countingMethod` نفسها إلى `UnifiedLimitInput`
+كحقل ناقص أثناء P1.4.2.
