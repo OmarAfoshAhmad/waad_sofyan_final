@@ -286,6 +286,7 @@ public class BenefitStructureService {
         }
         bucket.setNameAr(rule.getLabel());
         bucket.setContextType(rule.getEncounterType());
+        bucket.setActive(true);
         bucket.setAmountLimit(request.amountLimit());
         bucket.setTimesLimit(request.timesLimit());
         bucket.setDaysLimit(request.daysLimit());
