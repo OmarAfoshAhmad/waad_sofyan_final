@@ -351,6 +351,7 @@ export default function ClaimBatchEntry() {
   const saveQueueRef = useRef(Promise.resolve());
   const autosaveTimerRef = useRef(null);
   const recoveryCheckedRef = useRef(false);
+  const recoveryDismissedRef = useRef(false);
   const skipAutosaveRef = useRef(false);
 
   const draftStorageKey = useMemo(
@@ -1063,6 +1064,7 @@ export default function ClaimBatchEntry() {
     if (editingClaimId) return;
     if (loadingBatchMeta) return;
     if (recoveryCheckedRef.current) return;
+    if (recoveryDismissedRef.current) return;
 
     recoveryCheckedRef.current = true;
 
@@ -1524,6 +1526,7 @@ export default function ClaimBatchEntry() {
   }, [defaultDate]);
 
   const restoreServerDraft = useCallback(() => {
+    recoveryDismissedRef.current = true;
     const payload = recoveryDialog.serverDraft?.data;
     if (payload) {
       skipAutosaveRef.current = true;
@@ -1536,6 +1539,7 @@ export default function ClaimBatchEntry() {
   }, [recoveryDialog.serverDraft, applyRecoveredDraft]);
 
   const restoreLocalDraft = useCallback(() => {
+    recoveryDismissedRef.current = true;
     const payload = recoveryDialog.localDraft?.data;
     if (payload) {
       skipAutosaveRef.current = true;
@@ -1548,6 +1552,7 @@ export default function ClaimBatchEntry() {
   }, [recoveryDialog.localDraft, applyRecoveredDraft]);
 
   const dismissRecovery = useCallback(() => {
+    recoveryDismissedRef.current = true;
     setRecoveryDialog({ open: false, serverDraft: null, localDraft: null });
   }, []);
 
