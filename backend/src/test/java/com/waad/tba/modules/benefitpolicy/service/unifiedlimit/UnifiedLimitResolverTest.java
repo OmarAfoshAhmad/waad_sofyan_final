@@ -13,21 +13,51 @@ import com.waad.tba.modules.benefitpolicy.enums.CountingMethod;
 import com.waad.tba.modules.providercontract.enums.EncounterType;
 
 /**
- * P1.4.3: proves UnifiedLimitResolver -- the real Java implementation, not
- * the pure-formula fixtures -- reproduces every one of G1-G7 exactly as
+ * P1.4.3/P1.5.0: proves UnifiedLimitResolver -- the real Java implementation,
+ * not the pure-formula fixtures -- reproduces every one of G1-G8 exactly as
  * fixed in P1_UNIFIED_LIMIT_DECISION_CONTRACT.md §4 and
  * P1_4_UNIFIED_LIMIT_RESOLVER_DESIGN.md. Both test files stay: the golden
  * formula tests guard the law, this file guards this specific
  * implementation of it.
  *
+ * P1.5.0 ownership change: {@code remaining} on each fixture below is
+ * computed HERE, by hand, exactly the way the future adapter will compute
+ * it from LimitBalanceReader -- the resolver itself never recomputes it
+ * from configured/committed/reserved anymore (that recomputation was
+ * reviewed out in P1.5.0 to avoid a second owner of the same number).
+ *
  * Isolated skeleton (P1.4.0/P1.4.2): no Spring context, no repository, no
- * live caller. Inputs are built by hand exactly as a future integration
- * step would assemble them from BenefitBucketLimitService/
- * EffectiveLimitResolver/ApplicableCountingLimitResolver.
+ * live caller.
  */
 class UnifiedLimitResolverTest {
 
     private static final LocalDate DATE = LocalDate.of(2026, 3, 1);
+    private static final LocalDate PERIOD_START = LocalDate.of(2026, 1, 1);
+    private static final LocalDate PERIOD_END = LocalDate.of(2026, 12, 31);
+
+    private static BucketLimitSnapshot amountAxis(long bucketId, long owningPolicyId,
+            String configured, String committed, String reserved, String remaining) {
+        return new BucketLimitSnapshot(bucketId, owningPolicyId, LimitAxisType.AMOUNT,
+                new BigDecimal(configured), new BigDecimal(committed), new BigDecimal(reserved),
+                new BigDecimal(remaining), PERIOD_START, PERIOD_END);
+    }
+
+    private static BucketLimitSnapshot timesAxis(long bucketId, long owningPolicyId,
+            int configured, int committed, int reserved, int remaining) {
+        return new BucketLimitSnapshot(bucketId, owningPolicyId, LimitAxisType.TIMES,
+                BigDecimal.valueOf(configured), BigDecimal.valueOf(committed), BigDecimal.valueOf(reserved),
+                BigDecimal.valueOf(remaining), PERIOD_START, PERIOD_END);
+    }
+
+    private static BucketLimitSnapshot daysAxis(long bucketId, long owningPolicyId,
+            int configured, int committed, int remaining) {
+        // No reservation concept exists for days anywhere in the codebase
+        // (no sumReservedDays query) -- activeReserved is always zero here,
+        // not by coincidence.
+        return new BucketLimitSnapshot(bucketId, owningPolicyId, LimitAxisType.DAYS,
+                BigDecimal.valueOf(configured), BigDecimal.valueOf(committed), BigDecimal.ZERO,
+                BigDecimal.valueOf(remaining), PERIOD_START, PERIOD_END);
+    }
 
     @Test
     @DisplayName("G1 — amount only, no occurrence dimension: the money itself is partially refused")
@@ -36,13 +66,10 @@ class UnifiedLimitResolverTest {
                 700L, 900L, 500L, DATE, EncounterType.OUTPATIENT,
                 1, 0, CountingMethod.EACH_LINE, new BigDecimal("1000.00"), new BigDecimal("1000.00"),
                 null, ReservationEvaluationMode.NORMAL, null, null);
-        BucketLimitSnapshot bucket = new BucketLimitSnapshot(
-                931L, 700L,
-                new BigDecimal("1000.00"), new BigDecimal("400.00"), BigDecimal.ZERO, null,
-                null, null, null, null,
-                null, null, null, null);
+        // configured=1000, committed=400, reserved=0 -> remaining=600 (NORMAL)
+        BucketLimitSnapshot snapshot = amountAxis(931L, 700L, "1000.00", "400.00", "0.00", "600.00");
 
-        UnifiedLimitDecision d = UnifiedLimitResolver.resolve(in, List.of(bucket));
+        UnifiedLimitDecision d = UnifiedLimitResolver.resolve(in, List.of(snapshot));
 
         assertThat(d.status()).isEqualTo(UnifiedLimitStatus.PARTIAL);
         assertThat(d.bindingConstraintType()).isEqualTo(BindingConstraintType.AMOUNT);
@@ -57,13 +84,10 @@ class UnifiedLimitResolverTest {
                 700L, 901L, 500L, DATE, EncounterType.OUTPATIENT,
                 3, 0, CountingMethod.EACH_UNIT, new BigDecimal("100.00"), new BigDecimal("300.00"),
                 null, ReservationEvaluationMode.NORMAL, null, null);
-        BucketLimitSnapshot bucket = new BucketLimitSnapshot(
-                932L, 700L,
-                null, null, null, null,
-                20, 18, 0, null, // configured=20, committed=18 -> remaining 2
-                null, null, null, null);
+        // configured=20, committed=18, reserved=0 -> remaining=2 (NORMAL)
+        BucketLimitSnapshot snapshot = timesAxis(932L, 700L, 20, 18, 0, 2);
 
-        UnifiedLimitDecision d = UnifiedLimitResolver.resolve(in, List.of(bucket));
+        UnifiedLimitDecision d = UnifiedLimitResolver.resolve(in, List.of(snapshot));
 
         assertThat(d.status()).isEqualTo(UnifiedLimitStatus.PARTIAL);
         assertThat(d.bindingConstraintType()).isEqualTo(BindingConstraintType.TIMES);
@@ -79,13 +103,10 @@ class UnifiedLimitResolverTest {
                 700L, 902L, 500L, DATE, EncounterType.INPATIENT,
                 1, 1, CountingMethod.PER_DAY, new BigDecimal("300.00"), new BigDecimal("300.00"),
                 null, ReservationEvaluationMode.NORMAL, null, null);
-        BucketLimitSnapshot bucket = new BucketLimitSnapshot(
-                933L, 700L,
-                null, null, null, null,
-                null, null, null, null,
-                10, 10, 0, null); // configured=10, committed=10 -> remaining 0
+        // configured=10, committed=10 -> remaining=0
+        BucketLimitSnapshot snapshot = daysAxis(933L, 700L, 10, 10, 0);
 
-        UnifiedLimitDecision d = UnifiedLimitResolver.resolve(in, List.of(bucket));
+        UnifiedLimitDecision d = UnifiedLimitResolver.resolve(in, List.of(snapshot));
 
         assertThat(d.status()).isEqualTo(UnifiedLimitStatus.EXHAUSTED);
         assertThat(d.bindingConstraintType()).isEqualTo(BindingConstraintType.DAYS);
@@ -101,13 +122,10 @@ class UnifiedLimitResolverTest {
                 700L, 903L, 500L, DATE, EncounterType.OUTPATIENT,
                 5, 0, CountingMethod.EACH_UNIT, new BigDecimal("100.00"), new BigDecimal("500.00"),
                 null, ReservationEvaluationMode.NORMAL, null, null);
-        BucketLimitSnapshot bucket = new BucketLimitSnapshot(
-                934L, 700L,
-                new BigDecimal("250.00"), BigDecimal.ZERO, BigDecimal.ZERO, null, // amount remaining 250 -> 2 whole units
-                20, 16, 0, null, // times remaining 4
-                null, null, null, null);
+        BucketLimitSnapshot amountSnapshot = amountAxis(934L, 700L, "250.00", "0.00", "0.00", "250.00"); // -> 2 whole units
+        BucketLimitSnapshot timesSnapshot = timesAxis(934L, 700L, 20, 16, 0, 4);
 
-        UnifiedLimitDecision d = UnifiedLimitResolver.resolve(in, List.of(bucket));
+        UnifiedLimitDecision d = UnifiedLimitResolver.resolve(in, List.of(amountSnapshot, timesSnapshot));
 
         assertThat(d.status()).isEqualTo(UnifiedLimitStatus.PARTIAL);
         assertThat(d.bindingConstraintType()).isEqualTo(BindingConstraintType.AMOUNT);
@@ -123,13 +141,10 @@ class UnifiedLimitResolverTest {
                 700L, 904L, 500L, DATE, EncounterType.OUTPATIENT,
                 8, 0, CountingMethod.EACH_UNIT, new BigDecimal("50.00"), new BigDecimal("400.00"),
                 null, ReservationEvaluationMode.NORMAL, null, null);
-        BucketLimitSnapshot bucket = new BucketLimitSnapshot(
-                935L, 700L,
-                null, null, null, null,
-                20, 10, 4, null, // 20 - 10 - 4 = 6 available
-                null, null, null, null);
+        // configured=20, committed=10, reserved=4 -> remaining=6 (NORMAL)
+        BucketLimitSnapshot snapshot = timesAxis(935L, 700L, 20, 10, 4, 6);
 
-        UnifiedLimitDecision d = UnifiedLimitResolver.resolve(in, List.of(bucket));
+        UnifiedLimitDecision d = UnifiedLimitResolver.resolve(in, List.of(snapshot));
 
         assertThat(d.status()).isEqualTo(UnifiedLimitStatus.PARTIAL);
         assertThat(d.bindingConstraintType()).isEqualTo(BindingConstraintType.TIMES);
@@ -145,12 +160,10 @@ class UnifiedLimitResolverTest {
                 700L, 905L, 500L, DATE, EncounterType.OUTPATIENT,
                 1, 0, CountingMethod.EACH_LINE, new BigDecimal("100.00"), new BigDecimal("100.00"),
                 null, ReservationEvaluationMode.NORMAL, null, null);
-        BucketLimitSnapshot foreignBucket = new BucketLimitSnapshot(
-                936L, 701L, // belongs to a DIFFERENT policy than input.policyId()=700
-                new BigDecimal("100.00"), BigDecimal.ZERO, BigDecimal.ZERO, null,
-                null, null, null, null, null, null, null, null);
+        BucketLimitSnapshot foreignSnapshot = amountAxis(936L, 701L, // belongs to a DIFFERENT policy than input.policyId()=700
+                "100.00", "0.00", "0.00", "100.00");
 
-        UnifiedLimitDecision d = UnifiedLimitResolver.resolve(in, List.of(foreignBucket));
+        UnifiedLimitDecision d = UnifiedLimitResolver.resolve(in, List.of(foreignSnapshot));
 
         assertThat(d.status()).isEqualTo(UnifiedLimitStatus.BLOCKED);
         assertThat(d.bindingConstraintType()).isEqualTo(BindingConstraintType.NONE);
@@ -167,13 +180,12 @@ class UnifiedLimitResolverTest {
                 123L, ReservationEvaluationMode.PREAUTHORIZED_CLAIM, 50L, 60L);
         // Limit=20, committed=10, reserved total=6, of which THIS preauth owns 4
         // -> actualRemaining=10, reservableAvailable=4, availableForThisClaim=min(10, 4+4)=8
-        BucketLimitSnapshot bucket = new BucketLimitSnapshot(
-                937L, 700L,
-                null, null, null, null,
-                20, 10, 6, 4,
-                null, null, null, null);
+        // `remaining` here is exactly what a PREAUTHORIZED_CLAIM-mode adapter
+        // read would compute -- the resolver does not know or care which
+        // formula produced it.
+        BucketLimitSnapshot snapshot = timesAxis(937L, 700L, 20, 10, 6, 8);
 
-        UnifiedLimitDecision d = UnifiedLimitResolver.resolve(in, List.of(bucket));
+        UnifiedLimitDecision d = UnifiedLimitResolver.resolve(in, List.of(snapshot));
 
         assertThat(d.times().remaining()).isEqualByComparingTo("8");
         assertThat(d.approvedQuantity()).isEqualTo(8);
@@ -192,13 +204,9 @@ class UnifiedLimitResolverTest {
                 700L, 908L, 500L, DATE, EncounterType.OUTPATIENT,
                 3, 0, CountingMethod.PER_VISIT, new BigDecimal("100.00"), new BigDecimal("300.00"),
                 null, ReservationEvaluationMode.NORMAL, null, null);
-        BucketLimitSnapshot bucket = new BucketLimitSnapshot(
-                938L, 700L,
-                null, null, null, null,
-                20, 18, 0, null, // times remaining 2 -- enough for neither 3 nor a split
-                null, null, null, null);
+        BucketLimitSnapshot snapshot = timesAxis(938L, 700L, 20, 18, 0, 2);
 
-        UnifiedLimitDecision d = UnifiedLimitResolver.resolve(in, List.of(bucket));
+        UnifiedLimitDecision d = UnifiedLimitResolver.resolve(in, List.of(snapshot));
 
         assertThat(d.status()).isEqualTo(UnifiedLimitStatus.EXHAUSTED);
         assertThat(d.bindingConstraintType()).isEqualTo(BindingConstraintType.TIMES);
