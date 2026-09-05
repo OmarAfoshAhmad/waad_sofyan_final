@@ -456,6 +456,58 @@ public interface BenefitBucketConsumptionRepository extends JpaRepository<Benefi
                                          @Param("periodStart") LocalDate periodStart,
                                          @Param("periodEnd") LocalDate periodEnd);
 
+    interface OwnActiveReservationProjection {
+        Long getBucketId();
+        LocalDate getPeriodStart();
+        LocalDate getPeriodEnd();
+        BigDecimal getAmount();
+        Integer getTimes();
+    }
+
+    /**
+     * The bulk form of {@link #sumOwnActiveReservation}/
+     * {@link #sumOwnActiveReservationTimes} for BUCKET scope only: one query
+     * for every applicable bucket instead of one per bucket, exactly like
+     * {@link #aggregateAmountBalances} already does for the ordinary reserved
+     * read. Period is deliberately NOT filtered here -- a claim's applicable
+     * buckets can resolve to different periods (an annual bucket next to a
+     * monthly one), so each row's own {@code periodStart}/{@code periodEnd}
+     * is returned and the caller matches it against the period it already
+     * resolved for that bucket (via BucketPeriodCalculator, through
+     * BenefitBucketLimitService#findApplicable) -- never a period recomputed
+     * here. A reservation for the same bucket but a different period simply
+     * fails that match in the caller, which is what proves it was never
+     * released (P1.5.0b's own-period requirement).
+     */
+    @Query(value = """
+        select c.bucket_id as bucketId,
+               c.period_start as periodStart,
+               c.period_end as periodEnd,
+               coalesce(sum(c.approved_amount - coalesce(r.released_amount, 0)), 0) as amount,
+               coalesce(sum(c.times_consumed - coalesce(r.released_times, 0)), 0) as times
+          from benefit_bucket_consumptions c
+          left join (
+                select reversal_of_id,
+                       sum(approved_amount) as released_amount,
+                       sum(times_consumed) as released_times
+                  from benefit_bucket_consumptions
+                 where status = 'REVERSED' and reversal_of_id is not null
+                 group by reversal_of_id
+          ) r on r.reversal_of_id = c.id
+         where c.member_id = :memberId
+           and c.preauth_id = :preauthId
+           and c.member_policy_assignment_id = :assignmentId
+           and c.bucket_id in (:bucketIds)
+           and c.limit_scope = 'BUCKET'
+           and c.status = 'RESERVED'
+         group by c.bucket_id, c.period_start, c.period_end
+        """, nativeQuery = true)
+    List<OwnActiveReservationProjection> aggregateOwnActiveReservation(
+            @Param("memberId") Long memberId,
+            @Param("preauthId") Long preauthId,
+            @Param("assignmentId") Long assignmentId,
+            @Param("bucketIds") java.util.Collection<Long> bucketIds);
+
     /**
      * Net RESERVED times held against a bucket. A separate dimension from the
      * amount: a visit count and a currency figure are not comparable, and a
