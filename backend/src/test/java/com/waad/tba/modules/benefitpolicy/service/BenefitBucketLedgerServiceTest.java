@@ -549,5 +549,20 @@ class BenefitBucketLedgerServiceTest {
         assertThat(captor.getAllValues()).extracting(row -> row.getBucket().getId())
                 .containsExactlyInAnyOrder(70L, 71L);
     }
+
+    @Test
+    @DisplayName("P1.11.3 architectural guard — a normal commit (live decision present) never reaches legacyReconcileTargets' rule-bucket walk")
+    void normalCommitNeverConsultsTheLegacyRuleBucketWalk() {
+        // Exactly what every direct-entry or reviewed approval looks like
+        // today: a live decision is present, so the canonical branch alone
+        // must run. legacyReconcileTargets exists ONLY for
+        // reconcileApprovedClaim's historical-claim repair, where the
+        // decision is naturally absent -- never for a new approval.
+        giveLineACanonicalAmountDecision(70L, new BigDecimal("1500.00"), new BigDecimal("100.00"));
+
+        service.commitClaim(20L);
+
+        verify(ruleBucketRepository, never()).findByRuleIdOrderByConsumptionOrder(anyLong());
+    }
 }
 

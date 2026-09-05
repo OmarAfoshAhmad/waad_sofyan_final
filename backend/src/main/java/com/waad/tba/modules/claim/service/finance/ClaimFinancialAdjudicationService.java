@@ -164,10 +164,16 @@ public class ClaimFinancialAdjudicationService {
      * state) -- exists to catch a balance that changed after Save-A ran,
      * not to run an independent adjudication.
      *
-     * requestedDays is fixed at 0 here on purpose: the retired
-     * EffectiveLimitResolver/LimitBalanceReader pair had no days dimension
-     * at all (AMOUNT and TIMES only), so this preserves that exact scope
-     * rather than inventing a new one B never had.
+     * P1.11.3: requestedDays now mirrors {@code CoverageEngineService}'s own
+     * DAYS gating (found missing during the same wiring review that
+     * uncovered the PER_VISIT/PER_DAY gap above) -- a DAYS axis is atomic,
+     * once per decision per (bucket, period, service date), never once per
+     * line. Before this fix every line reaching this fresh-resolve path
+     * (which is EVERY direct-entry approval today, since
+     * {@code ClaimFinancialSnapshotService.finalizeSnapshot} always
+     * re-resolves under the member lock) independently requested its own
+     * day, so a claim with several lines against the same day-limited
+     * bucket on the same date over-consumed by exactly the duplicate count.
      */
     private CanonicalLimitEvaluation resolveCanonically(Claim claim, ClaimLine line, BenefitPolicy policy,
             LocalDate serviceDate, Long memberId, Long assignmentId, BigDecimal effectiveUnitPrice,
@@ -191,8 +197,16 @@ public class ClaimFinancialAdjudicationService {
                 .filter(s -> s.limitType() == com.waad.tba.modules.benefitpolicy.service.unifiedlimit.LimitAxisType.TIMES)
                 .findFirst();
         int requestedQuantity = requestedQuantity(primaryTimesSnapshot, quantity, context);
+
+        boolean hasDaysAxis = beforeLine.stream()
+                .anyMatch(s -> s.limitType() == com.waad.tba.modules.benefitpolicy.service.unifiedlimit.LimitAxisType.DAYS);
+        boolean batchDayAlreadyConsumed = beforeLine.stream()
+                .filter(s -> s.limitType() == com.waad.tba.modules.benefitpolicy.service.unifiedlimit.LimitAxisType.DAYS)
+                .anyMatch(s -> context.dayAlreadyConsumedThisBatch(s.bucketId(), s.periodStart(), s.periodEnd(), serviceDate));
+        int requestedDays = hasDaysAxis && !batchDayAlreadyConsumed ? 1 : 0;
+
         UnifiedLimitInput input = new UnifiedLimitInput(policy.getId(), line.getAppliedRuleId(), memberId,
-                serviceDate, claim.getEncounterType(), requestedQuantity, 0, effectiveUnitPrice, eligibleAmount,
+                serviceDate, claim.getEncounterType(), requestedQuantity, requestedDays, effectiveUnitPrice, eligibleAmount,
                 claim.getId(),
                 isPreauthorized ? ReservationEvaluationMode.PREAUTHORIZED_CLAIM : ReservationEvaluationMode.NORMAL,
                 isPreauthorized ? claim.getPreAuthorization().getId() : null,

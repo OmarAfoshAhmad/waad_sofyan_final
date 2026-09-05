@@ -76,7 +76,7 @@ class CanonicalConsumptionTargetBuilderTest {
     }
 
     @Test
-    @DisplayName("CT3 — Days rejected: approvedDays=0 produces no target for a DAYS-only bucket at all")
+    @DisplayName("CT3/D1 — Days rejected: approvedDays=0 produces no target for a DAYS-only bucket at all")
     void ct3_daysRejected() {
         BucketLimitSnapshot daysSnapshot = new BucketLimitSnapshot(930L, 700L, LimitAxisType.DAYS,
                 CountingMethod.EACH_LINE, BigDecimal.valueOf(5), BigDecimal.valueOf(5), BigDecimal.ZERO,
@@ -94,7 +94,7 @@ class CanonicalConsumptionTargetBuilderTest {
     }
 
     @Test
-    @DisplayName("CT4 — Days accepted: approvedDays>0 produces a target with consumeDay=true")
+    @DisplayName("CT4/D2 — Days accepted: approvedDays>0 produces a target with consumeDay=true")
     void ct4_daysAccepted() {
         BucketLimitSnapshot daysSnapshot = new BucketLimitSnapshot(940L, 700L, LimitAxisType.DAYS,
                 CountingMethod.EACH_LINE, BigDecimal.valueOf(5), BigDecimal.ZERO, BigDecimal.ZERO,
@@ -110,6 +110,39 @@ class CanonicalConsumptionTargetBuilderTest {
 
         assertThat(targets).hasSize(1);
         assertThat(targets.get(0).consumeDay()).isTrue();
+    }
+
+    @Test
+    @DisplayName("D6 — a bucket with positive AMOUNT consumed but approvedDays=0 (DAYS excluded from consumptionTargets) gets no day movement")
+    void d6_positiveAmountDoesNotImplyADayIsConsumed() {
+        // Hand-built decision (bypassing UnifiedLimitResolver, which -- by
+        // its own P1.3 design -- zeroes the WHOLE line's money whenever a
+        // DAYS refusal binds, so "positive money + refused days" cannot
+        // arise from a single resolve() call on one bucket): bucket 945
+        // configures BOTH amountLimit and daysLimit, but only its AMOUNT
+        // axis made it into consumptionTargets -- exactly the old ledger's
+        // failure trigger, which inferred "day used" purely from
+        // bucket.getDaysLimit() != null, ignoring the decision entirely.
+        BucketLimitSnapshot amountTarget = new BucketLimitSnapshot(945L, 700L, LimitAxisType.AMOUNT,
+                CountingMethod.EACH_LINE, BigDecimal.valueOf(1000), BigDecimal.ZERO, BigDecimal.ZERO,
+                BigDecimal.valueOf(1000), PERIOD_START, PERIOD_END);
+        UnifiedLimitDecision decision = new UnifiedLimitDecision(42L, List.of(945L), List.of(),
+                0, 0, 0, 0, 0, 0,
+                new UnifiedLimitDecision.LimitAxis(BigDecimal.valueOf(1000), BigDecimal.ZERO, BigDecimal.ZERO,
+                        BigDecimal.valueOf(1000)),
+                UnifiedLimitDecision.LimitAxis.unconfigured(), UnifiedLimitDecision.LimitAxis.unconfigured(),
+                BindingConstraintType.NONE, null, new BigDecimal("300.00"), UnifiedLimitStatus.LIMITED,
+                List.of(amountTarget)); // consumptionTargets: AMOUNT only -- DAYS never made it in
+        assertThat(decision.approvedDays()).isZero();
+        var items = List.of(new ResolvedLimitItem(amountTarget, descriptorFor("BUCKET:945", 945L, 17L)));
+
+        List<CanonicalConsumptionTarget> targets = CanonicalConsumptionTargetBuilder.build(
+                decision, new BigDecimal("300.00"), items, SERVICE_DATE);
+
+        assertThat(targets).hasSize(1);
+        assertThat(targets.get(0).amountToConsume()).isEqualByComparingTo("300.00");
+        assertThat(targets.get(0).consumeDay())
+                .as("positive money on this bucket must never imply a day was consumed").isFalse();
     }
 
     @Test

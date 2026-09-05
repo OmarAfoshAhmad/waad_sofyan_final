@@ -174,4 +174,54 @@ class ClaimFinancialAdjudicationServiceTest {
         assertThat(line.getCompanyShare()).isEqualByComparingTo("300.00");
         assertThat(line.getUnifiedLimitDecision()).isNotNull();
     }
+
+    @Test
+    @DisplayName("P1.11.3 (D3/Batch) — two lines, no rider, same day-limited bucket + same service date: only the first line spends the day")
+    void freshResolveAppliesTheSameOncePerBatchDayRuleAcrossLines() {
+        ClaimLine line1 = new ClaimLine();
+        line1.setAppliedRuleId(900L);
+        line1.setCoveragePercentSnapshot(100);
+        line1.setRequestedTotal(new BigDecimal("50.00"));
+        line1.setContractUnitPrice(new BigDecimal("50.00"));
+        line1.setQuantity(1);
+        ClaimLine line2 = new ClaimLine();
+        line2.setAppliedRuleId(900L);
+        line2.setCoveragePercentSnapshot(100);
+        line2.setRequestedTotal(new BigDecimal("50.00"));
+        line2.setContractUnitPrice(new BigDecimal("50.00"));
+        line2.setQuantity(1);
+        // No unifiedLimitDecision on either line -- both fall back to
+        // resolveCanonically, sharing ONE freshResolveContext for the claim.
+
+        Member member = Member.builder().id(500L).build();
+        Claim claim = Claim.builder().member(member).serviceDate(SERVICE_DATE)
+                .encounterType(EncounterType.OUTPATIENT).build();
+        claim.setLines(List.of(line1, line2));
+        BenefitPolicy policy = BenefitPolicy.builder().id(700L).build();
+        when(memberPolicyResolver.resolveForOrFail(member, SERVICE_DATE)).thenReturn(policy);
+
+        BucketLimitSnapshot daysSnapshot = new BucketLimitSnapshot(933L, 700L, LimitAxisType.DAYS,
+                CountingMethod.EACH_LINE, BigDecimal.valueOf(5), BigDecimal.ZERO, BigDecimal.ZERO,
+                BigDecimal.valueOf(5), PERIOD_START, PERIOD_END);
+        var descriptor = new com.waad.tba.modules.benefitpolicy.service.unifiedlimit.ResolvedLimitDescriptor(
+                "BUCKET:933", 933L, com.waad.tba.modules.benefitpolicy.entity.ClaimLineLimitSnapshot.SourceType.POLICY_DEFAULT,
+                com.waad.tba.modules.benefitpolicy.enums.BenefitScopeType.CATEGORY,
+                com.waad.tba.modules.benefitpolicy.enums.BeneficiaryScopeType.MEMBER, 900L, 1L, "ANNUAL",
+                PERIOD_START, PERIOD_END);
+        // Both lines share appliedRuleId=900L, so the SAME stub answers both
+        // of resolveCanonically's two calls -- exactly like two lines
+        // genuinely reading the same live DB state twice.
+        when(bucketLimitSnapshotAdapter.buildForNormalClaim(700L, 900L, 500L, SERVICE_DATE,
+                EncounterType.OUTPATIENT, null))
+                .thenReturn(BucketLimitSnapshotAdapter.Result.of(List.of(
+                        new com.waad.tba.modules.benefitpolicy.service.unifiedlimit.ResolvedLimitItem(
+                                daysSnapshot, descriptor))));
+
+        service.adjudicate(claim);
+
+        assertThat(line1.getUnifiedLimitDecision().approvedDays())
+                .as("the first line to reach this bucket+date spends the day").isEqualTo(1);
+        assertThat(line2.getUnifiedLimitDecision().approvedDays())
+                .as("the second line, same bucket + same service date, must not spend a second day").isZero();
+    }
 }
