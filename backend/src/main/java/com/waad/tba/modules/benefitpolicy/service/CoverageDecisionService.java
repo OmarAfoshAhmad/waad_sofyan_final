@@ -7,7 +7,6 @@ import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRuleRepository;
 import com.waad.tba.modules.claimcontext.repository.ClaimContextDefinitionRepository;
 import com.waad.tba.modules.medicaltaxonomy.entity.MedicalCategory;
-import com.waad.tba.modules.medicaltaxonomy.enums.CategoryContext;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalCategoryRepository;
 import com.waad.tba.modules.providercontract.enums.EncounterType;
 import lombok.RequiredArgsConstructor;
@@ -45,13 +44,17 @@ public class CoverageDecisionService {
         }
 
         EncounterType context = request.encounterType() != null ? request.encounterType() : EncounterType.OUTPATIENT;
-        if (category.getContexts() != null && !category.getContexts().isEmpty()) {
-            CategoryContext categoryContext = CategoryContext.valueOf(context.name());
-            if (!category.getContexts().contains(CategoryContext.ANY)
-                    && !category.getContexts().contains(categoryContext)) {
-                return rejected(categoryId, CoverageDecisionSource.CONTEXT_MISMATCH, "CONTEXT_MISMATCH");
-            }
-        }
+        /*
+         * Financial boundary:
+         * - MedicalCategory is the service classification only.
+         * - claimContextCode is the whole-claim financial context.
+         *
+         * Older data still carries medical_category_contexts, but that table must not
+         * veto coverage decisions. A diagnostic category such as labs/imaging can be
+         * valid in outpatient, inpatient, maternity and pregnancy-complication claims
+         * depending on the policy rule. The exact rule lookup below is therefore the
+         * single financial authority for category+claim-context eligibility.
+         */
 
         BenefitPolicy policy = request.policyId() == null
                 ? null : policyRepository.findById(request.policyId()).orElse(null);

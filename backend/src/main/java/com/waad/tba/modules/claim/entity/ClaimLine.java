@@ -191,7 +191,7 @@ public class ClaimLine {
     @Column(name = "applied_rule_id")
     private Long appliedRuleId;
 
-    @Column(name = "applied_context", length = 20)
+    @Column(name = "applied_context", length = 60)
     private String appliedContext;
 
     @Column(name = "bucket_snapshot_json", columnDefinition = "jsonb")

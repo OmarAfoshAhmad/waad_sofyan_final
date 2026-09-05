@@ -1,20 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { isServiceAllowedForClaimContext, normalizeClaimServiceContext, resolveClaimContextSelection } from '../claim-context.mjs';
+import { getServiceContext, normalizeClaimServiceContext, resolveClaimContextSelection } from '../claim-context.mjs';
 
 describe('claim context', () => {
   it('accepts a future data-driven context code without a frontend release', () => {
     expect(normalizeClaimServiceContext('emergency_dental')).toBe('EMERGENCY_DENTAL');
   });
 
-  it('shows every contracted item when outpatient is cleared to ANY', () => {
-    for (const encounterType of ['OUTPATIENT', 'INPATIENT', 'MATERNITY', 'PREGNANCY_COMPLICATIONS', 'ANY']) {
-      expect(isServiceAllowedForClaimContext({ encounterType }, 'ANY')).toBe(true);
-    }
-  });
-
-  it('treats pharmacy as a benefit classification, not a claim-header context', () => {
-    expect(isServiceAllowedForClaimContext({ encounterType: 'OUTPATIENT' }, 'OUTPATIENT')).toBe(true);
-    expect(isServiceAllowedForClaimContext({ encounterType: 'INPATIENT' }, 'OUTPATIENT')).toBe(false);
+  it('keeps service encounter as catalog metadata, not as a frontend eligibility filter', () => {
+    expect(getServiceContext({ encounterType: 'OUTPATIENT' })).toBe('OUTPATIENT');
+    expect(getServiceContext({ encounterType: 'INPATIENT' })).toBe('INPATIENT');
+    expect(getServiceContext({ encounterType: 'PREGNANCY_COMPLICATIONS' })).toBe('PREGNANCY_COMPLICATIONS');
   });
 
   it.each([

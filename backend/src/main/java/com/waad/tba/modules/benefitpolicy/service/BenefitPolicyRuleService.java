@@ -261,8 +261,9 @@ public class BenefitPolicyRuleService {
             Long serviceCategoryId, Long memberId, Integer year, Long excludeClaimId,
             com.waad.tba.modules.providercontract.enums.EncounterType encounterType) {
 
-        // Resolve usage rule using the same dual-key logic as coverage lookup:
-        // categoryId=context override, serviceCategoryId=service intrinsic category.
+        // Resolve usage rule using the same category identity as coverage lookup.
+        // serviceCategoryId is the canonical service classification when present;
+        // categoryId is retained only as a legacy fallback for older callers.
         Long resolvedCategoryId = serviceCategoryId != null ? serviceCategoryId : categoryId;
         int targetYear = year != null ? year : java.time.LocalDate.now().getYear();
         java.time.LocalDate referenceDate = java.time.LocalDate.of(targetYear, 1, 1);

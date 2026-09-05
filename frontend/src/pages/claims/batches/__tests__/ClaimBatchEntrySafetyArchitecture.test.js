@@ -81,11 +81,11 @@ describe('claim batch entry safety boundary', () => {
     expect(dateChange).toContain("setPreAuthId('')");
   });
 
-  it('blocks rather than merely warns about services from another claim context', () => {
-    expect(entrySource).toContain('if (incompatibleContextLines.length > 0)');
-    expect(entrySource).toContain('!hasAcceptedCoverageDecision(line)');
-    expect(entrySource).toContain('لا يمكن الحفظ: الخدمات في البنود');
-    expect(entrySource).not.toContain('وسيتم احتسابها حسب قواعد التغطية المطابقة فقط');
+  it('does not use the selected claim context as a frontend service filter', () => {
+    expect(entrySource).toContain('السياق المالي يُطبّق على المطالبة كاملة');
+    expect(entrySource).not.toContain('incompatibleContextLines');
+    expect(entrySource).not.toContain('لا تتوافق مع سياق المطالبة الحالي');
+    expect(entrySource).not.toContain('isServiceAllowedForClaimContext');
   });
 
   it('recalculates all draft lines when a service is selected so shared limits are consumed once', () => {

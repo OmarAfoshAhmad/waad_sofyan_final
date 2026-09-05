@@ -256,9 +256,12 @@ public class CoverageEngineService {
 
     /**
      * Pricing item is the canonical bridge between provider price lists and
-     * insurance classifications. If the frontend omits categoryId/serviceCategoryId
-     * or contractPrice, recover them from the provider contract pricing item so
-     * coverage is not falsely marked as "not covered" for free-text services.
+     * insurance classifications. The frontend may still submit legacy category
+     * fields for display/hydration, but it must not be able to choose the
+     * financial category for a contract-priced line. When pricingItemId exists,
+     * always overwrite categoryId/serviceCategoryId from the provider contract
+     * pricing item. Contract price is still recovered only when the caller did
+     * not already send a positive price cap.
      */
     private void applyPricingItemSnapshot(ClaimLineInput line) {
         if (line == null || line.getPricingItemId() == null) {
@@ -270,12 +273,8 @@ public class CoverageEngineService {
                 .ifPresent(item -> {
                     if (item.getMedicalCategory() != null) {
                         Long categoryId = item.getMedicalCategory().getId();
-                        if (line.getServiceCategoryId() == null) {
-                            line.setServiceCategoryId(categoryId);
-                        }
-                        if (line.getCategoryId() == null) {
-                            line.setCategoryId(categoryId);
-                        }
+                        line.setServiceCategoryId(categoryId);
+                        line.setCategoryId(categoryId);
                     }
                     if ((line.getContractPrice() == null || line.getContractPrice().compareTo(ZERO) <= 0)
                             && item.getContractPrice() != null) {

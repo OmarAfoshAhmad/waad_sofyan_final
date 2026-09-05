@@ -109,7 +109,7 @@ import { RejectClaimDialog } from './components/RejectClaimDialog';
 import { ConfirmDeleteClaimDialog } from './components/ConfirmDeleteClaimDialog';
 import { ActionConfirmDialog } from './components/ActionConfirmDialog';
 import { CustomServiceDialog } from './components/CustomServiceDialog';
-import { getServiceContext, isServiceAllowedForClaimContext } from './claim-context.mjs';
+import { getServiceContext } from './claim-context.mjs';
 
 // ── أسماء الشهور ─────────────────────────────────────────────────────────────
 const MONTHS_AR = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
@@ -143,6 +143,17 @@ const newLine = () => ({
 
 const newDirectEntryKey = () => globalThis.crypto?.randomUUID?.() || `claim-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
+const normalizeArabicSearch = (value = '') =>
+  String(value)
+    .normalize('NFKD')
+    .replace(/[\u064B-\u065F\u0670]/g, '')
+    .replace(/[أإآٱ]/g, 'ا')
+    .replace(/ؤ/g, 'و')
+    .replace(/ئ/g, 'ي')
+    .replace(/ى/g, 'ي')
+    .replace(/ة/g, 'ه')
+    .toLowerCase();
+
 const hasMeaningfulDraftData = (draft) => {
   if (!draft) return false;
   if (draft.member?.id) return true;
@@ -151,11 +162,6 @@ const hasMeaningfulDraftData = (draft) => {
   if ((draft.notes || '').trim()) return true;
   return Array.isArray(draft.lines) && draft.lines.some((l) => l?.serviceName || l?.serviceCode || l?.service);
 };
-
-const hasAcceptedCoverageDecision = (line) =>
-  Boolean(line?.service || line?.serviceName) &&
-  line?.notCovered !== true &&
-  Number(line?.coveragePercent || 0) > 0;
 
 // أنماط حقول الجدول القابلة للتعديل
 const inlineSx = {
@@ -1127,8 +1133,13 @@ export default function ClaimBatchEntry() {
     // Claim entry is contract-priced and fail-closed. Synthetic generic items
     // have neither a pricingItemId nor a classified coverage source and mask a
     // failed contract-services request as if the contract contained services.
-    return contractedServiceOptionsRaw.filter((item) => isServiceAllowedForClaimContext(item, encounterType));
-  }, [contractedServiceOptionsRaw, encounterType]);
+    //
+    // السياق المالي يُطبّق على المطالبة كاملة، لا على قائمة الخدمات.
+    // Do not filter services by claim context here. A service classification
+    // belongs to the provider contract/catalog; the selected claim context
+    // belongs to the whole claim and is validated by the coverage rule engine.
+    return contractedServiceOptionsRaw;
+  }, [contractedServiceOptionsRaw]);
 
   const noEffectiveContractServicesForDate =
     Boolean(entryContext?.contractId) &&
@@ -1423,27 +1434,16 @@ export default function ClaimBatchEntry() {
       return;
     }
 
-    updateLine(idx, {
-      medicalCategoryId: selected.id,
-      serviceCategoryId: selected.id,
-      categoryId: selected.id,
-      medicalCategoryCode: selected.code,
-      medicalCategoryName: selected.name,
-      serviceCategoryName: selected.name,
-      coveragePending: true
-    });
-
     await sendLineToMedicalDictionary(idx, selected.id);
     closeClassificationReviewDialog();
-    enqueueSnackbar('تم اعتماد تصنيف البند لهذه المطالبة فقط، وسُجل كاقتراح دائم ينتظر اعتماد رئيس القسم', { variant: 'success' });
+    enqueueSnackbar('تم إرسال اقتراح التصنيف للمراجعة. لن يتغير حساب هذه المطالبة حتى يُعتمد التصنيف في مصدر الخدمة.', { variant: 'success' });
   }, [
     classificationReview.lineIndex,
     classificationReview.selectedCategoryId,
     closeClassificationReviewDialog,
     enqueueSnackbar,
     resolveCategoryLabel,
-    sendLineToMedicalDictionary,
-    updateLine
+    sendLineToMedicalDictionary
   ]);
 
   const sendClassificationToReviewQueue = useCallback(async () => {
@@ -1470,19 +1470,6 @@ export default function ClaimBatchEntry() {
   const categoriesForReview = useMemo(
     () => medicalCategories.filter((category) => category.active !== false && category.deleted !== true),
     [medicalCategories]
-  );
-
-  const incompatibleContextLines = useMemo(
-    () =>
-      lines
-        .map((line, index) => ({ line, index }))
-        .filter(
-          ({ line }) =>
-            line?.service &&
-            !hasAcceptedCoverageDecision(line) &&
-            !isServiceAllowedForClaimContext(line.service, encounterType)
-        ),
-    [lines, encounterType]
   );
 
   const totals = useMemo(() => {
@@ -1736,16 +1723,6 @@ export default function ClaimBatchEntry() {
         autoHideDuration: 6000
       });
       scrollToLine(invalidQuantityLines[0] - 1);
-      return;
-    }
-
-    if (incompatibleContextLines.length > 0) {
-      const lineNumbers = incompatibleContextLines.map(({ index }) => index + 1).join('، ');
-      enqueueSnackbar(
-        `لا يمكن الحفظ: الخدمات في البنود ${lineNumbers} لا تتوافق مع سياق المطالبة الحالي. احذفها أو أعد اختيار خدمات صالحة لهذا السياق.`,
-        { variant: 'error', autoHideDuration: 7000 }
-      );
-      scrollToLine(incompatibleContextLines[0].index);
       return;
     }
 
@@ -2340,22 +2317,6 @@ export default function ClaimBatchEntry() {
 
             <Divider />
 
-            {incompatibleContextLines.length > 0 && (
-              <Alert
-                severity="error"
-                sx={{
-                  mx: '1.25rem',
-                  mt: 1,
-                  mb: 0,
-                  alignItems: 'center',
-                  '& .MuiAlert-message': { width: '100%', textAlign: 'right' }
-                }}
-              >
-                لا يمكن الحفظ: الخدمات في البنود {incompatibleContextLines.map(({ index }) => index + 1).join('، ')} لا تتوافق مع سياق
-                المطالبة الحالي. احذفها أو أعد اختيار خدمات صالحة لهذا السياق.
-              </Alert>
-            )}
-
             <Box
               sx={{
                 position: 'relative',
@@ -2549,11 +2510,12 @@ export default function ClaimBatchEntry() {
       </Box>
 
       <Dialog open={classificationReview.open} onClose={closeClassificationReviewDialog} fullWidth maxWidth="sm" dir="rtl">
-        <DialogTitle sx={{ fontWeight: 900 }}>مراجعة تصنيف بند الخدمة</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 900 }}>إبلاغ عن تصنيف خدمة غير دقيق</DialogTitle>
         <DialogContent dividers>
           <Stack spacing={2}>
             <Alert severity="info">
-              هذا القرار يخص التصنيف التأميني للبند فقط. الحساب المالي النهائي يبقى من اختصاص محرك التغطية بعد إعادة الحساب.
+              التصنيف المالي لهذه المطالبة يؤخذ من مصدر الخدمة المعتمد في العقد أو القاموس النظامي. هذا الإجراء يرسل اقتراحاً
+              للمراجعة ولا يغيّر حساب المطالبة الحالية.
             </Alert>
 
             <Box>
@@ -2605,24 +2567,23 @@ export default function ClaimBatchEntry() {
               }
               isOptionEqualToValue={(option, value) => String(option.id) === String(value.id)}
               filterOptions={(options, state) => {
-                const query = state.inputValue.trim().toLowerCase();
+                const query = normalizeArabicSearch(state.inputValue.trim());
                 if (!query) return options;
                 return options.filter((category) =>
                   [category.code, category.name, category.nameAr, category.nameEn]
                     .filter(Boolean)
-                    .some((value) => String(value).toLowerCase().includes(query))
+                    .some((value) => normalizeArabicSearch(value).includes(query))
                 );
               }}
               renderInput={(params) => (
-                <TextField {...params} label="تغيير التصنيف عند الحاجة" placeholder="ابحث باسم التصنيف أو الكود..." />
+                <TextField {...params} label="التصنيف المقترح للمراجعة" placeholder="ابحث باسم التصنيف أو الكود..." />
               )}
             />
 
             {activeClassificationCategory && (
               <Alert severity="success" variant="outlined">
-                سيتم اعتماد: {activeClassificationCategory.name}
-                {activeClassificationCategory.code ? ` (${activeClassificationCategory.code})` : ''}، وتسجيل القرار على سطر المطالبة ثم
-                إعادة احتساب التغطية.
+                سيتم إرسال اقتراح: {activeClassificationCategory.name}
+                {activeClassificationCategory.code ? ` (${activeClassificationCategory.code})` : ''} إلى قائمة مراجعة القاموس.
               </Alert>
             )}
           </Stack>
@@ -2639,7 +2600,7 @@ export default function ClaimBatchEntry() {
               onClick={approveClassificationForLine}
               disabled={!classificationReview.selectedCategoryId}
             >
-              اعتماد التصنيف
+              إرسال الاقتراح
             </Button>
           </Stack>
         </DialogActions>

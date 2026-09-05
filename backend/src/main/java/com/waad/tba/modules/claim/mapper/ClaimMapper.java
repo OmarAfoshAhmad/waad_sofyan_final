@@ -35,7 +35,6 @@ import java.util.*;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
 import org.springframework.beans.BeanUtils;
-import org.springframework.security.access.AccessDeniedException;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -339,24 +338,32 @@ public class ClaimMapper {
                                                 : matchedPricingItem.getMedicalCategory().getName();
                         }
 
-                        var currentUser = authorizationService.getCurrentUser();
-                        boolean canOverrideClassification = currentUser != null
-                                        && (authorizationService.isSuperAdmin(currentUser)
-                                                        || authorizationService.isReviewer(currentUser)
-                                                        || authorizationService.canAccessInternalOperations(currentUser));
-                        Long requestedCategoryOverride = lineDto.getServiceCategoryId();
-                        boolean hasCategoryOverride = requestedCategoryOverride != null
-                                        && pricingItemCategoryId != null
-                                        && !Objects.equals(requestedCategoryOverride, pricingItemCategoryId);
-                        if (hasCategoryOverride && !canOverrideClassification) {
-                                throw new AccessDeniedException("لا تملك صلاحية تغيير التصنيف التأميني لبند المطالبة");
+                        /*
+                         * Financial boundary:
+                         * The browser may display a category and may submit legacy category
+                         * fields, but it is no longer allowed to choose the financial
+                         * classification for a claim line.
+                         *
+                         * Source of truth:
+                         * 1) contract-priced service  -> provider_contract_pricing_items.medical_category_id
+                         * 2) manual standard service  -> medical_services.category_id
+                         * 3) pending approved service -> pending final/proposed category
+                         *
+                         * A wrong classification must be corrected in the catalogue/contract
+                         * review workflow, not by mutating a single live claim calculation.
+                         */
+                        Long submittedCategoryId = lineDto.getServiceCategoryId();
+                        Long serviceCatIdForCoverage = pricingItemCategoryId != null ? pricingItemCategoryId : catalogCategoryId;
+                        boolean submittedCategoryIgnored = submittedCategoryId != null
+                                        && serviceCatIdForCoverage != null
+                                        && !Objects.equals(submittedCategoryId, serviceCatIdForCoverage);
+                        if (submittedCategoryIgnored) {
+                                log.warn("Ignoring submitted claim-line category override. pricingItemId={}, submittedCategoryId={}, canonicalCategoryId={}",
+                                                resolvedPricingItemId, submittedCategoryId, serviceCatIdForCoverage);
                         }
 
-                        Long serviceCatIdForCoverage = hasCategoryOverride ? requestedCategoryOverride
-                                        : (pricingItemCategoryId != null ? pricingItemCategoryId : catalogCategoryId);
-                        String serviceCatName = lineDto.getServiceCategoryName();
-                        if (serviceCatName == null && matchedPricingItem != null
-                                        && matchedPricingItem.getMedicalCategory() != null) {
+                        String serviceCatName = null;
+                        if (matchedPricingItem != null && matchedPricingItem.getMedicalCategory() != null) {
                                 serviceCatName = matchedPricingItem.getMedicalCategory().getNameAr() != null
                                                 ? matchedPricingItem.getMedicalCategory().getNameAr()
                                                 : matchedPricingItem.getMedicalCategory().getName();
@@ -457,12 +464,12 @@ public class ClaimMapper {
                                         .serviceCategoryName(serviceCatName)
                                         .originalServiceCategoryId(pricingItemCategoryId)
                                         .originalServiceCategoryName(pricingItemCategoryName)
-                                        .classificationReviewed(hasCategoryOverride)
-                                        .classificationReviewSource(hasCategoryOverride ? "CLAIM_REVIEWER" : null)
-                                        .classificationReviewedBy(hasCategoryOverride ? currentUser.getId() : null)
-                                        .classificationReviewedAt(hasCategoryOverride ? LocalDateTime.now() : null)
-                                        .classificationReviewNote(hasCategoryOverride
-                                                        ? "Reviewer changed claim line category before coverage calculation"
+                                        .classificationReviewed(false)
+                                        .classificationReviewSource(null)
+                                        .classificationReviewedBy(null)
+                                        .classificationReviewedAt(null)
+                                        .classificationReviewNote(submittedCategoryIgnored
+                                                        ? "Submitted claim-line category was ignored; canonical contract/catalog classification was used"
                                                         : null)
                                         .appliedCategoryId(result.getResolvedCategoryId())
                                         .appliedCategoryName(result.getResolvedCategoryId() != null
@@ -473,7 +480,7 @@ public class ClaimMapper {
                                         .requiresPA(result.isRequiresPreApproval())
                                         .coveragePercentSnapshot(result.getCoveragePercent())
                                         .appliedRuleId(result.getAppliedRuleId())
-                                        .appliedContext(claim.getEncounterType() == null ? null : claim.getEncounterType().name())
+                                        .appliedContext(claim.getClaimContextCode())
                                         .timesLimitSnapshot(result.getUsageDetails() == null ? null : result.getUsageDetails().getTimesLimit())
                                         .amountLimitSnapshot(result.getUsageDetails() == null ? null : result.getUsageDetails().getAmountLimit())
                                         .usedAmountSnapshot(result.getUsageDetails() == null ? null : result.getUsageDetails().getUsedAmount())

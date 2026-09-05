@@ -10,18 +10,28 @@ import {
   Typography,
   IconButton,
   alpha,
-  createFilterOptions,
   Button,
   Box
 } from '@mui/material';
 
-const serviceFilter = createFilterOptions({
-  stringify: (opt) => `${opt.serviceCode || opt.code || ''} ${opt.serviceName || opt.name || ''}`,
-  ignoreAccents: true,
-  ignoreCase: true,
-  trim: true,
-  matchFrom: 'any'
-});
+const normalizeArabicSearch = (value = '') =>
+  String(value)
+    .normalize('NFKD')
+    .replace(/[\u064B-\u065F\u0670]/g, '')
+    .replace(/[أإآٱ]/g, 'ا')
+    .replace(/ؤ/g, 'و')
+    .replace(/ئ/g, 'ي')
+    .replace(/ى/g, 'ي')
+    .replace(/ة/g, 'ه')
+    .toLowerCase();
+
+const serviceFilter = (options, state) => {
+  const query = normalizeArabicSearch(state.inputValue || '');
+  if (!query) return options;
+  return options.filter((opt) =>
+    normalizeArabicSearch(`${opt.serviceCode || opt.code || ''} ${opt.serviceName || opt.name || ''} ${opt.label || ''}`).includes(query)
+  );
+};
 import {
   Block as RejectIcon,
   Delete as DeleteIcon,
@@ -456,7 +466,7 @@ export const ClaimLineRow = ({
         <TableCell align="left">
           <Stack direction="row" spacing={0} justifyContent="flex-start" sx={{ '& .MuiIconButton-root': { p: 0.5 } }}>
             {onOpenClassificationReview && (
-              <Tooltip title="مراجعة/اعتماد تصنيف البند أو إرساله لقائمة مراجعة القاموس" arrow>
+              <Tooltip title="إبلاغ عن تصنيف خدمة غير دقيق وإرساله لقائمة مراجعة القاموس" arrow>
                 <span>
                   <IconButton
                     size="small"

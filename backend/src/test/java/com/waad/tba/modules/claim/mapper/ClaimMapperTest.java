@@ -18,21 +18,31 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.waad.tba.modules.claim.dto.ClaimCreateDto;
+import com.waad.tba.modules.claim.dto.ClaimLineDto;
 import com.waad.tba.modules.claim.dto.ClaimViewDto;
+import com.waad.tba.modules.claim.dto.engine.CoverageResult;
 import com.waad.tba.modules.claim.entity.Claim;
 import com.waad.tba.modules.claim.entity.ClaimLine;
 import com.waad.tba.modules.claim.entity.ClaimStatus;
 import com.waad.tba.modules.claim.repository.ClaimBatchRepository;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository;
+import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy;
 import com.waad.tba.modules.employer.entity.Employer;
+import com.waad.tba.modules.medicaltaxonomy.entity.MedicalCategory;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalCategoryRepository;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalServiceRepository;
 import com.waad.tba.modules.member.entity.Member;
+import com.waad.tba.modules.provider.dto.EffectivePriceResponseDto;
+import com.waad.tba.modules.provider.entity.Provider;
 import com.waad.tba.modules.provider.service.ProviderContractService;
 import com.waad.tba.modules.providercontract.repository.ProviderContractPricingItemRepository;
 import com.waad.tba.modules.providercontract.service.EffectiveProviderContractResolver;
 import com.waad.tba.modules.providercontract.entity.ProviderContract;
+import com.waad.tba.modules.providercontract.entity.ProviderContractTerm;
 import com.waad.tba.modules.providercontract.entity.ProviderContractPricingItem;
+import com.waad.tba.modules.providercontract.enums.EncounterType;
+import com.waad.tba.modules.visit.entity.Visit;
 
 /**
  * Regression test for the double-derivation bug: {@code toViewDto} used to
@@ -133,6 +143,75 @@ class ClaimMapperTest {
         assertThat(claim.getPolicyId()).isEqualTo(303L);
         assertThat(claim.getPolicyAssignmentId()).isEqualTo(302L);
         assertThat(claim.getEmployerAssignmentId()).isEqualTo(301L);
+    }
+
+    @Test
+    void claimLineUsesCanonicalPricingItemCategoryAndExactClaimContextIgnoringSubmittedCategory() {
+        LocalDate serviceDate = LocalDate.of(2026, 5, 1);
+        Member member = Member.builder().id(7L).employer(Employer.builder().id(20L).build()).build();
+        Visit visit = Visit.builder().id(44L).member(member).visitType(com.waad.tba.modules.visit.entity.VisitType.INPATIENT).build();
+        Provider provider = Provider.builder().id(8L).name("مزود الاختبار").build();
+        BenefitPolicy policy = BenefitPolicy.builder().id(303L).defaultCoveragePercent(80).build();
+        ProviderContract contract = ProviderContract.builder().id(501L).build();
+        ProviderContractTerm terms = ProviderContractTerm.builder()
+                .id(9001L).discountPercent(BigDecimal.ZERO).discountBeforeRejection(true).build();
+        MedicalCategory canonicalCategory = MedicalCategory.builder()
+                .id(55L).code("CAT-COV-DIAG-FEES").name("أشعة وتحاليل ورسوم أطباء")
+                .nameAr("أشعة وتحاليل ورسوم أطباء").active(true).deleted(false).build();
+        ProviderContractPricingItem pricingItem = ProviderContractPricingItem.builder()
+                .id(700L).contract(contract).serviceCode("PL-LAB").serviceName("فاتورة تحاليل طبية")
+                .contractPrice(new BigDecimal("3200.00")).maxContractPrice(new BigDecimal("3200.00"))
+                .medicalCategory(canonicalCategory).active(true).build();
+
+        when(memberPolicyResolver.resolveFor(member, serviceDate)).thenReturn(Optional.of(policy));
+        when(effectiveContractResolver.resolve(eq(8L), eq(20L), eq(serviceDate)))
+                .thenReturn(new EffectiveProviderContractResolver.ResolvedContract(contract, terms));
+        when(pricingItemRepository.findEffectiveInContractById(501L, 700L, serviceDate))
+                .thenReturn(Optional.of(pricingItem));
+        when(providerContractService.getEffectivePrice(eq(8L), eq(20L), eq("PL-LAB"), eq(serviceDate)))
+                .thenReturn(EffectivePriceResponseDto.builder()
+                        .hasContract(true).pricingItemId(700L)
+                        .contractPrice(new BigDecimal("3200.00"))
+                        .maxContractPrice(new BigDecimal("3200.00")).build());
+        when(coverageEngineService.evaluateLine(any(), any(), any()))
+                .thenReturn(CoverageResult.builder()
+                        .serviceCode("PL-LAB").serviceName("فاتورة تحاليل طبية")
+                        .effectiveUnitPrice(new BigDecimal("3200.00")).effectiveTotal(new BigDecimal("3200.00"))
+                        .companyShare(new BigDecimal("2400.00")).patientShare(new BigDecimal("800.00"))
+                        .coveragePercent(75).resolvedCategoryId(55L).build());
+        when(medicalCategoryRepository.findById(55L)).thenReturn(Optional.of(canonicalCategory));
+
+        ClaimCreateDto dto = ClaimCreateDto.builder()
+                .serviceDate(serviceDate)
+                .encounterType(EncounterType.INPATIENT)
+                .claimContextCode("PREGNANCY_COMPLICATIONS")
+                .lines(List.of(ClaimLineDto.builder()
+                        .pricingItemId(700L)
+                        .serviceCategoryId(999L)
+                        .serviceCode("PL-LAB")
+                        .serviceName("فاتورة تحاليل طبية")
+                        .unitPrice(new BigDecimal("3200.00"))
+                        .quantity(1)
+                        .build()))
+                .build();
+        com.waad.tba.modules.member.service.MemberDatedContext datedContext =
+                new com.waad.tba.modules.member.service.MemberDatedContext(
+                        7L, serviceDate,
+                        com.waad.tba.modules.member.entity.MemberEmployerAssignment.builder().id(301L).build(),
+                        Employer.builder().id(20L).build(),
+                        com.waad.tba.modules.member.entity.MemberPolicyAssignment.builder().id(302L).build(),
+                        policy);
+
+        Claim claim = mapper.toEntity(dto, visit, provider, null, null, datedContext);
+
+        assertThat(claim.getLines()).singleElement().satisfies(line -> {
+            assertThat(line.getServiceCategoryId()).isEqualTo(55L);
+            assertThat(line.getOriginalServiceCategoryId()).isEqualTo(55L);
+            assertThat(line.getAppliedCategoryId()).isEqualTo(55L);
+            assertThat(line.getClassificationReviewed()).isFalse();
+            assertThat(line.getClassificationReviewNote()).contains("ignored");
+            assertThat(line.getAppliedContext()).isEqualTo("PREGNANCY_COMPLICATIONS");
+        });
     }
 
     @Test
