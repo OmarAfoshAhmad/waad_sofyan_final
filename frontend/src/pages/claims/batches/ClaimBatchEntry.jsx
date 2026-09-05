@@ -1482,7 +1482,7 @@ export default function ClaimBatchEntry() {
   const currentClassificationCategory = resolveCategoryLabel(resolveLineCategoryId(activeClassificationLine));
 
   const categoriesForReview = useMemo(
-    () => medicalCategories.filter((category) => category.active !== false && category.deleted !== true),
+    () => medicalCategories.filter(medicalCategoriesService.isCanonicalCoverageCategory),
     [medicalCategories]
   );
 
