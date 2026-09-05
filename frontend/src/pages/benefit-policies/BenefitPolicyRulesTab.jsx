@@ -83,6 +83,17 @@ import { lookupMedicalServices } from 'services/api/medical-services.service';
 import { getBenefitPoliciesSelector, checkPolicyEditability, getBenefitPolicyGapReport } from 'services/api/benefit-policies.service';
 import { getActiveClaimContexts } from 'services/api/claim-contexts.service';
 
+const normalizeArabicSearch = (value = '') =>
+  String(value)
+    .normalize('NFKD')
+    .replace(/[\u064B-\u065F\u0670]/g, '')
+    .replace(/[أإآٱ]/g, 'ا')
+    .replace(/ؤ/g, 'و')
+    .replace(/ئ/g, 'ي')
+    .replace(/ى/g, 'ي')
+    .replace(/ة/g, 'ه')
+    .toLowerCase();
+
 // ═══════════════════════════════════════════════════════════════════════════
 // RULE FORM COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1651,7 +1662,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
       const linkedDaysLimits = bucketLinks.map((link) => link.bucket?.daysLimit).filter((value) => value !== null && value !== undefined);
       const uniqueDaysLimits = [...new Set(linkedDaysLimits)];
       const daysLimitLabel = uniqueDaysLimits.length > 0 ? uniqueDaysLimits.map((value) => `${value} يوم`).join('، ') : null;
-      const searchable = `${code} ${nameAr} ${nameEn} ${typeLabel} ${parentNameAr} ${linkSearch}`.toLowerCase();
+      const searchable = normalizeArabicSearch(`${code} ${nameAr} ${nameEn} ${typeLabel} ${parentNameAr} ${linkSearch}`);
 
       // Normalize active state defensively (backend may return boolean/string/number)
       const activeRaw = rule.active;
@@ -1739,7 +1750,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
           groupSource: true,
           groupMembers,
           bucket: primaryBucket,
-          searchable: `${group.code} ${group.nameAr} مجموعة منافع ${memberNames.join(' ')}`.toLowerCase(),
+          searchable: normalizeArabicSearch(`${group.code} ${group.nameAr} مجموعة منافع ${memberNames.join(' ')}`),
           changedAt: group.updatedAt || null
         };
       });
@@ -1768,7 +1779,8 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
   }, [normalizedRules, gapRuleIds]);
 
   const filteredRules = useMemo(() => {
-    const query = ruleSearch.trim().toLowerCase();
+    const query = normalizeArabicSearch(ruleSearch.trim());
+    const queryTokens = query.split(/\s+/).filter(Boolean);
     let statusFiltered = normalizedRules.filter((rule) => {
       if (viewMode === 'DELETED') return rule.isDeleted || rule.isActive === false;
       return !rule.isDeleted && rule.isActive !== false;
@@ -1788,7 +1800,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
       statusFiltered = statusFiltered.filter((r) => r.appliedBucketLinks?.length === 0 || gapRuleIds.has(r.id));
     }
 
-    const filtered = !query ? statusFiltered : statusFiltered.filter((rule) => rule.searchable.includes(query));
+    const filtered = queryTokens.length === 0 ? statusFiltered : statusFiltered.filter((rule) => queryTokens.every((token) => rule.searchable.includes(token)));
 
     // Default ordering: keep visual order stable unless user explicitly sorts.
     if (!sortBy) {

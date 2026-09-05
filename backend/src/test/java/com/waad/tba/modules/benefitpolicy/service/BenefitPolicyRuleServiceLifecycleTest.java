@@ -3,10 +3,17 @@ package com.waad.tba.modules.benefitpolicy.service;
 import com.waad.tba.common.exception.BusinessRuleException;
 import com.waad.tba.modules.benefitpolicy.dto.BenefitPolicyRuleResponseDto;
 import com.waad.tba.modules.benefitpolicy.dto.BenefitPolicyRuleUpdateDto;
+import com.waad.tba.modules.benefitpolicy.entity.BenefitGroup;
+import com.waad.tba.modules.benefitpolicy.entity.BenefitLimitBucket;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicyRule;
+import com.waad.tba.modules.benefitpolicy.entity.BenefitRuleBucket;
+import com.waad.tba.modules.benefitpolicy.enums.AggregationMode;
+import com.waad.tba.modules.benefitpolicy.enums.CountingMethod;
+import com.waad.tba.modules.benefitpolicy.enums.LimitPeriodType;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRuleRepository;
+import com.waad.tba.modules.benefitpolicy.repository.BenefitRuleBucketRepository;
 import com.waad.tba.modules.claimcontext.repository.ClaimContextDefinitionRepository;
 import com.waad.tba.modules.claimcontext.entity.ClaimContextDefinition;
 import com.waad.tba.modules.medicaltaxonomy.entity.MedicalCategory;
@@ -21,6 +28,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.Optional;
+import java.util.List;
+import java.math.BigDecimal;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -40,6 +49,7 @@ class BenefitPolicyRuleServiceLifecycleTest {
     @Mock MedicalCategoryRepository categoryRepository;
     @Mock CoverageDecisionService coverageDecisionService;
     @Mock ClaimContextDefinitionRepository claimContextRepository;
+    @Mock BenefitRuleBucketRepository ruleBucketRepository;
     @Mock EntityManager em;
     @Mock Query query;
 
@@ -130,6 +140,31 @@ class BenefitPolicyRuleServiceLifecycleTest {
     }
 
     @Test
+    void restoreReactivatesConfiguredIndividualLimitBucket() {
+        BenefitPolicyRule deleted = rule(16L, false, true);
+        BenefitGroup group = BenefitGroup.builder().id(30L).policy(deleted.getBenefitPolicy())
+                .code("AUTO-BEN-RULE-16").aggregationMode(AggregationMode.INDIVIDUAL).active(false).build();
+        BenefitLimitBucket bucket = BenefitLimitBucket.builder().id(31L).policy(deleted.getBenefitPolicy())
+                .benefitGroup(group).code("AUTO-BEN-LIMIT-RULE-16").nameAr("تحاليل")
+                .contextType(EncounterType.OUTPATIENT).periodType(LimitPeriodType.POLICY_PERIOD)
+                .countingMethod(CountingMethod.EACH_UNIT).amountLimit(new BigDecimal("3000"))
+                .active(false).build();
+        BenefitRuleBucket link = BenefitRuleBucket.builder().rule(deleted).bucket(bucket).build();
+
+        when(ruleRepository.findById(16L)).thenReturn(Optional.of(deleted));
+        when(ruleBucketRepository.findByRuleIdOrderByConsumptionOrder(16L)).thenReturn(List.of(link));
+        when(ruleRepository.save(deleted)).thenReturn(deleted);
+
+        service().restore(16L);
+
+        assertThat(deleted.isDeleted()).isFalse();
+        assertThat(deleted.isActive()).isTrue();
+        assertThat(group.isActive()).isTrue();
+        assertThat(bucket.isActive()).isTrue();
+        verify(ruleRepository).save(deleted);
+    }
+
+    @Test
     void responseDtoExposesLifecycleStatusForActiveDisabledAndDeletedRules() {
         assertThat(BenefitPolicyRuleResponseDto.fromEntity(rule(20L, true, false)).getLifecycleStatus()).isEqualTo("ACTIVE");
         assertThat(BenefitPolicyRuleResponseDto.fromEntity(rule(21L, false, false)).getLifecycleStatus()).isEqualTo("DISABLED");
@@ -175,7 +210,7 @@ class BenefitPolicyRuleServiceLifecycleTest {
 
     private BenefitPolicyRuleService service() {
         return new BenefitPolicyRuleService(ruleRepository, policyRepository, categoryRepository,
-                coverageDecisionService, claimContextRepository, em);
+                coverageDecisionService, claimContextRepository, ruleBucketRepository, em);
     }
 
     private void financialReferenceCount(Long count) {

@@ -87,6 +87,19 @@ const PREGNANCY_RULE = {
   coveragePercent: 100
 };
 
+const DIAG_FEES_RULE = {
+  id: 3,
+  ruleType: 'CATEGORY',
+  medicalCategoryId: 30,
+  medicalCategoryCode: 'CAT-COV-DIAG-FEES',
+  medicalCategoryName: 'أشعة وتحاليل ورسوم أطباء',
+  active: true,
+  deleted: false,
+  encounterType: 'OUTPATIENT',
+  claimContextCode: 'OUTPATIENT',
+  coveragePercent: 75
+};
+
 const CLAIM_CONTEXTS = [
   { code: 'OUTPATIENT', nameAr: 'عيادات خارجية', baseEncounterType: 'OUTPATIENT' },
   { code: 'INPATIENT', nameAr: 'إيواء', baseEncounterType: 'INPATIENT' },
@@ -154,6 +167,23 @@ describe('BenefitPolicyRulesTab: real context filter and gap-badge interaction',
     await user.click(within(listbox).getByText(/^مضاعفات الحمل/));
 
     expect(screen.getByText('خدمات الولادة المعقدة')).toBeInTheDocument();
+    expect(screen.queryByText('علاج طبيعي')).not.toBeInTheDocument();
+  });
+
+  it('normalizes Arabic hamzas and letter variants while searching rules', async () => {
+    const user = userEvent.setup();
+    renderTab({
+      rules: [OUTPATIENT_RULE, DIAG_FEES_RULE],
+      structure: { groups: [], buckets: [], links: [] },
+      gapReport: { rulesWithoutBucket: [], bucketsWithoutRule: [], rulesWithUnknownContext: [] }
+    });
+
+    expect(await screen.findByText('أشعة وتحاليل ورسوم أطباء')).toBeInTheDocument();
+
+    const search = screen.getByPlaceholderText('بحث بالرمز أو الاسم أو النوع...');
+    await user.type(search, 'اشعه اطباء');
+
+    expect(screen.getByText('أشعة وتحاليل ورسوم أطباء')).toBeInTheDocument();
     expect(screen.queryByText('علاج طبيعي')).not.toBeInTheDocument();
   });
 

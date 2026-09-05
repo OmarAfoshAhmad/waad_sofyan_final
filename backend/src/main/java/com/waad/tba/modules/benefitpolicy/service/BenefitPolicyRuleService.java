@@ -3,10 +3,13 @@ package com.waad.tba.modules.benefitpolicy.service;
 import com.waad.tba.common.exception.BusinessRuleException;
 import com.waad.tba.common.exception.ResourceNotFoundException;
 import com.waad.tba.modules.benefitpolicy.dto.*;
+import com.waad.tba.modules.benefitpolicy.entity.BenefitLimitBucket;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicyRule;
+import com.waad.tba.modules.benefitpolicy.entity.BenefitRuleBucket;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRuleRepository;
+import com.waad.tba.modules.benefitpolicy.repository.BenefitRuleBucketRepository;
 import com.waad.tba.modules.claimcontext.repository.ClaimContextDefinitionRepository;
 import com.waad.tba.modules.medicaltaxonomy.entity.MedicalCategory;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalCategoryRepository;
@@ -48,6 +51,7 @@ public class BenefitPolicyRuleService {
     private final MedicalCategoryRepository categoryRepository;
     private final CoverageDecisionService coverageDecisionService;
     private final ClaimContextDefinitionRepository claimContextRepository;
+    private final BenefitRuleBucketRepository ruleBucketRepository;
     private final jakarta.persistence.EntityManager em;
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -814,10 +818,28 @@ public class BenefitPolicyRuleService {
 
         rule.setDeleted(false);
         rule.setActive(true);
+        reactivateIndividualLimitIfConfigured(ruleId);
         BenefitPolicyRule saved = ruleRepository.save(rule);
 
         log.info("Restored rule {} from trash", ruleId);
         return BenefitPolicyRuleResponseDto.fromEntity(saved);
+    }
+
+    private void reactivateIndividualLimitIfConfigured(Long ruleId) {
+        for (BenefitRuleBucket link : ruleBucketRepository.findByRuleIdOrderByConsumptionOrder(ruleId)) {
+            BenefitLimitBucket bucket = link.getBucket();
+            if (bucket == null || bucket.getCode() == null || !bucket.getCode().startsWith("AUTO-BEN-LIMIT-")) {
+                continue;
+            }
+            boolean hasConfiguredLimit = bucket.getAmountLimit() != null || bucket.getTimesLimit() != null || bucket.getDaysLimit() != null;
+            if (!hasConfiguredLimit) {
+                continue;
+            }
+            if (bucket.getBenefitGroup() != null) {
+                bucket.getBenefitGroup().setActive(true);
+            }
+            bucket.setActive(true);
+        }
     }
 
     /**
