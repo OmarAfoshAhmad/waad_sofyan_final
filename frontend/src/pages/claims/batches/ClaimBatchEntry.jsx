@@ -155,6 +155,11 @@ const hasMeaningfulDraftData = (draft) => {
   return Array.isArray(draft.lines) && draft.lines.some((l) => l?.serviceName || l?.serviceCode || l?.service);
 };
 
+const hasAcceptedCoverageDecision = (line) =>
+  Boolean(line?.service || line?.serviceName) &&
+  line?.notCovered !== true &&
+  Number(line?.coveragePercent || 0) > 0;
+
 // أنماط حقول الجدول القابلة للتعديل
 const inlineSx = {
   '& .MuiInput-root::before': { display: 'none' },
@@ -1474,7 +1479,12 @@ export default function ClaimBatchEntry() {
     () =>
       lines
         .map((line, index) => ({ line, index }))
-        .filter(({ line }) => line?.service && !isServiceAllowedForClaimContext(line.service, encounterType)),
+        .filter(
+          ({ line }) =>
+            line?.service &&
+            !hasAcceptedCoverageDecision(line) &&
+            !isServiceAllowedForClaimContext(line.service, encounterType)
+        ),
     [lines, encounterType]
   );
 

@@ -83,6 +83,7 @@ describe('claim batch entry safety boundary', () => {
 
   it('blocks rather than merely warns about services from another claim context', () => {
     expect(entrySource).toContain('if (incompatibleContextLines.length > 0)');
+    expect(entrySource).toContain('!hasAcceptedCoverageDecision(line)');
     expect(entrySource).toContain('لا يمكن الحفظ: الخدمات في البنود');
     expect(entrySource).not.toContain('وسيتم احتسابها حسب قواعد التغطية المطابقة فقط');
   });
