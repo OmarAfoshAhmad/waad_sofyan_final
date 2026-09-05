@@ -175,7 +175,30 @@ const PreApprovalView = () => {
   // Navigate to Provider Portal claims submission pre-filled with this pre-auth data
   const handleConvertToClaim = () => {
     if (!preApproval) return;
-    navigate('/provider/claims/submit', {
+    const serviceDate =
+      preApproval.serviceDate || preApproval.visitDate || preApproval.requestedServiceDate || preApproval.approvedAt?.slice?.(0, 10) || '';
+    const serviceDay = serviceDate ? new Date(serviceDate) : null;
+    const params = new URLSearchParams({
+      fromPreAuth: 'true',
+      preAuthId: String(preApproval.id || ''),
+      preAuthNumber: preApproval.preAuthNumber || '',
+      visitId: String(preApproval.visitId || ''),
+      memberId: String(preApproval.memberId || preApproval.member?.id || ''),
+      memberName: preApproval.memberName || preApproval.member?.fullName || '',
+      cardNumber: preApproval.memberCardNumber || preApproval.member?.cardNumber || '',
+      providerId: String(preApproval.providerId || ''),
+      employerId: String(preApproval.employerId || preApproval.member?.employerId || ''),
+      serviceDate,
+      month: serviceDay && !Number.isNaN(serviceDay.getTime()) ? String(serviceDay.getMonth() + 1) : '',
+      year: serviceDay && !Number.isNaN(serviceDay.getTime()) ? String(serviceDay.getFullYear()) : '',
+      visitType: preApproval.encounterType || preApproval.visitType || 'OUTPATIENT'
+    });
+
+    Array.from(params.entries()).forEach(([key, value]) => {
+      if (!value) params.delete(key);
+    });
+
+    navigate(`/claims/batches/entry?${params.toString()}`, {
       state: {
         fromPreAuth: true,
         preAuthId: preApproval.id,
@@ -526,7 +549,6 @@ const PreApprovalView = () => {
             </Stack>
           </MainCard>
         </Grid>
-
       </Grid>
 
       <DocumentPreviewDrawer
