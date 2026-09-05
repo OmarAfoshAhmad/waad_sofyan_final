@@ -2,8 +2,12 @@ package com.waad.tba.security;
 
 import com.waad.tba.modules.claim.entity.Claim;
 import com.waad.tba.modules.claim.repository.ClaimRepository;
+import com.waad.tba.modules.employer.entity.Employer;
 import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.modules.member.repository.MemberRepository;
+import com.waad.tba.modules.provider.entity.Provider;
+import com.waad.tba.modules.provider.repository.ProviderAllowedEmployerRepository;
+import com.waad.tba.modules.provider.repository.ProviderRepository;
 import com.waad.tba.modules.rbac.entity.User;
 import com.waad.tba.modules.rbac.repository.UserRepository;
 import com.waad.tba.modules.visit.entity.Visit;
@@ -44,6 +48,12 @@ class ProviderIsolationSecurityTest {
 
     @Mock
     private MemberRepository memberRepository;
+
+    @Mock
+    private ProviderRepository providerRepository;
+
+    @Mock
+    private ProviderAllowedEmployerRepository providerAllowedEmployerRepository;
 
     @InjectMocks
     private DataAccessService dataAccessService;
@@ -135,5 +145,63 @@ class ProviderIsolationSecurityTest {
 
         boolean canAccess = dataAccessService.canAccessVisit(providerBUser, 7001L);
         assertFalse(canAccess, "SECURITY VIOLATION: Provider B staff accessed Provider A visit!");
+    }
+
+    @Test
+    @DisplayName("Provider staff CAN read members from an allowed employer for claim entry")
+    void providerCanReadMemberWhenEmployerIsAllowed() {
+        Employer employer = new Employer();
+        employer.setId(501L);
+        Member member = new Member();
+        member.setId(8801L);
+        member.setEmployer(employer);
+        Provider provider = Provider.builder()
+                .id(10L)
+                .name("Provider A")
+                .licenseNumber("PA-10")
+                .providerType(Provider.ProviderType.HOSPITAL)
+                .active(true)
+                .allowAllEmployers(false)
+                .build();
+
+        when(roleService.isSuperAdmin(providerAUser)).thenReturn(false);
+        when(roleService.canAccessInternalOperations(providerAUser)).thenReturn(false);
+        when(roleService.isEmployerAdmin(providerAUser)).thenReturn(false);
+        when(roleService.isProvider(providerAUser)).thenReturn(true);
+        when(memberRepository.findById(8801L)).thenReturn(Optional.of(member));
+        when(providerRepository.findById(10L)).thenReturn(Optional.of(provider));
+        when(providerAllowedEmployerRepository.hasActiveAccessToEmployer(10L, 501L)).thenReturn(true);
+
+        assertTrue(dataAccessService.canAccessMember(providerAUser, 8801L),
+                "Provider staff should be able to enter claims for members in allowed employers");
+    }
+
+    @Test
+    @DisplayName("Provider staff CANNOT read members from an unauthorized employer")
+    void providerCannotReadMemberWhenEmployerIsNotAllowed() {
+        Employer employer = new Employer();
+        employer.setId(777L);
+        Member member = new Member();
+        member.setId(8802L);
+        member.setEmployer(employer);
+        Provider provider = Provider.builder()
+                .id(10L)
+                .name("Provider A")
+                .licenseNumber("PA-10X")
+                .providerType(Provider.ProviderType.HOSPITAL)
+                .active(true)
+                .allowAllEmployers(false)
+                .build();
+
+        when(roleService.isSuperAdmin(providerAUser)).thenReturn(false);
+        when(roleService.canAccessInternalOperations(providerAUser)).thenReturn(false);
+        when(roleService.isEmployerAdmin(providerAUser)).thenReturn(false);
+        when(roleService.isProvider(providerAUser)).thenReturn(true);
+        when(memberRepository.findById(8802L)).thenReturn(Optional.of(member));
+        when(providerRepository.findById(10L)).thenReturn(Optional.of(provider));
+        when(providerAllowedEmployerRepository.hasActiveAccessToEmployer(10L, 777L)).thenReturn(false);
+
+        assertFalse(dataAccessService.canAccessMember(providerAUser, 8802L),
+                "Provider staff must not read members outside their provider-employer links");
     }
 }

@@ -91,8 +91,13 @@ class StandardServicesSeededByV215MigrationTest {
                     .isEqualTo(1);
             assertThat(count(statement, "select count(*) from provider_service_defaults "
                     + "where provider_type = 'LAB' and service_code = 'SYS-LAB-INVOICE' and auto_apply = true and active = true"))
-                    .as("new lab providers receive the invoice service by default; other provider types can be provisioned manually")
+                    .as("new lab providers receive the invoice service by default")
                     .isEqualTo(1);
+            assertThat(count(statement, "select count(*) from provider_service_defaults "
+                    + "where provider_type in ('HOSPITAL', 'CLINIC') and service_code = 'SYS-LAB-INVOICE' "
+                    + "and auto_apply = true and active = true"))
+                    .as("clinical providers also receive the lab invoice service as a professional/manual invoice line")
+                    .isEqualTo(2);
 
             assertThat(count(statement, "select count(*) from rbac_permissions "
                     + "where code = 'PROVIDER_STANDARD_SERVICES_MANAGE'"))

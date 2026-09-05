@@ -222,7 +222,7 @@ public interface ProviderContractPricingItemRepository extends JpaRepository<Pro
                      "AND p.id = :pricingItemId " +
                      "AND p.active = true " +
                      "AND p.contract.active = true " +
-                     "AND p.contract.status = 'ACTIVE' " +
+                     "AND p.contract.status <> 'DRAFT' " +
                      "AND p.contract.startDate <= :date " +
                      "AND (p.contract.endDate IS NULL OR p.contract.endDate >= :date) " +
                      "AND (p.effectiveFrom IS NULL OR p.effectiveFrom <= :date) " +
@@ -263,7 +263,7 @@ public interface ProviderContractPricingItemRepository extends JpaRepository<Pro
                      "WHERE p.contract.provider.id = :providerId " +
                      "AND p.active = true " +
                      "AND p.contract.active = true " +
-                     "AND p.contract.status = 'ACTIVE' " +
+                     "AND p.contract.status <> 'DRAFT' " +
                      "AND p.serviceCode = :serviceCode " +
                      "AND p.contract.startDate <= :date " +
                      "AND (p.contract.endDate IS NULL OR p.contract.endDate >= :date) " +
@@ -284,7 +284,7 @@ public interface ProviderContractPricingItemRepository extends JpaRepository<Pro
                      "AND p.contract.pricingScope = 'EMPLOYER_SPECIFIC' " +
                      "AND p.active = true " +
                      "AND p.contract.active = true " +
-                     "AND p.contract.status = 'ACTIVE' " +
+                     "AND p.contract.status <> 'DRAFT' " +
                      "AND p.serviceCode = :serviceCode " +
                      "AND p.contract.startDate <= :date " +
                      "AND (p.contract.endDate IS NULL OR p.contract.endDate >= :date) " +
@@ -305,7 +305,7 @@ public interface ProviderContractPricingItemRepository extends JpaRepository<Pro
                      "AND p.contract.employer IS NULL " +
                      "AND p.active = true " +
                      "AND p.contract.active = true " +
-                     "AND p.contract.status = 'ACTIVE' " +
+                     "AND p.contract.status <> 'DRAFT' " +
                      "AND p.serviceCode = :serviceCode " +
                      "AND p.contract.startDate <= :date " +
                      "AND (p.contract.endDate IS NULL OR p.contract.endDate >= :date) " +
@@ -452,7 +452,7 @@ public interface ProviderContractPricingItemRepository extends JpaRepository<Pro
                      "WHERE p.contract.provider.id = :providerId " +
                      "AND p.active = true " +
                      "AND p.contract.active = true " +
-                     "AND p.contract.status = 'ACTIVE' " +
+                     "AND p.contract.status <> 'DRAFT' " +
                      "AND p.contract.startDate <= :date " +
                      "AND (p.contract.endDate IS NULL OR p.contract.endDate >= :date) " +
                      "AND (p.effectiveFrom IS NULL OR p.effectiveFrom <= :date) " +

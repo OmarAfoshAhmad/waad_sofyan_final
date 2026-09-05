@@ -68,6 +68,26 @@ class ProviderContractPriceVersioningIntegrationTest extends PostgresIntegration
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
+    @Test
+    void serviceDateLookupStillFindsPricingAfterContractLifecycleExpires() {
+        ProviderContract contract = createContract();
+        contract.setStartDate(LocalDate.of(2025, 1, 1));
+        contract.setEndDate(LocalDate.of(2025, 12, 31));
+        contractRepository.saveAndFlush(contract);
+
+        savePrice(contract, "SRV-HIST", "خدمة تاريخية", "55.00",
+                LocalDate.of(2025, 1, 1), LocalDate.of(2026, 1, 1));
+        contract = contractRepository.findById(contract.getId()).orElseThrow();
+        contract.setStatus(ContractStatus.EXPIRED);
+        contractRepository.saveAndFlush(contract);
+
+        assertThat(pricingRepository.findEffectivePricingByCode(
+                contract.getProvider().getId(), "SRV-HIST", LocalDate.of(2025, 5, 1)))
+                .as("historical claim pricing follows service date, not today's lifecycle badge")
+                .get().extracting(ProviderContractPricingItem::getContractPrice)
+                .isEqualTo(new BigDecimal("55.00"));
+    }
+
     private ProviderContract createContract() {
         String suffix = UUID.randomUUID().toString().substring(0, 8);
         Provider provider = providerRepository.save(Provider.builder()

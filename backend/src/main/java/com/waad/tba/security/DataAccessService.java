@@ -4,6 +4,8 @@ import com.waad.tba.modules.claim.entity.Claim;
 import com.waad.tba.modules.claim.repository.ClaimRepository;
 import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.modules.member.repository.MemberRepository;
+import com.waad.tba.modules.provider.repository.ProviderAllowedEmployerRepository;
+import com.waad.tba.modules.provider.repository.ProviderRepository;
 import com.waad.tba.modules.rbac.entity.User;
 import com.waad.tba.modules.visit.entity.Visit;
 import com.waad.tba.modules.visit.repository.VisitRepository;
@@ -22,6 +24,8 @@ public class DataAccessService {
     private final MemberRepository memberRepository;
     private final ClaimRepository claimRepository;
     private final VisitRepository visitRepository;
+    private final ProviderRepository providerRepository;
+    private final ProviderAllowedEmployerRepository providerAllowedEmployerRepository;
 
     public boolean canAccessMember(User user, Long memberId) {
         if (user == null || memberId == null) {
@@ -58,6 +62,31 @@ public class DataAccessService {
                 return false;
             }
             log.debug("✅ canAccessMember: ALLOWED - user={} employer matches", user.getUsername());
+            return true;
+        }
+
+        if (roleService.isProvider(user)) {
+            if (user.getProviderId() == null) {
+                log.warn("❌ canAccessMember: DENIED - PROVIDER user {} has no providerId", user.getUsername());
+                return false;
+            }
+            if (member.getEmployer() == null || member.getEmployer().getId() == null) {
+                log.warn("❌ canAccessMember: DENIED - member {} has no employer for provider access check", memberId);
+                return false;
+            }
+
+            boolean allowed = providerRepository.findById(user.getProviderId())
+                    .filter(provider -> Boolean.TRUE.equals(provider.getActive()))
+                    .map(provider -> Boolean.TRUE.equals(provider.getAllowAllEmployers())
+                            || providerAllowedEmployerRepository.hasActiveAccessToEmployer(
+                                    provider.getId(), member.getEmployer().getId()))
+                    .orElse(false);
+            if (!allowed) {
+                log.warn("❌ canAccessMember: DENIED - provider user {} attempted to access member {} from unauthorized employer {}",
+                        user.getUsername(), memberId, member.getEmployer().getId());
+                return false;
+            }
+            log.debug("✅ canAccessMember: ALLOWED - user={} provider has employer access", user.getUsername());
             return true;
         }
 
