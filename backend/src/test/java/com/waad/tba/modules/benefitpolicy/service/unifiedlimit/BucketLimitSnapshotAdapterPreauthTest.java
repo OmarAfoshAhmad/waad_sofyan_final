@@ -106,6 +106,37 @@ class BucketLimitSnapshotAdapterPreauthTest {
         assertThat(s.remaining()).isEqualByComparingTo("8");
     }
 
+    /**
+     * P1.12.5 (U6) — the SAME bucket, the SAME balances (configured=20,
+     * committed=10, allActiveReserved=6, own=4 of that 6), through the SAME
+     * adapter code, differing ONLY in which build method (and therefore
+     * which {@code ReservationEvaluationMode}) is called: this is the whole
+     * reason the three modes exist, made explicit as a single test rather
+     * than left to be inferred from two separate ones.
+     */
+    @Test
+    @DisplayName("U6 — mode alone flips the outcome: PREAUTHORIZED_CLAIM adds the own hold back (8), "
+            + "PREAUTH_RESERVATION does not (4) -- same bucket, same balances, same adapter")
+    void modeAloneDeterminesWhetherTheOwnHoldIsAddedBack() {
+        stubTimesOnlyBucket(937L, 20, 10);
+        when(consumptionRepository.sumReservedTimes(MEMBER_ID, 937L, PERIOD_START, PERIOD_END)).thenReturn(6);
+        var ownRow = ownRow(937L, PERIOD_START, PERIOD_END, 4);
+        when(consumptionRepository.aggregateOwnActiveReservation(MEMBER_ID, PREAUTH_ID, ASSIGNMENT_ID, List.of(937L)))
+                .thenReturn(List.of(ownRow));
+
+        var claimConversion = adapter.buildForPreauthorizedClaim(POLICY_ID, RULE_ID, MEMBER_ID, SERVICE_DATE,
+                EncounterType.OUTPATIENT, null, PREAUTH_ID, ASSIGNMENT_ID);
+        var newReservation = adapter.buildForPreauthReservation(POLICY_ID, RULE_ID, MEMBER_ID, SERVICE_DATE,
+                EncounterType.OUTPATIENT);
+
+        assertThat(claimConversion.snapshots().get(0).remaining())
+                .as("PREAUTHORIZED_CLAIM: own hold (4) added back -> min(actualRemaining=10, reservable=4+own=4)=8")
+                .isEqualByComparingTo("8");
+        assertThat(newReservation.evaluation().snapshots().get(0).remaining())
+                .as("PREAUTH_RESERVATION: no own-hold concept at all -> actualRemaining=10 - allReserved=6 = 4")
+                .isEqualByComparingTo("4");
+    }
+
     @Test
     @DisplayName("B2 — a hold on a DIFFERENT bucket must not be released for this one")
     void b2DifferentBucketNotReleased() {

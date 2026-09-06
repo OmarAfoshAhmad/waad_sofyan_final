@@ -8,17 +8,21 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.TestPropertySource;
 
 import com.waad.tba.TbaWaadApplication;
 import com.waad.tba.common.exception.BusinessRuleException;
 import com.waad.tba.modules.preauthorization.entity.PreAuthorization;
 import com.waad.tba.modules.preauthorization.repository.PreAuthorizationRepository;
 import com.waad.tba.support.PostgresIntegrationTestBase;
+
+import jakarta.persistence.EntityManagerFactory;
 
 /**
  * The decision builder, checked against the financial constitution's own
@@ -33,11 +37,13 @@ import com.waad.tba.support.PostgresIntegrationTestBase;
  */
 @SpringBootTest(classes = TbaWaadApplication.class)
 @ActiveProfiles("test")
+@TestPropertySource(properties = "spring.jpa.properties.hibernate.generate_statistics=true")
 class PreAuthorizationDecisionBuilderIntegrationTest extends PostgresIntegrationTestBase {
 
     @Autowired private PreAuthorizationDecisionBuilder builder;
     @Autowired private PreAuthorizationRepository preauthRepository;
     @Autowired private JdbcTemplate jdbc;
+    @Autowired private EntityManagerFactory entityManagerFactory;
 
     private static String suffix() {
         return UUID.randomUUID().toString().substring(0, 8);
@@ -905,6 +911,96 @@ class PreAuthorizationDecisionBuilderIntegrationTest extends PostgresIntegration
         assertThat(bucketHold.reservedTimesBefore()).isEqualTo(2);
         assertThat(bucketHold.actualRemainingTimesBefore()).isEqualTo(7);
         assertThat(bucketHold.reservableTimesBefore()).isEqualTo(5);
+    }
+
+    /**
+     * P1.12.5 — a baseline record, not a claim of "no N+1": how the number
+     * of statements {@code build()} issues scales with line count. A bucket
+     * genuinely re-fetched per line would show up here as a per-line jump
+     * in the SAME ballpark as the per-line fixture cost itself (each line
+     * is its own service+rule lookup+pricing, already O(n) legitimately);
+     * this only rules out a MULTIPLICATIVE blow-up, not the absence of
+     * every possible per-line query.
+     */
+    @Test
+    @DisplayName("P1.12.5 — statement count for build() scales roughly linearly with line count, "
+            + "not super-linearly (baseline, not a claim of zero N+1)")
+    void statementCountScalesLinearlyNotSuperLinearlyWithLineCount() {
+        Scenario oneLine = scenarioWithLines(1);
+        org.hibernate.stat.Statistics statistics = entityManagerFactory
+                .unwrap(org.hibernate.SessionFactory.class).getStatistics();
+
+        statistics.clear();
+        builder.build(oneLine.preauthId(), 1);
+        long statementsForOneLine = statistics.getPrepareStatementCount();
+
+        Scenario tenLines = scenarioWithLines(10);
+        statistics.clear();
+        builder.build(tenLines.preauthId(), 1);
+        long statementsForTenLines = statistics.getPrepareStatementCount();
+
+        System.out.println("[P1.12.5] PreAuth build() statement count: 1 line=" + statementsForOneLine
+                + ", 10 lines=" + statementsForTenLines);
+        assertThat(statementsForTenLines)
+                .as("no unexpected super-linear regression: 10 lines must not cost anywhere near 10x "
+                        + "the per-line overhead on top of the fixed cost already paid once for 1 line "
+                        + "(%d statements for 1 line, %d for 10)", statementsForOneLine, statementsForTenLines)
+                .isLessThanOrEqualTo(statementsForOneLine * 10);
+    }
+
+    /** N lines, each its own medical service, all under the SAME rule/bucket. */
+    private Scenario scenarioWithLines(int lineCount) {
+        String s = suffix();
+        Long employerId = jdbc.queryForObject("INSERT INTO employers (code, name) VALUES ('DBN-" + s
+                + "', 'Decision Co " + s + "') RETURNING id", Long.class);
+        Long policyId = jdbc.queryForObject("INSERT INTO benefit_policies (name, policy_code, employer_id, "
+                + "annual_limit, default_coverage_percent, start_date, end_date, status, active) VALUES ('DPN-" + s
+                + "', 'DPOLN-" + s + "', " + employerId + ", 1000000, 80, "
+                + "CURRENT_DATE - 60, CURRENT_DATE + 365, 'ACTIVE', true) RETURNING id", Long.class);
+        Long memberId = jdbc.queryForObject("INSERT INTO members (employer_id, full_name, benefit_policy_id, "
+                + "card_number, barcode, status, active) VALUES (" + employerId + ", 'Decision Member', "
+                + policyId + ", 'DCN" + s + "', 'DCN" + s + "', 'ACTIVE', true) RETURNING id", Long.class);
+        jdbc.update("INSERT INTO member_policy_assignments (member_id, policy_id, assignment_start_date, "
+                + "assignment_source) VALUES (?, ?, CURRENT_DATE - 60, 'MANUAL')", memberId, policyId);
+        jdbc.update("INSERT INTO member_employer_assignments (member_id, employer_id, assignment_start_date, "
+                + "assignment_reason, assignment_source) VALUES (?, ?, CURRENT_DATE - 60, "
+                + "'test enrollment', 'MANUAL')", memberId, employerId);
+
+        Long categoryId = jdbc.queryForObject("INSERT INTO medical_categories (code, name, active) "
+                + "VALUES ('DCATN-" + s + "', 'Decision Category', true) RETURNING id", Long.class);
+        Long ruleId = jdbc.queryForObject("INSERT INTO benefit_policy_rules (benefit_policy_id, "
+                + "medical_category_id, encounter_type, claim_context_code, coverage_percent, active, deleted) VALUES ("
+                + policyId + ", " + categoryId + ", 'OUTPATIENT', 'OUTPATIENT', 80, true, false) RETURNING id",
+                Long.class);
+        Long groupId = jdbc.queryForObject("INSERT INTO benefit_groups (policy_id, code, name_ar, "
+                + "context_type, aggregation_mode) VALUES (" + policyId + ", 'DGN-" + s
+                + "', 'مجموعة', 'OUTPATIENT', 'INDIVIDUAL') RETURNING id", Long.class);
+        Long bucketId = jdbc.queryForObject("INSERT INTO benefit_limit_buckets (policy_id, benefit_group_id, "
+                + "code, name_ar, amount_limit, period_type, counting_method, consumption_basis, "
+                + "benefit_scope_type, context_type, active) VALUES ("
+                + policyId + ", " + groupId + ", 'DBN-" + s + "', 'وعاء', 1000000"
+                + ", 'ANNUAL', 'EACH_LINE', 'COMPANY_SHARE', 'CATEGORY', 'OUTPATIENT', true) RETURNING id",
+                Long.class);
+        jdbc.update("INSERT INTO benefit_rule_buckets (rule_id, bucket_id) VALUES (?, ?)", ruleId, bucketId);
+
+        Long preauthId = jdbc.queryForObject("INSERT INTO pre_authorizations (member_id, policy_id, "
+                + "service_category_id, status, request_date, expected_service_date, created_at, updated_at) "
+                + "VALUES (" + memberId + ", " + policyId + ", " + categoryId
+                + ", 'SUBMITTED', now(), CURRENT_DATE + 14, now(), now()) RETURNING id", Long.class);
+
+        for (int i = 0; i < lineCount; i++) {
+            Long serviceId = jdbc.queryForObject("INSERT INTO medical_services (code, name, category_id, active) "
+                    + "VALUES ('DSRVN-" + s + "-" + i + "', 'Decision Service " + i + "', " + categoryId
+                    + ", true) RETURNING id", Long.class);
+            jdbc.update("INSERT INTO pre_authorization_lines (pre_authorization_id, provider_service_id, "
+                    + "medical_service_id, medical_category_id, provider_service_code, service_name, "
+                    + "contract_price, requested_amount, coverage_percentage, encounter_type) VALUES (?, "
+                    + serviceId + ", " + serviceId + ", " + categoryId + ", ?, ?, "
+                    + "100.00, 100.00, 80, 'OUTPATIENT')",
+                    preauthId, "SVCN-" + s + "-" + i, "Service " + s + "-" + i);
+        }
+
+        return new Scenario(preauthId, memberId, policyId, bucketId);
     }
 
     /**

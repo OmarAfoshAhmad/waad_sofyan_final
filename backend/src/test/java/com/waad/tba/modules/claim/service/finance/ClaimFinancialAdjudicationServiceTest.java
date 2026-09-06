@@ -224,4 +224,47 @@ class ClaimFinancialAdjudicationServiceTest {
         assertThat(line2.getUnifiedLimitDecision().approvedDays())
                 .as("the second line, same bucket + same service date, must not spend a second day").isZero();
     }
+
+    /**
+     * P1.12.5 (U3) — the SAME numbers P1.12.3's PA3a proved for PreAuth
+     * (bucket amount 1000/800 committed, times 4/1 committed, requested 3
+     * units at 400 total -> approvedQuantity=1), reproduced on the Claims
+     * side through the identical {@link UnifiedLimitResolver}. Same-bucket
+     * AMOUNT+TIMES cross-axis whole-unit constraint is ONE canonical
+     * behavior, not a PreAuth-only rule: a pre-authorization that promised 3
+     * units this same bucket's own balance can only fund 1 of would leave
+     * the claim it converts into honoring only 1 -- exactly the
+     * cross-mode split P1.12 exists to remove.
+     */
+    @Test
+    @DisplayName("U3 — same-bucket AMOUNT+TIMES cross-axis whole-unit constraint: PreAuth's PA3a numbers, on Claims")
+    void sameBucketAmountAndTimesApplyTheCrossAxisWholeUnitConstraintOnClaimsToo() {
+        ClaimLine line = new ClaimLine();
+        line.setAppliedRuleId(900L);
+        line.setCoveragePercentSnapshot(80);
+        line.setRequestedTotal(new BigDecimal("400.00"));
+        line.setContractUnitPrice(new BigDecimal("133.33"));
+        line.setQuantity(3);
+        Claim claim = claimWith(line);
+
+        BucketLimitSnapshot amountAxis = new BucketLimitSnapshot(950L, 700L, LimitAxisType.AMOUNT,
+                CountingMethod.EACH_UNIT, BigDecimal.valueOf(1000), BigDecimal.valueOf(800), BigDecimal.ZERO,
+                BigDecimal.valueOf(200), PERIOD_START, PERIOD_END);
+        BucketLimitSnapshot timesAxis = new BucketLimitSnapshot(950L, 700L, LimitAxisType.TIMES,
+                CountingMethod.EACH_UNIT, BigDecimal.valueOf(4), BigDecimal.valueOf(1), BigDecimal.ZERO,
+                BigDecimal.valueOf(3), PERIOD_START, PERIOD_END);
+        UnifiedLimitInput input = new UnifiedLimitInput(700L, 900L, 500L, SERVICE_DATE, EncounterType.OUTPATIENT,
+                3, 0, new BigDecimal("133.33"), new BigDecimal("400.00"),
+                null, ReservationEvaluationMode.NORMAL, null, null);
+        UnifiedLimitDecision decision = UnifiedLimitResolver.resolve(input, List.of(amountAxis, timesAxis));
+        assertThat(decision.approvedQuantity())
+                .as("200 remaining / (400/3 per unit) affords only 1 whole unit, tighter than the 3 the "
+                        + "occurrence ceiling alone would allow")
+                .isEqualTo(1);
+        line.setUnifiedLimitDecision(decision);
+
+        service.adjudicate(claim);
+
+        assertThat(line.getApprovedQuantity()).isEqualTo(1);
+    }
 }

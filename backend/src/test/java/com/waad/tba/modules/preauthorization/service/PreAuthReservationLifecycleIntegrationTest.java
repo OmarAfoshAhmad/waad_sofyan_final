@@ -7,11 +7,13 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.UUID;
 
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 import com.waad.tba.TbaWaadApplication;
 import com.waad.tba.support.PostgresIntegrationTestBase;
@@ -36,6 +38,7 @@ class PreAuthReservationLifecycleIntegrationTest extends PostgresIntegrationTest
 
     @Autowired private PreAuthReservationLedgerService service;
     @Autowired private JdbcTemplate jdbc;
+    @MockitoSpyBean private PreAuthorizationDecisionBuilder decisionBuilder;
 
     private static String suffix() {
         return UUID.randomUUID().toString().substring(0, 8);
@@ -146,6 +149,44 @@ class PreAuthReservationLifecycleIntegrationTest extends PostgresIntegrationTest
         // member's limit forever.
         assertThat(jdbc.queryForObject("SELECT expiry_date FROM pre_authorizations WHERE id = ?",
                 LocalDate.class, sc.preauthId())).isEqualTo(LocalDate.now().plusDays(30));
+    }
+
+    /**
+     * P1.12.5 (U10) — {@code approveAndReserve} calls {@code decisionBuilder.build}
+     * TWICE (preview, then again under the bucket locks): "the second run
+     * is the decision that counts" only means something if the two runs
+     * genuinely agree when nothing changed between them. Captures both real
+     * return values via the spy and compares them directly, rather than
+     * inferring agreement from the final persisted numbers alone.
+     */
+    @Test
+    @DisplayName("U10 — preview and the locked final build produce the identical decision when nothing changes")
+    void previewAndLockedFinalAgreeWhenNothingChangesBetweenThem() {
+        Scenario sc = scenario("1000", 5, "300.00", 80, 1);
+
+        java.util.List<PreAuthorizationDecision> captured = new java.util.ArrayList<>();
+        org.mockito.Mockito.doAnswer(invocation -> {
+            PreAuthorizationDecision result = (PreAuthorizationDecision) invocation.callRealMethod();
+            captured.add(result);
+            return result;
+        }).when(decisionBuilder).build(org.mockito.ArgumentMatchers.eq(sc.preauthId()),
+                org.mockito.ArgumentMatchers.anyInt());
+
+        service.approveAndReserve(sc.preauthId(), 0L, "reviewer");
+
+        assertThat(captured).as("preview, then the locked re-run").hasSize(2);
+        PreAuthorizationDecision preview = captured.get(0);
+        PreAuthorizationDecision locked = captured.get(1);
+
+        assertThat(locked.outcome()).isEqualTo(preview.outcome());
+        assertThat(locked.companyShareTotal()).isEqualByComparingTo(preview.companyShareTotal());
+        assertThat(locked.lines().get(0).approvedQuantity()).isEqualTo(preview.lines().get(0).approvedQuantity());
+        assertThat(locked.lines().get(0).coveredTimes()).isEqualTo(preview.lines().get(0).coveredTimes());
+        assertThat(locked.lines().get(0).limitHolds())
+                .as("same target identities, not just the same count")
+                .extracting(PreAuthorizationDecision.LimitHold::limitSemanticKey)
+                .containsExactlyInAnyOrderElementsOf(preview.lines().get(0).limitHolds().stream()
+                        .map(PreAuthorizationDecision.LimitHold::limitSemanticKey).toList());
     }
 
     @Test
