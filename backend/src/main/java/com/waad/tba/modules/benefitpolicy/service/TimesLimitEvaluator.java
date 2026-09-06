@@ -83,4 +83,28 @@ public class TimesLimitEvaluator {
             case PER_VISIT, PER_DAY -> alreadyCounted.add(new CountedKey(bucketId, serviceDate)) ? 1 : 0;
         };
     }
+
+    /**
+     * The STATELESS core (P1.12.3): no batch dedup, no bucket, no service
+     * date -- for a caller whose {@code approvedQuantity} was ALREADY gated
+     * once-per-batch UPSTREAM, before the limit decision ever ran (Claims'
+     * {@code CoverageEngineService.requestedQuantity()}, PreAuth's own
+     * mirror of it). Translating that already-gated number into occurrences
+     * a SECOND time must never re-apply the dedup -- doing so against the
+     * SAME {@code alreadyCounted} set the upstream gate just populated would
+     * find the key already present and silently return 0 instead of 1,
+     * exactly the double-counting bug this overload exists to make
+     * impossible. EACH_UNIT still divides; every other method is exactly 0
+     * or 1, whatever {@code approvedQuantity}'s raw number already is.
+     */
+    public int occurrencesFor(CountingMethod countingMethod, int approvedQuantity) {
+        if (approvedQuantity <= 0) {
+            return 0;
+        }
+        CountingMethod method = countingMethod == null ? CountingMethod.EACH_LINE : countingMethod;
+        return switch (method) {
+            case EACH_UNIT -> approvedQuantity;
+            case EACH_LINE, PER_VISIT, PER_DAY -> 1;
+        };
+    }
 }

@@ -16,16 +16,14 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.waad.tba.common.exception.BusinessRuleException;
-import com.waad.tba.modules.benefitpolicy.entity.BenefitLimitBucket;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy;
-import com.waad.tba.modules.benefitpolicy.enums.BenefitScopeType;
-import com.waad.tba.modules.benefitpolicy.enums.ConsumptionBasis;
-import com.waad.tba.modules.benefitpolicy.enums.CountingMethod;
+import com.waad.tba.modules.benefitpolicy.service.unifiedlimit.BucketLimitSnapshotAdapter;
+import com.waad.tba.modules.benefitpolicy.service.unifiedlimit.ReservationEvaluationMode;
+import com.waad.tba.modules.benefitpolicy.service.unifiedlimit.UnifiedLimitDecision;
+import com.waad.tba.modules.benefitpolicy.service.unifiedlimit.UnifiedLimitInput;
+import com.waad.tba.modules.benefitpolicy.service.unifiedlimit.UnifiedLimitResolver;
+import com.waad.tba.modules.benefitpolicy.service.unifiedlimit.UnifiedLimitStatus;
 import com.waad.tba.modules.providercontract.enums.EncounterType;
-import com.waad.tba.modules.benefitpolicy.repository.BenefitLimitBucketRepository;
-import com.waad.tba.modules.benefitpolicy.service.DivisibleLimitSplitter;
-import com.waad.tba.modules.benefitpolicy.service.EffectiveLimitResolver;
-import com.waad.tba.modules.benefitpolicy.service.LimitBalanceReader;
 import com.waad.tba.modules.claim.service.finance.WaadFinancialEngine;
 import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.modules.member.repository.MemberRepository;
@@ -63,13 +61,10 @@ public class PreAuthorizationDecisionBuilder {
     private final MemberRepository memberRepository;
     private final MemberPolicyResolver memberPolicyResolver;
     private final ProviderContractTermRepository contractTermRepository;
-    private final EffectiveLimitResolver effectiveLimitResolver;
-    private final LimitBalanceReader limitBalanceReader;
-    private final BenefitLimitBucketRepository bucketRepository;
+    private final BucketLimitSnapshotAdapter bucketLimitSnapshotAdapter;
+    private final PreAuthLimitHoldMapper preAuthLimitHoldMapper;
     private final WaadFinancialEngine financialEngine;
     private final com.waad.tba.modules.benefitpolicy.repository.BenefitBucketConsumptionRepository consumptionRepository;
-    private final com.waad.tba.modules.benefitpolicy.service.ApplicableCountingLimitResolver countingLimitResolver;
-    private final com.waad.tba.modules.benefitpolicy.service.TimesLimitEvaluator timesLimitEvaluator;
     private final com.waad.tba.modules.benefitpolicy.service.CoverageDecisionService coverageDecisionService;
 
     private static final BigDecimal HUNDRED = new BigDecimal("100.00");
@@ -273,32 +268,50 @@ public class PreAuthorizationDecisionBuilder {
                             + "لا يمكن تحديد الأوعية المنطبقة.");
         }
 
-        // Every limit that applies to this line, including the ones that will
-        // not bind -- a decision must remain explainable ("why did this stop
-        // at 500, and where did the others stand?").
-        List<EffectiveLimitResolver.EffectiveLimit> limits = effectiveLimitResolver.resolve(
+        // ── the canonical limit decision (P1.12.3) ──────────────────────
+        // The SAME three-stage pipeline P1.12.2 proved in isolation, now the
+        // ONLY source of what applies, what is available, and what is
+        // approved -- EffectiveLimitResolver/ApplicableLimitResolver/
+        // ApplicableCountingLimitResolver/LimitBalanceReader.read are never
+        // called from here again.
+        var evaluation = bucketLimitSnapshotAdapter.buildForPreauthReservation(
                 policy.getId(), benefitRuleId, member.getId(), serviceDate, encounterType);
-        LimitBalanceReader.BalanceSet balances = limitBalanceReader.read(member.getId(), limits, null);
+        if (evaluation.evaluation().blocked()) {
+            // P1.12.3: the ONE intentional behavior change from the legacy
+            // path (P1.12.1's PA7) -- a structural block (a corrupted
+            // bucket/policy relationship, or a days-limited bucket P1.12.1's
+            // PA4 established stays unsupported) now fails the same way
+            // every other fail-closed guard in this method already does: a
+            // safe, translated BusinessRuleException, never the raw
+            // IllegalStateException the retired resolver stack used to leak.
+            throw new BusinessRuleException(translateBlockReason(evaluation.evaluation().blockReason()));
+        }
 
-        // The binding constraint is reservableAvailable, NOT actualRemaining:
-        // a hold placed by another approval has already spoken for part of the
-        // balance even though nothing has been consumed yet. Deciding against
-        // actualRemaining is exactly how the same limit gets promised twice.
-        BigDecimal minimumReservable = balances.limits().stream()
-                .map(LimitBalanceReader.LimitBalance::reservableAvailable)
-                .filter(Objects::nonNull)
-                .min(BigDecimal::compareTo)
-                .orElse(null);
+        // effectiveUnitPrice is genuinely PER UNIT (UnifiedLimitResolver's
+        // own "money buys whole units" cross-check, DivisibleLimitSplitter's
+        // contract) -- contractPrice itself is the LINE's full total
+        // (P1.11.4's finding), never a per-unit price.
+        BigDecimal effectiveUnitPrice = approvedQuantity > 0
+                ? contractPrice.divide(BigDecimal.valueOf(approvedQuantity), 2, RoundingMode.HALF_UP)
+                : contractPrice;
+        int resolverRequestedQuantity = requestedQuantityForResolver(
+                evaluation.evaluation().snapshots(), approvedQuantity, serviceDate, countedOnce);
+        UnifiedLimitInput input = new UnifiedLimitInput(policy.getId(), benefitRuleId, member.getId(), serviceDate,
+                encounterType, resolverRequestedQuantity, 0, effectiveUnitPrice, contractPrice, null,
+                ReservationEvaluationMode.PREAUTH_RESERVATION, null, null);
+        UnifiedLimitDecision decision = UnifiedLimitResolver.resolve(input, evaluation.evaluation().snapshots());
 
-        WaadFinancialEngine.LimitMode limitMode = minimumReservable == null
+        WaadFinancialEngine.LimitMode limitMode = decision.status() == UnifiedLimitStatus.UNLIMITED
                 ? WaadFinancialEngine.LimitMode.UNLIMITED
                 : WaadFinancialEngine.LimitMode.LIMITED;
+        BigDecimal bindingAvailableLimit = limitMode == WaadFinancialEngine.LimitMode.LIMITED
+                ? decision.bindingAvailableAmount().max(BigDecimal.ZERO) : null;
 
         WaadFinancialEngine.Result result = financialEngine.evaluate(new WaadFinancialEngine.Input(
                 requested,
                 contractPrice,
                 limitMode,
-                minimumReservable,
+                bindingAvailableLimit,
                 coveragePercent,
                 terms == null ? BigDecimal.ZERO : terms.getDiscountPercent(),
                 terms != null && Boolean.TRUE.equals(terms.getDiscountBeforeRejection()),
@@ -317,68 +330,28 @@ public class PreAuthorizationDecisionBuilder {
                 requestedQuantity));
 
         // ── the occurrence dimension ────────────────────────────────────
-        // A ceiling on OCCURRENCES constrains the decision independently of
-        // the money, and the two are never compared: min() across a visit
-        // count and a currency amount is meaningless.
-        //
-        // It is applied to what the REVIEWER approved, and never reduces it:
-        // a service authorised for 4 units stays authorised for 4 even when
-        // the policy covers only 2. The other 2 become the patient's, exactly
-        // as an amount above the ceiling does.
-        rejectUnsupportedDayLimit(balances);
-        // The counting ceilings come from their OWN resolver. The monetary
-        // resolver correctly declines to report a bucket that caps only
-        // visits -- it has no amount to contribute -- and taking it as the
-        // sole source is what let two approvals each hold the last visit.
-        //
-        // The two dimensions are joined only by bucketId. Nothing is summed
-        // across them: a visit count and a currency amount are not the same
-        // kind of number.
-        List<BenefitLimitBucket> countingBuckets = countingLimitResolver.resolve(benefitRuleId);
-        Map<Long, Integer> requiredTimesByBucket = new LinkedHashMap<>();
-        for (BenefitLimitBucket bucket : countingBuckets) {
-            requiredTimesByBucket.put(bucket.getId(),
-                    timesLimitEvaluator.occurrencesFor(bucket, approvedQuantity, countedOnce, serviceDate));
-        }
+        // The reviewer's authorisation is never reduced by the ceiling: a
+        // service authorised for 4 units stays authorised for 4 even when
+        // the policy covers only 2 -- decision.approvedQuantity() already
+        // encodes exactly that (input.requestedQuantity() WAS the reviewer's
+        // approvedQuantity above). No occurrence axis at all means nothing
+        // was ever capped, matching the legacy shape exactly (coveredTimes
+        // defaulted to 0 there too when no counting bucket existed).
+        boolean hasTimesAxis = evaluation.evaluation().snapshots().stream()
+                .anyMatch(s -> s.limitType() == com.waad.tba.modules.benefitpolicy.service.unifiedlimit.LimitAxisType.TIMES);
+        int coveredTimes = hasTimesAxis ? decision.approvedQuantity() : 0;
+        int limitExcessTimes = hasTimesAxis ? decision.refusedQuantity() : 0;
 
-        int requiredTimes = requiredTimesByBucket.values().stream()
-                .max(Integer::compareTo).orElse(0);
-        Integer reservableTimes = countingBuckets.isEmpty() ? null
-                : countingBuckets.stream()
-                        .map(bucket -> countingLimitResolver.reservableTimes(member.getId(), bucket, policy, serviceDate))
-                        .min(Integer::compareTo)
-                        .orElse(null);
-
-        int coveredTimes = reservableTimes == null
-                ? requiredTimes
-                : Math.min(requiredTimes, Math.max(0, reservableTimes));
-        int limitExcessTimes = Math.max(0, requiredTimes - coveredTimes);
-
-        // ONE reservable company share for the line. Recorded against each
-        // applicable scope below -- never added across them: a line mapped to a
-        // service bucket, its group, its parent and the general ceiling holds
-        // one amount that four scopes each measure, not four amounts.
+        // ONE reservable company share for the line, and the eligible amount
+        // an ELIGIBLE_AMOUNT bucket measures instead -- UnifiedLimitResolver
+        // already folded any occurrence-driven money reduction into
+        // bindingAvailableAmount (its own DivisibleLimitSplitter step), so
+        // result.insurerFinalPayment()/insideLimit() need no further
+        // adjustment here the way the legacy path's separate post-hoc split
+        // used to require.
         BigDecimal companyShare = scaled(result.insurerFinalPayment());
         BigDecimal patientShare = scaled(result.patientTotalResponsibility());
-
-        // Storing reservedTimes without changing the money would let the
-        // insurer pay for occurrences the policy does not cover.
-        if (limitExcessTimes > 0) {
-            // Same split DivisibleLimitSplitter applies in claims
-            // (CoverageEngineService): only EACH_UNIT is divisible. The
-            // difference from claims stays exactly here -- coveredTimes comes
-            // from a reservation-availability check (reservableTimes), not a
-            // committed-usage balance -- never in how the money is split
-            // once coveredTimes/requiredTimes are known.
-            boolean divisible = requiredTimes > 0 && countingBuckets.stream().anyMatch(
-                    b -> b.getCountingMethod() == CountingMethod.EACH_UNIT);
-            DivisibleLimitSplitter.UnitSplit split = divisible
-                    ? new DivisibleLimitSplitter.UnitSplit(coveredTimes, limitExcessTimes)
-                    : new DivisibleLimitSplitter.UnitSplit(0, requiredTimes);
-            BigDecimal payable = DivisibleLimitSplitter.coveredAmountFor(companyShare, split);
-            patientShare = scaled(patientShare.add(companyShare.subtract(payable)));
-            companyShare = payable;
-        }
+        BigDecimal eligibleAmount = scaled(Optional.ofNullable(result.insideLimit()).orElse(result.settlementBase()));
 
         // What the policy WOULD have paid had the ceiling not intervened.
         // Reporting only the post-ceiling figure is what makes an exhausted
@@ -397,88 +370,9 @@ public class PreAuthorizationDecisionBuilder {
                         .multiply(BigDecimal.valueOf(requestedQuantity - approvedQuantity))
                         .divide(BigDecimal.valueOf(requestedQuantity), 2, RoundingMode.HALF_UP));
 
-        List<PreAuthorizationDecision.LimitHold> holds = new ArrayList<>();
-        for (LimitBalanceReader.LimitBalance balance : balances.limits()) {
-            var definition = balance.limit().definition();
-
-            // What THIS scope measures. A bucket that counts the eligible
-            // amount does not count the company share, and holding the wrong
-            // quantity would leave the hold and the later claim consumption
-            // measuring different things -- so the release at conversion would
-            // not cancel what the claim then commits.
-            Measure measure = measureFor(definition.bucketId(), companyShare, result, 1);
-
-            // A ceiling that measures no money holds none. Writing an amount
-            // against it would assert a monetary limit that does not exist.
-            BigDecimal heldAmount = balance.limit().effectiveLimit() == null
-                    ? null : measure.amount();
-
-            // A bucket may cap BOTH money and occurrences. The two are
-            // recorded side by side, never added: they answer different
-            // questions and are measured in different units.
-            Integer heldTimes = balance.timesLimit() == null ? null : coveredTimes;
-
-            boolean binding = minimumReservable != null
-                    && balance.reservableAvailable() != null
-                    && balance.reservableAvailable().compareTo(minimumReservable) == 0;
-
-            holds.add(new PreAuthorizationDecision.LimitHold(
-                    definition.semanticKey(),
-                    definition.benefitScopeType() == BenefitScopeType.POLICY_GENERAL
-                            ? "POLICY_GENERAL" : "BUCKET",
-                    definition.bucketId(),
-                    definition.policyId(),
-                    definition.periodType(),
-                    definition.periodStart(),
-                    definition.periodEnd(),
-                    scaled(balance.limit().effectiveLimit()),
-                    scaled(balance.committed()),
-                    scaled(balance.reserved()),
-                    scaled(balance.actualRemaining()),
-                    scaled(balance.reservableAvailable()),
-                    balance.timesLimit(), balance.committedTimes(), balance.reservedTimes(),
-                    balance.actualRemainingTimes(), balance.reservableTimes(),
-                    measure.basis(), measure.unit(),
-                    heldAmount, heldTimes, measure.days(),
-                    binding));
-        }
-
-        // A bucket that caps ONLY occurrences never appears in the monetary
-        // balances, so it would otherwise produce no hold at all -- which is
-        // exactly how two approvals could each take the last visit. It gets
-        // its own row, carrying the occurrence dimension and no money.
-        Set<Long> alreadyHeld = holds.stream()
-                .map(PreAuthorizationDecision.LimitHold::bucketId)
-                .filter(Objects::nonNull)
-                .collect(java.util.stream.Collectors.toSet());
-
-        for (BenefitLimitBucket bucket : countingBuckets) {
-            if (alreadyHeld.contains(bucket.getId())) {
-                continue; // a mixed bucket already has its row; both dimensions ride on it
-            }
-            var period = countingLimitResolver.periodFor(bucket, policy, serviceDate);
-            int reservable = countingLimitResolver.reservableTimes(
-                    member.getId(), bucket, policy, serviceDate);
-            int wanted = requiredTimesByBucket.getOrDefault(bucket.getId(), 0);
-            int held = Math.min(wanted, reservable);
-
-            holds.add(new PreAuthorizationDecision.LimitHold(
-                    "BUCKET:" + bucket.getId(), "BUCKET", bucket.getId(), policy.getId(),
-                    bucket.getPeriodType().name(), period.start(), period.end(),
-                    // No monetary dimension: this ceiling does not measure
-                    // money. reservedBefore stays a real zero rather than
-                    // null -- the column is NOT NULL, and "no money held" is
-                    // a true statement about a bucket that holds no money.
-                    null, null, java.math.BigDecimal.ZERO, null, null,
-                    bucket.getTimesLimit(),
-                    bucket.getTimesLimit() - reservable, 0,
-                    reservable, reservable,
-                    // No monetary basis and no monetary unit: this ceiling
-                    // counts visits.
-                    null, null,
-                    null, held, null,
-                    held < wanted));
-        }
+        List<PreAuthorizationDecision.LimitHold> holds = preAuthLimitHoldMapper.map(decision,
+                evaluation.evaluation().items(), evaluation.measures(), companyShare, eligibleAmount,
+                policy.getId());
 
         return new PreAuthorizationDecision.Line(
                 line.getId(), line.getProviderServiceId(), line.getProviderServiceCode(), line.getServiceName(),
@@ -502,67 +396,64 @@ public class PreAuthorizationDecisionBuilder {
                 List.copyOf(holds));
     }
 
-    /** A scope's own measure of the single line decision, in its own unit. */
-    private record Measure(String basis, PreAuthorizationDecision.ReservedUnit unit,
-            BigDecimal amount, Integer times, Integer days) {}
-
     /**
-     * What a given scope will record for this line. One decision, but each
-     * scope measures it independently: money for an amount ceiling,
-     * occurrences for a visit limit, days for a stay limit. Mirrors what the
-     * claim ledger later consumes for the same bucket, so that releasing the
-     * hold and committing the actual consumption cancel out instead of
-     * leaving a residue.
-     *
-     * These are never summed or compared across scopes -- a visit count and a
-     * currency amount are not the same kind of number.
+     * P1.12.3: mirrors {@code CoverageEngineService.requestedQuantity()} /
+     * {@code ClaimFinancialAdjudicationService}'s own private helper of the
+     * same name EXACTLY -- an indivisible counting method (EACH_LINE always,
+     * PER_VISIT/PER_DAY once per batch) must reach
+     * {@code UnifiedLimitResolver} as AT MOST ONE occurrence, never the raw
+     * requested quantity; only EACH_UNIT is genuinely divisible. Without
+     * this, a PER_VISIT bucket's raw {@code remaining} (a VISIT count) is
+     * compared directly against a multi-unit quantity request -- a unit
+     * mismatch that refuses the whole line instead of counting one visit.
      */
-    private Measure measureFor(Long bucketId, BigDecimal companyShare, WaadFinancialEngine.Result result,
-            int quantity) {
-        if (bucketId == null) {
-            // The general ceiling measures the insurer's money.
-            return new Measure("COMPANY_SHARE", PreAuthorizationDecision.ReservedUnit.CURRENCY,
-                    companyShare, null, null);
+    private int requestedQuantityForResolver(
+            List<com.waad.tba.modules.benefitpolicy.service.unifiedlimit.BucketLimitSnapshot> snapshots,
+            int approvedQuantity,
+            LocalDate serviceDate,
+            Set<com.waad.tba.modules.benefitpolicy.service.TimesLimitEvaluator.CountedKey> countedOnce) {
+        var primaryTimesSnapshot = snapshots.stream()
+                .filter(s -> s.limitType() == com.waad.tba.modules.benefitpolicy.service.unifiedlimit.LimitAxisType.TIMES)
+                .findFirst();
+        if (primaryTimesSnapshot.isEmpty()) {
+            return approvedQuantity;
         }
-        ConsumptionBasis basis = bucketRepository.findById(bucketId)
-                .map(BenefitLimitBucket::getConsumptionBasis)
-                .orElse(ConsumptionBasis.COMPANY_SHARE);
-
-        return switch (basis) {
-            case COMPANY_SHARE -> new Measure("COMPANY_SHARE",
-                    PreAuthorizationDecision.ReservedUnit.CURRENCY, companyShare, null, null);
-            // The claim ledger consumes (total - limitRefused) for such a
-            // bucket, which at pre-authorization time is the part of the line
-            // that fits inside the ceiling.
-            case ELIGIBLE_AMOUNT -> new Measure("ELIGIBLE_AMOUNT",
-                    PreAuthorizationDecision.ReservedUnit.CURRENCY,
-                    scaled(Optional.ofNullable(result.insideLimit()).orElse(result.settlementBase())),
-                    null, null);
-        };
+        var snapshot = primaryTimesSnapshot.get();
+        var method = snapshot.countingMethod() != null ? snapshot.countingMethod()
+                : com.waad.tba.modules.benefitpolicy.enums.CountingMethod.EACH_LINE;
+        if (method == com.waad.tba.modules.benefitpolicy.enums.CountingMethod.EACH_UNIT) {
+            return approvedQuantity;
+        }
+        if (method == com.waad.tba.modules.benefitpolicy.enums.CountingMethod.PER_VISIT
+                || method == com.waad.tba.modules.benefitpolicy.enums.CountingMethod.PER_DAY) {
+            boolean alreadyThisBatch = !countedOnce.add(
+                    new com.waad.tba.modules.benefitpolicy.service.TimesLimitEvaluator.CountedKey(
+                            snapshot.bucketId(), serviceDate));
+            return approvedQuantity <= 0 ? 0 : (alreadyThisBatch ? 0 : 1);
+        }
+        return approvedQuantity <= 0 ? 0 : 1; // EACH_LINE
     }
 
-
     /**
-     * A day limit counts DISTINCT SERVICE DATES, and a pre-authorization
-     * carries a single expected date with no admission/discharge behind it.
-     * Reserving one day from one date would understate a multi-day stay;
-     * treating quantity as days would invent data; ignoring the limit would
-     * let it be overdrawn. All three are worse than stopping.
+     * P1.12.3: translates a canonical {@code BLOCKED} reason into the SAME
+     * safe, Arabic, non-technical message the legacy path already used for
+     * DAYS (word-for-word, so nothing user-facing changes there) -- and a
+     * new one for a policy mismatch, which legacy code never phrased safely
+     * at all (it leaked a raw {@code IllegalStateException} instead,
+     * P1.12.1's PA7 finding). Fails closed on an unrecognized reason rather
+     * than ever surfacing the technical code itself to a caller.
      */
-    private void rejectUnsupportedDayLimit(LimitBalanceReader.BalanceSet balances) {
-        boolean hasDayLimit = balances.limits().stream()
-                .map(b -> b.limit().definition().bucketId())
-                .filter(Objects::nonNull)
-                .flatMap(id -> bucketRepository.findById(id).stream())
-                .anyMatch(bucket -> bucket.getDaysLimit() != null);
-
-        if (hasDayLimit) {
-            throw new BusinessRuleException(
-                    "الوعاء المنطبق يحمل حد أيام، والموافقة المسبقة لا تحمل جدول أيام "
-                            + "(تاريخ خدمة متوقع واحد بلا تاريخ دخول/خروج) يمكن حجز الحد منه.");
+    private String translateBlockReason(String blockReason) {
+        if (blockReason != null && blockReason.startsWith("PREAUTH_DAY_LIMIT_UNSUPPORTED")) {
+            return "الوعاء المنطبق يحمل حد أيام، والموافقة المسبقة لا تحمل جدول أيام "
+                    + "(تاريخ خدمة متوقع واحد بلا تاريخ دخول/خروج) يمكن حجز الحد منه.";
         }
+        if (blockReason != null && blockReason.startsWith("BUCKET_POLICY_MISMATCH")) {
+            return "تعذر تحديد الأوعية المنطبقة على هذا البند بسبب تعارض في إعدادات السياسة. "
+                    + "يرجى التواصل مع الدعم الفني.";
+        }
+        return "تعذر تقييم حدود المنفعة لهذا البند. يرجى التواصل مع الدعم الفني.";
     }
-
 
     private Long requiredCategoryId(PreAuthorizationLine line) {
         if (line.getMedicalCategoryId() == null) {

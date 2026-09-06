@@ -130,7 +130,7 @@ class PreAuthCanonicalReservationPathTest {
         BigDecimal eligibleAmount = Optional.ofNullable(financial.insideLimit()).orElse(financial.settlementBase());
 
         List<PreAuthorizationDecision.LimitHold> holds = mapper.map(decision, evaluation.evaluation().items(),
-                evaluation.measures(), companyShare, eligibleAmount, SERVICE_DATE, new HashSet<>());
+                evaluation.measures(), companyShare, eligibleAmount, POLICY_ID);
         return new Outcome(false, null, holds, decision);
     }
 

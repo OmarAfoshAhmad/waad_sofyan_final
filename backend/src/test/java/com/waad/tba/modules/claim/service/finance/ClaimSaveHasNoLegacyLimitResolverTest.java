@@ -15,6 +15,7 @@ import com.waad.tba.modules.benefitpolicy.service.EffectiveLimitResolver;
 import com.waad.tba.modules.benefitpolicy.service.LimitBalanceReader;
 import com.waad.tba.modules.benefitpolicy.service.unifiedlimit.BucketLimitSnapshotAdapter;
 import com.waad.tba.modules.preauthorization.service.PreAuthLimitHoldMapper;
+import com.waad.tba.modules.preauthorization.service.PreAuthorizationDecisionBuilder;
 
 /**
  * P1.6.x architectural proof: {@link ClaimFinancialAdjudicationService} (the
@@ -93,6 +94,23 @@ class ClaimSaveHasNoLegacyLimitResolverTest {
             + "PreAuth-specific limit-resolution stack")
     void mapperHasNoLegacyPreauthResolutionDependency() {
         assertNoConstructorParameterOfType(PreAuthLimitHoldMapper.class, RETIRED_FOR_PREAUTH_RESERVATION);
+    }
+
+    /**
+     * P1.12.3 — the live wiring itself: {@code PreAuthorizationDecisionBuilder}
+     * (the sole live PreAuth decision orchestrator) no longer resolves limits
+     * or reads balances on its own -- {@code decideLine} delegates entirely
+     * to {@code BucketLimitSnapshotAdapter.buildForPreauthReservation} +
+     * {@code UnifiedLimitResolver} + {@code PreAuthLimitHoldMapper}. This is
+     * the strongest form of the guard: a class with none of these four types
+     * as a constructor parameter cannot resolve a bucket or read a balance
+     * through them, no matter what {@code decideLine} does at runtime.
+     */
+    @Test
+    @DisplayName("P1.12.3 — PreAuthorizationDecisionBuilder has no constructor dependency on the retired "
+            + "PreAuth-specific limit-resolution stack: it no longer resolves limits or reads balances itself")
+    void builderHasNoLegacyPreauthResolutionDependency() {
+        assertNoConstructorParameterOfType(PreAuthorizationDecisionBuilder.class, RETIRED_FOR_PREAUTH_RESERVATION);
     }
 
     private void assertNoConstructorParameterOfType(Class<?> target, List<Class<?>> forbidden) {

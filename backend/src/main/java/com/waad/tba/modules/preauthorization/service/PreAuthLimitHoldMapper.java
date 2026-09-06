@@ -1,13 +1,12 @@
 package com.waad.tba.modules.preauthorization.service;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 
 import org.springframework.stereotype.Component;
 
@@ -42,9 +41,13 @@ import lombok.RequiredArgsConstructor;
  *     mapper runs; it receives the two already-final candidate figures, never
  *     a raw {@code WaadFinancialEngine.Result} to re-derive from</li>
  * <li>not how many occurrences an approved quantity represents beyond
- *     translating it through a bucket's OWN counting method -- the same
- *     {@link TimesLimitEvaluator} claims and legacy PreAuth already share, so
- *     this mapper still applies zero new business rule for TIMES</li>
+ *     translating it through a bucket's OWN counting method, via
+ *     {@link TimesLimitEvaluator}'s STATELESS core -- {@code decision.approvedQuantity()}
+ *     was already gated once-per-batch by the CALLER before the decision
+ *     ever ran (P1.12.3's own mirror of {@code CoverageEngineService.requestedQuantity()}),
+ *     so this mapper must never re-apply that dedup against the same
+ *     tracking set a second time (that would find the slot already taken
+ *     and silently under-count)</li>
  * </ul>
  * No repository, no {@code LimitBalanceReader}, no
  * {@code EffectiveLimitResolver}, no {@code ApplicableCountingLimitResolver},
@@ -71,11 +74,11 @@ public class PreAuthLimitHoldMapper {
      *                           decision (P1.12.1's characterized golden
      *                           case: an eligible-amount bucket holding
      *                           1000 beside a general ceiling holding 800)
-     * @param countedOnce        cross-line PER_VISIT/PER_DAY dedup, carried
-     *                           by the caller across every line of the same
-     *                           approval -- identical contract to
-     *                           {@code TimesLimitEvaluator.occurrencesFor}'s
-     *                           existing callers
+     * @param policyId           the policy this decision was resolved
+     *                           against -- carried by the caller (already
+     *                           known before any bucket is touched), never
+     *                           derivable from {@link ResolvedLimitDescriptor}
+     *                           itself, which does not carry it
      */
     public List<PreAuthorizationDecision.LimitHold> map(
             UnifiedLimitDecision decision,
@@ -83,8 +86,7 @@ public class PreAuthLimitHoldMapper {
             List<ResolvedLimitMeasure> measures,
             BigDecimal companyShareAmount,
             BigDecimal eligibleAmount,
-            LocalDate serviceDate,
-            Set<TimesLimitEvaluator.CountedKey> countedOnce) {
+            Long policyId) {
 
         Map<String, ConsumptionBasis> basisByKey = new LinkedHashMap<>();
         for (ResolvedLimitMeasure measure : measures) {
@@ -122,7 +124,12 @@ public class PreAuthLimitHoldMapper {
 
             BigDecimal effectiveLimit = amountSnapshot == null ? null : amountSnapshot.configured();
             BigDecimal committedBefore = amountSnapshot == null ? null : amountSnapshot.committed();
-            BigDecimal reservedBefore = amountSnapshot == null ? null : amountSnapshot.activeReserved();
+            // reserved_before is NOT NULL in the schema: "no money held" is a
+            // true statement about a bucket that measures no money, and must
+            // be a real zero, never null (legacy PreAuthorizationDecisionBuilder's
+            // own count-only-bucket branch made the same exception).
+            BigDecimal reservedBefore = amountSnapshot == null
+                    ? BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP) : amountSnapshot.activeReserved();
             BigDecimal actualRemainingBefore = amountSnapshot == null ? null
                     : amountSnapshot.configured().subtract(amountSnapshot.committed());
             BigDecimal reservableAvailableBefore = amountSnapshot == null ? null : amountSnapshot.remaining();
@@ -144,8 +151,7 @@ public class PreAuthLimitHoldMapper {
                     : (basis == ConsumptionBasis.ELIGIBLE_AMOUNT ? eligibleAmount : companyShareAmount);
 
             Integer timesReserved = timesSnapshot == null ? null
-                    : timesLimitEvaluator.occurrencesFor(timesSnapshot.countingMethod(), descriptor.bucketId(),
-                            decision.approvedQuantity(), countedOnce, serviceDate);
+                    : timesLimitEvaluator.occurrencesFor(timesSnapshot.countingMethod(), decision.approvedQuantity());
 
             boolean binding = Objects.equals(descriptor.bucketId(), decision.bindingBucketId());
 
@@ -153,7 +159,7 @@ public class PreAuthLimitHoldMapper {
                     key,
                     isGeneral ? "POLICY_GENERAL" : "BUCKET",
                     descriptor.bucketId(),
-                    null, // policyId travels with the caller, not the descriptor -- P1.12.3 wires it in
+                    policyId,
                     descriptor.periodType(), descriptor.periodFrom(), descriptor.periodTo(),
                     effectiveLimit, committedBefore, reservedBefore, actualRemainingBefore, reservableAvailableBefore,
                     timesLimit, committedTimesBefore, reservedTimesBefore, actualRemainingTimesBefore,

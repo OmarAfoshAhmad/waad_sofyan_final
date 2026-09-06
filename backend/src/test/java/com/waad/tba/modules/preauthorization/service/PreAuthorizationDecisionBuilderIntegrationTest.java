@@ -15,6 +15,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 
 import com.waad.tba.TbaWaadApplication;
+import com.waad.tba.common.exception.BusinessRuleException;
 import com.waad.tba.modules.preauthorization.entity.PreAuthorization;
 import com.waad.tba.modules.preauthorization.repository.PreAuthorizationRepository;
 import com.waad.tba.support.PostgresIntegrationTestBase;
@@ -655,11 +656,35 @@ class PreAuthorizationDecisionBuilderIntegrationTest extends PostgresIntegration
         assertThat(decision.lines().get(0).coveredTimes()).isZero();
     }
 
+    /**
+     * PA3a — P1.12.3 TRANSITION (was:
+     * {@code anAmountLimitAndAnOccurrenceLimitConstrainSeparatelyWithoutBeingCombined},
+     * which asserted {@code coveredTimes=3} on the theory that AMOUNT and
+     * TIMES on the SAME bucket never cross-constrain in PreAuth). This is
+     * the third and last intentional behavior change P1.12.3 makes,
+     * alongside PA7: when one bucket configures BOTH an amount ceiling and
+     * an occurrence ceiling, the canonical {@code UnifiedLimitResolver}
+     * applies the SAME "money buys whole units" cross-axis check Claims
+     * already relies on (200 remaining / (400/3 per unit) = 1 whole unit
+     * affordable, tighter than the 3 the occurrence ceiling alone would
+     * allow) -- {@code approvedQuantity = min(unitsAffordableByTimes=3,
+     * unitsAffordableByAmount=1) = 1}, not 3.
+     *
+     * This is deliberate, not a regression: PreAuth and the claim it
+     * converts into MUST agree on how many units the SAME bucket, at the
+     * SAME balance, can actually fund -- {@code buildForPreauthorizedClaim}
+     * (P1.5.0b, already live for claims) applies the identical cross-axis
+     * rule during conversion. Approving 3 units here and then honoring only
+     * 1 at claim time would be exactly the cross-mode split P1.12 exists to
+     * remove. See PA3b/PA3c below for the cases this rule does NOT reach.
+     */
     @Test
-    void anAmountLimitAndAnOccurrenceLimitConstrainSeparatelyWithoutBeingCombined() {
+    void sameBucketAmountAndTimesApplyTheCrossAxisWholeUnitConstraint() {
         Scenario sc = scenario("1000", "800.00", "400.00", 80, null, LocalDate.now().plusDays(14));
         // 4 occurrences, of which the opening balance already used 1, so 3
-        // remain -- enough for this line. The MONEY is what binds here.
+        // remain by the OCCURRENCE ceiling alone -- but the SAME bucket's
+        // money (200 of 1000 remaining) can only fund 1 of the 3 units at
+        // 400/3 each, and that is the tighter, whole-unit-respecting cap.
         jdbc.update("UPDATE benefit_limit_buckets SET times_limit = 4, counting_method = 'EACH_UNIT' "
                 + "WHERE id = ?", sc.bucketId());
         jdbc.update("UPDATE pre_authorization_lines SET requested_quantity = 3, approved_quantity = 3 "
@@ -669,13 +694,75 @@ class PreAuthorizationDecisionBuilderIntegrationTest extends PostgresIntegration
         var hold = line.limitHolds().stream()
                 .filter(h -> "BUCKET".equals(h.limitScope())).findFirst().orElseThrow();
 
-        // The money binds (200 left of 1000); the occurrences do not (3 of 3).
-        // Each dimension is recorded in its own unit, and nothing is summed.
-        assertThat(line.coveredTimes()).isEqualTo(3);
-        assertThat(hold.timesReserved()).isEqualTo(3);
+        assertThat(line.coveredTimes()).isEqualTo(1);
+        assertThat(line.limitExcessTimes()).isEqualTo(2);
+        assertThat(hold.timesReserved()).isEqualTo(1);
         assertThat(hold.amountReserved()).isNotNull();
         assertThat(hold.reservedUnit()).isEqualTo(PreAuthorizationDecision.ReservedUnit.CURRENCY);
+        // 400 total split proportionally to 1 of 3 units (DivisibleLimitSplitter,
+        // the SAME split Claims uses), then 80% coverage on that money alone.
+        assertThat(line.companyShare()).isEqualByComparingTo("106.66");
+    }
+
+    /**
+     * PA3b — an AMOUNT-only bucket (no occurrence ceiling configured at all)
+     * never reduces quantity because of the monetary cap: money is
+     * continuous there, and the whole-unit cross-axis rule in PA3a applies
+     * ONLY when the SAME bucket also configures a genuine counting
+     * dimension. Regression guard against over-generalizing PA3a.
+     */
+    @Test
+    void anAmountOnlyBucketNeverReducesQuantityForTheMonetaryCap() {
+        Scenario sc = scenario("1000", "800.00", "400.00", 80, null, LocalDate.now().plusDays(14));
+        // No times_limit at all on this bucket -- money is the ONLY ceiling.
+        jdbc.update("UPDATE pre_authorization_lines SET requested_quantity = 3, approved_quantity = 3 "
+                + "WHERE pre_authorization_id = ?", sc.preauthId());
+
+        var line = builder.build(sc.preauthId(), 1).lines().get(0);
+
+        // The reviewer's own approvedQuantity is never touched by a purely
+        // monetary ceiling -- only the MONEY itself is capped (to 200, the
+        // bucket's own remaining), exactly as PA1 already established.
+        assertThat(line.approvedQuantity()).isEqualTo(3);
+        assertThat(line.coveredTimes()).isZero(); // no occurrence axis exists to measure
+        assertThat(line.companyShare()).isEqualByComparingTo("160.00"); // 200 * 80%
+    }
+
+    /**
+     * PA3c — a monetary bucket and a SEPARATE occurrence-only bucket (not
+     * the same bucket) keep their own independent semantics: the money
+     * ceiling caps the money, the occurrence ceiling on the OTHER bucket
+     * caps the count, and neither cross-constrains the other's quantity.
+     * The PA3a rule is specifically about ONE bucket configuring both axes
+     * at once -- it must not spill over into unrelated buckets.
+     */
+    @Test
+    void independentBucketsKeepTheirOwnConsumptionSemantics() {
+        Scenario sc = scenario("1000", "800.00", "400.00", 80, null, LocalDate.now().plusDays(14));
+        // A second, SEPARATE bucket under the same rule, capping only
+        // occurrences (PER_VISIT, no money at all) -- inherited via a shared
+        // parent, exactly like PA8's shape.
+        Long parentBucketId = jdbc.queryForObject("INSERT INTO benefit_limit_buckets (policy_id, "
+                + "benefit_group_id, code, name_ar, times_limit, period_type, counting_method, "
+                + "consumption_basis, benefit_scope_type, context_type, active) SELECT policy_id, "
+                + "benefit_group_id, code || '-PARENT', 'أصل', 5, period_type, 'PER_VISIT', "
+                + "consumption_basis, 'GROUP', context_type, true FROM benefit_limit_buckets "
+                + "WHERE id = ? RETURNING id", Long.class, sc.bucketId());
+        jdbc.update("UPDATE benefit_limit_buckets SET parent_bucket_id = ? WHERE id = ?",
+                parentBucketId, sc.bucketId());
+        jdbc.update("UPDATE pre_authorization_lines SET requested_quantity = 3, approved_quantity = 3 "
+                + "WHERE pre_authorization_id = ?", sc.preauthId());
+
+        var line = builder.build(sc.preauthId(), 1).lines().get(0);
+        var parentHold = line.limitHolds().stream()
+                .filter(h -> parentBucketId.equals(h.bucketId())).findFirst().orElseThrow();
+
+        // The child's own money still caps at 200 (its own ceiling, no
+        // occurrence dimension of its own), and the SEPARATE parent bucket
+        // holds its own occurrence count (1, PER_VISIT is indivisible) --
+        // neither number was derived from the other.
         assertThat(line.companyShare()).isEqualByComparingTo("160.00");
+        assertThat(parentHold.timesReserved()).isEqualTo(1);
     }
 
     @Test
@@ -734,19 +821,21 @@ class PreAuthorizationDecisionBuilderIntegrationTest extends PostgresIntegration
     }
 
     /**
-     * PA7 — a bucket whose {@code policy_id} does not match the requested
-     * policy (a data-corruption shape that should never arise in practice)
-     * is refused today by {@code ApplicableLimitResolver}, reached
-     * TRANSITIVELY through {@code EffectiveLimitResolver} -- as a raw,
-     * untranslated {@code IllegalStateException}, not a
-     * {@code BusinessRuleException}. Characterized as today's EXTERNAL
-     * outcome, not as correct: CLAUDE.md's error policy (§11) forbids
-     * leaking technical exception types to a caller, and the canonical
-     * {@code UnifiedLimitResolver} already returns a structured
-     * {@code BLOCKED} decision for the identical condition instead.
+     * PA7 — P1.12.3 TRANSITION (was: leaked a raw
+     * {@code IllegalStateException} via {@code ApplicableLimitResolver},
+     * reached transitively through the now-retired-from-this-path
+     * {@code EffectiveLimitResolver}). The canonical
+     * {@code BucketLimitSnapshotAdapter} returns a structured
+     * {@code BLOCKED} result for the identical condition, and this method
+     * now fails the same way every other fail-closed guard here already
+     * does: a safe, translated {@code BusinessRuleException}, matching
+     * CLAUDE.md's error policy (§11) -- never a raw technical exception
+     * type reaching a caller. This is the ONE intentional behavior change
+     * P1.12.3 makes; everything else must match P1.12.1's characterization
+     * exactly.
      */
     @Test
-    void aBucketBelongingToADifferentPolicyLeaksARawTechnicalException() {
+    void aBucketBelongingToADifferentPolicyIsRefusedWithASafeMessageNotARawException() {
         Scenario sc = scenario("1000000", null, "500.00", 80, null, LocalDate.now().plusDays(14));
 
         Long otherEmployerId = jdbc.queryForObject("INSERT INTO employers (code, name) VALUES ('DB-OTHER-"
@@ -761,8 +850,10 @@ class PreAuthorizationDecisionBuilderIntegrationTest extends PostgresIntegration
         jdbc.update("UPDATE benefit_limit_buckets SET policy_id = ? WHERE id = ?", otherPolicyId, sc.bucketId());
 
         assertThatThrownBy(() -> builder.build(sc.preauthId(), 1))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("BUCKET_POLICY_MISMATCH");
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageNotContaining("BUCKET_POLICY_MISMATCH")
+                .hasMessageNotContaining("IllegalStateException")
+                .hasMessageContaining("الدعم الفني");
     }
 
     /**

@@ -77,7 +77,7 @@ class PreAuthLimitHoldMapperTest {
                 new ResolvedLimitMeasure(ResolvedLimitDescriptor.bucketKey(910L), ConsumptionBasis.ELIGIBLE_AMOUNT));
 
         List<PreAuthorizationDecision.LimitHold> holds = mapper.map(decision, items, measures,
-                new BigDecimal("800.00"), new BigDecimal("1000.00"), SERVICE_DATE, new HashSet<>());
+                new BigDecimal("800.00"), new BigDecimal("1000.00"), 700L);
 
         assertThat(holds).hasSize(2);
         var bucketHold = holds.stream().filter(h -> "BUCKET".equals(h.limitScope())).findFirst().orElseThrow();
@@ -107,7 +107,7 @@ class PreAuthLimitHoldMapperTest {
                 new ResolvedLimitMeasure(ResolvedLimitDescriptor.bucketKey(920L), ConsumptionBasis.COMPANY_SHARE));
 
         List<PreAuthorizationDecision.LimitHold> holds = mapper.map(decision, items, measures,
-                new BigDecimal("240.00"), new BigDecimal("300.00"), SERVICE_DATE, new HashSet<>());
+                new BigDecimal("240.00"), new BigDecimal("300.00"), 700L);
 
         assertThat(holds).hasSize(1);
         assertThat(holds.get(0).amountReserved()).isEqualByComparingTo("240.00");
@@ -129,8 +129,7 @@ class PreAuthLimitHoldMapperTest {
         List<ResolvedLimitMeasure> measures = List.of(
                 new ResolvedLimitMeasure(ResolvedLimitDescriptor.bucketKey(930L), ConsumptionBasis.COMPANY_SHARE));
 
-        var hold = mapper.map(decision, items, measures, new BigDecimal("100.00"), new BigDecimal("100.00"),
-                SERVICE_DATE, new HashSet<>()).get(0);
+        var hold = mapper.map(decision, items, measures, new BigDecimal("100.00"), new BigDecimal("100.00"), 700L).get(0);
 
         assertThat(hold.effectiveLimit()).isEqualByComparingTo("1000");
         assertThat(hold.committedBefore()).isEqualByComparingTo("800");
@@ -153,8 +152,7 @@ class PreAuthLimitHoldMapperTest {
 
         List<ResolvedLimitItem> items = List.of(new ResolvedLimitItem(bucketTarget, bucketDescriptor(940L)));
 
-        var hold = mapper.map(decision, items, List.of(), BigDecimal.ZERO, BigDecimal.ZERO,
-                SERVICE_DATE, new HashSet<>()).get(0);
+        var hold = mapper.map(decision, items, List.of(), BigDecimal.ZERO, BigDecimal.ZERO, 700L).get(0);
 
         assertThat(hold.timesLimit()).isEqualTo(10);
         assertThat(hold.committedTimesBefore()).isEqualTo(3);
@@ -187,7 +185,7 @@ class PreAuthLimitHoldMapperTest {
                 new ResolvedLimitMeasure(ResolvedLimitDescriptor.bucketKey(950L), ConsumptionBasis.COMPANY_SHARE));
 
         List<PreAuthorizationDecision.LimitHold> holds = mapper.map(decision, items, measures,
-                new BigDecimal("100.00"), new BigDecimal("100.00"), SERVICE_DATE, new HashSet<>());
+                new BigDecimal("100.00"), new BigDecimal("100.00"), 700L);
 
         assertThat(holds).hasSize(1);
         assertThat(holds.get(0).amountReserved()).isEqualByComparingTo("100.00");
