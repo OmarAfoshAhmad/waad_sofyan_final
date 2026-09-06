@@ -62,7 +62,6 @@ class MemberCeilingComesFromOneReaderArchitectureTest {
             // number the policy grants its members.
             "BenefitPolicyService.java",
             "BenefitBucketLimitService.java",
-            "ApplicableLimitResolver.java",
             // Reads it to hand straight to LimitBalanceReader, which is the
             // correct path -- the reader adds the uplift to what it is given.
             "BenefitPolicyCoverageService.java",

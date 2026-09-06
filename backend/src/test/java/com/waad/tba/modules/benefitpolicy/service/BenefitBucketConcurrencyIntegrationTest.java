@@ -26,6 +26,7 @@ import com.waad.tba.modules.benefitpolicy.entity.*;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy.BenefitPolicyStatus;
 import com.waad.tba.modules.benefitpolicy.enums.*;
 import com.waad.tba.modules.benefitpolicy.repository.*;
+import com.waad.tba.modules.benefitpolicy.service.unifiedlimit.BucketLimitSnapshot;
 import com.waad.tba.modules.claim.dto.*;
 import com.waad.tba.modules.claim.entity.ClaimStatus;
 import com.waad.tba.modules.claim.repository.ClaimRepository;
@@ -73,8 +74,7 @@ class BenefitBucketConcurrencyIntegrationTest extends PostgresIntegrationTestBas
     @Autowired VisitRepository visitRepository;
     @Autowired ClaimRepository claimRepository;
     @Autowired UserRepository userRepository;
-    @Autowired EffectiveLimitResolver effectiveLimitResolver;
-    @Autowired LimitBalanceReader limitBalanceReader;
+    @Autowired com.waad.tba.modules.benefitpolicy.service.unifiedlimit.BucketLimitSnapshotAdapter bucketLimitSnapshotAdapter;
     @Autowired org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
 
     @BeforeEach
@@ -285,35 +285,35 @@ class BenefitBucketConcurrencyIntegrationTest extends PostgresIntegrationTestBas
                     .calculationVersion(1)
                     .idempotencyKey("TEST:RESERVED:" + dependentPreauthId).build()));
 
-        var principalLimits = effectiveLimitResolver.resolve(principal.policy().getId(), principal.rule().getId(),
-                principal.member().getId(), LocalDate.now(), EncounterType.OUTPATIENT);
-        var dependentLimits = effectiveLimitResolver.resolve(dependent.policy().getId(), dependent.rule().getId(),
-                dependent.member().getId(), LocalDate.now(), EncounterType.OUTPATIENT);
-        var principalBalances = limitBalanceReader.read(principal.member().getId(), principalLimits, null);
-        var dependentBalances = limitBalanceReader.read(dependent.member().getId(), dependentLimits, null);
+        var principalResult = bucketLimitSnapshotAdapter.buildForNormalClaim(principal.policy().getId(),
+                principal.rule().getId(), principal.member().getId(), LocalDate.now(), EncounterType.OUTPATIENT, null);
+        var dependentResult = bucketLimitSnapshotAdapter.buildForNormalClaim(dependent.policy().getId(),
+                dependent.rule().getId(), dependent.member().getId(), LocalDate.now(), EncounterType.OUTPATIENT, null);
 
-        assertThat(principalLimits).extracting(EffectiveLimitResolver.EffectiveLimit::effectiveLimit)
-                .containsExactlyElementsOf(dependentLimits.stream()
-                        .map(EffectiveLimitResolver.EffectiveLimit::effectiveLimit).toList());
-        assertThat(balance(principalBalances, "BUCKET:" + principal.bucket().getId()).committed())
+        assertThat(principalResult.snapshots()).extracting(BucketLimitSnapshot::configured)
+                .containsExactlyElementsOf(dependentResult.snapshots().stream()
+                        .map(BucketLimitSnapshot::configured).toList());
+        assertThat(bucketSnapshot(principalResult, principal.bucket().getId()).committed())
                 .isEqualByComparingTo("60.00");
-        assertThat(balance(dependentBalances, "BUCKET:" + principal.bucket().getId()).committed()).isZero();
-        assertThat(balance(dependentBalances, "BUCKET:" + principal.bucket().getId()).reserved())
+        assertThat(bucketSnapshot(dependentResult, principal.bucket().getId()).committed()).isZero();
+        assertThat(bucketSnapshot(dependentResult, principal.bucket().getId()).activeReserved())
                 .isEqualByComparingTo("60.00");
         // The reservation reduces what a NEW decision may consume, but not the
         // member's actual remaining balance -- a hold is not a consumption.
-        assertThat(balance(dependentBalances, "BUCKET:" + principal.bucket().getId()).reservableAvailable())
+        assertThat(bucketSnapshot(dependentResult, principal.bucket().getId()).remaining())
                 .isEqualByComparingTo("940.00");
-        assertThat(balance(dependentBalances, "BUCKET:" + principal.bucket().getId()).actualRemaining())
+        BucketLimitSnapshot dependentBucketSnapshot = bucketSnapshot(dependentResult, principal.bucket().getId());
+        assertThat(dependentBucketSnapshot.configured().subtract(dependentBucketSnapshot.committed()))
                 .as("nothing was committed, so the real remaining balance is untouched by the hold")
                 .isEqualByComparingTo("1000.00");
-        assertThat(balance(principalBalances, "POLICY_GENERAL:" + principal.policy().getId()).committed())
-                .isEqualByComparingTo("60.00");
-        assertThat(balance(dependentBalances, "POLICY_GENERAL:" + principal.policy().getId()).committed()).isZero();
+        assertThat(generalSnapshot(principalResult).committed()).isEqualByComparingTo("60.00");
+        assertThat(generalSnapshot(dependentResult).committed()).isZero();
 
-        var excludingCurrent = limitBalanceReader.read(principal.member().getId(), principalLimits, principalClaimId);
-        assertThat(balance(excludingCurrent, "BUCKET:" + principal.bucket().getId()).committed()).isZero();
-        assertThat(balance(excludingCurrent, "POLICY_GENERAL:" + principal.policy().getId()).committed()).isZero();
+        var excludingCurrent = bucketLimitSnapshotAdapter.buildForNormalClaim(principal.policy().getId(),
+                principal.rule().getId(), principal.member().getId(), LocalDate.now(), EncounterType.OUTPATIENT,
+                principalClaimId);
+        assertThat(bucketSnapshot(excludingCurrent, principal.bucket().getId()).committed()).isZero();
+        assertThat(generalSnapshot(excludingCurrent).committed()).isZero();
     }
 
     @Test
@@ -352,9 +352,20 @@ class BenefitBucketConcurrencyIntegrationTest extends PostgresIntegrationTestBas
         assertThat(canonical.secondMode()).isEqualTo("LIMITED");
     }
 
-    private LimitBalanceReader.LimitBalance balance(LimitBalanceReader.BalanceSet set, String semanticKey) {
-        return set.limits().stream()
-                .filter(value -> value.limit().definition().semanticKey().equals(semanticKey))
+    private com.waad.tba.modules.benefitpolicy.service.unifiedlimit.BucketLimitSnapshot bucketSnapshot(
+            com.waad.tba.modules.benefitpolicy.service.unifiedlimit.BucketLimitSnapshotAdapter.Result result,
+            Long bucketId) {
+        return result.snapshots().stream()
+                .filter(s -> s.limitType() == com.waad.tba.modules.benefitpolicy.service.unifiedlimit.LimitAxisType.AMOUNT
+                        && bucketId.equals(s.bucketId()))
+                .findFirst().orElseThrow();
+    }
+
+    private com.waad.tba.modules.benefitpolicy.service.unifiedlimit.BucketLimitSnapshot generalSnapshot(
+            com.waad.tba.modules.benefitpolicy.service.unifiedlimit.BucketLimitSnapshotAdapter.Result result) {
+        return result.snapshots().stream()
+                .filter(s -> s.limitType() == com.waad.tba.modules.benefitpolicy.service.unifiedlimit.LimitAxisType.AMOUNT
+                        && s.bucketId() == null)
                 .findFirst().orElseThrow();
     }
 

@@ -36,7 +36,11 @@ class FinancialDateSourceArchitectureTest {
             "src/main/java/com/waad/tba/modules/claim/service/CostCalculationService.java",
             "src/main/java/com/waad/tba/modules/claim/service/ClaimFinancialSnapshotService.java",
             "src/main/java/com/waad/tba/modules/benefitpolicy/service/BenefitBucketLedgerService.java",
-            "src/main/java/com/waad/tba/modules/benefitpolicy/service/EffectiveLimitResolver.java");
+            // P1.12.4: EffectiveLimitResolver (retired) is replaced on this
+            // list by the files that now actually make the limit decision.
+            "src/main/java/com/waad/tba/modules/benefitpolicy/service/unifiedlimit/BucketLimitSnapshotAdapter.java",
+            "src/main/java/com/waad/tba/modules/preauthorization/service/PreAuthorizationDecisionBuilder.java",
+            "src/main/java/com/waad/tba/modules/preauthorization/service/PreAuthLimitHoldMapper.java");
 
     /**
      * Files still permitted to call LocalDate.now(), each for a stated reason.

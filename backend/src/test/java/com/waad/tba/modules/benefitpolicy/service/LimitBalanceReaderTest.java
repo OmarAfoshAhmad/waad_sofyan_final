@@ -2,8 +2,6 @@ package com.waad.tba.modules.benefitpolicy.service;
 
 import com.waad.tba.modules.benefitpolicy.repository.BenefitBucketConsumptionRepository;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitBucketConsumptionRepository.GeneralCeilingBulkProjection;
-import com.waad.tba.modules.benefitpolicy.repository.BenefitLimitBucketRepository;
-import com.waad.tba.modules.claim.repository.ClaimRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -31,8 +29,6 @@ import static org.mockito.Mockito.when;
 class LimitBalanceReaderTest {
 
     @Mock private BenefitBucketConsumptionRepository consumptionRepository;
-    @Mock private ClaimRepository claimRepository;
-    @Mock private BenefitLimitBucketRepository bucketRepository;
 
     private LimitBalanceReader reader;
 
@@ -53,8 +49,7 @@ class LimitBalanceReaderTest {
         org.mockito.Mockito.lenient().when(upliftRepository.sumInForceByMember(
                 org.mockito.ArgumentMatchers.anyCollection(), org.mockito.ArgumentMatchers.any()))
                 .thenReturn(java.util.List.of());
-        reader = new LimitBalanceReader(consumptionRepository, upliftRepository,
-                claimRepository, bucketRepository);
+        reader = new LimitBalanceReader(consumptionRepository, upliftRepository);
     }
 
     private record Row(Long memberId, Long policyId, BigDecimal amount) implements GeneralCeilingBulkProjection {

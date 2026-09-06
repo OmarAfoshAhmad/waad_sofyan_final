@@ -48,14 +48,14 @@ import java.util.Set;
  *    what a real claim sees -- not a parallel reimplementation that could
  *    silently drift from it again.
  *
- * {@link ApplicableLimitResolver}, a second, apparently-not-yet-wired
- * engine, still performs an additional BUCKET_POLICY_MISMATCH check this
- * audit and the live path do not. Adding that check to the live path
- * unconditionally would change behavior for any claim served today by an
- * inconsistent parent chain, if one exists -- unmeasured, and deliberately
- * out of scope here; ApplicableLimitResolver itself was updated to use
- * BucketChainWalker too, so at least the mechanical walk no longer drifts
- * even though this one policy-level rule is not yet shared.
+ * The BUCKET_POLICY_MISMATCH check (a parent belonging to a different
+ * policy) that used to live only in the now-retired {@code ApplicableLimitResolver}
+ * (P1.12.4: deleted, zero live callers once Claims and PreAuth both moved
+ * onto {@code UnifiedLimitResolver}/{@code BucketLimitSnapshotAdapter}) now
+ * lives in {@code BucketLimitSnapshotAdapter.validateAndScope}, the
+ * canonical live path's own equivalent -- this audit still does not
+ * perform it independently, since its purpose is reachability, not the
+ * live decision's own validation.
  */
 @Service
 @RequiredArgsConstructor
