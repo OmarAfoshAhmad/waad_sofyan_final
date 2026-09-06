@@ -8,7 +8,6 @@ import {
   CircularProgress,
   Divider,
   Grid,
-  Paper,
   Stack,
   Typography,
   Alert,
@@ -21,7 +20,6 @@ import {
   MedicalServices as MedicalIcon,
   AttachFile as AttachmentIcon,
   Receipt as ClaimIcon,
-  CloudUpload as UploadIcon,
   VisibilityOutlined as ShowDocsIcon
 } from '@mui/icons-material';
 import MainCard from 'components/MainCard';
@@ -37,14 +35,7 @@ import {
 } from 'services/api/files.service';
 
 // Insurance UX Components - Phase B2 Step 3
-import {
-  StatusTimeline,
-  CardStatusBadge,
-  PriorityBadge,
-  ValidityCountdown,
-  AmountComparisonBar,
-  getWorkflowSteps
-} from 'components/insurance';
+import { StatusTimeline, CardStatusBadge, PriorityBadge, ValidityCountdown, getWorkflowSteps } from 'components/insurance';
 
 // Pre-Approval Status Mapping for CardStatusBadge
 const PREAPPROVAL_STATUS_MAP = {

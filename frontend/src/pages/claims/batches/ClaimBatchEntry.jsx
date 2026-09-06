@@ -4,7 +4,7 @@
  * ✅ زر الحفظ مرئي دون scroll
  * ✅ كل النصوص من ar.js (لا hardcode)
  */
-import { useState, useMemo, useRef, useCallback, useEffect, Fragment } from 'react';
+import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { keyframes } from '@mui/system';
 import {
@@ -26,60 +26,35 @@ import {
   Chip,
   Paper,
   Checkbox,
-  FormControlLabel,
-  Radio,
-  RadioGroup,
   Tooltip,
   alpha,
-  TableFooter,
-  InputAdornment,
   Alert,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
-  Pagination,
   Menu,
   MenuItem,
   ListItemIcon,
   ListItemText,
-  FormControl,
-  InputLabel,
-  Select,
   Collapse
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import {
-  Save as SaveIcon,
   Add as AddIcon,
-  Delete as DeleteIcon,
   Receipt as ReceiptIcon,
-  CheckCircle as DoneIcon,
   ArrowBack as BackIcon,
   Close as DiscardIcon,
-  History as HistoryIcon,
-  Search as SearchIcon,
-  LocalPrintshop as PrintIcon,
-  FileDownload as FileDownloadIcon,
-  WarningAmber as WarningIcon,
   VerifiedUser as PolicyIcon,
   Info as InfoIcon,
   Block as RejectIcon,
-  Cancel as CancelIcon,
-  AttachFile as AttachFileIcon,
-  Lock as LockIcon,
-  AddCircleOutline as AddReasonIcon,
   ViewColumn as ViewColumnIcon,
-  Edit as EditIcon,
-  Check as CheckIcon,
-  ExpandMore as ExpandMoreIcon,
   UnfoldLess as CompactIcon,
   UnfoldMore as ExpandIcon
 } from '@mui/icons-material';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSnackbar } from 'notistack';
 
-import MainCard from 'components/MainCard';
 import { ModernPageHeader } from 'components/tba';
 import useLocale from 'hooks/useLocale';
 
@@ -91,7 +66,6 @@ import { getActiveClaimContexts } from 'services/api/claim-contexts.service';
 import claimBatchesService from 'services/api/claim-batches.service';
 import medicalDictionaryService from 'services/api/medical-dictionary.service';
 import { claimRejectionReasonsService } from 'services/api/claim-rejection-reasons.service';
-import systemSettingsService from 'services/api/systemSettings.service';
 import { normalizeApiError, runWithRetry } from 'utils/api-error';
 import axiosClient from 'utils/axios';
 
@@ -161,13 +135,6 @@ const hasMeaningfulDraftData = (draft) => {
   if ((draft.complaint || '').trim()) return true;
   if ((draft.notes || '').trim()) return true;
   return Array.isArray(draft.lines) && draft.lines.some((l) => l?.serviceName || l?.serviceCode || l?.service);
-};
-
-// أنماط حقول الجدول القابلة للتعديل
-const inlineSx = {
-  '& .MuiInput-root::before': { display: 'none' },
-  '& .MuiInput-root::after': { borderBottomColor: '#1b5e20', borderBottomWidth: 1 },
-  '& input': { fontSize: '0.78rem', fontWeight: 500, textAlign: 'center', py: 0.35 }
 };
 
 const TH = ({ children, align = 'center', w, sx: sxOver = {} }) => {
@@ -249,7 +216,6 @@ export default function ClaimBatchEntry() {
   const [editingReasonText, setEditingReasonText] = useState('');
   const [isDeletingReasonId, setIsDeletingReasonId] = useState(null);
   const [showReasonsList, setShowReasonsList] = useState(false);
-  const [page, setPage] = useState(0);
   const [attachments, setAttachments] = useState([]);
   const [editingClaimId, setEditingClaimId] = useState(initialClaimId);
   const [editHydrationVersion, setEditHydrationVersion] = useState(0);
@@ -257,7 +223,6 @@ export default function ClaimBatchEntry() {
   const [preAuthId, setPreAuthId] = useState('');
   const [directEntryKey, setDirectEntryKey] = useState(newDirectEntryKey);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
-  const [confirmDeleteReason, setConfirmDeleteReason] = useState('');
   const [showValidationErrors, setShowValidationErrors] = useState(false);
   const [autoSaveStatus, setAutoSaveStatus] = useState('idle');
   const [draftVersion, setDraftVersion] = useState(null);
@@ -378,10 +343,6 @@ export default function ClaimBatchEntry() {
     staleTime: 5 * 60 * 1000
   });
 
-  const rootCategories = useMemo(() => {
-    return medicalCategories.filter((c) => !c.parentId);
-  }, [medicalCategories]);
-
   // ── المنطق المالي وتغطية الخدمات (المرحلة 3: Hooks المستخرجة) ─────────────────
   const { recompute } = useCalculationLogic();
 
@@ -429,18 +390,6 @@ export default function ClaimBatchEntry() {
   });
   const [customServiceError, setCustomServiceError] = useState(null);
   const [addingCustomService, setAddingCustomService] = useState(false);
-
-  const handleOpenCustomServiceDialog = (lineId) => {
-    setCustomServiceData({
-      categoryId: '',
-      serviceName: '',
-      serviceCode: '',
-      contractPrice: ''
-    });
-    setCustomServiceError(null);
-    setActiveLineIdForCustomService(lineId);
-    setCustomServiceDialogOpen(true);
-  };
 
   const handleCloseCustomServiceDialog = () => {
     setCustomServiceDialogOpen(false);
@@ -606,24 +555,6 @@ export default function ClaimBatchEntry() {
     }
   }, [currentBatch]);
 
-  const { data: batchData, isLoading: loadingBatch } = useQuery({
-    queryKey: ['batch-claims-entry', employerId, providerId, month, year, page],
-    queryFn: async () => {
-      if (!employerId || !providerId || isNaN(month) || isNaN(year)) return null;
-      const lastDay = new Date(year, month, 0).getDate();
-      return claimsService.list({
-        employerId,
-        providerId,
-        dateFrom: `${year}-${String(month).padStart(2, '0')}-01`,
-        dateTo: `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`,
-        size: 20,
-        page,
-        sortBy: 'createdAt',
-        sortDir: 'desc'
-      });
-    },
-    enabled: !!employerId && !!providerId
-  });
   const {
     data: contractedRaw,
     isLoading: loadingServices,
@@ -729,42 +660,6 @@ export default function ClaimBatchEntry() {
     return null;
   }, [coveragePending, entryContextBlockReason, isDirty, saving]);
 
-  const { data: summaryData } = useQuery({
-    queryKey: ['batch-stats', employerId, providerId, month, year],
-    queryFn: () => {
-      if (!employerId || !providerId || isNaN(month) || isNaN(year)) return null;
-      const lastDay = new Date(year, month, 0).getDate();
-      return claimsService.getFinancialSummary({
-        employerId,
-        providerId,
-        dateFrom: `${year}-${String(month).padStart(2, '0')}-01`,
-        dateTo: `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
-      });
-    },
-    enabled: !!employerId && !!providerId
-  });
-
-  const { data: backdatedMonthsSetting } = useQuery({
-    queryKey: ['system-setting-backdated-months'],
-    queryFn: () =>
-      systemSettingsService.getAll().then((settings) => {
-        const s = settings?.find((x) => x.settingKey === 'CLAIM_BACKDATED_MONTHS');
-        return s ? parseInt(s.settingValue, 10) : 3;
-      }),
-    staleTime: 5 * 60 * 1000
-  });
-  const allowedBackdatedMonths = backdatedMonthsSetting ?? 3;
-
-  const isExpiredBatch = useMemo(() => {
-    if (!month || !year) return false;
-    const now = new Date();
-    const currentYM = now.getFullYear() * 12 + now.getMonth();
-    const targetYM = year * 12 + (month - 1);
-    const diff = currentYM - targetYM;
-    if (allowedBackdatedMonths === 0) return diff > 0;
-    return diff > allowedBackdatedMonths;
-  }, [month, year, allowedBackdatedMonths]);
-
   // Eligible pre-authorizations are part of the same dated context response.
   // A separate request used to resolve the member, policy, contract and
   // balance a second time whenever member/date changed.
@@ -826,7 +721,7 @@ export default function ClaimBatchEntry() {
       }
     : null;
   // ── Load Existing Claim for Edit ───────────────────────────────────────
-  const { data: editingClaim, isLoading: loadingClaim } = useQuery({
+  const { data: editingClaim } = useQuery({
     queryKey: ['claim', editingClaimId],
     queryFn: () => claimsService.getById(editingClaimId),
     enabled: !!editingClaimId,
@@ -925,7 +820,7 @@ export default function ClaimBatchEntry() {
       // recalculates coverage after policy/member are ready as well.
       setEditHydrationVersion((version) => version + 1);
     }
-  }, [editingClaim, defaultDate, contractedRaw]);
+  }, [editingClaim, defaultDate, recompute, serviceOptions]);
 
   const draftPayload = useMemo(
     () => ({
@@ -1045,7 +940,7 @@ export default function ClaimBatchEntry() {
             enqueueSnackbar('تمت مزامنة المسودة بعد تعارض بسيط', { variant: 'info' });
           }
           setAutoSaveStatus('saved');
-        } catch (error) {
+        } catch {
           if (typeof navigator !== 'undefined' && navigator.onLine === false) {
             setAutoSaveStatus('offline');
           } else {
@@ -1073,7 +968,7 @@ export default function ClaimBatchEntry() {
       try {
         const raw = localStorage.getItem(draftStorageKey);
         localDraft = raw ? JSON.parse(raw) : null;
-      } catch (_) {
+      } catch {
         localDraft = null;
       }
 
@@ -1082,7 +977,7 @@ export default function ClaimBatchEntry() {
         if (draftBatchId) {
           serverDraft = await claimsService.getDraft(draftBatchId);
         }
-      } catch (_) {
+      } catch {
         serverDraft = null;
       }
 
@@ -1161,12 +1056,6 @@ export default function ClaimBatchEntry() {
     !loadingServices &&
     !servicesError &&
     contractedServiceOptionsRaw.length === 0;
-
-  const batchContent = useMemo(
-    () => batchData?.data?.items ?? batchData?.items ?? batchData?.data?.content ?? batchData?.content ?? [],
-    [batchData]
-  );
-  const batchTotal = batchData?.data?.total ?? batchData?.total ?? batchData?.data?.totalElements ?? batchData?.totalElements ?? 0;
 
   // ── المنطق المالي وتغطية الخدمات (مطبق في الأعلى) ───────────────────────────
 
@@ -1927,19 +1816,18 @@ export default function ClaimBatchEntry() {
         if (batchIdForDelete) {
           await claimsService.deleteDraft(batchIdForDelete);
         }
-      } catch (_) {
+      } catch {
         // Non-blocking cleanup
       }
       try {
         localStorage.removeItem(draftStorageKey);
-      } catch (_) {
+      } catch {
         // ignore local cleanup errors
       }
       setDraftVersion(null);
       setAutoSaveStatus('idle');
 
       invalidateBatchData();
-      setPage(0);
       if (resetAfter) {
         resetForm();
         setEditingClaimId(null);
@@ -1958,56 +1846,11 @@ export default function ClaimBatchEntry() {
     }
   };
 
-  // ── طباعة وتصدير ─────────────────────────────────────────────────────────
-  const handlePrint = () => window.print();
-
-  const handleExport = () => {
-    if (!batchContent.length) {
-      enqueueSnackbar('لا توجد بيانات للتصدير', { variant: 'warning' });
-      return;
-    }
-    const headers = ['#', 'المؤمن عليه', 'التاريخ', 'المبلغ المطلوب', 'المبلغ المعتمد', 'الحالة'];
-    const rows = batchContent.map((c) => [
-      c.id,
-      c.memberName,
-      c.serviceDate,
-      c.requestedAmount?.toFixed(2) ?? '0.00',
-      c.approvedAmount?.toFixed(2) ?? '0.00',
-      c.status
-    ]);
-    const csvRows = [headers, ...rows].map((r) => r.map((v) => `"${v ?? ''}"`).join(','));
-    const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `backlog_claims_${monthLabel}_${year}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  // ── حذف مطالبة من الشريط الجانبي ─────────────────────────────────────────
-  const handleSwitchClaim = useCallback(
-    (claimId) => {
-      if (isDirty) {
-        if (!window.confirm('يوجد تعديلات غير محفوظة. هل تريد الانتقال بدون حفظ؟')) return;
-      }
-      if (claimId === null) resetForm();
-      setEditingClaimId(claimId);
-    },
-    [isDirty, resetForm]
-  );
-
-  const handleDeleteClaim = async (claimId, e) => {
-    e.stopPropagation();
-    setConfirmDeleteId(claimId);
-    setConfirmDeleteReason(''); // Reset reason
-  };
-
   const confirmDeleteClaim = async () => {
     const claimId = confirmDeleteId;
     if (!claimId) return;
     try {
-      await claimsService.remove(claimId, confirmDeleteReason || 'تم الإلغاء');
+      await claimsService.remove(claimId, 'تم الإلغاء');
       enqueueSnackbar(`✅ تم إلغاء المطالبة #${claimId}`, { variant: 'success' });
       setConfirmDeleteId(null);
       invalidateBatchData();

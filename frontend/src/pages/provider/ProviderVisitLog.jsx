@@ -12,15 +12,13 @@ import {
   IconButton,
   TextField,
   InputAdornment,
-  Grid,
   FormControl,
   InputLabel,
   Select,
   MenuItem,
   Tooltip,
   Stack,
-  Alert,
-  Collapse
+  Alert
 } from '@mui/material';
 import { LocalizationProvider } from '@mui/x-date-pickers';
 import DatePicker from 'components/common/SystemDatePicker';
@@ -32,14 +30,10 @@ import SearchIcon from '@mui/icons-material/Search';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import ReceiptIcon from '@mui/icons-material/Receipt';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
-import FilterAltIcon from '@mui/icons-material/FilterAlt';
 import FilterAltOffIcon from '@mui/icons-material/FilterAltOff';
 import CloseIcon from '@mui/icons-material/Close';
 import FolderIcon from '@mui/icons-material/Folder';
-import PersonIcon from '@mui/icons-material/Person';
-import BadgeIcon from '@mui/icons-material/Badge';
 import LocalHospitalIcon from '@mui/icons-material/LocalHospital';
-import CreditCardIcon from '@mui/icons-material/CreditCard';
 import EventIcon from '@mui/icons-material/Event';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -204,9 +198,6 @@ const ProviderVisitLog = () => {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [totalCount, setTotalCount] = useState(0);
-
-  // Filters - Default date to TODAY
-  const [showFilters, setShowFilters] = useState(true);
 
   // Initialize from location state if we were redirected here (e.g. from registering a visit)
   const initialSearch = location.state?.newVisitId?.toString() || location.state?.memberName || '';

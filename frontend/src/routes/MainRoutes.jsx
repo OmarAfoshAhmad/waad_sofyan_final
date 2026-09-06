@@ -161,15 +161,9 @@ const AccountSettings = Loadable(lazy(() => import('pages/profile/AccountSetting
 // ==============================|| LAZY LOADING - REPORTS ||============================== //
 
 const ReportsPage = Loadable(lazy(() => import('pages/reports')));
-const EmployerDashboard = Loadable(lazy(() => import('pages/reports/employer-dashboard')));
 // ProviderDashboard REMOVED (2026-01-14) - No business value, Provider role restricted
 const ClaimsReport = Loadable(lazy(() => import('pages/reports/claims')));
 const ClaimStatementPreview = Loadable(lazy(() => import('pages/reports/claims/ClaimStatementPreview')));
-const PreApprovalsReport = Loadable(lazy(() => import('pages/reports/pre-approvals')));
-const VisitsReport = Loadable(lazy(() => import('pages/reports/visits')));
-const BenefitPolicyReport = Loadable(lazy(() => import('pages/reports/benefit-policy')));
-const BeneficiariesReports = Loadable(lazy(() => import('pages/reports/BeneficiariesReports')));
-const FinancialReports = Loadable(lazy(() => import('pages/reports/FinancialReports')));
 const ProviderSettlementReport = Loadable(lazy(() => import('pages/reports/ProviderSettlementReport')));
 const FinancialConsolidationMatrix = Loadable(lazy(() => import('pages/reports/FinancialConsolidationMatrix')));
 const AccountantProfitReport = Loadable(lazy(() => import('pages/reports/AccountantProfitReport')));
