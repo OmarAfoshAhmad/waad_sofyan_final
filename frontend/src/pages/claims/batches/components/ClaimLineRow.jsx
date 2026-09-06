@@ -1,4 +1,4 @@
-import React, { Fragment } from 'react';
+import { Fragment } from 'react';
 import {
   TableRow,
   TableCell,
@@ -90,6 +90,16 @@ export const ClaimLineRow = ({
       .filter(Boolean)
       .join(' — ') ||
     'تجاوز السعر التعاقدي و/أو سقف المنفعة';
+  const hasBenefitLimitDetails = Number(line.usageDetails?.timesLimit) > 0 || Number(line.usageDetails?.amountLimit) > 0;
+  const usageExceededTitle = hasBenefitLimitDetails
+    ? line.usageExhausted
+      ? '⚠️ رصيد المنفعة استنفذ بالكامل: '
+      : '⚠️ تجاوز سقف المنفعة المحدد: '
+    : '⚠️ تجاوز السقف العام للوثيقة: ';
+  const generalLimitExceededDetails =
+    !hasBenefitLimitDetails && line.usageExceeded
+      ? `(${line.rejectionReason || financialRefusalText || 'المبلغ المطلوب أكبر من المتاح ضمن السقف العام'})`
+      : '';
   const categoryName =
     line.medicalCategoryName ||
     line.serviceCategoryName ||
@@ -341,7 +351,9 @@ export const ClaimLineRow = ({
                 )}
               </Stack>
             ) : (
-              <Typography variant="caption" sx={{ fontSize: '0.8rem', fontWeight: 700 }}>—</Typography>
+              <Typography variant="caption" sx={{ fontSize: '0.8rem', fontWeight: 700 }}>
+                —
+              </Typography>
             )}
           </TableCell>
         )}
@@ -548,7 +560,7 @@ export const ClaimLineRow = ({
               sx={{ fontSize: '0.75rem', px: '1.0rem', display: 'flex', alignItems: 'center', gap: 1 }}
             >
               {line.usageExhausted ? <RejectIcon sx={{ fontSize: '0.875rem' }} /> : <WarningIcon sx={{ fontSize: '0.875rem' }} />}
-              {line.usageExhausted ? '⚠️ رصيد المنفعة استنفذ بالكامل: ' : '⚠️ تجاوز سقف المنفعة المحدد: '}
+              {usageExceededTitle}
               {line.usageDetails?.timesLimit > 0 &&
                 `(تعذّر قبول البند لأن عدد المرات المطلوبة يتجاوز الحد ${line.usageDetails.timesLimit} مرّة/سنة)`}
               {line.usageDetails?.amountLimit > 0 &&
@@ -564,6 +576,7 @@ export const ClaimLineRow = ({
                       : 'التزام الشركة بعد التحمل';
                   return ` (${basis}: مستخدم قبل السطر ${prev.toFixed(2)} + مطلوب ${curr.toFixed(2)} = ${total.toFixed(2)}؛ المقبول ${accepted.toFixed(2)} من حد ${limit.toFixed(2)} د.ل)`;
                 })()}
+              {generalLimitExceededDetails}
             </Typography>
           </TableCell>
         </TableRow>

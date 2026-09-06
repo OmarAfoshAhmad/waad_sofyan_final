@@ -720,6 +720,63 @@ export default function ClaimBatchEntry() {
         ceilingMode: entryContext.ceilingMode
       }
     : null;
+
+  const contractedServiceOptionsRaw = useMemo(() => {
+    const items = Array.isArray(contractedRaw) ? contractedRaw : contractedRaw?.content || contractedRaw?.items || [];
+    return items.map((s) => {
+      const code = s.serviceCode || s.code || '';
+      const name = s.serviceName || s.name || '';
+      const normalizedCategoryId =
+        s.categoryId ?? s.serviceCategoryId ?? s.medicalCategoryId ?? s.medicalCategory?.id ?? s.effectiveCategory?.id ?? null;
+      const normalizedCategoryName =
+        s.categoryName ??
+        s.serviceCategoryName ??
+        s.medicalCategoryName ??
+        s.medicalCategory?.nameAr ??
+        s.medicalCategory?.name ??
+        s.effectiveCategory?.nameAr ??
+        s.effectiveCategory?.name ??
+        null;
+      const normalizedEncounterType = getServiceContext(s);
+      return {
+        ...s,
+        label: `${code ? '[' + code + '] ' : ''}${name}`,
+        serviceName: name,
+        serviceCode: code,
+        encounterType: normalizedEncounterType,
+        defaultEncounterType: normalizedEncounterType,
+        categoryId: normalizedCategoryId,
+        serviceCategoryId: normalizedCategoryId,
+        medicalCategoryId: normalizedCategoryId,
+        categoryName: normalizedCategoryName,
+        serviceCategoryName: normalizedCategoryName,
+        medicalCategoryName: normalizedCategoryName,
+        pricingItemId: s.pricingItemId ?? s.id,
+        contractPrice: s.contractPrice || 0,
+        maxContractPrice: s.maxContractPrice || s.contractPrice || 0
+      };
+    });
+  }, [contractedRaw]);
+
+  const serviceOptions = useMemo(() => {
+    // Claim entry is contract-priced and fail-closed. Synthetic generic items
+    // have neither a pricingItemId nor a classified coverage source and mask a
+    // failed contract-services request as if the contract contained services.
+    //
+    // السياق المالي يُطبّق على المطالبة كاملة، لا على قائمة الخدمات.
+    // Do not filter services by claim context here. A service classification
+    // belongs to the provider contract/catalog; the selected claim context
+    // belongs to the whole claim and is validated by the coverage rule engine.
+    return contractedServiceOptionsRaw;
+  }, [contractedServiceOptionsRaw]);
+
+  const noEffectiveContractServicesForDate =
+    Boolean(entryContext?.contractId) &&
+    Boolean(serviceDate) &&
+    !loadingServices &&
+    !servicesError &&
+    contractedServiceOptionsRaw.length === 0;
+
   // ── Load Existing Claim for Edit ───────────────────────────────────────
   const { data: editingClaim } = useQuery({
     queryKey: ['claim', editingClaimId],
@@ -1000,62 +1057,6 @@ export default function ClaimBatchEntry() {
     }
     return list;
   }, [memberResults, member]);
-
-  const contractedServiceOptionsRaw = useMemo(() => {
-    const items = Array.isArray(contractedRaw) ? contractedRaw : contractedRaw?.content || contractedRaw?.items || [];
-    return items.map((s) => {
-      const code = s.serviceCode || s.code || '';
-      const name = s.serviceName || s.name || '';
-      const normalizedCategoryId =
-        s.categoryId ?? s.serviceCategoryId ?? s.medicalCategoryId ?? s.medicalCategory?.id ?? s.effectiveCategory?.id ?? null;
-      const normalizedCategoryName =
-        s.categoryName ??
-        s.serviceCategoryName ??
-        s.medicalCategoryName ??
-        s.medicalCategory?.nameAr ??
-        s.medicalCategory?.name ??
-        s.effectiveCategory?.nameAr ??
-        s.effectiveCategory?.name ??
-        null;
-      const normalizedEncounterType = getServiceContext(s);
-      return {
-        ...s,
-        label: `${code ? '[' + code + '] ' : ''}${name}`,
-        serviceName: name,
-        serviceCode: code,
-        encounterType: normalizedEncounterType,
-        defaultEncounterType: normalizedEncounterType,
-        categoryId: normalizedCategoryId,
-        serviceCategoryId: normalizedCategoryId,
-        medicalCategoryId: normalizedCategoryId,
-        categoryName: normalizedCategoryName,
-        serviceCategoryName: normalizedCategoryName,
-        medicalCategoryName: normalizedCategoryName,
-        pricingItemId: s.pricingItemId ?? s.id,
-        contractPrice: s.contractPrice || 0,
-        maxContractPrice: s.maxContractPrice || s.contractPrice || 0
-      };
-    });
-  }, [contractedRaw]);
-
-  const serviceOptions = useMemo(() => {
-    // Claim entry is contract-priced and fail-closed. Synthetic generic items
-    // have neither a pricingItemId nor a classified coverage source and mask a
-    // failed contract-services request as if the contract contained services.
-    //
-    // السياق المالي يُطبّق على المطالبة كاملة، لا على قائمة الخدمات.
-    // Do not filter services by claim context here. A service classification
-    // belongs to the provider contract/catalog; the selected claim context
-    // belongs to the whole claim and is validated by the coverage rule engine.
-    return contractedServiceOptionsRaw;
-  }, [contractedServiceOptionsRaw]);
-
-  const noEffectiveContractServicesForDate =
-    Boolean(entryContext?.contractId) &&
-    Boolean(serviceDate) &&
-    !loadingServices &&
-    !servicesError &&
-    contractedServiceOptionsRaw.length === 0;
 
   // ── المنطق المالي وتغطية الخدمات (مطبق في الأعلى) ───────────────────────────
 
