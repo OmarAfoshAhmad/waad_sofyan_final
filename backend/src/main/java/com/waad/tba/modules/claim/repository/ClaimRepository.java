@@ -296,6 +296,7 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
                         "WHERE c.active = true " +
                         "AND (:employerId IS NULL OR c.member.employer.id = :employerId) " +
                         "AND (:providerId IS NULL OR c.providerId = :providerId) " +
+                        "AND (:claimBatchId IS NULL OR c.claimBatch.id = :claimBatchId) " +
                         "AND (:status IS NULL OR c.status = :status) " +
                         "AND (CAST(:dateFrom AS date) IS NULL OR c.serviceDate >= :dateFrom) " +
                         "AND (CAST(:dateTo AS date) IS NULL OR c.serviceDate <= :dateTo) " +
@@ -304,11 +305,12 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
                         "AND (LOWER(c.providerName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) " +
                         "OR LOWER(c.diagnosisDescription) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) " +
                         "OR LOWER(c.member.fullName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) " +
-                        "OR LOWER(c.member.civilId) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))", countQuery = "SELECT COUNT(c) FROM Claim c WHERE c.active = true AND (:employerId IS NULL OR c.member.employer.id = :employerId) AND (:providerId IS NULL OR c.providerId = :providerId) AND (:status IS NULL OR c.status = :status) AND (CAST(:dateFrom AS date) IS NULL OR c.serviceDate >= :dateFrom) AND (CAST(:dateTo AS date) IS NULL OR c.serviceDate <= :dateTo) AND (CAST(:createdAtFrom AS timestamp) IS NULL OR c.createdAt >= :createdAtFrom) AND (CAST(:createdAtTo AS timestamp) IS NULL OR c.createdAt < :createdAtTo) AND (LOWER(c.providerName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) OR LOWER(c.diagnosisDescription) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) OR LOWER(c.member.fullName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) OR LOWER(c.member.civilId) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))")
+                        "OR LOWER(c.member.civilId) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))", countQuery = "SELECT COUNT(c) FROM Claim c WHERE c.active = true AND (:employerId IS NULL OR c.member.employer.id = :employerId) AND (:providerId IS NULL OR c.providerId = :providerId) AND (:claimBatchId IS NULL OR c.claimBatch.id = :claimBatchId) AND (:status IS NULL OR c.status = :status) AND (CAST(:dateFrom AS date) IS NULL OR c.serviceDate >= :dateFrom) AND (CAST(:dateTo AS date) IS NULL OR c.serviceDate <= :dateTo) AND (CAST(:createdAtFrom AS timestamp) IS NULL OR c.createdAt >= :createdAtFrom) AND (CAST(:createdAtTo AS timestamp) IS NULL OR c.createdAt < :createdAtTo) AND (LOWER(c.providerName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) OR LOWER(c.diagnosisDescription) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) OR LOWER(c.member.fullName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) OR LOWER(c.member.civilId) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))")
         Page<Claim> searchPagedWithFilters(
                         @Param("keyword") String keyword,
                         @Param("employerId") Long employerId,
                         @Param("providerId") Long providerId,
+                        @Param("claimBatchId") Long claimBatchId,
                         @Param("status") com.waad.tba.modules.claim.entity.ClaimStatus status,
                         @Param("dateFrom") java.time.LocalDate dateFrom,
                         @Param("dateTo") java.time.LocalDate dateTo,
@@ -1521,6 +1523,7 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
                         "AND c.providerId IN :providerIds " +
                         "AND (:providerId IS NULL OR c.providerId = :providerId) " +
                         "AND (:employerId IS NULL OR m.employer.id = :employerId) " +
+                        "AND (:claimBatchId IS NULL OR c.claimBatch.id = :claimBatchId) " +
                         "AND (:status IS NULL OR c.status = :status) " +
                         "AND (CAST(:dateFrom AS date) IS NULL OR c.serviceDate >= :dateFrom) " +
                         "AND (CAST(:dateTo AS date) IS NULL OR c.serviceDate <= :dateTo) " +
@@ -1534,6 +1537,7 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
                                         "WHERE c.active = true AND c.providerId IN :providerIds " +
                                         "AND (:providerId IS NULL OR c.providerId = :providerId) " +
                                         "AND (:employerId IS NULL OR m.employer.id = :employerId) " +
+                                        "AND (:claimBatchId IS NULL OR c.claimBatch.id = :claimBatchId) " +
                                         "AND (:status IS NULL OR c.status = :status) " +
                                         "AND (CAST(:dateFrom AS date) IS NULL OR c.serviceDate >= :dateFrom) " +
                                         "AND (CAST(:dateTo AS date) IS NULL OR c.serviceDate <= :dateTo) " +
@@ -1551,6 +1555,7 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
                         @Param("providerIds") List<Long> providerIds,
                         @Param("providerId") Long providerId,
                         @Param("employerId") Long employerId,
+                        @Param("claimBatchId") Long claimBatchId,
                         @Param("status") com.waad.tba.modules.claim.entity.ClaimStatus status,
                         @Param("dateFrom") java.time.LocalDate dateFrom,
                         @Param("dateTo") java.time.LocalDate dateTo,

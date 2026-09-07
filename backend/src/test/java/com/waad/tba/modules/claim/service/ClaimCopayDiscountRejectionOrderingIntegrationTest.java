@@ -286,7 +286,7 @@ class ClaimCopayDiscountRejectionOrderingIntegrationTest extends PostgresIntegra
                 new BigDecimal("300.00"), new BigDecimal("301.00"), false))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("providerRejectedAmount")
-                .hasMessageContaining("exceeds insurerGrossShare");
+                .hasMessageContaining("exceeds the rejectable insurer amount");
     }
 
     // ── Closure proof: consumption and payment are distinct, both canonical ──

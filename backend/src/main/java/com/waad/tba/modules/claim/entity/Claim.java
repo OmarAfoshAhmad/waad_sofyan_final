@@ -166,6 +166,27 @@ public class Claim {
     @Builder.Default
     private BigDecimal refusedAmount = BigDecimal.ZERO;
 
+    /**
+     * Direct amount paid by the beneficiary outside insurance. This is a
+     * settlement-distribution note only: it never changes coverage, limits,
+     * patientCoPay, refusedAmount, approvedAmount or netProviderAmount.
+     */
+    @Column(name = "beneficiary_paid_amount", precision = 15, scale = 2, nullable = false)
+    @Builder.Default
+    private BigDecimal beneficiaryPaidAmount = BigDecimal.ZERO;
+
+    @Column(name = "beneficiary_paid_toward_copay", precision = 15, scale = 2, nullable = false)
+    @Builder.Default
+    private BigDecimal beneficiaryPaidTowardCopay = BigDecimal.ZERO;
+
+    @Column(name = "beneficiary_paid_toward_refusal", precision = 15, scale = 2, nullable = false)
+    @Builder.Default
+    private BigDecimal beneficiaryPaidTowardRefusal = BigDecimal.ZERO;
+
+    @Column(name = "provider_refusal_balance", precision = 15, scale = 2, nullable = false)
+    @Builder.Default
+    private BigDecimal providerRefusalBalance = BigDecimal.ZERO;
+
     // B-07 OOP FIX: differenceAmount is mathematically derived.
     // Storing it physically creates a risk of silent sync drift (database anomaly).
     // Now purely calculated at runtime.

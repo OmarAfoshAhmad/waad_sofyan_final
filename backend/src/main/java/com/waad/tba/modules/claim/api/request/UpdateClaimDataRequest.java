@@ -54,6 +54,8 @@ public class UpdateClaimDataRequest {
 
     private com.waad.tba.modules.providercontract.enums.EncounterType encounterType;
     private Boolean fullCoverage;
+    @jakarta.validation.constraints.DecimalMin(value = "0.00", message = "Beneficiary paid amount must be >= 0")
+    private java.math.BigDecimal beneficiaryPaidAmount;
 
     @Data
     @Builder
@@ -90,6 +92,8 @@ public class UpdateClaimDataRequest {
         @Size(max = 255, message = "Service category name must not exceed 255 characters")
         private String serviceCategoryName;
         private java.math.BigDecimal unitPrice;
+        @Positive(message = "Manual amount must be positive")
+        private java.math.BigDecimal manualAmount;
         private java.math.BigDecimal grossAmount;
         private java.math.BigDecimal coveredAmount;
         private java.math.BigDecimal refusedAmount;

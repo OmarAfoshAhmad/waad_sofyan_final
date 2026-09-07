@@ -30,6 +30,7 @@ public final class ClaimFinancialTotals {
         claim.setPatientCoPay(patient);
         claim.setCompanyDiscountAmount(discount);
         claim.setDifferenceAmount(money(requested.subtract(approved)));
+        applyBeneficiaryDirectPaymentSettlement(claim);
     }
 
     /**
@@ -62,5 +63,25 @@ public final class ClaimFinancialTotals {
 
     private static BigDecimal money(BigDecimal value) {
         return zero(value).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    public static void applyBeneficiaryDirectPaymentSettlement(Claim claim) {
+        BigDecimal paid = money(claim.getBeneficiaryPaidAmount());
+        BigDecimal patient = money(claim.getPatientCoPay());
+        BigDecimal refused = money(claim.getRefusedAmount());
+        BigDecimal maxPayableByBeneficiary = patient.add(refused);
+        if (paid.compareTo(maxPayableByBeneficiary) > 0) {
+            throw new IllegalArgumentException(
+                    "مبلغ المستفيد المدفوع لا يجوز أن يتجاوز التزام المستفيد الأصلي والمبلغ المرفوض");
+        }
+        BigDecimal towardCopay = paid.min(patient);
+        BigDecimal excessAfterCopay = paid.subtract(towardCopay).max(BigDecimal.ZERO);
+        BigDecimal towardRefusal = excessAfterCopay.min(refused);
+        BigDecimal providerBalance = refused.subtract(towardRefusal).max(BigDecimal.ZERO);
+
+        claim.setBeneficiaryPaidAmount(paid);
+        claim.setBeneficiaryPaidTowardCopay(towardCopay);
+        claim.setBeneficiaryPaidTowardRefusal(towardRefusal);
+        claim.setProviderRefusalBalance(providerBalance);
     }
 }

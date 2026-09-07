@@ -8,6 +8,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
+import java.math.BigDecimal;
 import java.util.List;
 
 /**
@@ -146,6 +147,13 @@ public class CreateClaimRequest {
      */
     private Boolean fullCoverage;
 
+    /**
+     * Optional direct beneficiary payment outside insurance. It is used only to
+     * distribute settlement responsibility after the canonical coverage result.
+     */
+    @jakarta.validation.constraints.DecimalMin(value = "0.00", message = "Beneficiary paid amount must be >= 0")
+    private BigDecimal beneficiaryPaidAmount;
+
     // ═══════════════════════════════════════════════════════════════════════════
     // ⛔ FORBIDDEN FIELDS - FINANCIAL SAFETY
     // ═══════════════════════════════════════════════════════════════════════════
@@ -211,6 +219,13 @@ public class CreateClaimRequest {
          * For backlog claims, this is used as the source of truth.
          */
         private java.math.BigDecimal unitPrice;
+
+        /**
+         * Invoice amount entered directly for standard manual-amount services
+         * such as pharmacy, optics, and laboratory invoices.
+         */
+        @Positive(message = "Manual amount must be positive")
+        private java.math.BigDecimal manualAmount;
 
         /**
          * Whether this specific line is rejected by the provider

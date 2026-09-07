@@ -22,11 +22,9 @@ import com.waad.tba.modules.medicaltaxonomy.enums.PricingMode;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalCategoryRepository;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalServiceRepository;
 import com.waad.tba.modules.medicaldictionary.service.MedicalDictionaryNormalizer;
-import com.waad.tba.modules.provider.repository.ProviderServiceRepository;
 import org.springframework.data.domain.PageImpl;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 
 import lombok.RequiredArgsConstructor;
 
@@ -45,7 +43,6 @@ public class ClaimEntryContextService {
     private final ProviderContractPricingItemService pricingItemService;
     private final LimitBalanceReader limitBalanceReader;
     private final PreAuthorizationRepository preAuthorizationRepository;
-    private final ProviderServiceRepository providerServiceRepository;
     private final MedicalServiceRepository medicalServiceRepository;
     private final MedicalCategoryRepository medicalCategoryRepository;
     private final MedicalDictionaryNormalizer searchNormalizer;
@@ -107,37 +104,34 @@ public class ClaimEntryContextService {
         Page<ProviderContractPricingItemResponseDto> contractItems = pricingItemService
                 .findEffectiveInContract(context.contractId(), serviceDate, query, pageable);
 
-        // Standard services (pharmacy/optics-style invoices, MANUAL_AMOUNT):
-        // there is no ProviderContractPricingItem to page through, and the
-        // set is always small (a handful of catalog entries), so it is
-        // folded into the first page only rather than paginated separately.
-        List<ProviderContractPricingItemResponseDto> manualAmountOptions = pageable.getOffset() == 0
-                ? findManualAmountServiceOptions(providerId, query)
+        // General claim-entry services are shared medical catalog entries, not
+        // provider price-list rows. Invoice-style professional standards stay
+        // MANUAL_AMOUNT; services added from the claim window use CONTRACT_PRICE
+        // with an editable quantity and a direct unit price.
+        List<ProviderContractPricingItemResponseDto> generalOptions = pageable.getOffset() == 0
+                ? findGeneralServiceOptions(query)
                 : List.of();
-        if (manualAmountOptions.isEmpty()) {
+        if (generalOptions.isEmpty()) {
             return contractItems;
         }
 
-        List<ProviderContractPricingItemResponseDto> merged = new ArrayList<>(contractItems.getContent());
-        merged.addAll(manualAmountOptions);
-        return new PageImpl<>(merged, pageable, contractItems.getTotalElements() + manualAmountOptions.size());
+        List<ProviderContractPricingItemResponseDto> merged = new ArrayList<>(generalOptions);
+        merged.addAll(contractItems.getContent());
+        return new PageImpl<>(merged, pageable, contractItems.getTotalElements() + generalOptions.size());
     }
 
-    private List<ProviderContractPricingItemResponseDto> findManualAmountServiceOptions(
-            Long providerId, String query) {
-        Set<String> providerServiceCodes = Set.copyOf(
-                providerServiceRepository.findServiceCodesByProviderId(providerId));
-        if (providerServiceCodes.isEmpty()) {
-            return List.of();
-        }
-
+    private List<ProviderContractPricingItemResponseDto> findGeneralServiceOptions(String query) {
         String normalizedQuery = searchNormalizer.normalize(query);
-        List<MedicalService> standardServices = medicalServiceRepository
-                .findByPricingModeAndActiveTrue(PricingMode.MANUAL_AMOUNT).stream()
-                .filter(service -> providerServiceCodes.contains(service.getCode()))
+        List<MedicalService> standardServices = new ArrayList<>();
+        standardServices.addAll(medicalServiceRepository.findByPricingModeAndActiveTrue(PricingMode.MANUAL_AMOUNT));
+        standardServices.addAll(medicalServiceRepository
+                .findByPricingModeAndCodeStartingWithAndActiveTrue(PricingMode.CONTRACT_PRICE, "SYS-CLAIM-"));
+        standardServices = standardServices.stream()
                 .filter(service -> normalizedQuery.isBlank()
                         || searchNormalizer.normalize(service.getName()).contains(normalizedQuery)
                         || service.getCode().toLowerCase().contains(normalizedQuery))
+                .sorted(java.util.Comparator.comparingInt(
+                        service -> manualAmountSearchRank(service, normalizedQuery)))
                 .toList();
         if (standardServices.isEmpty()) {
             return List.of();
@@ -156,9 +150,15 @@ public class ClaimEntryContextService {
                             .name(category.getName()).nameAr(category.getNameAr()).build();
             return ProviderContractPricingItemResponseDto.builder()
                     .medicalServiceId(service.getId())
-                    .pricingMode(PricingMode.MANUAL_AMOUNT.name())
+                    .pricingMode(service.getPricingMode() == null
+                            ? PricingMode.MANUAL_AMOUNT.name()
+                            : service.getPricingMode().name())
                     .serviceName(service.getName())
                     .serviceCode(service.getCode())
+                    .basePrice(service.getBasePrice())
+                    .contractPrice(service.getBasePrice())
+                    .maxContractPrice(service.getBasePrice())
+                    .claimContextCode(service.getDefaultClaimContextCode())
                     .categoryName(category != null
                             ? (category.getNameAr() != null ? category.getNameAr() : category.getName())
                             : null)
@@ -168,6 +168,26 @@ public class ClaimEntryContextService {
                     .isCurrentlyEffective(true)
                     .build();
         }).toList();
+    }
+
+    private int manualAmountSearchRank(MedicalService service, String normalizedQuery) {
+        if (normalizedQuery == null || normalizedQuery.isBlank()) {
+            return 100;
+        }
+
+        String normalizedName = searchNormalizer.normalize(service.getName());
+        String normalizedCode = service.getCode() == null ? "" : service.getCode().toLowerCase();
+
+        if (normalizedName.equals(normalizedQuery) || normalizedCode.equals(normalizedQuery)) {
+            return 0;
+        }
+        if (normalizedName.startsWith(normalizedQuery) || normalizedCode.startsWith(normalizedQuery)) {
+            return 1;
+        }
+        if (normalizedName.contains(normalizedQuery) || normalizedCode.contains(normalizedQuery)) {
+            return 2;
+        }
+        return 10;
     }
 
     public Page<ProviderContractPricingItemResponseDto> findEffectiveServices(

@@ -129,7 +129,7 @@ const RejectedBatchPrintReport = forwardRef(({ claims, employer, provider, month
       <div className="print-header">
         <img src={logoSrc} alt="logo" style={{ height: '4.0625rem', width: 'auto', objectFit: 'contain', marginBottom: '0.375rem' }} />
         <Typography className="print-title">{displayName}</Typography>
-        <Typography className="print-title">تقرير المطالبات المرفوضة (كلياً وجزئياً)</Typography>
+        <Typography className="print-title">تقرير المطالبات التي تحتوي مبالغ مرفوضة</Typography>
         <Typography variant="subtitle2">
           {provider?.name} - {employer?.name}
         </Typography>

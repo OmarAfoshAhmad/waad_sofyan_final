@@ -14,6 +14,7 @@ import com.waad.tba.modules.providercontract.repository.ProviderContractReposito
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.context.ApplicationEventPublisher;
@@ -151,8 +152,9 @@ public class ProviderContractPricingItemService {
         String normalizedQuery = query == null ? "" : query.trim();
         var page = normalizedQuery.isEmpty()
                 ? pricingRepository.findEffectiveByContractId(contractId, serviceDate, pageable)
-                : pricingRepository.searchEffectiveByContractId(
-                        contractId, serviceDate, normalizedQuery, searchNormalizer.normalize(normalizedQuery), pageable);
+                : pricingRepository.searchEffectiveByContractIdRanked(
+                        contractId, serviceDate, normalizedQuery, searchNormalizer.normalize(normalizedQuery),
+                        PageRequest.of(pageable.getPageNumber(), pageable.getPageSize()));
         return page
                 .map(ProviderContractPricingItemResponseDto::fromEntity);
     }

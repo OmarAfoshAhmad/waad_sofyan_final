@@ -53,6 +53,41 @@ class MultiLineMultiBucketEngineTest {
     }
 
     @Test
+    void oneClaimWithDifferentCategoriesConsumesSharedGeneralCeilingOnlyOnceAcrossLines() {
+        var diagnosticsBucket = balance(1L, "BUCKET:DIAG", BenefitScopeType.GROUP, "3000.00");
+        var imagingBucket = balance(1L, "BUCKET:IMG", BenefitScopeType.GROUP, "500.00");
+        var inpatientFallbackBucket = balance(1L, "BUCKET:INPATIENT-GENERAL", BenefitScopeType.GROUP, "1000.00");
+        var general = balance(1L, "POLICY:GENERAL", BenefitScopeType.POLICY_GENERAL, "800.00");
+
+        var result = engine.evaluate(1L, List.of(
+                line("labs", "200.00", 75, set(1L, diagnosticsBucket, general)),
+                line("ct", "800.00", 75, set(1L, imagingBucket, general)),
+                line("sugar-classified-outpatient-but-claim-inpatient", "100.00", 100,
+                        set(1L, inpatientFallbackBucket, general))));
+
+        var labs = result.lines().get(0).financial();
+        assertThat(labs.insideLimit()).isEqualByComparingTo("200.00");
+        assertThat(labs.insurerFinalPayment()).isEqualByComparingTo("150.00");
+        assertThat(labs.patientCoverageShare()).isEqualByComparingTo("50.00");
+
+        var ct = result.lines().get(1).financial();
+        assertThat(ct.insideLimit()).isEqualByComparingTo("500.00");
+        assertThat(ct.patientLimitExcess()).isEqualByComparingTo("300.00");
+        assertThat(ct.insurerFinalPayment()).isEqualByComparingTo("375.00");
+        assertThat(ct.patientCoverageShare()).isEqualByComparingTo("125.00");
+
+        var inpatientFallback = result.lines().get(2).financial();
+        assertThat(inpatientFallback.insideLimit()).isEqualByComparingTo("100.00");
+        assertThat(inpatientFallback.insurerFinalPayment()).isEqualByComparingTo("100.00");
+        assertThat(inpatientFallback.patientCoverageShare()).isZero();
+
+        assertThat(result.signedRemainingByLimit().get("POLICY:GENERAL")).isZero();
+        assertThat(result.signedRemainingByLimit().get("BUCKET:DIAG")).isEqualByComparingTo("2800.00");
+        assertThat(result.signedRemainingByLimit().get("BUCKET:IMG")).isZero();
+        assertThat(result.signedRemainingByLimit().get("BUCKET:INPATIENT-GENERAL")).isEqualByComparingTo("900.00");
+    }
+
+    @Test
     void rejectsBalancesBelongingToAnotherFamilyMember() {
         assertThatThrownBy(() -> engine.evaluate(1L,
                 List.of(line("L1", set(2L, balance(2L, "GROUP", BenefitScopeType.GROUP, "100.00"))))))
@@ -73,6 +108,12 @@ class MultiLineMultiBucketEngineTest {
     private MultiLineMultiBucketEngine.LineInput line(String key, LimitBalanceReader.BalanceSet balances) {
         return new MultiLineMultiBucketEngine.LineInput(key, new BigDecimal("60.00"),
                 new BigDecimal("60.00"), 80, BigDecimal.ZERO, BigDecimal.ZERO, false, 1, balances);
+    }
+
+    private MultiLineMultiBucketEngine.LineInput line(String key, String amount, int coveragePercent,
+                                                      LimitBalanceReader.BalanceSet balances) {
+        return new MultiLineMultiBucketEngine.LineInput(key, new BigDecimal(amount),
+                new BigDecimal(amount), coveragePercent, BigDecimal.ZERO, BigDecimal.ZERO, false, 1, balances);
     }
 
     private LimitBalanceReader.BalanceSet set(Long memberId, LimitBalanceReader.LimitBalance... balances) {

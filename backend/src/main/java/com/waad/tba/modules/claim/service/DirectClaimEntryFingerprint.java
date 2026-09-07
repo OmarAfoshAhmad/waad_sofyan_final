@@ -62,6 +62,7 @@ public class DirectClaimEntryFingerprint {
                 .append(FIELD).append(normalized(claim == null ? null : claim.getClaimContextCode()))
                 .append(FIELD).append(text(claim == null ? null : claim.getEncounterType()))
                 .append(FIELD).append(text(claim == null ? null : claim.getFullCoverage()))
+                .append(FIELD).append(money(claim == null ? null : claim.getBeneficiaryPaidAmount()))
                 .append(FIELD).append(text(claim == null ? null : claim.getPreAuthorizationId()));
 
         for (String line : canonicalLines(claim)) {

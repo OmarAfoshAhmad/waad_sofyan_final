@@ -106,4 +106,19 @@ class UnifiedSearchServiceSecurityTest {
                 .isEqualTo("JFZ202533933");
         verify(memberRepository, never()).findById(33933L);
     }
+
+    @Test
+    void shortNumericCardFragmentSearchesCardsBeforeInternalMemberId() {
+        when(queryAccessPolicy.requireListing(MemberOperation.SEARCH, null)).thenReturn(authorizedScope);
+        when(memberRepository.findByCardNumberWithDetails("33")).thenReturn(java.util.Optional.empty());
+        when(memberRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(java.util.List.of(
+                        Member.builder().id(7L).cardNumber("JFZ202533933").build())));
+
+        var results = service.search("33", null);
+
+        assertThat(results).singleElement().extracting(com.waad.tba.modules.member.dto.MemberSearchDto::getCardNumber)
+                .isEqualTo("JFZ202533933");
+        verify(memberRepository, never()).findById(33L);
+    }
 }

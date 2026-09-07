@@ -472,7 +472,7 @@ public class CoverageEngineService {
                 .approvedTotal(ZERO)
                 .companyShare(ZERO)
                 .patientShare(requestedTotal)
-                .refusalReason("تعذر حساب التغطية لهذا البند: " + safeMessage(e))
+                .refusalReason("تعذر حساب التغطية لهذا البند. أعد المحاولة أو راجع إعداد القاعدة.")
                 .priceRefused(ZERO)
                 .limitRefused(ZERO)
                 .systemRefusedAmount(requestedTotal)
@@ -481,11 +481,6 @@ public class CoverageEngineService {
                         ? (line.getServiceCategoryId() != null ? line.getServiceCategoryId() : line.getCategoryId())
                         : null)
                 .build();
-    }
-
-    private String safeMessage(Exception e) {
-        String message = e == null ? null : e.getMessage();
-        return message == null || message.isBlank() ? "خطأ داخلي في محرك التغطية" : message;
     }
 
     private long requestedTimes(CountingMethod method, ClaimLineInput line, BatchUsageAccumulator acc) {

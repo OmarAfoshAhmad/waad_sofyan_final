@@ -216,33 +216,51 @@ public class WaadFinancialEngine {
 
         BigDecimal patientTotalResponsibility = scale2(patientCoverageShare.add(patientLimitExcess));
 
-        BigDecimal rejectionCandidate = input.fullyRejected() ? insurerGrossShare : providerRejectedAmount;
-        if (rejectionCandidate.compareTo(insurerGrossShare) > 0) {
-            throw new IllegalArgumentException(
-                    "FINANCIAL_CONSTITUTION S11/S24: providerRejectedAmount (" + rejectionCandidate
-                            + ") exceeds insurerGrossShare (" + insurerGrossShare
-                            + "). Fail closed -- do not clamp silently.");
-        }
-        BigDecimal appliedRejection = scale2(rejectionCandidate);
         BigDecimal approvedBeforeDiscount;
         BigDecimal providerContractDiscount;
         BigDecimal insurerFinalPayment;
         if (input.fullyRejected()) {
             approvedBeforeDiscount = ZERO;
             providerContractDiscount = ZERO;
+            BigDecimal appliedRejection = insurerGrossShare;
             insurerFinalPayment = ZERO;
+            return checkedResult(input, requestedAmount, contractualPrice, contractualPriceExcess, settlementBase,
+                    bindingAvailableLimit, insideLimit, patientLimitExcess, limitConsumption, bindingRemainingLimit,
+                    patientCoverageShare, patientTotalResponsibility, insurerGrossShare, discountPercent,
+                    providerContractDiscount, approvedBeforeDiscount, appliedRejection, insurerFinalPayment);
         } else if (input.discountBeforeRejection()) {
             approvedBeforeDiscount = insurerGrossShare;
             providerContractDiscount = scale2(approvedBeforeDiscount.multiply(discountPercent)
                     .divide(HUNDRED, 2, RoundingMode.HALF_UP));
+            BigDecimal maxRejection = maxZero(scale2(approvedBeforeDiscount.subtract(providerContractDiscount)));
+            validateRejectionDoesNotExceed(maxRejection, providerRejectedAmount);
+            BigDecimal appliedRejection = providerRejectedAmount;
             insurerFinalPayment = maxZero(scale2(approvedBeforeDiscount
                     .subtract(providerContractDiscount).subtract(appliedRejection)));
+            return checkedResult(input, requestedAmount, contractualPrice, contractualPriceExcess, settlementBase,
+                    bindingAvailableLimit, insideLimit, patientLimitExcess, limitConsumption, bindingRemainingLimit,
+                    patientCoverageShare, patientTotalResponsibility, insurerGrossShare, discountPercent,
+                    providerContractDiscount, approvedBeforeDiscount, appliedRejection, insurerFinalPayment);
         } else {
+            validateRejectionDoesNotExceed(insurerGrossShare, providerRejectedAmount);
+            BigDecimal appliedRejection = providerRejectedAmount;
             approvedBeforeDiscount = maxZero(scale2(insurerGrossShare.subtract(appliedRejection)));
             providerContractDiscount = scale2(approvedBeforeDiscount.multiply(discountPercent)
                     .divide(HUNDRED, 2, RoundingMode.HALF_UP));
             insurerFinalPayment = maxZero(scale2(approvedBeforeDiscount.subtract(providerContractDiscount)));
+            return checkedResult(input, requestedAmount, contractualPrice, contractualPriceExcess, settlementBase,
+                    bindingAvailableLimit, insideLimit, patientLimitExcess, limitConsumption, bindingRemainingLimit,
+                    patientCoverageShare, patientTotalResponsibility, insurerGrossShare, discountPercent,
+                    providerContractDiscount, approvedBeforeDiscount, appliedRejection, insurerFinalPayment);
         }
+    }
+
+    private Result checkedResult(Input input, BigDecimal requestedAmount, BigDecimal contractualPrice,
+            BigDecimal contractualPriceExcess, BigDecimal settlementBase, BigDecimal bindingAvailableLimit,
+            BigDecimal insideLimit, BigDecimal patientLimitExcess, BigDecimal limitConsumption,
+            BigDecimal bindingRemainingLimit, BigDecimal patientCoverageShare, BigDecimal patientTotalResponsibility,
+            BigDecimal insurerGrossShare, BigDecimal discountPercent, BigDecimal providerContractDiscount,
+            BigDecimal approvedBeforeDiscount, BigDecimal appliedRejection, BigDecimal insurerFinalPayment) {
         // Historical schema name retained; canonical UI meaning: approved amount
         // immediately before contractual discount, according to contract timing.
         BigDecimal providerNetBeforeRejection = scale2(approvedBeforeDiscount);
@@ -283,6 +301,15 @@ public class WaadFinancialEngine {
                 providerNetBeforeRejection,
                 appliedRejection,
                 insurerFinalPayment);
+    }
+
+    private static void validateRejectionDoesNotExceed(BigDecimal maxRejection, BigDecimal rejectionCandidate) {
+        if (rejectionCandidate.compareTo(maxRejection) > 0) {
+            throw new IllegalArgumentException(
+                    "FINANCIAL_CONSTITUTION S11/S24: providerRejectedAmount (" + rejectionCandidate
+                            + ") exceeds the rejectable insurer amount (" + maxRejection
+                            + "). Fail closed -- do not clamp silently.");
+        }
     }
 
     private void validate(Input input) {

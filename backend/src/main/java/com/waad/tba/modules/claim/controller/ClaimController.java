@@ -278,6 +278,7 @@ public class ClaimController {
     public ResponseEntity<ApiResponse<ClaimListResponse>> listClaims(
             @RequestParam(name = "employerId", required = false) Long employerId,
             @RequestParam(name = "providerId", required = false) Long providerId,
+            @RequestParam(name = "claimBatchId", required = false) Long claimBatchId,
             @RequestParam(name = "status", required = false) ClaimStatus status,
             @RequestParam(name = "dateFrom", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFrom,
             @RequestParam(name = "dateTo", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateTo,
@@ -296,7 +297,7 @@ public class ClaimController {
         }
 
         Page<ClaimViewDto> claimsPage = claimService.listClaims(
-                employerId, providerId, status, dateFrom, dateTo, createdDateFrom, createdDateTo,
+                employerId, providerId, claimBatchId, status, dateFrom, dateTo, createdDateFrom, createdDateTo,
                 Math.max(0, page - 1), size, sortBy, sortDir, search);
 
         ClaimListResponse response = apiMapper.toListResponse(claimsPage);

@@ -133,6 +133,9 @@ public class ClaimMapper {
                                                 : com.waad.tba.modules.providercontract.enums.EncounterType.OUTPATIENT)
                                 .claimContextCode(dto.getClaimContextCode())
                                 .fullCoverage(dto.getFullCoverage() != null ? dto.getFullCoverage() : false)
+                                .beneficiaryPaidAmount(dto.getBeneficiaryPaidAmount() != null
+                                                ? dto.getBeneficiaryPaidAmount()
+                                                : BigDecimal.ZERO)
                                 .isBacklog(visit.getVisitType() == com.waad.tba.modules.visit.entity.VisitType.LEGACY_BACKLOG)
                                 .build();
 
@@ -264,11 +267,6 @@ public class ClaimMapper {
                                 if (lineDto.getManualAmount() == null
                                                 || lineDto.getManualAmount().compareTo(BigDecimal.ZERO) <= 0) {
                                         throw new BusinessRuleException("يجب إدخال قيمة الفاتورة لهذه الخدمة");
-                                }
-                                if (!providerServiceRepository.existsByProviderIdAndServiceCode(
-                                                claim.getProviderId(), codeToLookup)) {
-                                        throw new BusinessRuleException(
-                                                        "مقدم الخدمة غير مُسنَد إليه هذه الخدمة المهنية القياسية");
                                 }
                                 enteredUnitPrice = lineDto.getManualAmount();
                                 resolvedUnitPrice = lineDto.getManualAmount();
@@ -684,6 +682,10 @@ public class ClaimMapper {
                                 .totalAmount(claim.getRequestedAmount())
                                 .approvedAmount(claim.getApprovedAmount())
                                 .refusedAmount(claim.getRefusedAmount())
+                                .beneficiaryPaidAmount(claim.getBeneficiaryPaidAmount())
+                                .beneficiaryPaidTowardCopay(claim.getBeneficiaryPaidTowardCopay())
+                                .beneficiaryPaidTowardRefusal(claim.getBeneficiaryPaidTowardRefusal())
+                                .providerRefusalBalance(claim.getProviderRefusalBalance())
                                 .providerDiscountPercent(appliedDiscount)
                                 // القيمة المحفوظة فعلياً على المطالبة (companyDiscountAmount)، لا إعادة
                                 // حساب من النسبة — إعادة الحساب كانت تتجاهل refusedAmount وتوقيت الخصم

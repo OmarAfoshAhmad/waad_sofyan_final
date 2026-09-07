@@ -139,6 +139,16 @@ public class UnifiedSearchService {
             }
         }
 
+        // Operators often type the last two digits first while reading a printed
+        // card. Keep the 3-character minimum for names, but allow short numeric
+        // suffixes to search card identifiers inside the authorized employer scope.
+        if (stablePart.matches("\\d{2,}")) {
+            List<MemberSearchDto> shortNumericMatches = searchByNumericCardFragment(stablePart, scope);
+            if (!shortNumericMatches.isEmpty()) {
+                return shortNumericMatches;
+            }
+        }
+
         // 3. Try ID exact match only after card-number matching. Database ids are
         // supported for staff convenience but must not shadow a real card suffix.
         if (cardNumber.matches("\\d+")) {
@@ -158,6 +168,23 @@ public class UnifiedSearchService {
         // 4. Fallback to the original query for unusual legacy formats. Do not
         // repeat the same database query when the stable part was the input.
         return searchedOriginal ? List.of() : searchByName(cardNumber, scope);
+    }
+
+    private List<MemberSearchDto> searchByNumericCardFragment(String fragment, AuthorizedMemberScope scope) {
+        String pattern = "%" + fragment.trim().toLowerCase(java.util.Locale.ROOT) + "%";
+        Specification<Member> specification = (root, query, builder) -> builder.and(
+                MemberScopeFilter.toPredicate(scope, root.get("employer").get("id"), builder),
+                builder.or(
+                        builder.like(builder.lower(root.get("cardNumber")), pattern),
+                        builder.like(builder.lower(root.get("barcode")), pattern)));
+
+        return memberRepository.findAll(
+                specification,
+                PageRequest.of(0, MAX_SEARCH_RESULTS, Sort.by(Sort.Direction.ASC, "id")))
+                .getContent()
+                .stream()
+                .map(member -> MemberSearchDto.fromMember(member, "CARD_NUMBER_PARTIAL", 0.8))
+                .toList();
     }
 
     static String stableCardNumberPart(String value) {

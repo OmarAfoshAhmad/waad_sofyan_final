@@ -190,21 +190,27 @@ export const unifiedSearch = async (query, employerId = null) => {
         criteria.employerId = employerId;
       }
 
-      // Call searchMembers (GET /unified-members/search) which uses LIKE %...%
-      const advancedResponse = await searchMembers({ ...criteria, size: 20 });
-      if (advancedResponse?.content?.length > 0) {
-        results = advancedResponse.content.map((m) => ({
-          id: m.id,
-          fullName: m.fullName,
-          cardNumber: m.cardNumber,
-          barcode: m.barcode,
-          status: m.status,
-          cardStatus: m.cardStatus,
-          eligible: m.eligibilityStatus,
-          employerName: m.employerName,
-          policyName: m.benefitPolicyName,
-          searchType: 'PARTIAL_MATCH'
-        }));
+      try {
+        // Call searchMembers (GET /unified-members/search) which uses LIKE %...%.
+        // The fallback is an enhancement only; if it fails, keep the search box calm
+        // and return the strict search result instead of surfacing a generic error.
+        const advancedResponse = await searchMembers({ ...criteria, size: 20 });
+        if (advancedResponse?.content?.length > 0) {
+          results = advancedResponse.content.map((m) => ({
+            id: m.id,
+            fullName: m.fullName,
+            cardNumber: m.cardNumber,
+            barcode: m.barcode,
+            status: m.status,
+            cardStatus: m.cardStatus,
+            eligible: m.eligibilityStatus,
+            employerName: m.employerName,
+            policyName: m.benefitPolicyName,
+            searchType: 'PARTIAL_MATCH'
+          }));
+        }
+      } catch (fallbackError) {
+        console.warn('Unified member search fallback failed; returning strict search results.', fallbackError);
       }
     }
 

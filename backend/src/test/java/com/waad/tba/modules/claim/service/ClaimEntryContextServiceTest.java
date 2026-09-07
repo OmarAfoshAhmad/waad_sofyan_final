@@ -150,7 +150,7 @@ class ClaimEntryContextServiceTest {
     }
 
     @Test
-    void includesTheProvidersAssignedStandardServicesAlongsideContractPricedItems() {
+    void includesGeneralStandardServicesAlongsideContractPricedItemsForAnyProvider() {
         LocalDate date = LocalDate.of(2025, 8, 12);
         Employer employer = Employer.builder().id(9L).name("جهة أ").build();
         ProviderContract contract = ProviderContract.builder().id(41L).contractCode("CON-A")
@@ -170,8 +170,6 @@ class ClaimEntryContextServiceTest {
         when(pricingItemService.findEffectiveInContract(41L, date, null, pageable))
                 .thenReturn(new PageImpl<>(java.util.List.of()));
 
-        when(providerServiceRepository.findServiceCodesByProviderId(8L))
-                .thenReturn(java.util.List.of("SYS-DRUG-GENERAL"));
         var drugCategory = com.waad.tba.modules.medicaltaxonomy.entity.MedicalCategory.builder()
                 .id(77L).code("CAT-DRUG-GENERAL").name("Drugs").nameAr("أدوية").build();
         when(medicalServiceRepository.findByPricingModeAndActiveTrue(
@@ -197,7 +195,7 @@ class ClaimEntryContextServiceTest {
     }
 
     @Test
-    void excludesAStandardServiceTheProviderIsNotAssigned() {
+    void includesGeneralStandardServicesEvenWhenTheProviderHasNoAssignment() {
         LocalDate date = LocalDate.of(2025, 8, 12);
         Employer employer = Employer.builder().id(9L).name("جهة أ").build();
         ProviderContract contract = ProviderContract.builder().id(41L).contractCode("CON-A")
@@ -216,11 +214,23 @@ class ClaimEntryContextServiceTest {
                 .thenReturn(new EffectiveProviderContractResolver.ResolvedContract(contract, terms));
         when(pricingItemService.findEffectiveInContract(41L, date, null, pageable))
                 .thenReturn(new PageImpl<>(java.util.List.of()));
-        when(providerServiceRepository.findServiceCodesByProviderId(8L)).thenReturn(java.util.List.of());
+        var category = com.waad.tba.modules.medicaltaxonomy.entity.MedicalCategory.builder()
+                .id(88L).code("CAT-COV-DIAG-FEES").name("Diagnostics").nameAr("أشعة وتحاليل ورسوم أطباء").build();
+        when(medicalServiceRepository.findByPricingModeAndActiveTrue(
+                com.waad.tba.modules.medicaltaxonomy.enums.PricingMode.MANUAL_AMOUNT))
+                .thenReturn(java.util.List.of(
+                        com.waad.tba.modules.medicaltaxonomy.entity.MedicalService.builder()
+                                .id(601L).code("SYS-LAB-INVOICE").name("فاتورة تحاليل طبية")
+                                .categoryId(88L)
+                                .pricingMode(com.waad.tba.modules.medicaltaxonomy.enums.PricingMode.MANUAL_AMOUNT)
+                                .build()));
+        when(medicalCategoryRepository.findAllById(java.util.Set.of(88L)))
+                .thenReturn(java.util.List.of(category));
 
         var result = service.findEffectiveServices(7L, 8L, 9L, date, pageable);
 
-        assertThat(result.getContent()).isEmpty();
+        assertThat(result.getContent()).extracting(ProviderContractPricingItemResponseDto::getServiceCode)
+                .containsExactly("SYS-LAB-INVOICE");
     }
 
     @Test
@@ -243,8 +253,6 @@ class ClaimEntryContextServiceTest {
                 .thenReturn(new EffectiveProviderContractResolver.ResolvedContract(contract, terms));
         when(pricingItemService.findEffectiveInContract(41L, date, "فاتوره تحاليل", pageable))
                 .thenReturn(new PageImpl<>(java.util.List.of()));
-        when(providerServiceRepository.findServiceCodesByProviderId(8L))
-                .thenReturn(java.util.List.of("SYS-LAB-INVOICE"));
         var category = com.waad.tba.modules.medicaltaxonomy.entity.MedicalCategory.builder()
                 .id(88L).code("CAT-COV-DIAG-FEES").name("Diagnostics").nameAr("أشعة وتحاليل ورسوم أطباء").build();
         when(medicalServiceRepository.findByPricingModeAndActiveTrue(

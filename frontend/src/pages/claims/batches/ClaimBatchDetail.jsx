@@ -246,23 +246,63 @@ export default function ClaimBatchDetail() {
 
   // 2. Fetch Claims in this Batch
   const { data: claimsResponse, isLoading } = useQuery({
-    queryKey: ['batch-claims-detail', employerId, providerId, month, year],
+    queryKey: ['batch-claims-detail', employerId, providerId, month, year, realBatch?.id],
     queryFn: async () => {
-      const lastDay = new Date(year, month, 0).getDate();
-      const dateFrom = `${year}-${String(month).padStart(2, '0')}-01`;
-      const dateTo = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+      if (realBatch?.id) {
+        return await claimsService.list({
+          employerId,
+          providerId,
+          claimBatchId: realBatch.id,
+          size: 100
+        });
+      }
+
       return await claimsService.list({
         employerId,
         providerId,
-        dateFrom,
-        dateTo,
+        createdDateFrom: `${year}-${String(month).padStart(2, '0')}-01`,
+        createdDateTo: `${year}-${String(month).padStart(2, '0')}-${String(new Date(year, month, 0).getDate()).padStart(2, '0')}`,
         size: 100
       });
     },
+    enabled: !!providerId && !!employerId && !isNaN(month) && !isNaN(year) && realBatch !== undefined,
     refetchOnWindowFocus: true,
     refetchOnMount: 'always',
     staleTime: 0
   });
+
+  const getInsurerCommitment = (claim) => {
+    const netProvider = Number(claim?.netProviderAmount);
+    const discount = Number(claim?.companyDiscountAmount) || 0;
+    // Reviewer-facing amount neutralizes provider-contract discount. The
+    // accountant owns that discount; medical review should see the insurer
+    // commitment before accounting settlement effects.
+    if (Number.isFinite(netProvider) && netProvider > 0) return Number((netProvider + discount).toFixed(2));
+    return Number(claim?.approvedAmount) || 0;
+  };
+
+  const getDisplayRefused = (claim) => {
+    if (!claim) return 0;
+    const rawRefused =
+      claim.status === 'REJECTED' && (!claim.refusedAmount || claim.refusedAmount === 0)
+        ? claim.requestedAmount || 0
+        : claim.refusedAmount || 0;
+    const providerBalance = Number(claim.providerRefusalBalance);
+    if (Number.isFinite(providerBalance)) return Math.max(0, providerBalance);
+    const paidTowardRefusal = Number(claim.beneficiaryPaidTowardRefusal) || 0;
+    return Math.max(0, rawRefused - paidTowardRefusal);
+  };
+
+  const hasProviderRefusalBalance = (claim) => getDisplayRefused(claim) > 0;
+
+  const getReviewerDisplayStatus = (claim) => {
+    if (!claim) return 'APPROVED';
+    if (claim.status === 'REJECTED' && getDisplayRefused(claim) <= 0 && getInsurerCommitment(claim) > 0) {
+      return 'APPROVED';
+    }
+    if (claim.status === 'APPROVED' && hasProviderRefusalBalance(claim)) return 'REJECTED';
+    return claim.status || 'APPROVED';
+  };
 
   const claims = useMemo(() => {
     let items = claimsResponse?.items || claimsResponse?.content || [];
@@ -288,58 +328,15 @@ export default function ClaimBatchDetail() {
 
     // 2. Status Filter
     if (statusFilter) {
-      items = items.filter((c) => c.status === statusFilter);
+      items = items.filter((c) => {
+        if (statusFilter === 'REJECTED') return getReviewerDisplayStatus(c) === 'REJECTED';
+        if (statusFilter === 'APPROVED') return getReviewerDisplayStatus(c) === 'APPROVED';
+        return c.status === statusFilter;
+      });
     }
 
     return items;
   }, [claimsResponse, searchTerm, statusFilter]);
-
-  const getDisplayRefused = (claim) => {
-    if (!claim) return 0;
-    return claim.status === 'REJECTED' && (!claim.refusedAmount || claim.refusedAmount === 0)
-      ? claim.requestedAmount || 0
-      : claim.refusedAmount || 0;
-  };
-
-  const getDiscountPercent = (claim) => {
-    // نسبة الخصم تأتي من حقل providerDiscountPercent الذي يحمل لقطة من عقد المرفق
-    // Priority 1: providerDiscountPercent (mapped from appliedDiscountPercent in ClaimApiMapper)
-    // Priority 2: appliedDiscountPercent / discountPercent (legacy field names)
-    const raw = claim?.providerDiscountPercent ?? claim?.appliedDiscountPercent ?? claim?.discountPercent ?? null;
-    if (raw === null || raw === undefined) return 0;
-    const percent = Number(raw);
-    if (!Number.isFinite(percent) || percent < 0) return 0;
-    return Math.min(percent, 100);
-  };
-
-  const getDiscountAmount = (claim) => {
-    const gross = Number(claim?.requestedAmount) || 0;
-    const copay = Number(claim?.patientCoPay) || 0;
-    const providerShare = Math.max(0, gross - copay);
-    const percent = getDiscountPercent(claim);
-    const refused = Number(getDisplayRefused(claim)) || 0;
-    const isBefore = claim?.discountBeforeRejection !== false;
-
-    if (isBefore) {
-      return (providerShare * percent) / 100;
-    } else {
-      return (Math.max(0, providerShare - refused) * percent) / 100;
-    }
-  };
-
-  const getApprovedAfterDiscount = (claim) => {
-    const gross = Number(claim?.requestedAmount) || 0;
-    const copay = Number(claim?.patientCoPay) || 0;
-    return Math.max(0, gross - copay);
-  };
-
-  const getDueAfterRefused = (claim) => {
-    const gross = Number(claim?.requestedAmount) || 0;
-    const copay = Number(claim?.patientCoPay) || 0;
-    const providerShare = Math.max(0, gross - copay);
-    const refused = Number(getDisplayRefused(claim)) || 0;
-    return Math.max(0, providerShare - refused);
-  };
 
   const sortedClaims = useMemo(() => {
     const sorting = tableState.sorting?.[0];
@@ -359,19 +356,15 @@ export default function ClaimBatchDetail() {
         case 'amount':
           return Number(claim.requestedAmount) || 0;
         case 'covered':
-          return Number(getApprovedAfterDiscount(claim)) || 0;
-        case 'discountPercent':
-          return Number(getDiscountPercent(claim)) || 0;
+          return Number(getInsurerCommitment(claim)) || 0;
         case 'refused': {
           const refused = getDisplayRefused(claim);
           return Number(refused) || 0;
         }
-        case 'dueAfterRefused':
-          return Number(getDueAfterRefused(claim)) || 0;
+        case 'beneficiaryPaid':
+          return Number(claim?.beneficiaryPaidAmount) || 0;
         case 'copay':
           return Number(claim.patientCoPay) || 0;
-        case 'paid':
-          return Number(claim.netProviderAmount) || 0;
         case 'index':
           return idx;
         default:
@@ -426,9 +419,10 @@ export default function ClaimBatchDetail() {
       { header: 'تاريخ الخدمة', key: 'serviceDate', width: 16 },
       { header: 'الحالة', key: 'status', width: 14 },
       { header: 'المبلغ الإجمالي', key: 'amount', width: 16 },
-      { header: 'المعتمد', key: 'covered', width: 14 },
-      { header: 'المرفوض', key: 'refused', width: 14 },
+      { header: 'التزام الشركة', key: 'covered', width: 14 },
+      { header: 'على مقدم الخدمة', key: 'refused', width: 16 },
       { header: 'نصيب المؤمن عليه', key: 'copay', width: 18 },
+      { header: 'مدفوع المستفيد', key: 'beneficiaryPaid', width: 18 },
       { header: 'المستحق للمزود', key: 'paid', width: 16 }
     ];
 
@@ -443,10 +437,11 @@ export default function ClaimBatchDetail() {
         serviceDate: c.serviceDate || '-',
         status: c.status || 'APPROVED',
         amount: c.requestedAmount || 0,
-        covered: getApprovedAfterDiscount(c),
+        covered: getInsurerCommitment(c),
         refused: getDisplayRefused(c),
         copay: c.patientCoPay || 0,
-        paid: getDueAfterRefused(c)
+        beneficiaryPaid: c.beneficiaryPaidAmount || 0,
+        paid: getNetProviderAmount(c)
       });
     });
 
@@ -546,10 +541,10 @@ export default function ClaimBatchDetail() {
     { id: 'serviceDate', label: 'تاريخ الخدمة', minWidth: '7rem', align: 'center', sortable: true },
     { id: 'status', label: 'الحالة', minWidth: '6rem', align: 'center', sortable: true },
     { id: 'amount', label: 'الإجمالي', minWidth: '5rem', align: 'center', sortable: true },
-    { id: 'copay', label: 'نصيب المستفيد', minWidth: '5rem', align: 'center', sortable: true },
-    { id: 'covered', label: 'المعتمد', minWidth: '5rem', align: 'center', sortable: true },
-    { id: 'refused', label: 'المرفوض', minWidth: '5.5rem', align: 'center', sortable: true },
-    { id: 'dueAfterRefused', label: 'المستحق', minWidth: '8.5rem', align: 'center', sortable: true },
+    { id: 'copay', label: 'التزام المستفيد', minWidth: '5rem', align: 'center', sortable: true },
+    { id: 'covered', label: 'التزام الشركة', minWidth: '5rem', align: 'center', sortable: true },
+    { id: 'refused', label: 'على مقدم الخدمة', minWidth: '6.5rem', align: 'center', sortable: true },
+    { id: 'beneficiaryPaid', label: 'مدفوع المستفيد', minWidth: '7.5rem', align: 'center', sortable: true },
     { id: 'actions', label: 'إجراءات', minWidth: '5rem', align: 'center', sortable: false }
   ];
 
@@ -559,10 +554,10 @@ export default function ClaimBatchDetail() {
     const finalizedClaims = claims.filter(financiallyFinal);
     return {
       amount: claims.reduce((s, c) => s + (c.requestedAmount || 0), 0),
-      covered: finalizedClaims.reduce((s, c) => s + getApprovedAfterDiscount(c), 0),
+      covered: finalizedClaims.reduce((s, c) => s + getInsurerCommitment(c), 0),
       refused: claims.reduce((s, c) => s + getDisplayRefused(c), 0),
-      dueAfterRefused: finalizedClaims.reduce((s, c) => s + getDueAfterRefused(c), 0),
       copay: finalizedClaims.reduce((s, c) => s + (c.patientCoPay || 0), 0),
+      beneficiaryPaid: claims.reduce((s, c) => s + (Number(c.beneficiaryPaidAmount) || 0), 0),
       paid: finalizedClaims.reduce((s, c) => s + (c.netProviderAmount || 0), 0)
     };
   }, [claims]);
@@ -572,7 +567,7 @@ export default function ClaimBatchDetail() {
       APPROVED:
         refusedAmount > 0
           ? { label: 'مرفوضة', color: 'error', bgcolor: '#fff1f0', border: '#ffa39e' }
-          : { label: 'معتمدة', color: 'success', bgcolor: '#f6ffed', border: '#b7eb8f' },
+          : { label: 'مقبولة', color: 'success', bgcolor: '#f6ffed', border: '#b7eb8f' },
       SETTLED: { label: 'تمت التسوية', color: 'success', bgcolor: '#f6ffed', border: '#b7eb8f' },
       PAID: { label: 'مدفوعة', color: 'success', bgcolor: '#f6ffed', border: '#b7eb8f' },
       BATCHED: { label: 'في دفعة', color: 'info', bgcolor: '#e6f7ff', border: '#91d5ff' },
@@ -593,6 +588,8 @@ export default function ClaimBatchDetail() {
         sx={{
           fontWeight: 400,
           fontSize: '0.75rem',
+          minWidth: '5.4rem',
+          justifyContent: 'center',
           bgcolor: s.bgcolor || 'action.selected',
           color: `${s.color}.main`,
           border: '1px solid',
@@ -640,10 +637,10 @@ export default function ClaimBatchDetail() {
             justifyContent="flex-end"
             sx={{ overflow: 'hidden', minWidth: 0, width: '100%' }}
           >
-            <Avatar sx={{ width: '1.5rem', height: '1.5rem', fontSize: '0.7rem', bgcolor: 'secondary.light', flexShrink: 0 }}>
+            <Avatar sx={{ width: '1.35rem', height: '1.35rem', fontSize: '0.7rem', bgcolor: 'grey.500', flexShrink: 0 }}>
               {claim.memberName?.charAt(0)}
             </Avatar>
-            <Box sx={{ overflow: 'hidden', minWidth: 0, textAlign: 'right' }}>
+            <Box sx={{ overflow: 'hidden', minWidth: 0, textAlign: 'right', flex: '0 1 auto' }}>
               <Typography variant="body2" fontWeight={600} noWrap>
                 {claim.memberName}
               </Typography>
@@ -660,31 +657,20 @@ export default function ClaimBatchDetail() {
           </Typography>
         );
       case 'status':
-        return getStatusChip(claim.status || 'APPROVED', claim.refusedAmount || 0);
+        return getStatusChip(getReviewerDisplayStatus(claim), getDisplayRefused(claim));
       case 'amount':
         return (
           <Typography variant="body2" fontWeight={400}>
             {claim.requestedAmount?.toFixed(2)}
           </Typography>
         );
-      case 'discountPercent':
-        return (
-          <Stack spacing={0} alignItems="center">
-            <Typography variant="body2" color="warning.main" fontWeight={600}>
-              {getDiscountAmount(claim).toFixed(2)}
-            </Typography>
-            <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem', fontWeight: 500 }}>
-              ({getDiscountPercent(claim).toFixed(0)}%)
-            </Typography>
-          </Stack>
-        );
       case 'covered':
         if (claim.status === 'NEEDS_CORRECTION') {
           return <Typography variant="body2" color="text.secondary">—</Typography>;
         }
         return (
-          <Typography variant="body2" color="success.main" fontWeight={400}>
-            {getApprovedAfterDiscount(claim).toFixed(2)}
+          <Typography variant="body2" color="success.dark" fontWeight={500}>
+            {getInsurerCommitment(claim).toFixed(2)}
           </Typography>
         );
       case 'refused':
@@ -711,7 +697,7 @@ export default function ClaimBatchDetail() {
 
         let reasonText = claim.reviewerComment;
         if (!reasonText && displayRefused > 0) {
-          reasonText = linesReasons || (claim.status === 'REJECTED' ? 'مرفوضة بالكامل' : 'خصم للنظام الآلي');
+          reasonText = linesReasons || (claim.status === 'REJECTED' ? 'مرفوضة بالكامل' : 'متبقٍ على مقدم الخدمة بعد مدفوع المستفيد');
         }
 
         return (
@@ -726,14 +712,28 @@ export default function ClaimBatchDetail() {
             </Typography>
           </Tooltip>
         );
-      case 'dueAfterRefused':
+      case 'beneficiaryPaid':
         if (claim.status === 'NEEDS_CORRECTION') {
           return <Typography variant="body2" color="text.secondary">—</Typography>;
         }
+        const paidAmount = Number(claim.beneficiaryPaidAmount) || 0;
+        const paidTowardCopay = Number(claim.beneficiaryPaidTowardCopay) || 0;
+        const paidTowardRefusal = Number(claim.beneficiaryPaidTowardRefusal) || 0;
+        const paidTooltip =
+          paidAmount > 0
+            ? `من التزام المستفيد: ${paidTowardCopay.toFixed(2)} د.ل، من المرفوض: ${paidTowardRefusal.toFixed(2)} د.ل`
+            : '';
         return (
-          <Typography variant="body2" color="primary.main" fontWeight={600}>
-            {getDueAfterRefused(claim).toFixed(2)}
-          </Typography>
+          <Tooltip title={paidTooltip} arrow placement="top">
+            <Typography
+              variant="body2"
+              color={paidAmount > 0 ? 'primary.main' : 'text.secondary'}
+              fontWeight={paidAmount > 0 ? 600 : 400}
+              sx={{ cursor: paidTooltip ? 'help' : 'default', textDecoration: paidTooltip ? 'underline dotted' : 'none' }}
+            >
+              {paidAmount > 0 ? paidAmount.toFixed(2) : '—'}
+            </Typography>
+          </Tooltip>
         );
       case 'copay':
         return (
@@ -795,7 +795,7 @@ export default function ClaimBatchDetail() {
 
   return (
     <>
-      <Box sx={{ display: 'flex', flexDirection: 'column', px: { xs: 2, sm: 3 }, pb: 2 }}>
+      <Box sx={{ display: 'flex', flexDirection: 'column', px: { xs: 2, sm: 3 }, pb: 1 }}>
         <ModernPageHeader
           title={provider?.name || '...'}
           subtitle={`دفعة لشهر ${MONTHS_AR[month - 1]} ${year} - ${batchCode}`}
@@ -930,17 +930,17 @@ export default function ClaimBatchDetail() {
           }
         />
 
-        <Box sx={{ mt: -1 }}>
-          <Stack spacing={1.5}>
+        <Box sx={{ mt: -2 }}>
+          <Stack spacing={1}>
             {/* Filter Bar - Matches Beneficiaries standard */}
-            <MainCard sx={{ p: '8px !important', flexShrink: 0 }}>
+            <MainCard sx={{ p: '6px 8px !important', flexShrink: 0 }}>
               <Stack direction="row" spacing={1.5} alignItems="center">
                 <Chip
                   icon={<ReceiptIcon fontSize="small" />}
                   label={`${claims.length} مطالبة`}
                   variant="outlined"
                   color="primary"
-                  sx={{ height: '2.5rem', borderRadius: 1, fontWeight: 'bold', fontSize: '0.875rem', px: '0.75rem' }}
+                  sx={{ height: '2.25rem', borderRadius: 1, fontWeight: 'bold', fontSize: '0.82rem', px: '0.6rem' }}
                 />
 
                 <TextField
@@ -959,7 +959,7 @@ export default function ClaimBatchDetail() {
                         <SearchIcon fontSize="small" sx={{ color: 'text.disabled' }} />
                       </InputAdornment>
                     ),
-                    sx: { height: '2.5rem', borderRadius: 1, bgcolor: 'background.paper' }
+                    sx: { height: '2.25rem', borderRadius: 1, bgcolor: 'background.paper' }
                   }}
                 />
 
@@ -973,7 +973,7 @@ export default function ClaimBatchDetail() {
                     tableState.setPage(0);
                   }}
                   sx={{ minWidth: '8.125rem', bgcolor: 'background.paper' }}
-                  InputProps={{ sx: { height: '2.5rem', borderRadius: 1 } }}
+                  InputProps={{ sx: { height: '2.25rem', borderRadius: 1 } }}
                   InputLabelProps={{ shrink: true }}
                 >
                   <MenuItem value="">
@@ -996,7 +996,7 @@ export default function ClaimBatchDetail() {
                     setStatusFilter('');
                     tableState.setPage(0);
                   }}
-                  sx={{ minWidth: '7.5rem', height: '2.5rem', borderRadius: 1 }}
+                  sx={{ minWidth: '7.5rem', height: '2.25rem', borderRadius: 1 }}
                 >
                   إعادة ضبط
                 </Button>
@@ -1008,7 +1008,7 @@ export default function ClaimBatchDetail() {
                     color="primary"
                     variant="outlined"
                     onDelete={() => setSelectedClaimIds([])}
-                    sx={{ height: '2.5rem', borderRadius: 1, fontWeight: 600, fontSize: '0.8rem' }}
+                    sx={{ height: '2.25rem', borderRadius: 1, fontWeight: 600, fontSize: '0.8rem' }}
                   />
                 )}
               </Stack>
@@ -1141,22 +1141,40 @@ export default function ClaimBatchDetail() {
             {/* Totals Footer */}
             {claims.length > 0 && !showDeleted && (
               <MainCard
-                sx={{ p: '10px 16px !important', flexShrink: 0, bgcolor: 'grey.50', borderTop: '2px solid', borderColor: 'divider' }}
+                sx={{ p: '8px 12px !important', flexShrink: 0, bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider' }}
               >
-                <Stack direction="row" spacing={2} justifyContent="flex-start" alignItems="center" flexWrap="wrap">
-                  <Typography variant="caption" color="text.secondary" fontWeight={400} sx={{ mr: 'auto' }}>
+                <Stack direction="row" spacing={0.9} justifyContent="flex-start" alignItems="center" flexWrap="wrap">
+                  <Typography variant="caption" color="text.secondary" fontWeight={500} sx={{ mr: 'auto', alignSelf: 'center' }}>
                     الإجماليات ({claims.length} مطالبة)
                   </Typography>
-                  <Chip label={`الإجمالي: ${totals.amount.toFixed(2)}`} size="small" sx={{ fontWeight: 400 }} />
-                  <Chip label={`المعتمد: ${totals.covered.toFixed(2)}`} color="success" size="small" sx={{ fontWeight: 400 }} />
-                  <Chip label={`المرفوض: ${totals.refused.toFixed(2)}`} color="error" size="small" sx={{ fontWeight: 400 }} />
-                  <Chip
-                    label={`المستحق بعد طرح المرفوض: ${totals.dueAfterRefused.toFixed(2)}`}
-                    color="primary"
-                    size="small"
-                    sx={{ fontWeight: 400 }}
-                  />
-                  <Chip label={`نصيب المستفيد: ${totals.copay.toFixed(2)}`} color="info" size="small" sx={{ fontWeight: 400 }} />
+                  {[
+                    ['الإجمالي', totals.amount],
+                    ['التزام الشركة', totals.covered],
+                    ['على مقدم الخدمة', totals.refused],
+                    ['مدفوع المستفيد', totals.beneficiaryPaid],
+                    ['التزام المستفيد', totals.copay]
+                  ].map(([label, value]) => (
+                    <Box
+                      key={label}
+                      sx={{
+                        minWidth: '8.25rem',
+                        px: 1,
+                        py: 0.5,
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        borderRadius: 1,
+                        bgcolor: 'grey.50',
+                        textAlign: 'right'
+                      }}
+                    >
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1 }}>
+                        {label}
+                      </Typography>
+                      <Typography variant="body2" fontWeight={700} color="text.primary" dir="ltr" sx={{ lineHeight: 1.25 }}>
+                        {Number(value || 0).toFixed(2)}
+                      </Typography>
+                    </Box>
+                  ))}
                 </Stack>
               </MainCard>
             )}

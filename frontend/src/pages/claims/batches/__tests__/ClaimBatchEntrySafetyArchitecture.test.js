@@ -3,7 +3,11 @@ import { describe, expect, it } from 'vitest';
 
 const entrySource = readFileSync('src/pages/claims/batches/ClaimBatchEntry.jsx', 'utf8');
 const lineSource = readFileSync('src/pages/claims/batches/components/ClaimLineRow.jsx', 'utf8');
+const footerSource = readFileSync('src/pages/claims/batches/components/ClaimTotalsFooter.jsx', 'utf8');
 const headerSource = readFileSync('src/pages/claims/batches/components/ClaimHeaderFields.jsx', 'utf8');
+const customServiceDialogSource = readFileSync('src/pages/claims/batches/components/CustomServiceDialog.jsx', 'utf8');
+const detailSource = readFileSync('src/pages/claims/batches/ClaimBatchDetail.jsx', 'utf8');
+const authSource = readFileSync('src/contexts/AuthContext.jsx', 'utf8');
 
 describe('claim batch entry safety boundary', () => {
   it('loads dated contract services with the selected member identity, never an undefined alias', () => {
@@ -18,6 +22,34 @@ describe('claim batch entry safety boundary', () => {
 
   it('does not let the browser construct an approved claim', () => {
     expect(entrySource).not.toMatch(/status:\s*effectivelyRejected\s*\?\s*['"]REJECTED['"]\s*:\s*['"]APPROVED['"]/);
+  });
+
+  it('never labels a claim with refused money as partially approved in batch details', () => {
+    expect(detailSource).not.toContain('معتمدة جزئ');
+    expect(detailSource).toContain('getDisplayRefused(claim)');
+    expect(detailSource).toContain("label: 'مرفوضة'");
+  });
+
+  it('shows provider refusal balance after beneficiary payment in batch details', () => {
+    expect(detailSource).toContain('providerRefusalBalance');
+    expect(detailSource).toContain('beneficiaryPaidTowardRefusal');
+    expect(detailSource).toContain("label: 'على مقدم الخدمة'");
+    expect(detailSource).toContain('getReviewerDisplayStatus(claim)');
+  });
+
+  it('keeps provider contract discount out of the medical reviewer batch table', () => {
+    expect(detailSource).not.toContain('المستحق للمقدم');
+    expect(detailSource).not.toContain("id: 'discountPercent'");
+    expect(detailSource).not.toContain('getDiscountPercent');
+    expect(detailSource).not.toContain("{ id: 'dueAfterRefused'");
+    expect(detailSource).not.toContain("label: 'المعتمد'");
+    expect(detailSource).toContain("{ id: 'beneficiaryPaid', label: 'مدفوع المستفيد'");
+    expect(detailSource).toContain("{ id: 'covered', label: 'التزام الشركة'");
+    expect(detailSource).toContain('getInsurerCommitment(claim).toFixed(2)');
+  });
+
+  it('does not show noisy draft conflict synchronization snackbars', () => {
+    expect(entrySource).not.toContain('تمت مزامنة المسودة بعد تعارض بسيط');
   });
 
   it('submits only an explicit manual refusal and never reposts the calculated aggregate refusal', () => {
@@ -94,9 +126,8 @@ describe('claim batch entry safety boundary', () => {
     expect(entrySource).toContain(
       'const nextLines = currentLines.map((line, lineIdx) => (lineIdx === idx ? { ...currentLine, ...nextPatch } : line))'
     );
-    expect(entrySource).toContain('const committedLines = linesRef.current?.length ? linesRef.current : nextLines');
-    expect(entrySource).toContain('refetchAllLinesCoverage(encounterType, committedLines, fullCoverage, claimContextCode)');
-    expect(entrySource).not.toContain('refetchAllLinesCoverage(encounterType, nextLines, fullCoverage, claimContextCode)');
+    expect(entrySource).not.toContain('const committedLines = linesRef.current?.length ? linesRef.current : nextLines');
+    expect(entrySource).toContain('refetchAllLinesCoverage(encounterType, nextLines, fullCoverage, claimContextCode)');
     expect(entrySource).not.toContain('fetchCoverage(coverageInput, encounterType, null, claimContextCode)');
     expect(entrySource).not.toContain('fetchCoverage(svc, encounterType, null, claimContextCode)');
     expect(entrySource).not.toContain('fetchCoverage(svc, encounterType);');
@@ -126,7 +157,7 @@ describe('claim batch entry safety boundary', () => {
   });
 
   it('declares serviceDate before any effect reads it during the first render', () => {
-    const serviceDateState = entrySource.indexOf('const [serviceDate, setServiceDate] = useState(defaultDate);');
+    const serviceDateState = entrySource.indexOf('const [serviceDate, setServiceDate] = useState(initialServiceDate || defaultDate);');
     const serviceDateDebounce = entrySource.indexOf('setTimeout(() => setDebouncedServiceDate(serviceDate), 450)');
 
     expect(serviceDateState).toBeGreaterThan(-1);
@@ -140,22 +171,18 @@ describe('claim batch entry safety boundary', () => {
   });
 
   /**
-   * "Add a new service" used to post to /provider/my-contract/pricing, a
-   * provider-portal endpoint retired behind @PreAuthorize("denyAll()") on the
-   * backend -- every attempt failed for every role, always. The canonical
-   * internal path is POST /provider-contracts/{contractId}/pricing, the same
-   * ProviderContractPricingItemService the import screens and the contract's
-   * own pricing tab already write through, authorized for staff managing the
-   * contract rather than a provider acting for itself. It is keyed by the
-   * dated contract this screen already resolved, not by providerId alone --
-   * a provider can hold more than one contract over time, and the retired
-   * endpoint's own guess at "the" active one was part of what made it wrong
-   * for this screen even before it was denied outright.
+   * Adding a missing service from claim entry must create a shared catalog
+   * service, not a provider-contract pricing item. Unlike professional
+   * invoice standards, claim-entry general services are unit-priced so
+   * quantity remains editable.
    */
-  it('adds a custom service through the contract this screen resolved, not the retired provider-portal path', () => {
+  it('adds a custom service to the shared standard catalog, not the contract price list', () => {
     expect(entrySource).not.toContain('/provider/my-contract/pricing');
-    expect(entrySource).toContain('/provider-contracts/${entryContext.contractId}/pricing');
-    expect(entrySource).toContain("setCustomServiceError('لا يمكن إضافة خدمة قبل التحقق من العقد الفعّال لهذا المستفيد وتاريخ الخدمة')");
+    expect(entrySource).not.toContain('/provider-contracts/${entryContext.contractId}/pricing');
+    expect(entrySource).toContain("axiosClient.post('/provider-standard-services', payload)");
+    expect(entrySource).toContain("pricingMode: 'CONTRACT_PRICE'");
+    expect(entrySource).toContain('basePrice: priceNum');
+    expect(entrySource).toContain('defaultClaimContextCode: claimContextCode || encounterType ||');
   });
 
   /**
@@ -182,13 +209,68 @@ describe('claim batch entry safety boundary', () => {
     expect(entrySource).toContain('quantity: isManualAmount ? 1 : currentLine.quantity || 1');
   });
 
+  it('does not reinterpret a manual-amount service id as a provider pricing item id', () => {
+    expect(entrySource).toContain("const isManualAmount = s.pricingMode === 'MANUAL_AMOUNT'");
+    expect(entrySource).toContain('medicalServiceId: s.medicalServiceId ?? s.serviceId ?? (isManualAmount ? s.id : null)');
+    expect(entrySource).toContain('pricingItemId: isManualAmount ? null : (s.pricingItemId ?? s.id)');
+  });
+
   it('submits the entered amount as manualAmount for a manual-amount line, not as a contract unitPrice', () => {
-    expect(entrySource).toContain("manualAmount: (l.pricingMode || l.service?.pricingMode) === 'MANUAL_AMOUNT'");
+    expect(entrySource).toContain("const isManualAmountLine = (l.pricingMode || l.service?.pricingMode) === 'MANUAL_AMOUNT'");
+    expect(entrySource).toContain('manualAmount: isManualAmountLine ? parseFloat(l.unitPrice) || 0 : null');
+    expect(entrySource).toContain('medicalServiceId: l.medicalServiceId || l.service?.medicalServiceId || l.service?.serviceId || null');
+    expect(entrySource).toContain('pricingItemId: isManualAmountLine ? null :');
+  });
+
+  it('calculates coverage for claim-created unit-priced services with editable quantity', () => {
+    expect(entrySource).toContain('await handleServiceChange(selectedLineIndex, newServiceObject)');
+    expect(entrySource).toContain("pricingMode: 'CONTRACT_PRICE'");
+    expect(entrySource).toContain('unitPrice: isManualAmount ? (hasManualAmountOverride ? manualAmount : currentLine.unitPrice || 0) : price');
+    expect(entrySource).toContain('if (!isFreeText && policyId && member?.id)');
+    expect(entrySource).toContain('refetchAllLinesCoverage(encounterType, nextLines, fullCoverage, claimContextCode)');
+  });
+
+  it('does not block an invoice/manual line as uncovered before the invoice amount is entered', () => {
+    expect(entrySource).toContain('const hasAmountForCoverage = Number(line.unitPrice || 0) > 0 && Number(line.quantity || 0) > 0');
+    expect(entrySource).toContain('hasAmountForCoverage &&');
+    expect(lineSource).toContain('hasAmountForCoverage');
   });
 
   it('shows an invoice-amount field instead of the contract-bounds-checked price for a manual-amount line', () => {
     expect(lineSource).toContain("const isManualAmount = (line.pricingMode || line.service?.pricingMode) === 'MANUAL_AMOUNT'");
     expect(lineSource).toContain('label="قيمة الفاتورة"');
     expect(lineSource).toContain('disabled={isManualAmount}');
+  });
+
+  it('shows Arabic claim context terms in the general-service dialog, not technical codes', () => {
+    expect(customServiceDialogSource).toContain("OUTPATIENT: 'عيادات خارجية'");
+    expect(customServiceDialogSource).toContain("INPATIENT: 'إيواء'");
+    expect(customServiceDialogSource).toContain("MATERNITY: 'ولادة'");
+    expect(customServiceDialogSource).toContain('claimContextLabel(claimContextCode)');
+  });
+
+  it('does not expose generated catalog codes in the visible service label', () => {
+    expect(entrySource).toContain('GENERATED_SERVICE_CODE_PATTERN = /^(PL-|SYS-)/i');
+    expect(entrySource).toContain('buildServiceDisplayLabel({ code, name })');
+    expect(entrySource).toContain('buildServiceDisplayLabel({ code: finalServiceCode, name: payload.nameAr })');
+    expect(entrySource).not.toContain("label: `${code ? '[' + code + '] ' : ''}${name}`");
+    expect(entrySource).not.toContain("label: `[${finalServiceCode}] ${payload.nameAr}`");
+  });
+
+  it('keeps service search matching the facility code even when the visible label is cleaned', () => {
+    expect(lineSource).toContain('opt.serviceCode || opt.code ||');
+    expect(lineSource).toContain('opt.serviceName || opt.name ||');
+  });
+
+  it('blocks saving when beneficiary payment exceeds copay plus refusal', () => {
+    expect(entrySource).toContain('beneficiarySettlement.excessPayment > 0');
+    expect(entrySource).toContain('المبلغ المدفوع من المستفيد أكبر من التزامه والمبلغ المرفوض');
+    expect(footerSource).toContain('Boolean(saveDisabledReason)');
+  });
+
+  it('keeps the browser inactivity session aligned with the 24-hour backend session and clears claim drafts on logout', () => {
+    expect(authSource).toContain('const TIMEOUT_MS = 24 * 60 * 60 * 1000');
+    expect(authSource).toContain("key.startsWith('claim-draft:')");
+    expect(authSource).toContain('clearClaimDraftStorage();');
   });
 });

@@ -134,14 +134,19 @@ public class ClaimFinancialAdjudicationService {
         line.setProviderRejectedAmountV2(r.providerRejectedAmount());
         line.setInsurerFinalPayment(r.insurerFinalPayment());
 
-        // Compatibility/reporting columns now mirror the canonical result; no
-        // second formula is allowed here.
+        // Compatibility/reporting columns keep the user's settlement vocabulary:
+        // - patientShare is only the beneficiary's normal co-pay from coverage.
+        // - limit/price excess and reviewer rejection are refused/provider-side
+        //   amounts. A later beneficiary direct payment may cover part of them,
+        //   but they must not be folded into the original beneficiary co-pay.
         line.setApprovedAmount(r.insurerFinalPayment());
         line.setCompanyShare(r.insurerFinalPayment());
-        line.setPatientShare(r.patientTotalResponsibility());
+        line.setPatientShare(r.patientCoverageShare());
         line.setPriceExcessRefused(r.contractualPriceExcess());
         line.setLimitRefused(r.patientLimitExcess());
-        line.setRefusedAmount(r.contractualPriceExcess().add(r.providerRejectedAmount()));
+        line.setRefusedAmount(r.contractualPriceExcess()
+                .add(r.patientLimitExcess())
+                .add(r.providerRejectedAmount()));
         line.setApprovedQuantity(null); // not derivable from a monetary result
 
         if (!lineResult.limitAllocations().isEmpty()) {

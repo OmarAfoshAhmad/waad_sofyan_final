@@ -46,6 +46,16 @@ const CLEAR_USER = 'CLEAR_USER';
 // Context
 const AuthContext = createContext(null);
 
+const clearClaimDraftStorage = () => {
+  try {
+    Object.keys(localStorage)
+      .filter((key) => key.startsWith('claim-draft:'))
+      .forEach((key) => localStorage.removeItem(key));
+  } catch {
+    // Logout must finish even if browser storage is unavailable.
+  }
+};
+
 // Provider
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
@@ -56,7 +66,7 @@ export const AuthProvider = ({ children }) => {
   // ============================================================================
 
   const [lastActivity, setLastActivity] = useState(Date.now());
-  const TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
+  const TIMEOUT_MS = 24 * 60 * 60 * 1000; // 24 hours
 
   // 1. Activity Listener (throttled)
   useEffect(() => {
@@ -220,6 +230,7 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
     setAuthStatus(AUTH_STATUS.UNAUTHENTICATED);
     useRBACStore.getState().clear();
+    clearClaimDraftStorage();
 
     sessionStorage.clear();
 

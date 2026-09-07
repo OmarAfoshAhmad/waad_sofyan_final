@@ -119,6 +119,7 @@ export const ClaimLineRow = ({
     '';
   const quantityInvalid = Boolean(line.service || line.serviceName) && !isValidClaimQuantity(line.quantity);
   const isManualAmount = (line.pricingMode || line.service?.pricingMode) === 'MANUAL_AMOUNT';
+  const hasAmountForCoverage = Number(line.unitPrice || 0) > 0 && Number(line.quantity || 0) > 0;
 
   return (
     <Fragment>
@@ -203,7 +204,7 @@ export const ClaimLineRow = ({
                       }}
                       sx={{ fontSize: '0.75rem', py: 0.5 }}
                     >
-                      إضافة خدمة جديدة لعقد مقدم الخدمة
+                      إضافة خدمة طبية عامة
                     </Button>
                   )}
                 </Stack>
@@ -218,7 +219,7 @@ export const ClaimLineRow = ({
                   onClick={onOpenCustomServiceDialog}
                   sx={{ fontSize: '0.7rem', p: 0, minWidth: 0, height: 'auto', mt: 0.2 }}
                 >
-                  خدمة غير متوفرة؟ أضفها هنا
+                  خدمة غير متوفرة؟ أضف خدمة عامة
                 </Button>
               </Box>
             )}
@@ -595,7 +596,7 @@ export const ClaimLineRow = ({
           </TableCell>
         </TableRow>
       )}
-      {line.notCovered && !line.coveragePending && !line.rejected && (
+      {line.notCovered && !line.coveragePending && !line.rejected && hasAmountForCoverage && (
         <TableRow sx={{ bgcolor: alpha(theme.palette.error.main, 0.07) }}>
           <TableCell colSpan={12} sx={{ py: 0.4 }}>
             <Typography

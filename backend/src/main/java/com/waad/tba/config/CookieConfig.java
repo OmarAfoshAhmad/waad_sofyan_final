@@ -23,7 +23,7 @@ import org.springframework.session.web.http.CookieSerializer;
  * - SameSite: Strict (blocks all cross-site cookie transmission)
  * - HttpOnly: true (prevents JavaScript access, mitigates XSS)
  * - Secure: true in production (HTTPS-only transmission)
- * - Max-Age: 1800 seconds (30 minutes, matches session timeout)
+ * - Max-Age: 86400 seconds (24 hours, matches session timeout)
  * 
  * BROWSER SUPPORT:
  * - Chrome 51+, Firefox 60+, Edge 16+, Safari 12+ (2018+)
@@ -65,7 +65,7 @@ public class CookieConfig {
      * 
      * @return DefaultCookieSerializerCustomizer with hardened security settings
      */
-    private static final int DEFAULT_MAX_AGE_SECONDS = 1800; // 30 minutes, matches session timeout
+    private static final int DEFAULT_MAX_AGE_SECONDS = 24 * 60 * 60; // 24 hours, matches session timeout
     private static final int REMEMBER_ME_MAX_AGE_SECONDS = 30 * 24 * 60 * 60; // 30 days
 
     /**

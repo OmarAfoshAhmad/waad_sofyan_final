@@ -20,6 +20,12 @@ export const BatchHistorySidebar = ({
   isBatchOpen,
   t
 }) => {
+  const getProviderRefusalBalance = (claim) => {
+    const providerBalance = Number(claim?.providerRefusalBalance);
+    if (Number.isFinite(providerBalance)) return Math.max(0, providerBalance);
+    return Math.max(0, Number(claim?.refusedAmount || 0) - Number(claim?.beneficiaryPaidTowardRefusal || 0));
+  };
+
   return (
     <Box sx={{ width: '17.5rem', flexShrink: 0, display: 'flex', flexDirection: 'column', order: -1 }}>
       <Paper
@@ -114,7 +120,7 @@ export const BatchHistorySidebar = ({
                         ? (c.requestedAmount || 0).toFixed(2)
                         : (c.approvedAmount || c.requestedAmount || 0).toFixed(2)}
                     </Typography>
-                    {c.refusedAmount > 0 && (
+                    {getProviderRefusalBalance(c) > 0 && (
                       <Typography
                         variant="caption"
                         fontWeight={600}
@@ -127,7 +133,7 @@ export const BatchHistorySidebar = ({
                           fontSize: '0.85rem'
                         }}
                       >
-                        {(c.refusedAmount || 0).toFixed(2)}
+                        {getProviderRefusalBalance(c).toFixed(2)}
                       </Typography>
                     )}
                     <Tooltip title="إلغاء المطالبة">
@@ -156,7 +162,7 @@ export const BatchHistorySidebar = ({
                         py: 0.1,
                         borderRadius: 1,
                         color:
-                          c.status === 'REJECTED' || c.refusedAmount > 0
+                          c.status === 'REJECTED' || getProviderRefusalBalance(c) > 0
                             ? 'error.dark'
                             : c.status === 'NEEDS_CORRECTION'
                               ? 'warning.dark'
@@ -164,7 +170,7 @@ export const BatchHistorySidebar = ({
                                 ? 'text.secondary'
                                 : 'success.dark',
                         bgcolor:
-                          c.status === 'REJECTED' || c.refusedAmount > 0
+                          c.status === 'REJECTED' || getProviderRefusalBalance(c) > 0
                             ? alpha('#d32f2f', 0.1)
                             : c.status === 'NEEDS_CORRECTION'
                               ? alpha('#ed6c02', 0.1)
@@ -173,7 +179,7 @@ export const BatchHistorySidebar = ({
                                 : alpha('#2e7d32', 0.1)
                       }}
                     >
-                      {c.status === 'REJECTED' || c.refusedAmount > 0
+                      {c.status === 'REJECTED' || getProviderRefusalBalance(c) > 0
                         ? 'مرفوضة'
                         : c.status === 'NEEDS_CORRECTION'
                           ? 'معلقة'

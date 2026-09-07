@@ -36,11 +36,21 @@ const emptyForm = {
   nameAr: '',
   nameEn: '',
   categoryId: null,
+  defaultClaimContextCode: 'OUTPATIENT',
   active: true,
   defaultProviderTypes: []
 };
 
-export default function StandardServiceFormDialog({ open, onClose, onSubmit, submitting, error, service, categories = [] }) {
+export default function StandardServiceFormDialog({
+  open,
+  onClose,
+  onSubmit,
+  submitting,
+  error,
+  service,
+  categories = [],
+  claimContexts = []
+}) {
   const isEdit = Boolean(service);
   const [form, setForm] = useState(emptyForm);
   const [touched, setTouched] = useState(false);
@@ -55,6 +65,7 @@ export default function StandardServiceFormDialog({ open, onClose, onSubmit, sub
             nameAr: service.nameAr || service.name || '',
             nameEn: service.nameEn || '',
             categoryId: service.categoryId ?? null,
+            defaultClaimContextCode: service.defaultClaimContextCode || 'OUTPATIENT',
             active: service.active,
             defaultProviderTypes: service.defaultProviderTypes || []
           }
@@ -65,7 +76,7 @@ export default function StandardServiceFormDialog({ open, onClose, onSubmit, sub
   const selectedCategory = categories.find((c) => c.id === form.categoryId) || null;
   const selectedProviderTypes = PROVIDER_TYPES.filter((t) => form.defaultProviderTypes.includes(t.value));
 
-  const isValid = form.code.trim() && form.nameAr.trim() && form.categoryId;
+  const isValid = form.code.trim() && form.nameAr.trim() && form.categoryId && form.defaultClaimContextCode;
 
   const handleSubmit = () => {
     setTouched(true);
@@ -75,6 +86,7 @@ export default function StandardServiceFormDialog({ open, onClose, onSubmit, sub
       nameAr: form.nameAr.trim(),
       nameEn: form.nameEn?.trim() || null,
       categoryId: form.categoryId,
+      defaultClaimContextCode: form.defaultClaimContextCode,
       ...(isEdit ? { active: form.active } : {}),
       defaultProviderTypes: form.defaultProviderTypes
     });
@@ -120,12 +132,25 @@ export default function StandardServiceFormDialog({ open, onClose, onSubmit, sub
             isOptionEqualToValue={(a, b) => a.id === b.id}
             onChange={(_, value) => setForm((f) => ({ ...f, categoryId: value?.id ?? null }))}
             renderInput={(params) => (
+              <TextField {...params} label="التصنيف الطبي" required error={touched && !form.categoryId} size="small" />
+            )}
+          />
+          <Autocomplete
+            options={claimContexts}
+            value={claimContexts.find((context) => context.code === form.defaultClaimContextCode) || null}
+            getOptionLabel={(context) =>
+              `${context.nameAr || context.code}${context.baseEncounterType ? ` (${context.baseEncounterType === 'INPATIENT' ? 'إيواء' : 'عيادات خارجية'})` : ''}`
+            }
+            isOptionEqualToValue={(a, b) => a.code === b.code}
+            onChange={(_, value) => setForm((f) => ({ ...f, defaultClaimContextCode: value?.code || '' }))}
+            renderInput={(params) => (
               <TextField
                 {...params}
-                label="التصنيف الطبي"
+                label="سياق الاستخدام الافتراضي"
                 required
-                error={touched && !form.categoryId}
+                error={touched && !form.defaultClaimContextCode}
                 size="small"
+                helperText="للعرض والتنظيم فقط؛ حساب السقف يستند إلى سياق المطالبة الفعلي وقواعد الوثيقة"
               />
             )}
           />
@@ -147,12 +172,7 @@ export default function StandardServiceFormDialog({ open, onClose, onSubmit, sub
           />
           {isEdit && (
             <FormControlLabel
-              control={
-                <Switch
-                  checked={form.active}
-                  onChange={(e) => setForm((f) => ({ ...f, active: e.target.checked }))}
-                />
-              }
+              control={<Switch checked={form.active} onChange={(e) => setForm((f) => ({ ...f, active: e.target.checked }))} />}
               label="مفعّلة"
             />
           )}

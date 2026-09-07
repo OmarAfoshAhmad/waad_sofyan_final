@@ -128,8 +128,8 @@ public class AuthController {
                 session.setAttribute("providerId", userInfo.getProviderId());
 
                 // Remember Me: extend both the server-side session lifetime and the
-                // JSESSIONID cookie's Max-Age so the login survives beyond the default
-                // 30-minute inactivity window (see RememberMeAwareCookieSerializer).
+                // JSESSIONID cookie's Max-Age beyond the normal 24-hour session window
+                // (see RememberMeAwareCookieSerializer).
                 session.setAttribute("rememberMe", request.isRememberMe());
                 if (request.isRememberMe()) {
                         session.setMaxInactiveInterval(REMEMBER_ME_SESSION_SECONDS);

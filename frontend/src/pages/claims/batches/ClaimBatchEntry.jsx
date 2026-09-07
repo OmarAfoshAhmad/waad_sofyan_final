@@ -128,6 +128,19 @@ const normalizeArabicSearch = (value = '') =>
     .replace(/ة/g, 'ه')
     .toLowerCase();
 
+const GENERATED_SERVICE_CODE_PATTERN = /^(PL-|SYS-)/i;
+
+const isGeneratedServiceCode = (code = '') => GENERATED_SERVICE_CODE_PATTERN.test(String(code).trim());
+
+const buildServiceDisplayLabel = ({ code = '', name = '' } = {}) => {
+  const cleanCode = String(code || '').trim();
+  const cleanName = String(name || '').trim();
+
+  if (!cleanCode || isGeneratedServiceCode(cleanCode)) return cleanName;
+  if (cleanName && normalizeArabicSearch(cleanName).includes(normalizeArabicSearch(cleanCode))) return cleanName;
+  return cleanName ? `${cleanCode} — ${cleanName}` : cleanCode;
+};
+
 const hasMeaningfulDraftData = (draft) => {
   if (!draft) return false;
   if (draft.member?.id) return true;
@@ -198,6 +211,7 @@ export default function ClaimBatchEntry() {
   const [applyBenefits, setApplyBenefits] = useState(true);
   const [notes, setNotes] = useState('');
   const [lines, setLines] = useState([newLine()]);
+  const [beneficiaryPaidAmount, setBeneficiaryPaidAmount] = useState('');
   const [saving, setSaving] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
   const [policyId, setPolicyId] = useState(null);
@@ -414,55 +428,53 @@ export default function ClaimBatchEntry() {
     }
     const priceNum = parseFloat(customServiceData.contractPrice);
     if (isNaN(priceNum) || priceNum <= 0) {
-      setCustomServiceError('يرجى إدخال سعر تعاقدي صحيح أكبر من صفر');
+      setCustomServiceError('يرجى إدخال سعر وحدة صحيح أكبر من صفر');
       return;
     }
 
     setAddingCustomService(true);
     try {
-      // The dated contract, not the provider: this screen can only price a
-      // service against the specific contract ClaimEntryContextService already
-      // resolved for this provider/employer/service-date. Providers can hold
-      // more than one contract over time, and the provider-portal pricing
-      // endpoint this used to call guessed at "the" active one from the
-      // provider alone -- and had been retired behind a deny-all guard besides,
-      // so every attempt to use it failed outright regardless.
-      if (!entryContext?.contractId) {
-        setCustomServiceError('لا يمكن إضافة خدمة قبل التحقق من العقد الفعّال لهذا المستفيد وتاريخ الخدمة');
-        return;
-      }
-
       const finalCategoryId = customServiceData.categoryId;
 
       // Auto-generate service code if not provided
-      const finalServiceCode = customServiceData.serviceCode.trim() || `SRV-${Date.now().toString().slice(-6)}`;
+      const finalServiceCode = customServiceData.serviceCode.trim() || `SYS-CLAIM-${Date.now().toString().slice(-8)}`;
 
       const payload = {
-        serviceName: customServiceData.serviceName.trim(),
-        serviceCode: finalServiceCode,
-        medicalCategoryId: Number(finalCategoryId),
-        contractPrice: priceNum,
+        code: finalServiceCode,
+        nameAr: customServiceData.serviceName.trim(),
+        nameEn: null,
+        categoryId: Number(finalCategoryId),
+        pricingMode: 'CONTRACT_PRICE',
         basePrice: priceNum,
-        unit: 'service',
-        currency: 'LYD'
+        defaultClaimContextCode: claimContextCode || encounterType || 'OUTPATIENT',
+        defaultProviderTypes: []
       };
 
-      // The canonical internal path for adding one priced item to a contract --
-      // the same ProviderContractPricingItemService the import screens and the
-      // contract's own pricing tab use, authorized for internal staff managing
-      // the contract rather than a provider acting on its own behalf.
-      const response = await axiosClient.post(`/provider-contracts/${entryContext.contractId}/pricing`, payload);
-      const createdItem = response.data?.data || response.data;
+      // Create the shared medical catalog service, then use it on this claim
+      // as a direct unit-priced service. It is not a provider-contract price
+      // item, but it is also not an invoice-style MANUAL_AMOUNT line; quantity
+      // must stay editable for services added from claim entry.
+      const response = await axiosClient.post('/provider-standard-services', payload);
+      const createdService = response.data?.data || response.data;
 
-      const newServiceId = createdItem.medicalServiceId || createdItem.serviceId || createdItem.id;
+      const newServiceId = createdService.medicalServiceId || createdService.serviceId || createdService.id;
 
       const newServiceObject = {
         id: newServiceId,
-        pricingItemId: createdItem.pricingItemId || createdItem.id,
+        medicalServiceId: newServiceId,
+        pricingItemId: null,
+        pricingMode: 'CONTRACT_PRICE',
+        directPrice: true,
         serviceCode: finalServiceCode,
-        serviceName: payload.serviceName,
+        serviceName: payload.nameAr,
         categoryId: Number(finalCategoryId),
-        label: `[${finalServiceCode}] ${payload.serviceName}`,
+        serviceCategoryId: Number(finalCategoryId),
+        medicalCategoryId: Number(finalCategoryId),
+        categoryName: createdService.categoryName || '',
+        serviceCategoryName: createdService.categoryName || '',
+        medicalCategoryName: createdService.categoryName || '',
+        claimContextCode: payload.defaultClaimContextCode,
+        label: buildServiceDisplayLabel({ code: finalServiceCode, name: payload.nameAr }),
         contractPrice: priceNum,
         maxContractPrice: priceNum,
         price: priceNum
@@ -475,29 +487,16 @@ export default function ClaimBatchEntry() {
       // the endpoint above was reachable.
       queryClient.invalidateQueries({ queryKey: ['claim-entry-contract-services'] });
 
-      // Update the active claim line to select this newly added service
+      // Update the active claim line through the same path used by the normal
+      // service picker. This keeps manual-amount services, category metadata
+      // and backend coverage refresh in one code path.
       if (activeLineIdForCustomService) {
-        setLines((prev) =>
-          prev
-            .map((line) => {
-              if (line.id !== activeLineIdForCustomService) return line;
-
-              const linePatch = {
-                service: newServiceObject,
-                serviceName: payload.serviceName,
-                serviceCode: finalServiceCode,
-                unitPrice: priceNum,
-                contractPrice: priceNum,
-                maxContractPrice: priceNum
-              };
-
-              return {
-                ...line,
-                ...linePatch
-              };
-            })
-            .map((line, i, arr) => recompute(line, i, arr))
-        );
+        const currentLines = linesRef.current || lines;
+        const selectedLineIndex = currentLines.findIndex((line) => String(line.id) === String(activeLineIdForCustomService));
+        if (selectedLineIndex < 0) {
+          throw new Error('تعذر تحديد السطر المطلوب. أعد اختيار الخدمة في السطر نفسه.');
+        }
+        await handleServiceChange(selectedLineIndex, newServiceObject);
       }
 
       setCustomServiceDialogOpen(false);
@@ -506,7 +505,7 @@ export default function ClaimBatchEntry() {
       console.error('Failed to add custom service pricing:', err);
       const apiMessage =
         err?.response?.data?.messageAr || err?.response?.data?.message || err?.response?.data?.error || err?.userMessage || err?.message;
-      setCustomServiceError(apiMessage || 'فشل في حفظ الخدمة الجديدة في قائمة أسعار مقدم الخدمة. تأكد من صحة البيانات.');
+      setCustomServiceError(apiMessage || 'فشل في حفظ الخدمة العامة الجديدة. تأكد من صحة البيانات.');
     } finally {
       setAddingCustomService(false);
     }
@@ -652,14 +651,6 @@ export default function ClaimBatchEntry() {
     [lines]
   );
 
-  const saveDisabledReason = useMemo(() => {
-    if (saving) return 'جارٍ حفظ المطالبة.';
-    if (!isDirty) return 'لا توجد تغييرات جديدة للحفظ.';
-    if (entryContextBlockReason) return entryContextBlockReason;
-    if (coveragePending) return 'انتظر اكتمال حساب التغطية والسقوف لكل البنود قبل الحفظ.';
-    return null;
-  }, [coveragePending, entryContextBlockReason, isDirty, saving]);
-
   // Eligible pre-authorizations are part of the same dated context response.
   // A separate request used to resolve the member, policy, contract and
   // balance a second time whenever member/date changed.
@@ -738,9 +729,10 @@ export default function ClaimBatchEntry() {
         s.effectiveCategory?.name ??
         null;
       const normalizedEncounterType = getServiceContext(s);
+      const isManualAmount = s.pricingMode === 'MANUAL_AMOUNT';
       return {
         ...s,
-        label: `${code ? '[' + code + '] ' : ''}${name}`,
+        label: buildServiceDisplayLabel({ code, name }),
         serviceName: name,
         serviceCode: code,
         encounterType: normalizedEncounterType,
@@ -751,7 +743,8 @@ export default function ClaimBatchEntry() {
         categoryName: normalizedCategoryName,
         serviceCategoryName: normalizedCategoryName,
         medicalCategoryName: normalizedCategoryName,
-        pricingItemId: s.pricingItemId ?? s.id,
+        medicalServiceId: s.medicalServiceId ?? s.serviceId ?? (isManualAmount ? s.id : null),
+        pricingItemId: isManualAmount ? null : (s.pricingItemId ?? s.id),
         contractPrice: s.contractPrice || 0,
         maxContractPrice: s.maxContractPrice || s.contractPrice || 0
       };
@@ -775,6 +768,7 @@ export default function ClaimBatchEntry() {
     Boolean(serviceDate) &&
     !loadingServices &&
     !servicesError &&
+    !debouncedServiceSearch.trim() &&
     contractedServiceOptionsRaw.length === 0;
 
   // ── Load Existing Claim for Edit ───────────────────────────────────────
@@ -821,7 +815,7 @@ export default function ClaimBatchEntry() {
             categoryId: l.appliedCategoryId ?? l.serviceCategoryId ?? null,
             serviceCategoryId: l.appliedCategoryId ?? l.serviceCategoryId ?? null,
             serviceCategoryName: l.appliedCategoryName ?? l.serviceCategoryName ?? null,
-            label: `${lineCode ? '[' + lineCode + '] ' : ''}${lineName || ''}`,
+            label: buildServiceDisplayLabel({ code: lineCode, name: lineName || '' }),
             contractPrice: cp,
             maxContractPrice: maxCp
           };
@@ -872,6 +866,11 @@ export default function ClaimBatchEntry() {
       setClaimContextCode(
         editingClaim.claimContextCode || (editingClaim.fullCoverage ? 'FULL_COVERAGE' : editingClaim.encounterType || 'OUTPATIENT')
       );
+      setBeneficiaryPaidAmount(
+        editingClaim.beneficiaryPaidAmount != null || editingClaim.patientPaidAmount != null
+          ? String(editingClaim.beneficiaryPaidAmount ?? editingClaim.patientPaidAmount)
+          : ''
+      );
       setIsDirty(false);
       // Signal that edit fields and lines were committed. One dedicated effect
       // recalculates coverage after policy/member are ready as well.
@@ -887,6 +886,7 @@ export default function ClaimBatchEntry() {
       complaint,
       notes,
       lines,
+      beneficiaryPaidAmount,
       serviceDate,
       preAuthId,
       encounterType,
@@ -904,6 +904,7 @@ export default function ClaimBatchEntry() {
       complaint,
       notes,
       lines,
+      beneficiaryPaidAmount,
       serviceDate,
       preAuthId,
       encounterType,
@@ -925,6 +926,7 @@ export default function ClaimBatchEntry() {
       setComplaint(payload.complaint || '');
       setNotes(payload.notes || '');
       setLines(Array.isArray(payload.lines) && payload.lines.length ? payload.lines : [newLine()]);
+      setBeneficiaryPaidAmount(payload.beneficiaryPaidAmount || '');
       setServiceDate(payload.serviceDate || defaultDate);
       setPreAuthId(payload.preAuthId || '');
       setEncounterType(payload.encounterType || 'OUTPATIENT');
@@ -993,9 +995,10 @@ export default function ClaimBatchEntry() {
           });
 
           setDraftVersion(saved?.version ?? null);
-          if (saved?.conflictResolved) {
-            enqueueSnackbar('تمت مزامنة المسودة بعد تعارض بسيط', { variant: 'info' });
-          }
+          // Draft autosave is intentionally quiet. Repeated "conflict resolved"
+          // snackbars trained users to distrust the form even when no action was
+          // required; the compact autosave dot is enough for normal background
+          // synchronization.
           setAutoSaveStatus('saved');
         } catch {
           if (typeof navigator !== 'undefined' && navigator.onLine === false) {
@@ -1104,7 +1107,7 @@ export default function ClaimBatchEntry() {
   );
 
   const handleServiceChange = useCallback(
-    async (idx, val) => {
+    async (idx, val, options = {}) => {
       if (!val) {
         updateLine(idx, { service: null, serviceName: '', serviceCode: '', unitPrice: 0, contractPrice: 0, maxContractPrice: 0 });
         return;
@@ -1159,6 +1162,8 @@ export default function ClaimBatchEntry() {
       // per-row bounds-check tooltip never fires for a price that was never
       // a contract price to begin with.
       const isManualAmount = svc.pricingMode === 'MANUAL_AMOUNT';
+      const manualAmount = Number(options.manualAmount);
+      const hasManualAmountOverride = Number.isFinite(manualAmount) && manualAmount > 0;
 
       const nextPatch = {
         service: svc,
@@ -1172,7 +1177,7 @@ export default function ClaimBatchEntry() {
         serviceCategoryId: resolvedCategoryId,
         serviceCategoryName: resolvedCategoryName,
         quantity: isManualAmount ? 1 : currentLine.quantity || 1,
-        unitPrice: isManualAmount ? 0 : price,
+        unitPrice: isManualAmount ? (hasManualAmountOverride ? manualAmount : currentLine.unitPrice || 0) : price,
         contractPrice: isManualAmount ? 0 : maxPrice,
         maxContractPrice: isManualAmount ? 0 : maxPrice,
         ...(isFreeText ? failedCoverageResult('الخدمة النصية غير مرتبطة بخدمة معتمدة ولا يمكن احتساب تغطيتها') : { coveragePending: true })
@@ -1189,8 +1194,7 @@ export default function ClaimBatchEntry() {
         // Autocomplete event snapshot. Otherwise a service-only change can
         // calculate limits for quantity=1 while the row displays quantity=15.
         await new Promise((resolve) => setTimeout(resolve, 0));
-        const committedLines = linesRef.current?.length ? linesRef.current : nextLines;
-        const updated = await refetchAllLinesCoverage(encounterType, committedLines, fullCoverage, claimContextCode);
+        const updated = await refetchAllLinesCoverage(encounterType, nextLines, fullCoverage, claimContextCode);
         if (updated) setLines(updated);
       }
     },
@@ -1391,6 +1395,38 @@ export default function ClaimBatchEntry() {
     );
   }, [lines]);
 
+  const beneficiarySettlement = useMemo(() => {
+    const paid = Math.max(0, parseFloat(beneficiaryPaidAmount) || 0);
+    const baseBeneficiaryShare = Math.max(0, totals.employee || 0);
+    const refused = Math.max(0, totals.refused || 0);
+    const appliedToBaseShare = Math.min(paid, baseBeneficiaryShare);
+    const extraPaid = Math.max(0, paid - appliedToBaseShare);
+    const appliedToRefused = Math.min(extraPaid, refused);
+    const remainingBeneficiaryShare = Math.max(0, baseBeneficiaryShare - appliedToBaseShare);
+    const providerRefusedBalance = Math.max(0, refused - appliedToRefused);
+    const excessPayment = Math.max(0, extraPaid - appliedToRefused);
+
+    return {
+      paid,
+      appliedToBaseShare,
+      appliedToRefused,
+      remainingBeneficiaryShare,
+      providerRefusedBalance,
+      excessPayment
+    };
+  }, [beneficiaryPaidAmount, totals.employee, totals.refused]);
+
+  const saveDisabledReason = useMemo(() => {
+    if (saving) return 'جارٍ حفظ المطالبة.';
+    if (!isDirty) return 'لا توجد تغييرات جديدة للحفظ.';
+    if (entryContextBlockReason) return entryContextBlockReason;
+    if (coveragePending) return 'انتظر اكتمال حساب التغطية والسقوف لكل البنود قبل الحفظ.';
+    if (beneficiarySettlement.excessPayment > 0) {
+      return 'المبلغ المدفوع من المستفيد أكبر من التزامه والمبلغ المرفوض.';
+    }
+    return null;
+  }, [beneficiarySettlement.excessPayment, coveragePending, entryContextBlockReason, isDirty, saving]);
+
   const resetForm = useCallback(() => {
     setMember(null);
     setMemberInput('');
@@ -1399,6 +1435,7 @@ export default function ClaimBatchEntry() {
     setComplaint('');
     setNotes('');
     setLines([newLine()]);
+    setBeneficiaryPaidAmount('');
     setApplyBenefits(true);
     setIsDirty(false);
     setServiceDate(defaultDate);
@@ -1441,10 +1478,29 @@ export default function ClaimBatchEntry() {
     setRecoveryDialog({ open: false, serverDraft: null, localDraft: null });
   }, [recoveryDialog.localDraft, applyRecoveredDraft]);
 
-  const dismissRecovery = useCallback(() => {
+  const dismissRecovery = useCallback(async () => {
     recoveryDismissedRef.current = true;
+    skipAutosaveRef.current = true;
+    try {
+      localStorage.removeItem(draftStorageKey);
+    } catch {
+      // Non-blocking local cleanup
+    }
+    try {
+      const batchIdForDelete = draftBatchId || currentBatch?.id;
+      if (batchIdForDelete) {
+        await claimsService.deleteDraft(batchIdForDelete);
+      }
+    } catch {
+      // تجاهل المسودة يجب ألا يفشل بسبب تعذر تنظيف نسخة الخادم.
+    }
     setRecoveryDialog({ open: false, serverDraft: null, localDraft: null });
-  }, []);
+    setDraftVersion(null);
+    setAutoSaveStatus('idle');
+    setTimeout(() => {
+      skipAutosaveRef.current = false;
+    }, 0);
+  }, [currentBatch?.id, draftBatchId, draftStorageKey]);
 
   // ── أسباب الرفض من قاعدة البيانات ─────────────────────────────────────
   const { data: rejectionReasons = [], refetch: refetchReasons } = useQuery({
@@ -1643,6 +1699,14 @@ export default function ClaimBatchEntry() {
       return;
     }
 
+    if (beneficiarySettlement.excessPayment > 0) {
+      enqueueSnackbar('المبلغ المدفوع من المستفيد أكبر من التزامه والمبلغ المرفوض. عدّل المبلغ قبل الحفظ.', {
+        variant: 'error',
+        autoHideDuration: 7000
+      });
+      return;
+    }
+
     const uncoveredLineIndex = lines.findIndex(
       (line) => (line.service || line.serviceName) && !line.rejected && (line.notCovered || (Number(line.coveragePercent) || 0) <= 0)
     );
@@ -1687,10 +1751,10 @@ export default function ClaimBatchEntry() {
         return;
       }
 
-      // الحالة REJECTED فقط إذا:
+      // حالة قاعدة البيانات REJECTED فقط إذا:
       // 1. المستخدم ضغط "رفض المطالبة" صراحة (isClaimRejected)
       // 2. جميع البنود مرفوضة يدوياً (allLinesManuallyRejected)
-      // ⚠️ الخصومات الآلية (تجاوز سعر/سقف) لا تجعل المطالبة "مرفوضة" — تبقى "معتمدة" مع مبالغ مرفوضة
+      // أما وجود مبلغ مرفوض جزئي بسبب سعر/سقف فيُعرض للمستخدم كمرفوضة، مع إبقاء الجزء المقبول قابلاً للصرف.
       const activeLines = lines.filter((l) => l.service || l.serviceName);
       const allLinesManuallyRejected = activeLines.length > 0 && activeLines.every((l) => l.rejected);
 
@@ -1728,42 +1792,46 @@ export default function ClaimBatchEntry() {
         encounterType,
         claimContextCode,
         fullCoverage: fullCoverage,
+        beneficiaryPaidAmount: beneficiarySettlement.paid,
         // لا ترسل صفوف الإدخال الفارغة التي يضيفها المستخدم ولم يختر لها خدمة.
         // التحقق أعلاه يعتمد activeLines، ويجب أن يستخدم الحفظ المصدر نفسه حتى
         // لا تصل أسطر بلا medicalServiceId أو pricingItemId إلى الخادم.
-        lines: activeLines.map((l) => ({
-          id: typeof l.id === 'number' ? l.id : null,
-          medicalServiceId: l.medicalServiceId ?? l.service?.medicalServiceId ?? null,
-          pricingItemId: l.pricingItemId ?? l.service?.pricingItemId ?? null,
-          serviceName: l.serviceName || l.service?.serviceName || '',
-          serviceCode: l.serviceCode || l.service?.serviceCode || '',
-          serviceCategoryId:
-            l.serviceCategoryId ??
-            l.medicalCategoryId ??
-            l.service?.serviceCategoryId ??
-            l.service?.categoryId ??
-            l.service?.medicalCategoryId ??
-            null,
-          serviceCategoryName:
-            l.serviceCategoryName ??
-            l.medicalCategoryName ??
-            l.service?.serviceCategoryName ??
-            l.service?.categoryName ??
-            l.service?.medicalCategoryName ??
-            null,
-          quantity: Number(l.quantity),
-          unitPrice: parseFloat(l.unitPrice) || 0,
-          manualAmount: (l.pricingMode || l.service?.pricingMode) === 'MANUAL_AMOUNT' ? parseFloat(l.unitPrice) || 0 : null,
-          rejected: isClaimRejected ? true : l.rejected || false,
-          rejectionReason: isClaimRejected ? effectiveRejectionReason : l.rejectionReason || null,
-          // refusedAmount on the rendered line includes price/benefit-limit
-          // refusals calculated by the server. Sending that aggregate back as
-          // a manual refusal makes the financial engine subtract the same
-          // ceiling excess twice (and can exceed the insurer gross share).
-          // Only the user's explicit refusal is command input; the backend
-          // must recalculate every automatic refusal at save time.
-          manualRefusedAmount: isClaimRejected ? 0 : parseFloat(l.manualRefusedAmount) || 0
-        }))
+        lines: activeLines.map((l) => {
+          const isManualAmountLine = (l.pricingMode || l.service?.pricingMode) === 'MANUAL_AMOUNT';
+          return {
+            id: typeof l.id === 'number' ? l.id : null,
+            medicalServiceId: l.medicalServiceId || l.service?.medicalServiceId || l.service?.serviceId || null,
+            pricingItemId: isManualAmountLine ? null : (l.pricingItemId ?? l.service?.pricingItemId ?? null),
+            serviceName: l.serviceName || l.service?.serviceName || '',
+            serviceCode: l.serviceCode || l.service?.serviceCode || '',
+            serviceCategoryId:
+              l.serviceCategoryId ??
+              l.medicalCategoryId ??
+              l.service?.serviceCategoryId ??
+              l.service?.categoryId ??
+              l.service?.medicalCategoryId ??
+              null,
+            serviceCategoryName:
+              l.serviceCategoryName ??
+              l.medicalCategoryName ??
+              l.service?.serviceCategoryName ??
+              l.service?.categoryName ??
+              l.service?.medicalCategoryName ??
+              null,
+            quantity: Number(l.quantity),
+            unitPrice: parseFloat(l.unitPrice) || 0,
+            manualAmount: isManualAmountLine ? parseFloat(l.unitPrice) || 0 : null,
+            rejected: isClaimRejected ? true : l.rejected || false,
+            rejectionReason: isClaimRejected ? effectiveRejectionReason : l.rejectionReason || null,
+            // refusedAmount on the rendered line includes price/benefit-limit
+            // refusals calculated by the server. Sending that aggregate back as
+            // a manual refusal makes the financial engine subtract the same
+            // ceiling excess twice (and can exceed the insurer gross share).
+            // Only the user's explicit refusal is command input; the backend
+            // must recalculate every automatic refusal at save time.
+            manualRefusedAmount: isClaimRejected ? 0 : parseFloat(l.manualRefusedAmount) || 0
+          };
+        })
       };
 
       let resultClaimId;
@@ -2320,6 +2388,12 @@ export default function ClaimBatchEntry() {
                           policyInfo={policyInfo}
                           visibleColumns={visibleColumns}
                           triggerConfirm={triggerConfirm}
+                          onOpenCustomServiceDialog={() => {
+                            setActiveLineIdForCustomService(line.id);
+                            setCustomServiceData({ categoryId: '', serviceName: '', serviceCode: '', contractPrice: '' });
+                            setCustomServiceError(null);
+                            setCustomServiceDialogOpen(true);
+                          }}
                           onOpenClassificationReview={openClassificationReviewDialog}
                         />
                       ))}
@@ -2352,14 +2426,28 @@ export default function ClaimBatchEntry() {
                     Boolean(member?.id) && (!serviceDate || loadingEntryContext || entryContextError || !entryContext)
                   }
                   hasUncoveredLines={lines.some(
-                    (line) =>
-                      (line.service || line.serviceName) && !line.rejected && (line.notCovered || (Number(line.coveragePercent) || 0) <= 0)
+                    (line) => {
+                      const hasService = line.service || line.serviceName;
+                      const hasAmountForCoverage = Number(line.unitPrice || 0) > 0 && Number(line.quantity || 0) > 0;
+                      return (
+                        hasService &&
+                        hasAmountForCoverage &&
+                        !line.rejected &&
+                        (line.notCovered || (Number(line.coveragePercent) || 0) <= 0)
+                      );
+                    }
                   )}
                   setIsClaimRejected={setIsClaimRejected}
                   setIsDirty={setIsDirty}
                   setRejectionInput={setRejectionInput}
                   openRejectDialog={openRejectDialog}
                   totals={totals}
+                  beneficiaryPaidAmount={beneficiaryPaidAmount}
+                  beneficiarySettlement={beneficiarySettlement}
+                  onBeneficiaryPaidAmountChange={(value) => {
+                    setBeneficiaryPaidAmount(value);
+                    setIsDirty(true);
+                  }}
                   theme={theme}
                   lines={lines}
                   t={t}
@@ -2528,6 +2616,7 @@ export default function ClaimBatchEntry() {
         customServiceData={customServiceData}
         customServiceError={customServiceError}
         addingCustomService={addingCustomService}
+        claimContextCode={claimContextCode}
         onFieldChange={handleCustomServiceDataChange}
         onClearError={() => setCustomServiceError(null)}
         onSubmit={handleSubmitCustomService}

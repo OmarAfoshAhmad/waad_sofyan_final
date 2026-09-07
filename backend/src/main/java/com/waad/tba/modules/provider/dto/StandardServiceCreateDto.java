@@ -8,13 +8,14 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.List;
+import java.math.BigDecimal;
+
+import com.waad.tba.modules.medicaltaxonomy.enums.PricingMode;
 
 /**
- * Creates a new standard (invoice-priced, MANUAL_AMOUNT) professional
- * service -- e.g. a new medication-invoice or optics-fitting catalog entry,
- * the kind V215 seeded four of by migration. pricingMode is not a field
- * here: this endpoint exists specifically to create MANUAL_AMOUNT services,
- * never CONTRACT_PRICE ones, so there is nothing to choose.
+ * Creates a shared medical service. Professional standard services default to
+ * invoice-priced MANUAL_AMOUNT. Claim-entry "add general service" may opt into
+ * CONTRACT_PRICE so quantity remains meaningful for that claim path.
  */
 @Data
 @NoArgsConstructor
@@ -32,6 +33,14 @@ public class StandardServiceCreateDto {
 
     @NotNull(message = "التصنيف الطبي إلزامي")
     private Long categoryId;
+
+    @NotBlank(message = "سياق الاستخدام إلزامي")
+    private String defaultClaimContextCode;
+
+    @Builder.Default
+    private PricingMode pricingMode = PricingMode.MANUAL_AMOUNT;
+
+    private BigDecimal basePrice;
 
     /** Facility types this service is auto-suggested/applied for by default. */
     @Builder.Default

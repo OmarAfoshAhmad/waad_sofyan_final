@@ -172,6 +172,16 @@ class WaadFinancialEngineTest {
     }
 
     @Test
+    void discountBeforeRejection_rejectionCannotExceedInsurerNetAfterDiscount() {
+        assertThatThrownBy(() -> engine.evaluate(new Input(
+                new BigDecimal("100.00"), new BigDecimal("100.00"),
+                LimitMode.UNLIMITED, null, 100, new BigDecimal("10.00"), true,
+                new BigDecimal("95.00"), false, 1)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("rejectable insurer amount");
+    }
+
+    @Test
     void s11_rejectionExceedingNetBeforeRejectionFailsClosed() {
         assertThatThrownBy(() -> engine.evaluate(limited(
                 new BigDecimal("100.00"), new BigDecimal("100.00"), new BigDecimal("100.00"),
