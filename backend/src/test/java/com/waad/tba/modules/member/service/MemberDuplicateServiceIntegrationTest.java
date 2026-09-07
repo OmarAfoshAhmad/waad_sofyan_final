@@ -71,10 +71,19 @@ class MemberDuplicateServiceIntegrationTest extends PostgresIntegrationTestBase 
                 .licenseNumber("LIC-" + UUID.randomUUID()).providerType(ProviderType.CLINIC).active(true).build());
         Visit historicalVisit = visits.saveAndFlush(Visit.builder().member(duplicate).employer(f.employer())
                 .providerId(provider.getId()).visitDate(LocalDate.now().minusDays(2)).build());
+        // V219: a RESOLVED claim needs a real, service-date-covering
+        // employer/policy assignment behind it, not three arbitrary ids.
+        initializeTemporalAssignments(duplicate);
+        var resolved = com.waad.tba.support.ResolvedClaimTestFixture.resolve(jdbc, duplicate.getId());
         Claim historicalClaim = Claim.builder().member(duplicate).visit(historicalVisit)
                 .providerId(provider.getId()).serviceDate(historicalVisit.getVisitDate())
                 .requestedAmount(new BigDecimal("10.00")).approvedAmount(new BigDecimal("10.00"))
-                .status(ClaimStatus.DRAFT).build();
+                .status(ClaimStatus.DRAFT)
+                .historicalContextStatus(com.waad.tba.modules.claim.entity.ClaimHistoricalContextStatus.RESOLVED)
+                .policyId(resolved.policyId())
+                .policyAssignmentId(resolved.policyAssignmentId())
+                .employerAssignmentId(resolved.employerAssignmentId())
+                .build();
         historicalClaim.addLine(ClaimLine.builder().serviceCode("HIST").serviceName("Historical")
                 .quantity(1).unitPrice(new BigDecimal("10.00")).build());
         historicalClaim = claims.saveAndFlush(historicalClaim);

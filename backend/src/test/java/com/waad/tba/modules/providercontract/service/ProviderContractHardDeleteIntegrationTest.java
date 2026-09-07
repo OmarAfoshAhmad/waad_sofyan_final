@@ -173,9 +173,11 @@ class ProviderContractHardDeleteIntegrationTest extends PostgresIntegrationTestB
                 .active(true)
                 .build());
         // Terminated on purpose: chk_active_member_requires_policy would drag a
-        // benefit policy into a test about a foreign key, and
+        // benefit policy into the MEMBER row itself, and
         // chk_member_status_active_consistency requires the status to agree with
-        // the flag. All this member has to be is a row a claim can point at.
+        // the flag. Neither constraint is about member_policy_assignments, so a
+        // separate policy + assignment (needed only to satisfy V219's
+        // chk_claims_historical_context_consistency below) does not disturb them.
         Member member = memberRepository.save(Member.builder()
                 .fullName("Member " + suffix)
                 .barcode("BC-" + suffix)
@@ -192,20 +194,56 @@ class ProviderContractHardDeleteIntegrationTest extends PostgresIntegrationTestB
                 .status(VisitStatus.REGISTERED)
                 .build());
 
+        Long policyId = ((Number) entityManager.createNativeQuery("""
+                INSERT INTO benefit_policies (name, policy_code, employer_id, annual_limit,
+                                    default_coverage_percent, start_date, end_date, status, active)
+                VALUES (:name, :code, :employerId, 10000, 80, DATE '2026-01-01', DATE '2026-12-31',
+                        'ACTIVE', true)
+                RETURNING id
+                """)
+                .setParameter("name", "HD Policy " + suffix)
+                .setParameter("code", "HDPOL-" + suffix)
+                .setParameter("employerId", employer.getId())
+                .getSingleResult()).longValue();
+        Long employerAssignmentId = ((Number) entityManager.createNativeQuery("""
+                INSERT INTO member_employer_assignments (member_id, employer_id, assignment_start_date,
+                                    assignment_reason, assignment_source)
+                VALUES (:memberId, :employerId, DATE '2026-01-01', 'test', 'MANUAL')
+                RETURNING id
+                """)
+                .setParameter("memberId", member.getId())
+                .setParameter("employerId", employer.getId())
+                .getSingleResult()).longValue();
+        Long policyAssignmentId = ((Number) entityManager.createNativeQuery("""
+                INSERT INTO member_policy_assignments (member_id, policy_id, assignment_start_date,
+                                    assignment_source)
+                VALUES (:memberId, :policyId, DATE '2026-01-01', 'MANUAL')
+                RETURNING id
+                """)
+                .setParameter("memberId", member.getId())
+                .setParameter("policyId", policyId)
+                .getSingleResult()).longValue();
+
         entityManager.createNativeQuery("""
                 INSERT INTO claims (member_id, visit_id, provider_id, provider_contract_id,
                                     requested_amount, status, submission_source, review_paused,
                                     encounter_type, claim_context_code, pending_recalculation,
-                                    coverage_version, active, service_date, created_at, updated_at)
+                                    coverage_version, active, service_date, created_at, updated_at,
+                                    historical_context_status, policy_id, policy_assignment_id,
+                                    employer_assignment_id)
                 VALUES (:memberId, :visitId, :providerId, :contractId,
                         100.00, 'DRAFT', 'DIRECT_ENTRY', false,
                         'OUTPATIENT', 'OUTPATIENT', false,
-                        1, true, DATE '2026-06-01', NOW(), NOW())
+                        1, true, DATE '2026-06-01', NOW(), NOW(),
+                        'RESOLVED', :policyId, :policyAssignmentId, :employerAssignmentId)
                 """)
                 .setParameter("memberId", member.getId())
                 .setParameter("visitId", visit.getId())
                 .setParameter("providerId", contract.getProvider().getId())
                 .setParameter("contractId", contract.getId())
+                .setParameter("policyId", policyId)
+                .setParameter("policyAssignmentId", policyAssignmentId)
+                .setParameter("employerAssignmentId", employerAssignmentId)
                 .executeUpdate();
     }
 }

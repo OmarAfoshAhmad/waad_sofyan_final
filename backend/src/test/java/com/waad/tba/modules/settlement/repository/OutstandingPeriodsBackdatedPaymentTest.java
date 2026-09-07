@@ -78,7 +78,11 @@ class OutstandingPeriodsBackdatedPaymentTest extends PostgresIntegrationTestBase
 
         // active = false deliberately: chk_active_member_requires_policy demands a
         // benefit policy for active members, and the outstanding query joins members
-        // only to read employer_id — it never filters on the member's status.
+        // only to read employer_id — it never filters on the member's status. That
+        // constraint is about the MEMBER row's own benefit_policy_id, not about
+        // member_policy_assignments, so a separate policy + assignment (needed only
+        // to satisfy V219's chk_claims_historical_context_consistency below) does
+        // not disturb it.
         Long memberId = jdbc.queryForObject("""
                 INSERT INTO members (employer_id, full_name, national_number, barcode, status, active, created_at, updated_at)
                 VALUES (?, ?, ?, ?, 'SUSPENDED', false, now(), now()) RETURNING id
@@ -89,16 +93,35 @@ class OutstandingPeriodsBackdatedPaymentTest extends PostgresIntegrationTestBase
                 VALUES (?, ?, ?, 'REGISTERED', now(), now()) RETURNING id
                 """, Long.class, memberId, providerId, SERVICE_DATE);
 
+        Long policyId = jdbc.queryForObject("""
+                INSERT INTO benefit_policies (name, policy_code, employer_id, annual_limit,
+                                    default_coverage_percent, start_date, end_date, status, active)
+                VALUES (?, ?, ?, 10000, 80, ?, ?, 'ACTIVE', true) RETURNING id
+                """, Long.class, "Backdate Policy " + suffix, "BDPOL-" + suffix, employerId,
+                SERVICE_DATE.minusYears(1), SERVICE_DATE.plusYears(1));
+        Long employerAssignmentId = jdbc.queryForObject("""
+                INSERT INTO member_employer_assignments (member_id, employer_id, assignment_start_date,
+                                    assignment_reason, assignment_source)
+                VALUES (?, ?, ?, 'test', 'MANUAL') RETURNING id
+                """, Long.class, memberId, employerId, SERVICE_DATE.minusYears(1));
+        Long policyAssignmentId = jdbc.queryForObject("""
+                INSERT INTO member_policy_assignments (member_id, policy_id, assignment_start_date,
+                                    assignment_source)
+                VALUES (?, ?, ?, 'MANUAL') RETURNING id
+                """, Long.class, memberId, policyId, SERVICE_DATE.minusYears(1));
+
         // One approved claim: 1000.00 owed to this provider for 2026-06.
         jdbc.update("""
                 INSERT INTO claims (member_id, visit_id, provider_id, service_date, requested_amount,
                                     approved_amount, net_provider_amount, patient_copay, refused_amount,
                                 company_discount_amount, status, submission_source, encounter_type, claim_context_code,
                                     review_paused, pending_recalculation, coverage_version, active,
-                                    created_at, updated_at)
+                                    created_at, updated_at, historical_context_status, policy_id,
+                                    policy_assignment_id, employer_assignment_id)
                 VALUES (?, ?, ?, ?, 1000.00, 1000.00, 1000.00, 0.00, 0.00, 0.00,
-                    'APPROVED', 'INTERNAL_DIRECT', 'OUTPATIENT', 'OUTPATIENT', false, false, 1, true, now(), now())
-                """, memberId, visitId, providerId, SERVICE_DATE);
+                    'APPROVED', 'INTERNAL_DIRECT', 'OUTPATIENT', 'OUTPATIENT', false, false, 1, true, now(), now(),
+                    'RESOLVED', ?, ?, ?)
+                """, memberId, visitId, providerId, SERVICE_DATE, policyId, policyAssignmentId, employerAssignmentId);
     }
 
     /** A POSTED payment that fully allocates June, but dated in August. */

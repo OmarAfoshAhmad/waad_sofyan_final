@@ -13,6 +13,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 
 import com.waad.tba.TbaWaadApplication;
@@ -81,6 +82,7 @@ class ProviderPaymentPilotAcceptanceIntegrationTest extends PostgresIntegrationT
     @Autowired VisitRepository visits;
     @Autowired ClaimRepository claims;
     @Autowired BenefitPolicyRepository benefitPolicies;
+    @Autowired JdbcTemplate jdbc;
 
     private String suffix;
     private Long providerId;
@@ -320,6 +322,10 @@ class ProviderPaymentPilotAcceptanceIntegrationTest extends PostgresIntegrationT
         Member member = members.save(Member.builder().fullName("Pilot Member " + UUID.randomUUID())
                 .barcode("BC-" + UUID.randomUUID()).employer(employer)
                 .benefitPolicy(employerPolicies.get(employerId)).active(true).build());
+        // V219: a RESOLVED claim needs a real, service-date-covering
+        // employer/policy assignment behind it, not three arbitrary ids.
+        initializeTemporalAssignments(member);
+        var resolved = com.waad.tba.support.ResolvedClaimTestFixture.resolve(jdbc, member.getId());
         Visit visit = visits.save(Visit.builder().member(member).employer(employer).providerId(providerId)
                 .visitDate(date).status(VisitStatus.REGISTERED).build());
         BigDecimal value = new BigDecimal(amount);
@@ -328,7 +334,12 @@ class ProviderPaymentPilotAcceptanceIntegrationTest extends PostgresIntegrationT
                 .status(ClaimStatus.APPROVED)
                 .requestedAmount(value).approvedAmount(value).netProviderAmount(value)
                 .patientCoPay(BigDecimal.ZERO).refusedAmount(BigDecimal.ZERO)
-                .companyDiscountAmount(BigDecimal.ZERO).active(true).build();
+                .companyDiscountAmount(BigDecimal.ZERO).active(true)
+                .historicalContextStatus(com.waad.tba.modules.claim.entity.ClaimHistoricalContextStatus.RESOLVED)
+                .policyId(resolved.policyId())
+                .policyAssignmentId(resolved.policyAssignmentId())
+                .employerAssignmentId(resolved.employerAssignmentId())
+                .build();
         ClaimLine line = ClaimLine.builder().claim(claim).serviceCode("PILOT-SVC")
                 .serviceName("Pilot Service").quantity(1).unitPrice(value).totalPrice(value)
                 .requestedTotal(value).approvedAmount(value).companyShare(value)

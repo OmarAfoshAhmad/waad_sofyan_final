@@ -14,6 +14,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -60,6 +61,7 @@ class ProviderPaymentAllocationSuggestionIntegrationTest extends PostgresIntegra
     @Autowired VisitRepository visits;
     @Autowired ClaimRepository claims;
     @Autowired BenefitPolicyRepository benefitPolicies;
+    @Autowired JdbcTemplate jdbc;
 
     private Long providerId;
     private Long employerA;
@@ -128,6 +130,10 @@ class ProviderPaymentAllocationSuggestionIntegrationTest extends PostgresIntegra
         Member member = members.save(Member.builder().fullName("FIFO Member " + UUID.randomUUID())
                 .barcode("BC-" + UUID.randomUUID()).employer(employer)
                 .benefitPolicy(policiesByEmployer.get(employerId)).active(true).build());
+        // V219: a RESOLVED claim needs a real, service-date-covering
+        // employer/policy assignment behind it, not three arbitrary ids.
+        initializeTemporalAssignments(member);
+        var resolved = com.waad.tba.support.ResolvedClaimTestFixture.resolve(jdbc, member.getId());
         Visit visit = visits.save(Visit.builder().member(member).employer(employer).providerId(providerId)
                 .visitDate(date).status(VisitStatus.REGISTERED).build());
         BigDecimal value = new BigDecimal(amount);
@@ -135,7 +141,12 @@ class ProviderPaymentAllocationSuggestionIntegrationTest extends PostgresIntegra
                 .member(member).visit(visit).providerId(providerId).serviceDate(date).status(status)
                 .requestedAmount(value).approvedAmount(value).netProviderAmount(value)
                 .patientCoPay(BigDecimal.ZERO).refusedAmount(BigDecimal.ZERO)
-                .companyDiscountAmount(BigDecimal.ZERO).active(true).build();
+                .companyDiscountAmount(BigDecimal.ZERO).active(true)
+                .historicalContextStatus(com.waad.tba.modules.claim.entity.ClaimHistoricalContextStatus.RESOLVED)
+                .policyId(resolved.policyId())
+                .policyAssignmentId(resolved.policyAssignmentId())
+                .employerAssignmentId(resolved.employerAssignmentId())
+                .build();
         ClaimLine line = ClaimLine.builder().claim(claim).serviceCode("FIFO-SVC")
                 .serviceName("FIFO Service").quantity(1).unitPrice(value).totalPrice(value)
                 .requestedTotal(value).approvedAmount(value).companyShare(value)
