@@ -7,7 +7,7 @@ spring:
     jdbc:
       # Flyway owns the schema; Spring must never mutate production DDL.
       initialize-schema: never
-    timeout: ${SESSION_TIMEOUT:30m}
+    timeout: ${SESSION_TIMEOUT:24h}
 
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/tba_waad_system}
@@ -101,7 +101,7 @@ server:
       enabled: true
       force: true
     session:
-      timeout: ${SESSION_TIMEOUT:30m}
+      timeout: ${SESSION_TIMEOUT:24h}
       cookie:
         name: JSESSIONID
         # application-prod.yml already set secure/same-site/http-only; this

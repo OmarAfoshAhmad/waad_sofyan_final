@@ -10,6 +10,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
+import java.math.BigDecimal;
 import java.util.List;
 
 /**
@@ -115,6 +116,7 @@ public class ClaimCreateDto {
     private EncounterType encounterType = EncounterType.OUTPATIENT;
     private String claimContextCode;
     private Boolean fullCoverage;
+    private BigDecimal beneficiaryPaidAmount;
 
     /**
      * Optional: The monthly batch this claim belongs to.

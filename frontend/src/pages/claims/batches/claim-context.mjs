@@ -13,13 +13,6 @@ export const getServiceContext = (service) =>
       service?.context
   );
 
-export const isServiceAllowedForClaimContext = (service, claimEncounterType) => {
-  const claimContext = normalizeClaimServiceContext(claimEncounterType || 'OUTPATIENT');
-  if (claimContext === 'ANY') return true;
-  const serviceContext = getServiceContext(service);
-  return serviceContext === 'ANY' || serviceContext === claimContext;
-};
-
 export const resolveClaimContextSelection = (contexts, code) => {
   const selected = (Array.isArray(contexts) ? contexts : []).find((context) => context.code === code);
   if (!selected) return null;

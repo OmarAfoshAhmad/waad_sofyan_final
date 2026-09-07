@@ -10,6 +10,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
+import java.math.BigDecimal;
 import java.util.List;
 
 /**
@@ -66,6 +67,7 @@ public class ClaimDataUpdateDto {
     private String rejectionReason;
     private EncounterType encounterType;
     private Boolean fullCoverage;
+    private BigDecimal beneficiaryPaidAmount;
 
     /** New status for trusted internal re-approval/rejection edit paths. */
     private ClaimStatus status;

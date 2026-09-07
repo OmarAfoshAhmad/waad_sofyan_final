@@ -80,11 +80,43 @@ public interface ProviderContractPricingItemRepository extends JpaRepository<Pro
                      "AND (p.effectiveFrom IS NULL OR p.effectiveFrom <= :date) " +
                      "AND (p.effectiveTo IS NULL OR :date < p.effectiveTo) " +
                      "AND (LOWER(p.serviceCode) LIKE LOWER(CONCAT('%', :query, '%')) " +
-                     "OR LOWER(p.serviceName) LIKE LOWER(CONCAT('%', :query, '%')))")
+                     "OR LOWER(p.serviceName) LIKE LOWER(CONCAT('%', :query, '%')) " +
+                     "OR REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(LOWER(p.serviceName), 'أ', 'ا'), 'إ', 'ا'), 'آ', 'ا'), 'ى', 'ي'), 'ة', 'ه'), 'ؤ', 'و'), 'ئ', 'ي'), 'ـ', '') LIKE CONCAT('%', :normalizedQuery, '%') " +
+                     "OR REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(LOWER(p.categoryName), 'أ', 'ا'), 'إ', 'ا'), 'آ', 'ا'), 'ى', 'ي'), 'ة', 'ه'), 'ؤ', 'و'), 'ئ', 'ي'), 'ـ', '') LIKE CONCAT('%', :normalizedQuery, '%'))")
        Page<ProviderContractPricingItem> searchEffectiveByContractId(
                      @Param("contractId") Long contractId,
                      @Param("date") LocalDate date,
                      @Param("query") String query,
+                     @Param("normalizedQuery") String normalizedQuery,
+                     Pageable pageable);
+
+       @Query(value = "SELECT p FROM ProviderContractPricingItem p " +
+                     "WHERE p.contract.id = :contractId AND p.active = true " +
+                     "AND (p.effectiveFrom IS NULL OR p.effectiveFrom <= :date) " +
+                     "AND (p.effectiveTo IS NULL OR :date < p.effectiveTo) " +
+                     "AND (LOWER(p.serviceCode) LIKE LOWER(CONCAT('%', :query, '%')) " +
+                     "OR LOWER(p.serviceName) LIKE LOWER(CONCAT('%', :query, '%')) " +
+                     "OR REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(LOWER(p.serviceName), 'أ', 'ا'), 'إ', 'ا'), 'آ', 'ا'), 'ى', 'ي'), 'ة', 'ه'), 'ؤ', 'و'), 'ئ', 'ي'), 'ـ', '') LIKE CONCAT('%', :normalizedQuery, '%') " +
+                     "OR REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(LOWER(p.categoryName), 'أ', 'ا'), 'إ', 'ا'), 'آ', 'ا'), 'ى', 'ي'), 'ة', 'ه'), 'ؤ', 'و'), 'ئ', 'ي'), 'ـ', '') LIKE CONCAT('%', :normalizedQuery, '%')) " +
+                     "ORDER BY " +
+                     "CASE WHEN LOWER(p.serviceName) LIKE LOWER(CONCAT(:query, '%')) THEN 0 " +
+                     "WHEN LOWER(p.serviceCode) LIKE LOWER(CONCAT(:query, '%')) THEN 1 " +
+                     "WHEN REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(LOWER(p.serviceName), 'أ', 'ا'), 'إ', 'ا'), 'آ', 'ا'), 'ى', 'ي'), 'ة', 'ه'), 'ؤ', 'و'), 'ئ', 'ي'), 'ـ', '') LIKE CONCAT(:normalizedQuery, '%') THEN 2 " +
+                     "WHEN LOWER(p.serviceCode) LIKE LOWER(CONCAT('%', :query, '%')) THEN 3 " +
+                     "ELSE 4 END, p.serviceName ASC",
+              countQuery = "SELECT COUNT(p) FROM ProviderContractPricingItem p " +
+                     "WHERE p.contract.id = :contractId AND p.active = true " +
+                     "AND (p.effectiveFrom IS NULL OR p.effectiveFrom <= :date) " +
+                     "AND (p.effectiveTo IS NULL OR :date < p.effectiveTo) " +
+                     "AND (LOWER(p.serviceCode) LIKE LOWER(CONCAT('%', :query, '%')) " +
+                     "OR LOWER(p.serviceName) LIKE LOWER(CONCAT('%', :query, '%')) " +
+                     "OR REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(LOWER(p.serviceName), 'أ', 'ا'), 'إ', 'ا'), 'آ', 'ا'), 'ى', 'ي'), 'ة', 'ه'), 'ؤ', 'و'), 'ئ', 'ي'), 'ـ', '') LIKE CONCAT('%', :normalizedQuery, '%') " +
+                     "OR REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(LOWER(p.categoryName), 'أ', 'ا'), 'إ', 'ا'), 'آ', 'ا'), 'ى', 'ي'), 'ة', 'ه'), 'ؤ', 'و'), 'ئ', 'ي'), 'ـ', '') LIKE CONCAT('%', :normalizedQuery, '%'))")
+       Page<ProviderContractPricingItem> searchEffectiveByContractIdRanked(
+                     @Param("contractId") Long contractId,
+                     @Param("date") LocalDate date,
+                     @Param("query") String query,
+                     @Param("normalizedQuery") String normalizedQuery,
                      Pageable pageable);
 
        /**
@@ -222,7 +254,7 @@ public interface ProviderContractPricingItemRepository extends JpaRepository<Pro
                      "AND p.id = :pricingItemId " +
                      "AND p.active = true " +
                      "AND p.contract.active = true " +
-                     "AND p.contract.status = 'ACTIVE' " +
+                     "AND p.contract.status <> 'DRAFT' " +
                      "AND p.contract.startDate <= :date " +
                      "AND (p.contract.endDate IS NULL OR p.contract.endDate >= :date) " +
                      "AND (p.effectiveFrom IS NULL OR p.effectiveFrom <= :date) " +
@@ -263,7 +295,7 @@ public interface ProviderContractPricingItemRepository extends JpaRepository<Pro
                      "WHERE p.contract.provider.id = :providerId " +
                      "AND p.active = true " +
                      "AND p.contract.active = true " +
-                     "AND p.contract.status = 'ACTIVE' " +
+                     "AND p.contract.status <> 'DRAFT' " +
                      "AND p.serviceCode = :serviceCode " +
                      "AND p.contract.startDate <= :date " +
                      "AND (p.contract.endDate IS NULL OR p.contract.endDate >= :date) " +
@@ -284,7 +316,7 @@ public interface ProviderContractPricingItemRepository extends JpaRepository<Pro
                      "AND p.contract.pricingScope = 'EMPLOYER_SPECIFIC' " +
                      "AND p.active = true " +
                      "AND p.contract.active = true " +
-                     "AND p.contract.status = 'ACTIVE' " +
+                     "AND p.contract.status <> 'DRAFT' " +
                      "AND p.serviceCode = :serviceCode " +
                      "AND p.contract.startDate <= :date " +
                      "AND (p.contract.endDate IS NULL OR p.contract.endDate >= :date) " +
@@ -305,7 +337,7 @@ public interface ProviderContractPricingItemRepository extends JpaRepository<Pro
                      "AND p.contract.employer IS NULL " +
                      "AND p.active = true " +
                      "AND p.contract.active = true " +
-                     "AND p.contract.status = 'ACTIVE' " +
+                     "AND p.contract.status <> 'DRAFT' " +
                      "AND p.serviceCode = :serviceCode " +
                      "AND p.contract.startDate <= :date " +
                      "AND (p.contract.endDate IS NULL OR p.contract.endDate >= :date) " +
@@ -452,7 +484,7 @@ public interface ProviderContractPricingItemRepository extends JpaRepository<Pro
                      "WHERE p.contract.provider.id = :providerId " +
                      "AND p.active = true " +
                      "AND p.contract.active = true " +
-                     "AND p.contract.status = 'ACTIVE' " +
+                     "AND p.contract.status <> 'DRAFT' " +
                      "AND p.contract.startDate <= :date " +
                      "AND (p.contract.endDate IS NULL OR p.contract.endDate >= :date) " +
                      "AND (p.effectiveFrom IS NULL OR p.effectiveFrom <= :date) " +

@@ -29,7 +29,7 @@ server:
   forward-headers-strategy: framework
   servlet:
     session:
-      timeout: ${SESSION_TIMEOUT:30m}
+      timeout: ${SESSION_TIMEOUT:24h}
       cookie:
         secure: true
         same-site: strict

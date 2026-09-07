@@ -39,6 +39,7 @@ import com.waad.tba.modules.claim.entity.ClaimStatus;
 import com.waad.tba.modules.claim.entity.ClaimType;
 import com.waad.tba.modules.claim.mapper.ClaimMapper;
 import com.waad.tba.modules.claim.repository.ClaimRepository;
+import com.waad.tba.modules.claim.service.finance.ClaimFinancialTotals;
 import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.modules.member.repository.MemberRepository;
 
@@ -421,16 +422,20 @@ public class ClaimService {
         } else if (isDirectEntry) {
             BigDecimal payable = financialSnapshotService.finalizeSnapshot(savedClaim);
 
-            // Never construct an APPROVED claim with a zero approved amount: a claim with
-            // no qualifying amount after benefit-limit/coverage calculation is a rejection,
-            // not a silent zero-value approval. ClaimStateMachine enforces this same
-            // "totalApproved > 0" rule for the reviewed path — this makes the direct-entry
-            // path go through the identical, audited gate instead of bypassing it.
-            if (payable.compareTo(BigDecimal.ZERO) <= 0) {
-                savedClaim.setReviewerComment("تم رفض المطالبة تلقائياً لعدم وجود مبلغ مؤهل للتغطية بعد تطبيق سقوف المنافع");
-                claimStateMachine.transition(savedClaim, ClaimStatus.REJECTED, currentUser);
-            } else {
+            if (payable.compareTo(BigDecimal.ZERO) > 0) {
+                // A financially payable direct-entry claim stays approved in the
+                // ledger even when it contains a refused component; the reviewer UI
+                // labels refused financial rows as "مرفوضة" without losing the
+                // payable provider/accounting side effect.
                 claimStateMachine.transition(savedClaim, ClaimStatus.APPROVED, currentUser);
+            } else {
+                // No payable amount means there is no accounting side effect to
+                // preserve. Store the claim as rejected with a system reason instead
+                // of creating a zero-value approval that reads like a broken key.
+                if (savedClaim.getReviewerComment() == null || savedClaim.getReviewerComment().isBlank()) {
+                    savedClaim.setReviewerComment("رفض آلي: لا يوجد مبلغ قابل للاعتماد بعد تطبيق التغطية والسقوف.");
+                }
+                claimStateMachine.transition(savedClaim, ClaimStatus.REJECTED, currentUser);
             }
             savedClaim = claimRepository.save(savedClaim);
         }
@@ -684,6 +689,10 @@ public class ClaimService {
             if (!Objects.equals(previousFullCoverage, claim.getFullCoverage())) {
                 claim.markCoverageDirty();
             }
+        }
+        if (dto.getBeneficiaryPaidAmount() != null) {
+            claim.setBeneficiaryPaidAmount(dto.getBeneficiaryPaidAmount());
+            ClaimFinancialTotals.applyBeneficiaryDirectPaymentSettlement(claim);
         }
 
         // Trusted internal-entry correction path. Portal claims must be corrected
@@ -940,12 +949,12 @@ public class ClaimService {
     }
 
     @Transactional(readOnly = true)
-    public Page<ClaimViewDto> listClaims(Long employerId, Long providerId, ClaimStatus status, LocalDate dateFrom,
+    public Page<ClaimViewDto> listClaims(Long employerId, Long providerId, Long claimBatchId, ClaimStatus status, LocalDate dateFrom,
             LocalDate dateTo, LocalDate createdDateFrom, LocalDate createdDateTo,
             int page, int size, String sortBy, String sortDir, String search) {
         log.debug(
-                "📋 Listing claims with pagination. employerId={}, providerId={}, status={}, page={}, size={}, sortBy={}, sortDir={}, search={}",
-                employerId, providerId, status, page, size, sortBy, sortDir, search);
+                "📋 Listing claims with pagination. employerId={}, providerId={}, claimBatchId={}, status={}, page={}, size={}, sortBy={}, sortDir={}, search={}",
+                employerId, providerId, claimBatchId, status, page, size, sortBy, sortDir, search);
 
         User currentUser = authorizationService.getCurrentUser();
         if (currentUser == null) {
@@ -997,14 +1006,14 @@ public class ClaimService {
                     currentUser.getId(), allowedProviderIds.size());
 
             claimsPage = claimRepository.searchPagedWithFiltersAndReviewerProviders(
-                    keyword, allowedProviderIds, providerId, employerId, status, dateFrom, dateTo, createdAtFrom, createdAtTo,
+                    keyword, allowedProviderIds, providerId, employerId, claimBatchId, status, dateFrom, dateTo, createdAtFrom, createdAtTo,
                     pageable);
         } else {
             // Admin/SuperAdmin - see all claims (bypass isolation)
             log.debug("✅ [BYPASS] User {} bypasses reviewer isolation", currentUser.getId());
 
             claimsPage = claimRepository.searchPagedWithFilters(
-                    keyword, employerId, providerId, status, dateFrom, dateTo, createdAtFrom, createdAtTo, pageable);
+                    keyword, employerId, providerId, claimBatchId, status, dateFrom, dateTo, createdAtFrom, createdAtTo, pageable);
         }
 
         return claimsPage.map(claimMapper::toViewDto);
@@ -1571,6 +1580,7 @@ public class ClaimService {
                     allowedProviderIds,
                     effectiveProviderId, // Newly added providerId parameter
                     effectiveEmployerId,
+                    null,
                     status,
                     null,
                     null,
@@ -1584,6 +1594,7 @@ public class ClaimService {
                 "",
                 effectiveEmployerId,
                 effectiveProviderId,
+                null,
                 status,
                 null,
                 null,

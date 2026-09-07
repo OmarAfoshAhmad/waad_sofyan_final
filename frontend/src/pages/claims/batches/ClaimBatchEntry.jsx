@@ -4,7 +4,7 @@
  * ✅ زر الحفظ مرئي دون scroll
  * ✅ كل النصوص من ar.js (لا hardcode)
  */
-import { useState, useMemo, useRef, useCallback, useEffect, Fragment } from 'react';
+import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { keyframes } from '@mui/system';
 import {
@@ -26,60 +26,35 @@ import {
   Chip,
   Paper,
   Checkbox,
-  FormControlLabel,
-  Radio,
-  RadioGroup,
   Tooltip,
   alpha,
-  TableFooter,
-  InputAdornment,
   Alert,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
-  Pagination,
   Menu,
   MenuItem,
   ListItemIcon,
   ListItemText,
-  FormControl,
-  InputLabel,
-  Select,
   Collapse
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import {
-  Save as SaveIcon,
   Add as AddIcon,
-  Delete as DeleteIcon,
   Receipt as ReceiptIcon,
-  CheckCircle as DoneIcon,
   ArrowBack as BackIcon,
   Close as DiscardIcon,
-  History as HistoryIcon,
-  Search as SearchIcon,
-  LocalPrintshop as PrintIcon,
-  FileDownload as FileDownloadIcon,
-  WarningAmber as WarningIcon,
   VerifiedUser as PolicyIcon,
   Info as InfoIcon,
   Block as RejectIcon,
-  Cancel as CancelIcon,
-  AttachFile as AttachFileIcon,
-  Lock as LockIcon,
-  AddCircleOutline as AddReasonIcon,
   ViewColumn as ViewColumnIcon,
-  Edit as EditIcon,
-  Check as CheckIcon,
-  ExpandMore as ExpandMoreIcon,
   UnfoldLess as CompactIcon,
   UnfoldMore as ExpandIcon
 } from '@mui/icons-material';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSnackbar } from 'notistack';
 
-import MainCard from 'components/MainCard';
 import { ModernPageHeader } from 'components/tba';
 import useLocale from 'hooks/useLocale';
 
@@ -91,7 +66,6 @@ import { getActiveClaimContexts } from 'services/api/claim-contexts.service';
 import claimBatchesService from 'services/api/claim-batches.service';
 import medicalDictionaryService from 'services/api/medical-dictionary.service';
 import { claimRejectionReasonsService } from 'services/api/claim-rejection-reasons.service';
-import systemSettingsService from 'services/api/systemSettings.service';
 import { normalizeApiError, runWithRetry } from 'utils/api-error';
 import axiosClient from 'utils/axios';
 
@@ -109,7 +83,7 @@ import { RejectClaimDialog } from './components/RejectClaimDialog';
 import { ConfirmDeleteClaimDialog } from './components/ConfirmDeleteClaimDialog';
 import { ActionConfirmDialog } from './components/ActionConfirmDialog';
 import { CustomServiceDialog } from './components/CustomServiceDialog';
-import { getServiceContext, isServiceAllowedForClaimContext } from './claim-context.mjs';
+import { getServiceContext } from './claim-context.mjs';
 
 // ── أسماء الشهور ─────────────────────────────────────────────────────────────
 const MONTHS_AR = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
@@ -143,6 +117,30 @@ const newLine = () => ({
 
 const newDirectEntryKey = () => globalThis.crypto?.randomUUID?.() || `claim-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
+const normalizeArabicSearch = (value = '') =>
+  String(value)
+    .normalize('NFKD')
+    .replace(/[\u064B-\u065F\u0670]/g, '')
+    .replace(/[أإآٱ]/g, 'ا')
+    .replace(/ؤ/g, 'و')
+    .replace(/ئ/g, 'ي')
+    .replace(/ى/g, 'ي')
+    .replace(/ة/g, 'ه')
+    .toLowerCase();
+
+const GENERATED_SERVICE_CODE_PATTERN = /^(PL-|SYS-)/i;
+
+const isGeneratedServiceCode = (code = '') => GENERATED_SERVICE_CODE_PATTERN.test(String(code).trim());
+
+const buildServiceDisplayLabel = ({ code = '', name = '' } = {}) => {
+  const cleanCode = String(code || '').trim();
+  const cleanName = String(name || '').trim();
+
+  if (!cleanCode || isGeneratedServiceCode(cleanCode)) return cleanName;
+  if (cleanName && normalizeArabicSearch(cleanName).includes(normalizeArabicSearch(cleanCode))) return cleanName;
+  return cleanName ? `${cleanCode} — ${cleanName}` : cleanCode;
+};
+
 const hasMeaningfulDraftData = (draft) => {
   if (!draft) return false;
   if (draft.member?.id) return true;
@@ -150,18 +148,6 @@ const hasMeaningfulDraftData = (draft) => {
   if ((draft.complaint || '').trim()) return true;
   if ((draft.notes || '').trim()) return true;
   return Array.isArray(draft.lines) && draft.lines.some((l) => l?.serviceName || l?.serviceCode || l?.service);
-};
-
-const hasAcceptedCoverageDecision = (line) =>
-  Boolean(line?.service || line?.serviceName) &&
-  line?.notCovered !== true &&
-  Number(line?.coveragePercent || 0) > 0;
-
-// أنماط حقول الجدول القابلة للتعديل
-const inlineSx = {
-  '& .MuiInput-root::before': { display: 'none' },
-  '& .MuiInput-root::after': { borderBottomColor: '#1b5e20', borderBottomWidth: 1 },
-  '& input': { fontSize: '0.78rem', fontWeight: 500, textAlign: 'center', py: 0.35 }
 };
 
 const TH = ({ children, align = 'center', w, sx: sxOver = {} }) => {
@@ -206,6 +192,11 @@ export default function ClaimBatchEntry() {
   const month = parseInt(searchParams.get('month'));
   const year = parseInt(searchParams.get('year'));
   const initialClaimId = searchParams.get('claimId');
+  const initialMemberId = searchParams.get('memberId');
+  const initialMemberName = searchParams.get('memberName');
+  const initialMemberCardNumber = searchParams.get('cardNumber');
+  const initialServiceDate = searchParams.get('serviceDate') || searchParams.get('visitDate');
+  const initialVisitType = searchParams.get('visitType');
 
   // ── حالة النموذج ─────────────────────────────────────────────────────────
   const [member, setMember] = useState(null);
@@ -220,6 +211,7 @@ export default function ClaimBatchEntry() {
   const [applyBenefits, setApplyBenefits] = useState(true);
   const [notes, setNotes] = useState('');
   const [lines, setLines] = useState([newLine()]);
+  const [beneficiaryPaidAmount, setBeneficiaryPaidAmount] = useState('');
   const [saving, setSaving] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
   const [policyId, setPolicyId] = useState(null);
@@ -238,7 +230,6 @@ export default function ClaimBatchEntry() {
   const [editingReasonText, setEditingReasonText] = useState('');
   const [isDeletingReasonId, setIsDeletingReasonId] = useState(null);
   const [showReasonsList, setShowReasonsList] = useState(false);
-  const [page, setPage] = useState(0);
   const [attachments, setAttachments] = useState([]);
   const [editingClaimId, setEditingClaimId] = useState(initialClaimId);
   const [editHydrationVersion, setEditHydrationVersion] = useState(0);
@@ -246,7 +237,6 @@ export default function ClaimBatchEntry() {
   const [preAuthId, setPreAuthId] = useState('');
   const [directEntryKey, setDirectEntryKey] = useState(newDirectEntryKey);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
-  const [confirmDeleteReason, setConfirmDeleteReason] = useState('');
   const [showValidationErrors, setShowValidationErrors] = useState(false);
   const [autoSaveStatus, setAutoSaveStatus] = useState('idle');
   const [draftVersion, setDraftVersion] = useState(null);
@@ -295,15 +285,27 @@ export default function ClaimBatchEntry() {
     setVisibleColumns((prev) => ({ ...prev, [col]: !prev[col] }));
   };
 
-  const [encounterType, setEncounterType] = useState('OUTPATIENT');
-  const [claimContextCode, setClaimContextCode] = useState('OUTPATIENT');
+  const initialEncounterType = initialVisitType === 'INPATIENT' ? 'INPATIENT' : 'OUTPATIENT';
+  const [encounterType, setEncounterType] = useState(initialEncounterType);
+  const [claimContextCode, setClaimContextCode] = useState(initialEncounterType);
   const [fullCoverage, setFullCoverage] = useState(false);
 
   // A batch period is not a service date. Guessing the first day silently
   // creates a financially valid claim on a date the operator never chose.
   const defaultDate = '';
 
-  const [serviceDate, setServiceDate] = useState(defaultDate);
+  const [serviceDate, setServiceDate] = useState(initialServiceDate || defaultDate);
+
+  useEffect(() => {
+    if (!initialMemberId || member?.id) return;
+    const hydratedMember = {
+      id: Number(initialMemberId),
+      fullName: initialMemberName || '',
+      cardNumber: initialMemberCardNumber || ''
+    };
+    setMember(hydratedMember);
+    setMemberInput(initialMemberName || initialMemberCardNumber || initialMemberId);
+  }, [initialMemberCardNumber, initialMemberId, initialMemberName, member?.id]);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedMemberInput(memberInput), 350);
@@ -328,6 +330,7 @@ export default function ClaimBatchEntry() {
   const saveQueueRef = useRef(Promise.resolve());
   const autosaveTimerRef = useRef(null);
   const recoveryCheckedRef = useRef(false);
+  const recoveryDismissedRef = useRef(false);
   const skipAutosaveRef = useRef(false);
 
   const draftStorageKey = useMemo(
@@ -353,10 +356,6 @@ export default function ClaimBatchEntry() {
     queryFn: getActiveClaimContexts,
     staleTime: 5 * 60 * 1000
   });
-
-  const rootCategories = useMemo(() => {
-    return medicalCategories.filter((c) => !c.parentId);
-  }, [medicalCategories]);
 
   // ── المنطق المالي وتغطية الخدمات (المرحلة 3: Hooks المستخرجة) ─────────────────
   const { recompute } = useCalculationLogic();
@@ -406,18 +405,6 @@ export default function ClaimBatchEntry() {
   const [customServiceError, setCustomServiceError] = useState(null);
   const [addingCustomService, setAddingCustomService] = useState(false);
 
-  const handleOpenCustomServiceDialog = (lineId) => {
-    setCustomServiceData({
-      categoryId: '',
-      serviceName: '',
-      serviceCode: '',
-      contractPrice: ''
-    });
-    setCustomServiceError(null);
-    setActiveLineIdForCustomService(lineId);
-    setCustomServiceDialogOpen(true);
-  };
-
   const handleCloseCustomServiceDialog = () => {
     setCustomServiceDialogOpen(false);
     setActiveLineIdForCustomService(null);
@@ -441,55 +428,53 @@ export default function ClaimBatchEntry() {
     }
     const priceNum = parseFloat(customServiceData.contractPrice);
     if (isNaN(priceNum) || priceNum <= 0) {
-      setCustomServiceError('يرجى إدخال سعر تعاقدي صحيح أكبر من صفر');
+      setCustomServiceError('يرجى إدخال سعر وحدة صحيح أكبر من صفر');
       return;
     }
 
     setAddingCustomService(true);
     try {
-      // The dated contract, not the provider: this screen can only price a
-      // service against the specific contract ClaimEntryContextService already
-      // resolved for this provider/employer/service-date. Providers can hold
-      // more than one contract over time, and the provider-portal pricing
-      // endpoint this used to call guessed at "the" active one from the
-      // provider alone -- and had been retired behind a deny-all guard besides,
-      // so every attempt to use it failed outright regardless.
-      if (!entryContext?.contractId) {
-        setCustomServiceError('لا يمكن إضافة خدمة قبل التحقق من العقد الفعّال لهذا المستفيد وتاريخ الخدمة');
-        return;
-      }
-
       const finalCategoryId = customServiceData.categoryId;
 
       // Auto-generate service code if not provided
-      const finalServiceCode = customServiceData.serviceCode.trim() || `SRV-${Date.now().toString().slice(-6)}`;
+      const finalServiceCode = customServiceData.serviceCode.trim() || `SYS-CLAIM-${Date.now().toString().slice(-8)}`;
 
       const payload = {
-        serviceName: customServiceData.serviceName.trim(),
-        serviceCode: finalServiceCode,
-        medicalCategoryId: Number(finalCategoryId),
-        contractPrice: priceNum,
+        code: finalServiceCode,
+        nameAr: customServiceData.serviceName.trim(),
+        nameEn: null,
+        categoryId: Number(finalCategoryId),
+        pricingMode: 'CONTRACT_PRICE',
         basePrice: priceNum,
-        unit: 'service',
-        currency: 'LYD'
+        defaultClaimContextCode: claimContextCode || encounterType || 'OUTPATIENT',
+        defaultProviderTypes: []
       };
 
-      // The canonical internal path for adding one priced item to a contract --
-      // the same ProviderContractPricingItemService the import screens and the
-      // contract's own pricing tab use, authorized for internal staff managing
-      // the contract rather than a provider acting on its own behalf.
-      const response = await axiosClient.post(`/provider-contracts/${entryContext.contractId}/pricing`, payload);
-      const createdItem = response.data?.data || response.data;
+      // Create the shared medical catalog service, then use it on this claim
+      // as a direct unit-priced service. It is not a provider-contract price
+      // item, but it is also not an invoice-style MANUAL_AMOUNT line; quantity
+      // must stay editable for services added from claim entry.
+      const response = await axiosClient.post('/provider-standard-services', payload);
+      const createdService = response.data?.data || response.data;
 
-      const newServiceId = createdItem.medicalServiceId || createdItem.serviceId || createdItem.id;
+      const newServiceId = createdService.medicalServiceId || createdService.serviceId || createdService.id;
 
       const newServiceObject = {
         id: newServiceId,
-        pricingItemId: createdItem.pricingItemId || createdItem.id,
+        medicalServiceId: newServiceId,
+        pricingItemId: null,
+        pricingMode: 'CONTRACT_PRICE',
+        directPrice: true,
         serviceCode: finalServiceCode,
-        serviceName: payload.serviceName,
+        serviceName: payload.nameAr,
         categoryId: Number(finalCategoryId),
-        label: `[${finalServiceCode}] ${payload.serviceName}`,
+        serviceCategoryId: Number(finalCategoryId),
+        medicalCategoryId: Number(finalCategoryId),
+        categoryName: createdService.categoryName || '',
+        serviceCategoryName: createdService.categoryName || '',
+        medicalCategoryName: createdService.categoryName || '',
+        claimContextCode: payload.defaultClaimContextCode,
+        label: buildServiceDisplayLabel({ code: finalServiceCode, name: payload.nameAr }),
         contractPrice: priceNum,
         maxContractPrice: priceNum,
         price: priceNum
@@ -502,29 +487,16 @@ export default function ClaimBatchEntry() {
       // the endpoint above was reachable.
       queryClient.invalidateQueries({ queryKey: ['claim-entry-contract-services'] });
 
-      // Update the active claim line to select this newly added service
+      // Update the active claim line through the same path used by the normal
+      // service picker. This keeps manual-amount services, category metadata
+      // and backend coverage refresh in one code path.
       if (activeLineIdForCustomService) {
-        setLines((prev) =>
-          prev
-            .map((line) => {
-              if (line.id !== activeLineIdForCustomService) return line;
-
-              const linePatch = {
-                service: newServiceObject,
-                serviceName: payload.serviceName,
-                serviceCode: finalServiceCode,
-                unitPrice: priceNum,
-                contractPrice: priceNum,
-                maxContractPrice: priceNum
-              };
-
-              return {
-                ...line,
-                ...linePatch
-              };
-            })
-            .map((line, i, arr) => recompute(line, i, arr))
-        );
+        const currentLines = linesRef.current || lines;
+        const selectedLineIndex = currentLines.findIndex((line) => String(line.id) === String(activeLineIdForCustomService));
+        if (selectedLineIndex < 0) {
+          throw new Error('تعذر تحديد السطر المطلوب. أعد اختيار الخدمة في السطر نفسه.');
+        }
+        await handleServiceChange(selectedLineIndex, newServiceObject);
       }
 
       setCustomServiceDialogOpen(false);
@@ -533,7 +505,7 @@ export default function ClaimBatchEntry() {
       console.error('Failed to add custom service pricing:', err);
       const apiMessage =
         err?.response?.data?.messageAr || err?.response?.data?.message || err?.response?.data?.error || err?.userMessage || err?.message;
-      setCustomServiceError(apiMessage || 'فشل في حفظ الخدمة الجديدة في قائمة أسعار مقدم الخدمة. تأكد من صحة البيانات.');
+      setCustomServiceError(apiMessage || 'فشل في حفظ الخدمة العامة الجديدة. تأكد من صحة البيانات.');
     } finally {
       setAddingCustomService(false);
     }
@@ -582,24 +554,6 @@ export default function ClaimBatchEntry() {
     }
   }, [currentBatch]);
 
-  const { data: batchData, isLoading: loadingBatch } = useQuery({
-    queryKey: ['batch-claims-entry', employerId, providerId, month, year, page],
-    queryFn: async () => {
-      if (!employerId || !providerId || isNaN(month) || isNaN(year)) return null;
-      const lastDay = new Date(year, month, 0).getDate();
-      return claimsService.list({
-        employerId,
-        providerId,
-        dateFrom: `${year}-${String(month).padStart(2, '0')}-01`,
-        dateTo: `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`,
-        size: 20,
-        page,
-        sortBy: 'createdAt',
-        sortDir: 'desc'
-      });
-    },
-    enabled: !!employerId && !!providerId
-  });
   const {
     data: contractedRaw,
     isLoading: loadingServices,
@@ -663,18 +617,13 @@ export default function ClaimBatchEntry() {
   }, [memberSearchError, memberSearchQueryError, enqueueSnackbar]);
 
   useEffect(() => {
-    if (
-      !entryContextError ||
-      !entryContextFailure ||
-      !member?.id ||
-      !debouncedServiceDate ||
-      debouncedServiceDate !== serviceDate
-    ) return;
+    if (!entryContextError || !entryContextFailure || !member?.id || !debouncedServiceDate || debouncedServiceDate !== serviceDate) return;
     const normalized = normalizeApiError(entryContextFailure);
     const shortId = normalized.trackingId ? String(normalized.trackingId).split('-')[0] : null;
-    const message = normalized.code === 'MEMBER_NOT_COVERED_AT_SERVICE_DATE'
-      ? `المستفيد غير مغطى تأمينياً بتاريخ ${dayjs(debouncedServiceDate).format('DD/MM/YYYY')}.`
-      : normalized.message || 'تعذر التحقق من تغطية المستفيد في تاريخ الخدمة المحدد.';
+    const message =
+      normalized.code === 'MEMBER_NOT_COVERED_AT_SERVICE_DATE'
+        ? `المستفيد غير مغطى تأمينياً بتاريخ ${dayjs(debouncedServiceDate).format('DD/MM/YYYY')}.`
+        : normalized.message || 'تعذر التحقق من تغطية المستفيد في تاريخ الخدمة المحدد.';
     const toastKey = `${normalized.code}:${member.id}:${debouncedServiceDate}`;
     enqueueSnackbar(shortId ? `${message} (مرجع: ${shortId})` : message, {
       key: toastKey,
@@ -701,50 +650,6 @@ export default function ClaimBatchEntry() {
     () => lines.some((line) => (line.service || line.serviceName) && !line.rejected && line.coveragePending),
     [lines]
   );
-
-  const saveDisabledReason = useMemo(() => {
-    if (saving) return 'جارٍ حفظ المطالبة.';
-    if (!isDirty) return 'لا توجد تغييرات جديدة للحفظ.';
-    if (entryContextBlockReason) return entryContextBlockReason;
-    if (coveragePending) return 'انتظر اكتمال حساب التغطية والسقوف لكل البنود قبل الحفظ.';
-    return null;
-  }, [coveragePending, entryContextBlockReason, isDirty, saving]);
-
-  const { data: summaryData } = useQuery({
-    queryKey: ['batch-stats', employerId, providerId, month, year],
-    queryFn: () => {
-      if (!employerId || !providerId || isNaN(month) || isNaN(year)) return null;
-      const lastDay = new Date(year, month, 0).getDate();
-      return claimsService.getFinancialSummary({
-        employerId,
-        providerId,
-        dateFrom: `${year}-${String(month).padStart(2, '0')}-01`,
-        dateTo: `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
-      });
-    },
-    enabled: !!employerId && !!providerId
-  });
-
-  const { data: backdatedMonthsSetting } = useQuery({
-    queryKey: ['system-setting-backdated-months'],
-    queryFn: () =>
-      systemSettingsService.getAll().then((settings) => {
-        const s = settings?.find((x) => x.settingKey === 'CLAIM_BACKDATED_MONTHS');
-        return s ? parseInt(s.settingValue, 10) : 3;
-      }),
-    staleTime: 5 * 60 * 1000
-  });
-  const allowedBackdatedMonths = backdatedMonthsSetting ?? 3;
-
-  const isExpiredBatch = useMemo(() => {
-    if (!month || !year) return false;
-    const now = new Date();
-    const currentYM = now.getFullYear() * 12 + now.getMonth();
-    const targetYM = year * 12 + (month - 1);
-    const diff = currentYM - targetYM;
-    if (allowedBackdatedMonths === 0) return diff > 0;
-    return diff > allowedBackdatedMonths;
-  }, [month, year, allowedBackdatedMonths]);
 
   // Eligible pre-authorizations are part of the same dated context response.
   // A separate request used to resolve the member, policy, contract and
@@ -806,8 +711,68 @@ export default function ClaimBatchEntry() {
         ceilingMode: entryContext.ceilingMode
       }
     : null;
+
+  const contractedServiceOptionsRaw = useMemo(() => {
+    const items = Array.isArray(contractedRaw) ? contractedRaw : contractedRaw?.content || contractedRaw?.items || [];
+    return items.map((s) => {
+      const code = s.serviceCode || s.code || '';
+      const name = s.serviceName || s.name || '';
+      const normalizedCategoryId =
+        s.categoryId ?? s.serviceCategoryId ?? s.medicalCategoryId ?? s.medicalCategory?.id ?? s.effectiveCategory?.id ?? null;
+      const normalizedCategoryName =
+        s.categoryName ??
+        s.serviceCategoryName ??
+        s.medicalCategoryName ??
+        s.medicalCategory?.nameAr ??
+        s.medicalCategory?.name ??
+        s.effectiveCategory?.nameAr ??
+        s.effectiveCategory?.name ??
+        null;
+      const normalizedEncounterType = getServiceContext(s);
+      const isManualAmount = s.pricingMode === 'MANUAL_AMOUNT';
+      return {
+        ...s,
+        label: buildServiceDisplayLabel({ code, name }),
+        serviceName: name,
+        serviceCode: code,
+        encounterType: normalizedEncounterType,
+        defaultEncounterType: normalizedEncounterType,
+        categoryId: normalizedCategoryId,
+        serviceCategoryId: normalizedCategoryId,
+        medicalCategoryId: normalizedCategoryId,
+        categoryName: normalizedCategoryName,
+        serviceCategoryName: normalizedCategoryName,
+        medicalCategoryName: normalizedCategoryName,
+        medicalServiceId: s.medicalServiceId ?? s.serviceId ?? (isManualAmount ? s.id : null),
+        pricingItemId: isManualAmount ? null : (s.pricingItemId ?? s.id),
+        contractPrice: s.contractPrice || 0,
+        maxContractPrice: s.maxContractPrice || s.contractPrice || 0
+      };
+    });
+  }, [contractedRaw]);
+
+  const serviceOptions = useMemo(() => {
+    // Claim entry is contract-priced and fail-closed. Synthetic generic items
+    // have neither a pricingItemId nor a classified coverage source and mask a
+    // failed contract-services request as if the contract contained services.
+    //
+    // السياق المالي يُطبّق على المطالبة كاملة، لا على قائمة الخدمات.
+    // Do not filter services by claim context here. A service classification
+    // belongs to the provider contract/catalog; the selected claim context
+    // belongs to the whole claim and is validated by the coverage rule engine.
+    return contractedServiceOptionsRaw;
+  }, [contractedServiceOptionsRaw]);
+
+  const noEffectiveContractServicesForDate =
+    Boolean(entryContext?.contractId) &&
+    Boolean(serviceDate) &&
+    !loadingServices &&
+    !servicesError &&
+    !debouncedServiceSearch.trim() &&
+    contractedServiceOptionsRaw.length === 0;
+
   // ── Load Existing Claim for Edit ───────────────────────────────────────
-  const { data: editingClaim, isLoading: loadingClaim } = useQuery({
+  const { data: editingClaim } = useQuery({
     queryKey: ['claim', editingClaimId],
     queryFn: () => claimsService.getById(editingClaimId),
     enabled: !!editingClaimId,
@@ -850,7 +815,7 @@ export default function ClaimBatchEntry() {
             categoryId: l.appliedCategoryId ?? l.serviceCategoryId ?? null,
             serviceCategoryId: l.appliedCategoryId ?? l.serviceCategoryId ?? null,
             serviceCategoryName: l.appliedCategoryName ?? l.serviceCategoryName ?? null,
-            label: `${lineCode ? '[' + lineCode + '] ' : ''}${lineName || ''}`,
+            label: buildServiceDisplayLabel({ code: lineCode, name: lineName || '' }),
             contractPrice: cp,
             maxContractPrice: maxCp
           };
@@ -901,12 +866,17 @@ export default function ClaimBatchEntry() {
       setClaimContextCode(
         editingClaim.claimContextCode || (editingClaim.fullCoverage ? 'FULL_COVERAGE' : editingClaim.encounterType || 'OUTPATIENT')
       );
+      setBeneficiaryPaidAmount(
+        editingClaim.beneficiaryPaidAmount != null || editingClaim.patientPaidAmount != null
+          ? String(editingClaim.beneficiaryPaidAmount ?? editingClaim.patientPaidAmount)
+          : ''
+      );
       setIsDirty(false);
       // Signal that edit fields and lines were committed. One dedicated effect
       // recalculates coverage after policy/member are ready as well.
       setEditHydrationVersion((version) => version + 1);
     }
-  }, [editingClaim, defaultDate, contractedRaw]);
+  }, [editingClaim, defaultDate, recompute, serviceOptions]);
 
   const draftPayload = useMemo(
     () => ({
@@ -916,6 +886,7 @@ export default function ClaimBatchEntry() {
       complaint,
       notes,
       lines,
+      beneficiaryPaidAmount,
       serviceDate,
       preAuthId,
       encounterType,
@@ -933,6 +904,7 @@ export default function ClaimBatchEntry() {
       complaint,
       notes,
       lines,
+      beneficiaryPaidAmount,
       serviceDate,
       preAuthId,
       encounterType,
@@ -954,6 +926,7 @@ export default function ClaimBatchEntry() {
       setComplaint(payload.complaint || '');
       setNotes(payload.notes || '');
       setLines(Array.isArray(payload.lines) && payload.lines.length ? payload.lines : [newLine()]);
+      setBeneficiaryPaidAmount(payload.beneficiaryPaidAmount || '');
       setServiceDate(payload.serviceDate || defaultDate);
       setPreAuthId(payload.preAuthId || '');
       setEncounterType(payload.encounterType || 'OUTPATIENT');
@@ -1022,11 +995,12 @@ export default function ClaimBatchEntry() {
           });
 
           setDraftVersion(saved?.version ?? null);
-          if (saved?.conflictResolved) {
-            enqueueSnackbar('تمت مزامنة المسودة بعد تعارض بسيط', { variant: 'info' });
-          }
+          // Draft autosave is intentionally quiet. Repeated "conflict resolved"
+          // snackbars trained users to distrust the form even when no action was
+          // required; the compact autosave dot is enough for normal background
+          // synchronization.
           setAutoSaveStatus('saved');
-        } catch (error) {
+        } catch {
           if (typeof navigator !== 'undefined' && navigator.onLine === false) {
             setAutoSaveStatus('offline');
           } else {
@@ -1045,6 +1019,7 @@ export default function ClaimBatchEntry() {
     if (editingClaimId) return;
     if (loadingBatchMeta) return;
     if (recoveryCheckedRef.current) return;
+    if (recoveryDismissedRef.current) return;
 
     recoveryCheckedRef.current = true;
 
@@ -1053,7 +1028,7 @@ export default function ClaimBatchEntry() {
       try {
         const raw = localStorage.getItem(draftStorageKey);
         localDraft = raw ? JSON.parse(raw) : null;
-      } catch (_) {
+      } catch {
         localDraft = null;
       }
 
@@ -1062,7 +1037,7 @@ export default function ClaimBatchEntry() {
         if (draftBatchId) {
           serverDraft = await claimsService.getDraft(draftBatchId);
         }
-      } catch (_) {
+      } catch {
         serverDraft = null;
       }
 
@@ -1085,63 +1060,6 @@ export default function ClaimBatchEntry() {
     }
     return list;
   }, [memberResults, member]);
-
-  const contractedServiceOptionsRaw = useMemo(() => {
-    const items = Array.isArray(contractedRaw) ? contractedRaw : contractedRaw?.content || contractedRaw?.items || [];
-    return items.map((s) => {
-      const code = s.serviceCode || s.code || '';
-      const name = s.serviceName || s.name || '';
-      const normalizedCategoryId =
-        s.categoryId ?? s.serviceCategoryId ?? s.medicalCategoryId ?? s.medicalCategory?.id ?? s.effectiveCategory?.id ?? null;
-      const normalizedCategoryName =
-        s.categoryName ??
-        s.serviceCategoryName ??
-        s.medicalCategoryName ??
-        s.medicalCategory?.nameAr ??
-        s.medicalCategory?.name ??
-        s.effectiveCategory?.nameAr ??
-        s.effectiveCategory?.name ??
-        null;
-      const normalizedEncounterType = getServiceContext(s);
-      return {
-        ...s,
-        label: `${code ? '[' + code + '] ' : ''}${name}`,
-        serviceName: name,
-        serviceCode: code,
-        encounterType: normalizedEncounterType,
-        defaultEncounterType: normalizedEncounterType,
-        categoryId: normalizedCategoryId,
-        serviceCategoryId: normalizedCategoryId,
-        medicalCategoryId: normalizedCategoryId,
-        categoryName: normalizedCategoryName,
-        serviceCategoryName: normalizedCategoryName,
-        medicalCategoryName: normalizedCategoryName,
-        pricingItemId: s.pricingItemId ?? s.id,
-        contractPrice: s.contractPrice || 0,
-        maxContractPrice: s.maxContractPrice || s.contractPrice || 0
-      };
-    });
-  }, [contractedRaw]);
-
-  const serviceOptions = useMemo(() => {
-    // Claim entry is contract-priced and fail-closed. Synthetic generic items
-    // have neither a pricingItemId nor a classified coverage source and mask a
-    // failed contract-services request as if the contract contained services.
-    return contractedServiceOptionsRaw.filter((item) => isServiceAllowedForClaimContext(item, encounterType));
-  }, [contractedServiceOptionsRaw, encounterType]);
-
-  const noEffectiveContractServicesForDate =
-    Boolean(entryContext?.contractId) &&
-    Boolean(serviceDate) &&
-    !loadingServices &&
-    !servicesError &&
-    contractedServiceOptionsRaw.length === 0;
-
-  const batchContent = useMemo(
-    () => batchData?.data?.items ?? batchData?.items ?? batchData?.data?.content ?? batchData?.content ?? [],
-    [batchData]
-  );
-  const batchTotal = batchData?.data?.total ?? batchData?.total ?? batchData?.data?.totalElements ?? batchData?.totalElements ?? 0;
 
   // ── المنطق المالي وتغطية الخدمات (مطبق في الأعلى) ───────────────────────────
 
@@ -1189,7 +1107,7 @@ export default function ClaimBatchEntry() {
   );
 
   const handleServiceChange = useCallback(
-    async (idx, val) => {
+    async (idx, val, options = {}) => {
       if (!val) {
         updateLine(idx, { service: null, serviceName: '', serviceCode: '', unitPrice: 0, contractPrice: 0, maxContractPrice: 0 });
         return;
@@ -1244,6 +1162,8 @@ export default function ClaimBatchEntry() {
       // per-row bounds-check tooltip never fires for a price that was never
       // a contract price to begin with.
       const isManualAmount = svc.pricingMode === 'MANUAL_AMOUNT';
+      const manualAmount = Number(options.manualAmount);
+      const hasManualAmountOverride = Number.isFinite(manualAmount) && manualAmount > 0;
 
       const nextPatch = {
         service: svc,
@@ -1257,7 +1177,7 @@ export default function ClaimBatchEntry() {
         serviceCategoryId: resolvedCategoryId,
         serviceCategoryName: resolvedCategoryName,
         quantity: isManualAmount ? 1 : currentLine.quantity || 1,
-        unitPrice: isManualAmount ? 0 : price,
+        unitPrice: isManualAmount ? (hasManualAmountOverride ? manualAmount : currentLine.unitPrice || 0) : price,
         contractPrice: isManualAmount ? 0 : maxPrice,
         maxContractPrice: isManualAmount ? 0 : maxPrice,
         ...(isFreeText ? failedCoverageResult('الخدمة النصية غير مرتبطة بخدمة معتمدة ولا يمكن احتساب تغطيتها') : { coveragePending: true })
@@ -1274,8 +1194,7 @@ export default function ClaimBatchEntry() {
         // Autocomplete event snapshot. Otherwise a service-only change can
         // calculate limits for quantity=1 while the row displays quantity=15.
         await new Promise((resolve) => setTimeout(resolve, 0));
-        const committedLines = linesRef.current?.length ? linesRef.current : nextLines;
-        const updated = await refetchAllLinesCoverage(encounterType, committedLines, fullCoverage, claimContextCode);
+        const updated = await refetchAllLinesCoverage(encounterType, nextLines, fullCoverage, claimContextCode);
         if (updated) setLines(updated);
       }
     },
@@ -1423,27 +1342,18 @@ export default function ClaimBatchEntry() {
       return;
     }
 
-    updateLine(idx, {
-      medicalCategoryId: selected.id,
-      serviceCategoryId: selected.id,
-      categoryId: selected.id,
-      medicalCategoryCode: selected.code,
-      medicalCategoryName: selected.name,
-      serviceCategoryName: selected.name,
-      coveragePending: true
-    });
-
     await sendLineToMedicalDictionary(idx, selected.id);
     closeClassificationReviewDialog();
-    enqueueSnackbar('تم اعتماد تصنيف البند لهذه المطالبة فقط، وسُجل كاقتراح دائم ينتظر اعتماد رئيس القسم', { variant: 'success' });
+    enqueueSnackbar('تم إرسال اقتراح التصنيف للمراجعة. لن يتغير حساب هذه المطالبة حتى يُعتمد التصنيف في مصدر الخدمة.', {
+      variant: 'success'
+    });
   }, [
     classificationReview.lineIndex,
     classificationReview.selectedCategoryId,
     closeClassificationReviewDialog,
     enqueueSnackbar,
     resolveCategoryLabel,
-    sendLineToMedicalDictionary,
-    updateLine
+    sendLineToMedicalDictionary
   ]);
 
   const sendClassificationToReviewQueue = useCallback(async () => {
@@ -1468,21 +1378,8 @@ export default function ClaimBatchEntry() {
   const currentClassificationCategory = resolveCategoryLabel(resolveLineCategoryId(activeClassificationLine));
 
   const categoriesForReview = useMemo(
-    () => medicalCategories.filter((category) => category.active !== false && category.deleted !== true),
+    () => medicalCategories.filter(medicalCategoriesService.isCanonicalCoverageCategory),
     [medicalCategories]
-  );
-
-  const incompatibleContextLines = useMemo(
-    () =>
-      lines
-        .map((line, index) => ({ line, index }))
-        .filter(
-          ({ line }) =>
-            line?.service &&
-            !hasAcceptedCoverageDecision(line) &&
-            !isServiceAllowedForClaimContext(line.service, encounterType)
-        ),
-    [lines, encounterType]
   );
 
   const totals = useMemo(() => {
@@ -1498,6 +1395,38 @@ export default function ClaimBatchEntry() {
     );
   }, [lines]);
 
+  const beneficiarySettlement = useMemo(() => {
+    const paid = Math.max(0, parseFloat(beneficiaryPaidAmount) || 0);
+    const baseBeneficiaryShare = Math.max(0, totals.employee || 0);
+    const refused = Math.max(0, totals.refused || 0);
+    const appliedToBaseShare = Math.min(paid, baseBeneficiaryShare);
+    const extraPaid = Math.max(0, paid - appliedToBaseShare);
+    const appliedToRefused = Math.min(extraPaid, refused);
+    const remainingBeneficiaryShare = Math.max(0, baseBeneficiaryShare - appliedToBaseShare);
+    const providerRefusedBalance = Math.max(0, refused - appliedToRefused);
+    const excessPayment = Math.max(0, extraPaid - appliedToRefused);
+
+    return {
+      paid,
+      appliedToBaseShare,
+      appliedToRefused,
+      remainingBeneficiaryShare,
+      providerRefusedBalance,
+      excessPayment
+    };
+  }, [beneficiaryPaidAmount, totals.employee, totals.refused]);
+
+  const saveDisabledReason = useMemo(() => {
+    if (saving) return 'جارٍ حفظ المطالبة.';
+    if (!isDirty) return 'لا توجد تغييرات جديدة للحفظ.';
+    if (entryContextBlockReason) return entryContextBlockReason;
+    if (coveragePending) return 'انتظر اكتمال حساب التغطية والسقوف لكل البنود قبل الحفظ.';
+    if (beneficiarySettlement.excessPayment > 0) {
+      return 'المبلغ المدفوع من المستفيد أكبر من التزامه والمبلغ المرفوض.';
+    }
+    return null;
+  }, [beneficiarySettlement.excessPayment, coveragePending, entryContextBlockReason, isDirty, saving]);
+
   const resetForm = useCallback(() => {
     setMember(null);
     setMemberInput('');
@@ -1506,6 +1435,7 @@ export default function ClaimBatchEntry() {
     setComplaint('');
     setNotes('');
     setLines([newLine()]);
+    setBeneficiaryPaidAmount('');
     setApplyBenefits(true);
     setIsDirty(false);
     setServiceDate(defaultDate);
@@ -1523,6 +1453,7 @@ export default function ClaimBatchEntry() {
   }, [defaultDate]);
 
   const restoreServerDraft = useCallback(() => {
+    recoveryDismissedRef.current = true;
     const payload = recoveryDialog.serverDraft?.data;
     if (payload) {
       skipAutosaveRef.current = true;
@@ -1535,6 +1466,7 @@ export default function ClaimBatchEntry() {
   }, [recoveryDialog.serverDraft, applyRecoveredDraft]);
 
   const restoreLocalDraft = useCallback(() => {
+    recoveryDismissedRef.current = true;
     const payload = recoveryDialog.localDraft?.data;
     if (payload) {
       skipAutosaveRef.current = true;
@@ -1546,9 +1478,29 @@ export default function ClaimBatchEntry() {
     setRecoveryDialog({ open: false, serverDraft: null, localDraft: null });
   }, [recoveryDialog.localDraft, applyRecoveredDraft]);
 
-  const dismissRecovery = useCallback(() => {
+  const dismissRecovery = useCallback(async () => {
+    recoveryDismissedRef.current = true;
+    skipAutosaveRef.current = true;
+    try {
+      localStorage.removeItem(draftStorageKey);
+    } catch {
+      // Non-blocking local cleanup
+    }
+    try {
+      const batchIdForDelete = draftBatchId || currentBatch?.id;
+      if (batchIdForDelete) {
+        await claimsService.deleteDraft(batchIdForDelete);
+      }
+    } catch {
+      // تجاهل المسودة يجب ألا يفشل بسبب تعذر تنظيف نسخة الخادم.
+    }
     setRecoveryDialog({ open: false, serverDraft: null, localDraft: null });
-  }, []);
+    setDraftVersion(null);
+    setAutoSaveStatus('idle');
+    setTimeout(() => {
+      skipAutosaveRef.current = false;
+    }, 0);
+  }, [currentBatch?.id, draftBatchId, draftStorageKey]);
 
   // ── أسباب الرفض من قاعدة البيانات ─────────────────────────────────────
   const { data: rejectionReasons = [], refetch: refetchReasons } = useQuery({
@@ -1739,20 +1691,18 @@ export default function ClaimBatchEntry() {
       return;
     }
 
-    if (incompatibleContextLines.length > 0) {
-      const lineNumbers = incompatibleContextLines.map(({ index }) => index + 1).join('، ');
-      enqueueSnackbar(
-        `لا يمكن الحفظ: الخدمات في البنود ${lineNumbers} لا تتوافق مع سياق المطالبة الحالي. احذفها أو أعد اختيار خدمات صالحة لهذا السياق.`,
-        { variant: 'error', autoHideDuration: 7000 }
-      );
-      scrollToLine(incompatibleContextLines[0].index);
-      return;
-    }
-
     if (!isClaimRejected && coveragePending) {
       enqueueSnackbar('لا يمكن الحفظ أثناء انتظار قرار محرك التغطية. انتظر اكتمال تحديث جميع البنود.', {
         variant: 'warning',
         autoHideDuration: 5000
+      });
+      return;
+    }
+
+    if (beneficiarySettlement.excessPayment > 0) {
+      enqueueSnackbar('المبلغ المدفوع من المستفيد أكبر من التزامه والمبلغ المرفوض. عدّل المبلغ قبل الحفظ.', {
+        variant: 'error',
+        autoHideDuration: 7000
       });
       return;
     }
@@ -1801,10 +1751,10 @@ export default function ClaimBatchEntry() {
         return;
       }
 
-      // الحالة REJECTED فقط إذا:
+      // حالة قاعدة البيانات REJECTED فقط إذا:
       // 1. المستخدم ضغط "رفض المطالبة" صراحة (isClaimRejected)
       // 2. جميع البنود مرفوضة يدوياً (allLinesManuallyRejected)
-      // ⚠️ الخصومات الآلية (تجاوز سعر/سقف) لا تجعل المطالبة "مرفوضة" — تبقى "معتمدة" مع مبالغ مرفوضة
+      // أما وجود مبلغ مرفوض جزئي بسبب سعر/سقف فيُعرض للمستخدم كمرفوضة، مع إبقاء الجزء المقبول قابلاً للصرف.
       const activeLines = lines.filter((l) => l.service || l.serviceName);
       const allLinesManuallyRejected = activeLines.length > 0 && activeLines.every((l) => l.rejected);
 
@@ -1842,42 +1792,46 @@ export default function ClaimBatchEntry() {
         encounterType,
         claimContextCode,
         fullCoverage: fullCoverage,
+        beneficiaryPaidAmount: beneficiarySettlement.paid,
         // لا ترسل صفوف الإدخال الفارغة التي يضيفها المستخدم ولم يختر لها خدمة.
         // التحقق أعلاه يعتمد activeLines، ويجب أن يستخدم الحفظ المصدر نفسه حتى
         // لا تصل أسطر بلا medicalServiceId أو pricingItemId إلى الخادم.
-        lines: activeLines.map((l) => ({
-          id: typeof l.id === 'number' ? l.id : null,
-          medicalServiceId: l.medicalServiceId ?? l.service?.medicalServiceId ?? null,
-          pricingItemId: l.pricingItemId ?? l.service?.pricingItemId ?? null,
-          serviceName: l.serviceName || l.service?.serviceName || '',
-          serviceCode: l.serviceCode || l.service?.serviceCode || '',
-          serviceCategoryId:
-            l.serviceCategoryId ??
-            l.medicalCategoryId ??
-            l.service?.serviceCategoryId ??
-            l.service?.categoryId ??
-            l.service?.medicalCategoryId ??
-            null,
-          serviceCategoryName:
-            l.serviceCategoryName ??
-            l.medicalCategoryName ??
-            l.service?.serviceCategoryName ??
-            l.service?.categoryName ??
-            l.service?.medicalCategoryName ??
-            null,
-          quantity: Number(l.quantity),
-          unitPrice: parseFloat(l.unitPrice) || 0,
-          manualAmount: (l.pricingMode || l.service?.pricingMode) === 'MANUAL_AMOUNT' ? parseFloat(l.unitPrice) || 0 : null,
-          rejected: isClaimRejected ? true : l.rejected || false,
-          rejectionReason: isClaimRejected ? effectiveRejectionReason : l.rejectionReason || null,
-          // refusedAmount on the rendered line includes price/benefit-limit
-          // refusals calculated by the server. Sending that aggregate back as
-          // a manual refusal makes the financial engine subtract the same
-          // ceiling excess twice (and can exceed the insurer gross share).
-          // Only the user's explicit refusal is command input; the backend
-          // must recalculate every automatic refusal at save time.
-          manualRefusedAmount: isClaimRejected ? 0 : parseFloat(l.manualRefusedAmount) || 0
-        }))
+        lines: activeLines.map((l) => {
+          const isManualAmountLine = (l.pricingMode || l.service?.pricingMode) === 'MANUAL_AMOUNT';
+          return {
+            id: typeof l.id === 'number' ? l.id : null,
+            medicalServiceId: l.medicalServiceId || l.service?.medicalServiceId || l.service?.serviceId || null,
+            pricingItemId: isManualAmountLine ? null : (l.pricingItemId ?? l.service?.pricingItemId ?? null),
+            serviceName: l.serviceName || l.service?.serviceName || '',
+            serviceCode: l.serviceCode || l.service?.serviceCode || '',
+            serviceCategoryId:
+              l.serviceCategoryId ??
+              l.medicalCategoryId ??
+              l.service?.serviceCategoryId ??
+              l.service?.categoryId ??
+              l.service?.medicalCategoryId ??
+              null,
+            serviceCategoryName:
+              l.serviceCategoryName ??
+              l.medicalCategoryName ??
+              l.service?.serviceCategoryName ??
+              l.service?.categoryName ??
+              l.service?.medicalCategoryName ??
+              null,
+            quantity: Number(l.quantity),
+            unitPrice: parseFloat(l.unitPrice) || 0,
+            manualAmount: isManualAmountLine ? parseFloat(l.unitPrice) || 0 : null,
+            rejected: isClaimRejected ? true : l.rejected || false,
+            rejectionReason: isClaimRejected ? effectiveRejectionReason : l.rejectionReason || null,
+            // refusedAmount on the rendered line includes price/benefit-limit
+            // refusals calculated by the server. Sending that aggregate back as
+            // a manual refusal makes the financial engine subtract the same
+            // ceiling excess twice (and can exceed the insurer gross share).
+            // Only the user's explicit refusal is command input; the backend
+            // must recalculate every automatic refusal at save time.
+            manualRefusedAmount: isClaimRejected ? 0 : parseFloat(l.manualRefusedAmount) || 0
+          };
+        })
       };
 
       let resultClaimId;
@@ -1931,19 +1885,18 @@ export default function ClaimBatchEntry() {
         if (batchIdForDelete) {
           await claimsService.deleteDraft(batchIdForDelete);
         }
-      } catch (_) {
+      } catch {
         // Non-blocking cleanup
       }
       try {
         localStorage.removeItem(draftStorageKey);
-      } catch (_) {
+      } catch {
         // ignore local cleanup errors
       }
       setDraftVersion(null);
       setAutoSaveStatus('idle');
 
       invalidateBatchData();
-      setPage(0);
       if (resetAfter) {
         resetForm();
         setEditingClaimId(null);
@@ -1962,56 +1915,11 @@ export default function ClaimBatchEntry() {
     }
   };
 
-  // ── طباعة وتصدير ─────────────────────────────────────────────────────────
-  const handlePrint = () => window.print();
-
-  const handleExport = () => {
-    if (!batchContent.length) {
-      enqueueSnackbar('لا توجد بيانات للتصدير', { variant: 'warning' });
-      return;
-    }
-    const headers = ['#', 'المؤمن عليه', 'التاريخ', 'المبلغ المطلوب', 'المبلغ المعتمد', 'الحالة'];
-    const rows = batchContent.map((c) => [
-      c.id,
-      c.memberName,
-      c.serviceDate,
-      c.requestedAmount?.toFixed(2) ?? '0.00',
-      c.approvedAmount?.toFixed(2) ?? '0.00',
-      c.status
-    ]);
-    const csvRows = [headers, ...rows].map((r) => r.map((v) => `"${v ?? ''}"`).join(','));
-    const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `backlog_claims_${monthLabel}_${year}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  // ── حذف مطالبة من الشريط الجانبي ─────────────────────────────────────────
-  const handleSwitchClaim = useCallback(
-    (claimId) => {
-      if (isDirty) {
-        if (!window.confirm('يوجد تعديلات غير محفوظة. هل تريد الانتقال بدون حفظ؟')) return;
-      }
-      if (claimId === null) resetForm();
-      setEditingClaimId(claimId);
-    },
-    [isDirty, resetForm]
-  );
-
-  const handleDeleteClaim = async (claimId, e) => {
-    e.stopPropagation();
-    setConfirmDeleteId(claimId);
-    setConfirmDeleteReason(''); // Reset reason
-  };
-
   const confirmDeleteClaim = async () => {
     const claimId = confirmDeleteId;
     if (!claimId) return;
     try {
-      await claimsService.remove(claimId, confirmDeleteReason || 'تم الإلغاء');
+      await claimsService.remove(claimId, 'تم الإلغاء');
       enqueueSnackbar(`✅ تم إلغاء المطالبة #${claimId}`, { variant: 'success' });
       setConfirmDeleteId(null);
       invalidateBatchData();
@@ -2340,22 +2248,6 @@ export default function ClaimBatchEntry() {
 
             <Divider />
 
-            {incompatibleContextLines.length > 0 && (
-              <Alert
-                severity="error"
-                sx={{
-                  mx: '1.25rem',
-                  mt: 1,
-                  mb: 0,
-                  alignItems: 'center',
-                  '& .MuiAlert-message': { width: '100%', textAlign: 'right' }
-                }}
-              >
-                لا يمكن الحفظ: الخدمات في البنود {incompatibleContextLines.map(({ index }) => index + 1).join('، ')} لا تتوافق مع سياق
-                المطالبة الحالي. احذفها أو أعد اختيار خدمات صالحة لهذا السياق.
-              </Alert>
-            )}
-
             <Box
               sx={{
                 position: 'relative',
@@ -2407,8 +2299,8 @@ export default function ClaimBatchEntry() {
                     than through a notice parked on top of the table. */}
                 {noEffectiveContractServicesForDate && (
                   <Alert severity="warning" sx={{ m: 1.5, alignItems: 'center' }}>
-                    العقد والوثيقة صالحان لهذا التاريخ، لكن لا توجد أسعار خدمات فعالة في العقد بتاريخ الخدمة. راجع فترة سريان
-                    أسعار خدمات العقد.
+                    العقد والوثيقة صالحان لهذا التاريخ، لكن لا توجد أسعار خدمات فعالة في العقد بتاريخ الخدمة. راجع فترة سريان أسعار خدمات
+                    العقد.
                   </Alert>
                 )}
                 <TableContainer dir="rtl" sx={{ flex: 1, overflow: 'auto' }}>
@@ -2496,6 +2388,12 @@ export default function ClaimBatchEntry() {
                           policyInfo={policyInfo}
                           visibleColumns={visibleColumns}
                           triggerConfirm={triggerConfirm}
+                          onOpenCustomServiceDialog={() => {
+                            setActiveLineIdForCustomService(line.id);
+                            setCustomServiceData({ categoryId: '', serviceName: '', serviceCode: '', contractPrice: '' });
+                            setCustomServiceError(null);
+                            setCustomServiceDialogOpen(true);
+                          }}
                           onOpenClassificationReview={openClassificationReviewDialog}
                         />
                       ))}
@@ -2528,14 +2426,28 @@ export default function ClaimBatchEntry() {
                     Boolean(member?.id) && (!serviceDate || loadingEntryContext || entryContextError || !entryContext)
                   }
                   hasUncoveredLines={lines.some(
-                    (line) =>
-                      (line.service || line.serviceName) && !line.rejected && (line.notCovered || (Number(line.coveragePercent) || 0) <= 0)
+                    (line) => {
+                      const hasService = line.service || line.serviceName;
+                      const hasAmountForCoverage = Number(line.unitPrice || 0) > 0 && Number(line.quantity || 0) > 0;
+                      return (
+                        hasService &&
+                        hasAmountForCoverage &&
+                        !line.rejected &&
+                        (line.notCovered || (Number(line.coveragePercent) || 0) <= 0)
+                      );
+                    }
                   )}
                   setIsClaimRejected={setIsClaimRejected}
                   setIsDirty={setIsDirty}
                   setRejectionInput={setRejectionInput}
                   openRejectDialog={openRejectDialog}
                   totals={totals}
+                  beneficiaryPaidAmount={beneficiaryPaidAmount}
+                  beneficiarySettlement={beneficiarySettlement}
+                  onBeneficiaryPaidAmountChange={(value) => {
+                    setBeneficiaryPaidAmount(value);
+                    setIsDirty(true);
+                  }}
                   theme={theme}
                   lines={lines}
                   t={t}
@@ -2549,11 +2461,12 @@ export default function ClaimBatchEntry() {
       </Box>
 
       <Dialog open={classificationReview.open} onClose={closeClassificationReviewDialog} fullWidth maxWidth="sm" dir="rtl">
-        <DialogTitle sx={{ fontWeight: 900 }}>مراجعة تصنيف بند الخدمة</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 900 }}>إبلاغ عن تصنيف خدمة غير دقيق</DialogTitle>
         <DialogContent dividers>
           <Stack spacing={2}>
             <Alert severity="info">
-              هذا القرار يخص التصنيف التأميني للبند فقط. الحساب المالي النهائي يبقى من اختصاص محرك التغطية بعد إعادة الحساب.
+              التصنيف المالي لهذه المطالبة يؤخذ من مصدر الخدمة المعتمد في العقد أو القاموس النظامي. هذا الإجراء يرسل اقتراحاً للمراجعة ولا
+              يغيّر حساب المطالبة الحالية.
             </Alert>
 
             <Box>
@@ -2605,24 +2518,23 @@ export default function ClaimBatchEntry() {
               }
               isOptionEqualToValue={(option, value) => String(option.id) === String(value.id)}
               filterOptions={(options, state) => {
-                const query = state.inputValue.trim().toLowerCase();
+                const query = normalizeArabicSearch(state.inputValue.trim());
                 if (!query) return options;
                 return options.filter((category) =>
                   [category.code, category.name, category.nameAr, category.nameEn]
                     .filter(Boolean)
-                    .some((value) => String(value).toLowerCase().includes(query))
+                    .some((value) => normalizeArabicSearch(value).includes(query))
                 );
               }}
               renderInput={(params) => (
-                <TextField {...params} label="تغيير التصنيف عند الحاجة" placeholder="ابحث باسم التصنيف أو الكود..." />
+                <TextField {...params} label="التصنيف المقترح للمراجعة" placeholder="ابحث باسم التصنيف أو الكود..." />
               )}
             />
 
             {activeClassificationCategory && (
               <Alert severity="success" variant="outlined">
-                سيتم اعتماد: {activeClassificationCategory.name}
-                {activeClassificationCategory.code ? ` (${activeClassificationCategory.code})` : ''}، وتسجيل القرار على سطر المطالبة ثم
-                إعادة احتساب التغطية.
+                سيتم إرسال اقتراح: {activeClassificationCategory.name}
+                {activeClassificationCategory.code ? ` (${activeClassificationCategory.code})` : ''} إلى قائمة مراجعة القاموس.
               </Alert>
             )}
           </Stack>
@@ -2639,7 +2551,7 @@ export default function ClaimBatchEntry() {
               onClick={approveClassificationForLine}
               disabled={!classificationReview.selectedCategoryId}
             >
-              اعتماد التصنيف
+              إرسال الاقتراح
             </Button>
           </Stack>
         </DialogActions>
@@ -2704,6 +2616,7 @@ export default function ClaimBatchEntry() {
         customServiceData={customServiceData}
         customServiceError={customServiceError}
         addingCustomService={addingCustomService}
+        claimContextCode={claimContextCode}
         onFieldChange={handleCustomServiceDataChange}
         onClearError={() => setCustomServiceError(null)}
         onSubmit={handleSubmitCustomService}

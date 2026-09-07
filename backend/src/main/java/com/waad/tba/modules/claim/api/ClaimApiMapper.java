@@ -63,6 +63,7 @@ public class ClaimApiMapper {
                                 .encounterType(request.getEncounterType())
                                 .claimContextCode(request.getClaimContextCode())
                                 .fullCoverage(request.getFullCoverage())
+                                .beneficiaryPaidAmount(request.getBeneficiaryPaidAmount())
                                 .build();
         }
 
@@ -80,6 +81,7 @@ public class ClaimApiMapper {
                                 .serviceCategoryName(lineRequest.getServiceCategoryName())
                                 .quantity(lineRequest.getQuantity())
                                 .unitPrice(lineRequest.getUnitPrice())
+                                .manualAmount(lineRequest.getManualAmount())
                                 .manualRefusedAmount(lineRequest.getManualRefusedAmount() != null
                                                 ? lineRequest.getManualRefusedAmount()
                                                 : lineRequest.getRefusedAmount())
@@ -116,6 +118,7 @@ public class ClaimApiMapper {
                                 .rejectionReason(request.getRejectionReason())
                                 .encounterType(request.getEncounterType())
                                 .fullCoverage(request.getFullCoverage())
+                                .beneficiaryPaidAmount(request.getBeneficiaryPaidAmount())
                                 .preAuthorizationId(request.getPreAuthorizationId())
                                 .status(request.getStatus() != null
                                                 ? com.waad.tba.modules.claim.entity.ClaimStatus
@@ -135,6 +138,7 @@ public class ClaimApiMapper {
                                                                 .unitPrice(line.getUnitPrice() != null
                                                                                 ? line.getUnitPrice()
                                                                                 : line.getGrossAmount())
+                                                                .manualAmount(line.getManualAmount())
                                                                 .manualRefusedAmount(line.getRefusedAmount())
                                                                 .rejected(line.getRejected())
                                                                 .rejectionReason(line.getRejectionReason())
@@ -249,6 +253,10 @@ public class ClaimApiMapper {
                                 .approvedAmount(dto.getApprovedAmount())
                                 .refusedAmount(dto.getRefusedAmount())
                                 .differenceAmount(dto.getDifferenceAmount())
+                                .beneficiaryPaidAmount(dto.getBeneficiaryPaidAmount())
+                                .beneficiaryPaidTowardCopay(dto.getBeneficiaryPaidTowardCopay())
+                                .beneficiaryPaidTowardRefusal(dto.getBeneficiaryPaidTowardRefusal())
+                                .providerRefusalBalance(dto.getProviderRefusalBalance())
                                 .patientCoPay(dto.getPatientCoPay())
                                 .netProviderAmount(dto.getNetProviderAmount())
                                 .coPayPercent(dto.getCoPayPercent())

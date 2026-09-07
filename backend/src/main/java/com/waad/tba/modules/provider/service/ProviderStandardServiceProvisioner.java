@@ -17,12 +17,14 @@ import com.waad.tba.modules.provider.entity.ProviderService;
 import com.waad.tba.modules.provider.repository.ProviderRepository;
 import com.waad.tba.modules.provider.repository.ProviderServiceDefaultRepository;
 import com.waad.tba.modules.provider.repository.ProviderServiceRepository;
+import com.waad.tba.modules.claimcontext.repository.ClaimContextDefinitionRepository;
 import com.waad.tba.modules.claim.repository.ClaimRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -53,6 +55,7 @@ public class ProviderStandardServiceProvisioner {
     private final MedicalServiceRepository medicalServiceRepository;
     private final MedicalCategoryRepository medicalCategoryRepository;
     private final ClaimRepository claimRepository;
+    private final ClaimContextDefinitionRepository claimContextRepository;
 
     @Transactional(readOnly = true)
     public List<StandardServiceDto> listStandardServices() {
@@ -95,14 +98,15 @@ public class ProviderStandardServiceProvisioner {
                 .categoryName(category != null
                         ? (category.getNameAr() != null ? category.getNameAr() : category.getName())
                         : null)
+                .defaultClaimContextCode(s.getDefaultClaimContextCode())
                 .active(s.isActive())
                 .defaultProviderTypes(defaultProviderTypes)
                 .build();
     }
 
     /**
-     * Creates a new standard (MANUAL_AMOUNT) professional service and its
-     * default facility-type suggestions in one transaction -- a service
+     * Creates a new shared professional/general service and its default
+     * facility-type suggestions in one transaction -- a service
      * with no defaults still exists validly (defaultProviderTypes may be
      * empty), but a partially-created service/defaults pair from a failure
      * mid-way would not.
@@ -115,6 +119,16 @@ public class ProviderStandardServiceProvisioner {
         }
         MedicalCategory category = medicalCategoryRepository.findById(dto.getCategoryId())
                 .orElseThrow(() -> new BusinessRuleException("التصنيف الطبي المحدد غير موجود"));
+        String defaultClaimContextCode = requireActiveClaimContext(dto.getDefaultClaimContextCode());
+        PricingMode pricingMode = dto.getPricingMode() == null ? PricingMode.MANUAL_AMOUNT : dto.getPricingMode();
+        if (pricingMode != PricingMode.MANUAL_AMOUNT && pricingMode != PricingMode.CONTRACT_PRICE) {
+            throw new BusinessRuleException("نوع تسعير الخدمة غير مدعوم");
+        }
+        BigDecimal basePrice = dto.getBasePrice();
+        if (pricingMode == PricingMode.CONTRACT_PRICE
+                && (basePrice == null || basePrice.compareTo(BigDecimal.ZERO) <= 0)) {
+            throw new BusinessRuleException("سعر الوحدة إلزامي للخدمة العامة ذات الكمية");
+        }
 
         MedicalService service = medicalServiceRepository.save(MedicalService.builder()
                 .code(code)
@@ -122,7 +136,9 @@ public class ProviderStandardServiceProvisioner {
                 .nameAr(dto.getNameAr().trim())
                 .nameEn(dto.getNameEn())
                 .categoryId(category.getId())
-                .pricingMode(PricingMode.MANUAL_AMOUNT)
+                .basePrice(basePrice)
+                .pricingMode(pricingMode)
+                .defaultClaimContextCode(defaultClaimContextCode)
                 .isMaster(true)
                 .active(true)
                 .build());
@@ -139,16 +155,28 @@ public class ProviderStandardServiceProvisioner {
                 .orElseThrow(() -> new BusinessRuleException("الخدمة المهنية القياسية غير موجودة"));
         MedicalCategory category = medicalCategoryRepository.findById(dto.getCategoryId())
                 .orElseThrow(() -> new BusinessRuleException("التصنيف الطبي المحدد غير موجود"));
+        String defaultClaimContextCode = requireActiveClaimContext(dto.getDefaultClaimContextCode());
 
         service.setName(dto.getNameAr().trim());
         service.setNameAr(dto.getNameAr().trim());
         service.setNameEn(dto.getNameEn());
         service.setCategoryId(category.getId());
+        service.setDefaultClaimContextCode(defaultClaimContextCode);
         service.setActive(dto.getActive());
         service = medicalServiceRepository.save(service);
 
         List<Provider.ProviderType> defaults = reconcileDefaults(service.getCode(), dto.getDefaultProviderTypes());
         return toDto(service, category, defaults);
+    }
+
+    private String requireActiveClaimContext(String code) {
+        String normalized = code == null ? null : code.trim().toUpperCase();
+        if (normalized == null || normalized.isBlank()) {
+            throw new BusinessRuleException("سياق الاستخدام إلزامي للخدمة المهنية القياسية");
+        }
+        return claimContextRepository.findByCodeAndActiveTrue(normalized)
+                .map(com.waad.tba.modules.claimcontext.entity.ClaimContextDefinition::getCode)
+                .orElseThrow(() -> new BusinessRuleException("سياق الاستخدام المحدد غير موجود أو غير نشط"));
     }
 
     /**

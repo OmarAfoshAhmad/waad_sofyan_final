@@ -102,9 +102,10 @@ public class ClaimStateMachine {
     private static final Map<ClaimStatus, Set<ClaimStatus>> TRANSITION_MATRIX = Map.of(
             // DRAFT -> APPROVED/REJECTED: the direct-entry model (no review workflow — see
             // ClaimSubmissionSource.INTERNAL_DIRECT/PROVIDER_PORTAL direct claims). This claim
-            // never passes through SUBMITTED/UNDER_REVIEW; ClaimService decides APPROVED vs
-            // REJECTED right after finalizeSnapshot computes the real approved amount, and this
-            // transition enforces the same "totalApproved > 0" guard used by the reviewed path.
+            // never passes through SUBMITTED/UNDER_REVIEW; ClaimService finalizes the financial
+            // snapshot first, then stores APPROVED even when insurer payment is zero because an
+            // exhausted benefit ceiling is a financial refusal/provider balance, not an
+            // administrative rejection.
             ClaimStatus.DRAFT, Set.of(ClaimStatus.SUBMITTED, ClaimStatus.APPROVED, ClaimStatus.REJECTED),
             ClaimStatus.SUBMITTED, Set.of(ClaimStatus.UNDER_REVIEW),
             ClaimStatus.UNDER_REVIEW,
@@ -302,11 +303,11 @@ public class ClaimStateMachine {
                         ? context.totalApproved()
                         : claim.getApprovedAmount();
 
-                if (totalApproved == null || totalApproved.compareTo(BigDecimal.ZERO) <= 0) {
+                if (totalApproved == null || totalApproved.compareTo(BigDecimal.ZERO) < 0) {
                     throw new ClaimStateTransitionException(
                             currentStatus.name(),
                             targetStatus.name(),
-                            "Cannot approve claim with totalApproved = 0");
+                            "Cannot approve claim with negative totalApproved");
                 }
 
                 if (!context.allLinesCalculated()) {

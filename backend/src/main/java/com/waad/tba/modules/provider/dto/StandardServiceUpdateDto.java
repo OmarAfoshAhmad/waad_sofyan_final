@@ -28,6 +28,9 @@ public class StandardServiceUpdateDto {
     @NotNull(message = "التصنيف الطبي إلزامي")
     private Long categoryId;
 
+    @NotBlank(message = "سياق الاستخدام إلزامي")
+    private String defaultClaimContextCode;
+
     @NotNull(message = "حالة التفعيل إلزامية")
     private Boolean active;
 

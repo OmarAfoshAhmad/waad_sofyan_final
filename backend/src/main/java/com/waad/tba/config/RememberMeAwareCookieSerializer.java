@@ -6,7 +6,7 @@ import org.springframework.session.web.http.DefaultCookieSerializer;
 /**
  * Varies the JSESSIONID cookie's Max-Age per login based on the "rememberMe"
  * session attribute set by AuthController#sessionLogin, instead of the fixed
- * 30-minute Max-Age Spring Session would otherwise always apply.
+ * default Max-Age Spring Session would otherwise always apply.
  *
  * writeCookieValue is synchronized because cookieMaxAge is mutated on this
  * shared singleton right before each write -- without synchronization two

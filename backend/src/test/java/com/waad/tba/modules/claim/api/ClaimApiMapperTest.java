@@ -8,6 +8,8 @@ import org.junit.jupiter.api.Test;
 
 import com.waad.tba.modules.claim.api.response.ClaimResponse;
 import com.waad.tba.modules.claim.api.request.CreateClaimRequest;
+import com.waad.tba.modules.claim.api.request.UpdateClaimDataRequest;
+import com.waad.tba.modules.claim.dto.ClaimDataUpdateDto;
 import com.waad.tba.modules.claim.dto.ClaimCreateDto;
 import com.waad.tba.modules.claim.dto.ClaimViewDto;
 
@@ -68,6 +70,33 @@ class ClaimApiMapperTest {
 
         assertThat(mapped.getLines().get(0).getManualRefusedAmount())
                 .isEqualByComparingTo("125.00");
+    }
+
+    @Test
+    void manualInvoiceAmountFlowsThroughCreateAndUpdateCommands() {
+        CreateClaimRequest createRequest = CreateClaimRequest.builder()
+                .lines(java.util.List.of(CreateClaimRequest.ClaimLineRequest.builder()
+                        .quantity(1)
+                        .manualAmount(new BigDecimal("1000.00"))
+                        .build()))
+                .build();
+
+        ClaimCreateDto createDto = mapper.toCreateDto(createRequest);
+
+        assertThat(createDto.getLines().get(0).getManualAmount())
+                .isEqualByComparingTo("1000.00");
+
+        UpdateClaimDataRequest updateRequest = UpdateClaimDataRequest.builder()
+                .lines(java.util.List.of(UpdateClaimDataRequest.ClaimLineRequest.builder()
+                        .quantity(1)
+                        .manualAmount(new BigDecimal("850.00"))
+                        .build()))
+                .build();
+
+        ClaimDataUpdateDto updateDto = mapper.toDataUpdateDto(updateRequest);
+
+        assertThat(updateDto.getLines().get(0).getManualAmount())
+                .isEqualByComparingTo("850.00");
     }
 
     @Test

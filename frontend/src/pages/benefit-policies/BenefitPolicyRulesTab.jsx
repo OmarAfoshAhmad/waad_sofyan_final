@@ -78,7 +78,7 @@ import {
   downloadBenefitStructureTemplate,
   importBenefitStructure
 } from 'services/api/benefit-structure.service';
-import { getAllMedicalCategories } from 'services/api/medical-categories.service';
+import { getCanonicalCoverageCategories } from 'services/api/medical-categories.service';
 import { lookupMedicalServices } from 'services/api/medical-services.service';
 import { getBenefitPoliciesSelector, checkPolicyEditability, getBenefitPolicyGapReport } from 'services/api/benefit-policies.service';
 import { getActiveClaimContexts } from 'services/api/claim-contexts.service';
@@ -732,7 +732,14 @@ CategoryCoverageModal.propTypes = {
  *
  * Displays and manages coverage rules for a benefit policy
  */
-const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePercent, policyStartDate, policyEndDate, onOpenStructure }) => {
+const BenefitPolicyRulesTab = ({
+  policyId,
+  policyStatus,
+  policyDefaultCoveragePercent,
+  policyStartDate,
+  policyEndDate,
+  onOpenStructure
+}) => {
   const queryClient = useQueryClient();
   const { enqueueSnackbar } = useSnackbar();
 
@@ -813,17 +820,14 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
   // valid categories from coverage-rule creation.
   const { data: categories = [], isLoading: loadingCategories } = useQuery({
     queryKey: ['medical-categories-active-coverage-selector'],
-    queryFn: getAllMedicalCategories,
+    queryFn: getCanonicalCoverageCategories,
     staleTime: 0,
     refetchOnMount: 'always'
   });
   // Coverage-rule creation must use the canonical active dictionary only.
   // Legacy/disabled/deleted categories may remain in old rules for audit
   // visibility, but they should not appear as choices for new clean rules.
-  const activeCoverageCategories = useMemo(
-    () => categories.filter((cat) => cat?.active !== false && cat?.deleted !== true),
-    [categories]
-  );
+  const activeCoverageCategories = useMemo(() => categories, [categories]);
 
   // The same canonical, active claim-context list the rule form already
   // uses -- lifted here too, for the context badge and the context filter.
@@ -832,10 +836,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
     queryFn: getActiveClaimContexts,
     staleTime: 300000
   });
-  const claimContextByCode = useMemo(
-    () => Object.fromEntries(claimContexts.map((c) => [c.code, c])),
-    [claimContexts]
-  );
+  const claimContextByCode = useMemo(() => Object.fromEntries(claimContexts.map((c) => [c.code, c])), [claimContexts]);
 
   const { data: gapReport } = useQuery({
     queryKey: ['benefit-policy-gap-report', policyId],
@@ -1346,15 +1347,20 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
           // are both INPATIENT, and a chip reading only "إيواء" could not
           // tell a reviewer which one this rule actually governs.
           const context = claimContextByCode[rule.claimContextCode];
-          const label = context?.nameAr
-            || (rule.encounterType === 'INPATIENT' ? 'إيواء' : rule.encounterType === 'ANY' ? 'عام' : 'عيادات خارجية');
+          const label =
+            context?.nameAr || (rule.encounterType === 'INPATIENT' ? 'إيواء' : rule.encounterType === 'ANY' ? 'عام' : 'عيادات خارجية');
           const isCritical = criticalGapRuleIds.has(rule.id);
           const hasNoBucket = rule.appliedBucketLinks?.length === 0 && !rule.groupSource;
           const hasInactiveBucket = rule.inactiveBucketLinks?.length > 0 && !rule.groupSource;
           return (
             <Stack direction="row" spacing={0.5} alignItems="center" justifyContent="center" flexWrap="wrap">
-              <Chip size="small" variant="outlined" color={isCritical ? 'error' : 'default'} label={label}
-                sx={FIXED_RULE_CHIP_SX.context} />
+              <Chip
+                size="small"
+                variant="outlined"
+                color={isCritical ? 'error' : 'default'}
+                label={label}
+                sx={FIXED_RULE_CHIP_SX.context}
+              />
               {isCritical && (
                 <Tooltip title="سياق المطالبة غير موجود أو معطّل — هذه القاعدة لن تُطبَّق أبداً على أي مطالبة">
                   <Chip size="small" color="error" label="⚠ سياق غير صالح" sx={{ height: 20, fontSize: '0.65rem' }} />
@@ -1800,7 +1806,10 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
       statusFiltered = statusFiltered.filter((r) => r.appliedBucketLinks?.length === 0 || gapRuleIds.has(r.id));
     }
 
-    const filtered = queryTokens.length === 0 ? statusFiltered : statusFiltered.filter((rule) => queryTokens.every((token) => rule.searchable.includes(token)));
+    const filtered =
+      queryTokens.length === 0
+        ? statusFiltered
+        : statusFiltered.filter((rule) => queryTokens.every((token) => rule.searchable.includes(token)));
 
     // Default ordering: keep visual order stable unless user explicitly sorts.
     if (!sortBy) {

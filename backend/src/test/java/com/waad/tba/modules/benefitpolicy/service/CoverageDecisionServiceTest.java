@@ -74,14 +74,21 @@ class CoverageDecisionServiceTest {
     }
 
     @Test
-    void categoryContextMismatchIsRejectedBeforeRuleLookup() {
-        when(categoryRepository.findById(55L)).thenReturn(Optional.of(
-                category(55L, null, Set.of(CategoryContext.OUTPATIENT))));
+    void categoryContextsDoNotVetoExactClaimContextRules() {
+        MedicalCategory category = category(55L, null, Set.of(CategoryContext.OUTPATIENT));
+        BenefitPolicy policy = BenefitPolicy.builder().id(1L).defaultCoveragePercent(80).build();
+        BenefitPolicyRule rule = BenefitPolicyRule.builder().id(10L).benefitPolicy(policy)
+                .medicalCategory(category).coveragePercent(70).encounterType(EncounterType.INPATIENT)
+                .claimContextCode("INPATIENT").active(true).build();
+        when(categoryRepository.findById(55L)).thenReturn(Optional.of(category));
+        when(policyRepository.findById(1L)).thenReturn(Optional.of(policy));
+        when(ruleRepository.findBestRuleForClaimContext(1L, 55L, null, "INPATIENT"))
+                .thenReturn(Optional.of(rule));
 
         var decision = service.resolve(request(EncounterType.INPATIENT));
 
-        assertThat(decision.covered()).isFalse();
-        assertThat(decision.source()).isEqualTo(CoverageDecisionSource.CONTEXT_MISMATCH);
+        assertThat(decision.covered()).isTrue();
+        assertThat(decision.reasonCode()).isEqualTo("COVERED");
     }
 
     @Test

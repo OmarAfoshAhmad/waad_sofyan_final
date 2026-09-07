@@ -129,6 +129,10 @@ public class ClaimResponse {
      * READ-ONLY - Calculated by backend
      */
     private BigDecimal differenceAmount;
+    private BigDecimal beneficiaryPaidAmount;
+    private BigDecimal beneficiaryPaidTowardCopay;
+    private BigDecimal beneficiaryPaidTowardRefusal;
+    private BigDecimal providerRefusalBalance;
 
     /**
      * Patient co-pay (patient share of cost)

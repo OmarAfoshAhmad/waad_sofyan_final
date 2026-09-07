@@ -17,10 +17,15 @@ import com.waad.tba.modules.medicaldictionary.service.V50MedicalClassificationEn
 import com.waad.tba.modules.medicaltaxonomy.entity.MedicalCategory;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalCategoryRepository;
 import com.waad.tba.modules.medicaltaxonomy.service.MedicalCategoryService;
+import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy;
+import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicyRule;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRuleRepository;
+import com.waad.tba.modules.member.entity.Member;
+import com.waad.tba.modules.member.service.MemberContextResolver;
 import com.waad.tba.modules.providercontract.repository.ProviderContractPricingItemRepository;
 import com.waad.tba.modules.providercontract.repository.ProviderContractRepository;
+import com.waad.tba.modules.providercontract.enums.EncounterType;
 import com.waad.tba.modules.rbac.entity.User;
 import com.waad.tba.security.AuthorizationService;
 import org.junit.jupiter.api.Test;
@@ -31,6 +36,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -50,6 +56,7 @@ class ClaimPendingServiceServiceTest {
     @Mock MedicalCategoryService categoryService;
     @Mock BenefitPolicyRepository policyRepository;
     @Mock BenefitPolicyRuleRepository ruleRepository;
+    @Mock MemberContextResolver memberContextResolver;
     @Mock ProviderContractRepository contractRepository;
     @Mock ProviderContractPricingItemRepository pricingRepository;
     @Mock V50MedicalClassificationEngine classifier;
@@ -168,6 +175,42 @@ class ClaimPendingServiceServiceTest {
         assertThat(response.finalCategoryId()).isEqualTo(70L);
         assertThat(claim.getLines()).isEmpty();
         verify(claimMapper, never()).recalculateForApproval(any());
+    }
+
+    @Test
+    void approvingPendingServiceChecksExactClaimContextNotLegacyEncounterType() throws Exception {
+        LocalDate serviceDate = LocalDate.of(2026, 5, 1);
+        Member member = Member.builder().id(7L).build();
+        BenefitPolicy policy = BenefitPolicy.builder().id(303L).build();
+        Claim claim = Claim.builder().id(10L).providerId(20L).member(member)
+                .serviceDate(serviceDate).encounterType(EncounterType.INPATIENT)
+                .claimContextCode("PREGNANCY_COMPLICATIONS")
+                .status(ClaimStatus.UNDER_REVIEW).build();
+        ClaimPendingService pending = ClaimPendingService.builder()
+                .id(50L).claim(claim).providerId(20L).status(PendingServiceStatus.PRELIMINARY)
+                .proposedServiceName("خدمة مراجعة").proposedServiceCode("NEW-1")
+                .proposedCategoryId(40L).proposedUnitPrice(new BigDecimal("100.00")).build();
+        PendingServiceDecisionRequest request = new PendingServiceDecisionRequest();
+        request.setDecision(PendingServiceStatus.APPROVED_CLAIM_ONLY);
+        request.setReason("معتمد ضمن سياق المضاعفات");
+
+        when(claimRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(claim));
+        when(pendingRepository.findByIdAndClaimId(50L, 10L)).thenReturn(Optional.of(pending));
+        when(authorizationService.getCurrentUser()).thenReturn(
+                User.builder().id(31L).userType("MEDICAL_REVIEW_HEAD").build());
+        when(categoryRepository.findActiveById(40L)).thenReturn(Optional.of(MedicalCategory.builder().id(40L).build()));
+        when(memberContextResolver.resolveForOrFail(member, serviceDate)).thenReturn(
+                new com.waad.tba.modules.member.service.MemberDatedContext(
+                        7L, serviceDate, null, null, null, policy));
+        when(ruleRepository.findBestRuleForClaimContext(303L, 40L, null, "PREGNANCY_COMPLICATIONS"))
+                .thenReturn(Optional.of(BenefitPolicyRule.builder().id(501L).coveragePercent(75).build()));
+        when(pendingRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(objectMapper.writeValueAsString(any())).thenReturn("{}");
+
+        service.decide(10L, 50L, request);
+
+        verify(ruleRepository).findBestRuleForClaimContext(303L, 40L, null, "PREGNANCY_COMPLICATIONS");
+        verify(ruleRepository, never()).findBestRuleForContext(any(), any(), any(), any(), any());
     }
 
     private V50ClassificationResult classification() {

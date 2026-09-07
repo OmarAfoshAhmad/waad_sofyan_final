@@ -8,7 +8,6 @@ import {
   CircularProgress,
   Divider,
   Grid,
-  Paper,
   Stack,
   Typography,
   Alert,
@@ -21,7 +20,6 @@ import {
   MedicalServices as MedicalIcon,
   AttachFile as AttachmentIcon,
   Receipt as ClaimIcon,
-  CloudUpload as UploadIcon,
   VisibilityOutlined as ShowDocsIcon
 } from '@mui/icons-material';
 import MainCard from 'components/MainCard';
@@ -37,14 +35,7 @@ import {
 } from 'services/api/files.service';
 
 // Insurance UX Components - Phase B2 Step 3
-import {
-  StatusTimeline,
-  CardStatusBadge,
-  PriorityBadge,
-  ValidityCountdown,
-  AmountComparisonBar,
-  getWorkflowSteps
-} from 'components/insurance';
+import { StatusTimeline, CardStatusBadge, PriorityBadge, ValidityCountdown, getWorkflowSteps } from 'components/insurance';
 
 // Pre-Approval Status Mapping for CardStatusBadge
 const PREAPPROVAL_STATUS_MAP = {
@@ -175,7 +166,30 @@ const PreApprovalView = () => {
   // Navigate to Provider Portal claims submission pre-filled with this pre-auth data
   const handleConvertToClaim = () => {
     if (!preApproval) return;
-    navigate('/provider/claims/submit', {
+    const serviceDate =
+      preApproval.serviceDate || preApproval.visitDate || preApproval.requestedServiceDate || preApproval.approvedAt?.slice?.(0, 10) || '';
+    const serviceDay = serviceDate ? new Date(serviceDate) : null;
+    const params = new URLSearchParams({
+      fromPreAuth: 'true',
+      preAuthId: String(preApproval.id || ''),
+      preAuthNumber: preApproval.preAuthNumber || '',
+      visitId: String(preApproval.visitId || ''),
+      memberId: String(preApproval.memberId || preApproval.member?.id || ''),
+      memberName: preApproval.memberName || preApproval.member?.fullName || '',
+      cardNumber: preApproval.memberCardNumber || preApproval.member?.cardNumber || '',
+      providerId: String(preApproval.providerId || ''),
+      employerId: String(preApproval.employerId || preApproval.member?.employerId || ''),
+      serviceDate,
+      month: serviceDay && !Number.isNaN(serviceDay.getTime()) ? String(serviceDay.getMonth() + 1) : '',
+      year: serviceDay && !Number.isNaN(serviceDay.getTime()) ? String(serviceDay.getFullYear()) : '',
+      visitType: preApproval.encounterType || preApproval.visitType || 'OUTPATIENT'
+    });
+
+    Array.from(params.entries()).forEach(([key, value]) => {
+      if (!value) params.delete(key);
+    });
+
+    navigate(`/claims/batches/entry?${params.toString()}`, {
       state: {
         fromPreAuth: true,
         preAuthId: preApproval.id,
@@ -526,7 +540,6 @@ const PreApprovalView = () => {
             </Stack>
           </MainCard>
         </Grid>
-
       </Grid>
 
       <DocumentPreviewDrawer

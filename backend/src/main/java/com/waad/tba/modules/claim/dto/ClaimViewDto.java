@@ -112,6 +112,10 @@ public class ClaimViewDto {
     private BigDecimal approvedAmount;
     private BigDecimal refusedAmount;
     private BigDecimal differenceAmount;
+    private BigDecimal beneficiaryPaidAmount;
+    private BigDecimal beneficiaryPaidTowardCopay;
+    private BigDecimal beneficiaryPaidTowardRefusal;
+    private BigDecimal providerRefusalBalance;
 
     // ========== Provider Contract Fields ==========
 

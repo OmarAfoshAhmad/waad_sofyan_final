@@ -3,6 +3,7 @@ package com.waad.tba.modules.providercontract.service;
 import com.waad.tba.common.exception.BusinessRuleException;
 import com.waad.tba.modules.medicaltaxonomy.entity.MedicalCategory;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalCategoryRepository;
+import com.waad.tba.modules.medicaldictionary.service.MedicalDictionaryNormalizer;
 import com.waad.tba.modules.providercontract.dto.*;
 import com.waad.tba.modules.providercontract.entity.ProviderContract;
 import com.waad.tba.modules.providercontract.entity.ProviderContract.ContractStatus;
@@ -13,6 +14,7 @@ import com.waad.tba.modules.providercontract.repository.ProviderContractReposito
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.context.ApplicationEventPublisher;
@@ -42,6 +44,7 @@ public class ProviderContractPricingItemService {
     private final ProviderContractRepository contractRepository;
     private final MedicalCategoryRepository medicalCategoryRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final MedicalDictionaryNormalizer searchNormalizer;
 
     // ═══════════════════════════════════════════════════════════════════════════
     // READ OPERATIONS
@@ -149,7 +152,9 @@ public class ProviderContractPricingItemService {
         String normalizedQuery = query == null ? "" : query.trim();
         var page = normalizedQuery.isEmpty()
                 ? pricingRepository.findEffectiveByContractId(contractId, serviceDate, pageable)
-                : pricingRepository.searchEffectiveByContractId(contractId, serviceDate, normalizedQuery, pageable);
+                : pricingRepository.searchEffectiveByContractIdRanked(
+                        contractId, serviceDate, normalizedQuery, searchNormalizer.normalize(normalizedQuery),
+                        PageRequest.of(pageable.getPageNumber(), pageable.getPageSize()));
         return page
                 .map(ProviderContractPricingItemResponseDto::fromEntity);
     }

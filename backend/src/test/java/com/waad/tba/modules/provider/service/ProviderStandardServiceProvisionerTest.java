@@ -16,6 +16,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import com.waad.tba.common.exception.BusinessRuleException;
+import com.waad.tba.modules.claimcontext.entity.ClaimContextDefinition;
+import com.waad.tba.modules.claimcontext.repository.ClaimContextDefinitionRepository;
 import com.waad.tba.modules.medicaltaxonomy.entity.MedicalService;
 import com.waad.tba.modules.medicaltaxonomy.enums.PricingMode;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalCategoryRepository;
@@ -33,6 +35,7 @@ import com.waad.tba.modules.provider.repository.ProviderServiceRepository;
 import com.waad.tba.modules.provider.dto.RevokeStandardServicesSummaryDto;
 import com.waad.tba.modules.claim.repository.ClaimRepository;
 import com.waad.tba.modules.provider.projection.ProviderServiceClaimUsageProjection;
+import com.waad.tba.modules.providercontract.enums.EncounterType;
 
 /**
  * Bulk provisioning across many providers must (a) never write during
@@ -50,18 +53,23 @@ class ProviderStandardServiceProvisionerTest {
     private final MedicalServiceRepository medicalServiceRepository = mock(MedicalServiceRepository.class);
     private final MedicalCategoryRepository medicalCategoryRepository = mock(MedicalCategoryRepository.class);
     private final ClaimRepository claimRepository = mock(ClaimRepository.class);
+    private final ClaimContextDefinitionRepository claimContextRepository = mock(ClaimContextDefinitionRepository.class);
 
     private final ProviderStandardServiceProvisioner provisioner = new ProviderStandardServiceProvisioner(
             providerRepository, providerServiceRepository, providerServiceDefaultRepository,
-            medicalServiceRepository, medicalCategoryRepository, claimRepository);
+            medicalServiceRepository, medicalCategoryRepository, claimRepository, claimContextRepository);
 
     private MedicalService standardService;
 
     @BeforeEach
     void setUp() {
         standardService = MedicalService.builder()
-                .id(1L).code("SYS-DRUG-GENERAL").name("test").pricingMode(PricingMode.MANUAL_AMOUNT).build();
+                .id(1L).code("SYS-DRUG-GENERAL").name("test").pricingMode(PricingMode.MANUAL_AMOUNT)
+                .defaultClaimContextCode("OUTPATIENT").build();
         when(medicalServiceRepository.findByCodeIn(anyList())).thenReturn(List.of(standardService));
+        when(claimContextRepository.findByCodeAndActiveTrue("OUTPATIENT")).thenReturn(java.util.Optional.of(
+                ClaimContextDefinition.builder().code("OUTPATIENT").nameAr("عيادات خارجية")
+                        .baseEncounterType(EncounterType.OUTPATIENT).active(true).build()));
     }
 
     private Provider provider(long id, boolean active) {
@@ -304,7 +312,8 @@ class ProviderStandardServiceProvisionerTest {
 
         assertThatThrownBy(() -> provisioner.createStandardService(
                 com.waad.tba.modules.provider.dto.StandardServiceCreateDto.builder()
-                        .code("SYS-DRUG-GENERAL").nameAr("اسم").categoryId(5L).build()))
+                        .code("SYS-DRUG-GENERAL").nameAr("اسم").categoryId(5L)
+                        .defaultClaimContextCode("OUTPATIENT").build()))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessageContaining("مستخدم مسبقاً");
         verify(medicalServiceRepository, never()).save(any());
@@ -317,7 +326,8 @@ class ProviderStandardServiceProvisionerTest {
 
         assertThatThrownBy(() -> provisioner.createStandardService(
                 com.waad.tba.modules.provider.dto.StandardServiceCreateDto.builder()
-                        .code("SYS-NEW").nameAr("اسم").categoryId(5L).build()))
+                        .code("SYS-NEW").nameAr("اسم").categoryId(5L)
+                        .defaultClaimContextCode("OUTPATIENT").build()))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessageContaining("التصنيف");
         verify(medicalServiceRepository, never()).save(any());
@@ -339,15 +349,18 @@ class ProviderStandardServiceProvisionerTest {
         var result = provisioner.createStandardService(
                 com.waad.tba.modules.provider.dto.StandardServiceCreateDto.builder()
                         .code("SYS-NEW").nameAr("خدمة جديدة").categoryId(5L)
+                        .defaultClaimContextCode("OUTPATIENT")
                         .defaultProviderTypes(List.of(ProviderType.PHARMACY)).build());
 
         assertThat(result.getId()).isEqualTo(99L);
         assertThat(result.getCode()).isEqualTo("SYS-NEW");
+        assertThat(result.getDefaultClaimContextCode()).isEqualTo("OUTPATIENT");
         assertThat(result.getDefaultProviderTypes()).containsExactly(ProviderType.PHARMACY);
 
         var serviceCaptor = org.mockito.ArgumentCaptor.forClass(MedicalService.class);
         verify(medicalServiceRepository).save(serviceCaptor.capture());
         assertThat(serviceCaptor.getValue().getPricingMode()).isEqualTo(PricingMode.MANUAL_AMOUNT);
+        assertThat(serviceCaptor.getValue().getDefaultClaimContextCode()).isEqualTo("OUTPATIENT");
         assertThat(serviceCaptor.getValue().isActive()).isTrue();
 
         var defaultsCaptor = org.mockito.ArgumentCaptor.forClass(List.class);
@@ -367,7 +380,7 @@ class ProviderStandardServiceProvisionerTest {
 
         assertThatThrownBy(() -> provisioner.updateStandardService(7L,
                 com.waad.tba.modules.provider.dto.StandardServiceUpdateDto.builder()
-                        .nameAr("اسم").categoryId(5L).active(true).build()))
+                        .nameAr("اسم").categoryId(5L).defaultClaimContextCode("OUTPATIENT").active(true).build()))
                 .isInstanceOf(BusinessRuleException.class);
     }
 
@@ -387,7 +400,7 @@ class ProviderStandardServiceProvisionerTest {
 
         var result = provisioner.updateStandardService(1L,
                 com.waad.tba.modules.provider.dto.StandardServiceUpdateDto.builder()
-                        .nameAr("اسم محدَّث").categoryId(5L).active(true)
+                        .nameAr("اسم محدَّث").categoryId(5L).defaultClaimContextCode("OUTPATIENT").active(true)
                         .defaultProviderTypes(List.of(ProviderType.OPTICS)).build());
 
         assertThat(result.getDefaultProviderTypes()).containsExactly(ProviderType.OPTICS);

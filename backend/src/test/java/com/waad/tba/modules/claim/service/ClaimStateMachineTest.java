@@ -89,10 +89,30 @@ class ClaimStateMachineTest {
     }
 
     @Test
-    @DisplayName("Should enforce totalApproved > 0 before approval")
-    void should_reject_approval_when_total_approved_is_zero() {
+    @DisplayName("Should allow zero insurer payment after completed financial adjudication")
+    void should_allow_approval_when_total_approved_is_zero() {
         Claim claim = baseClaim(ClaimStatus.UNDER_REVIEW);
         claim.setApprovedAmount(BigDecimal.ZERO);
+        User actor = user("MEDICAL_REVIEWER", "reviewer1");
+
+        ClaimStateMachine.TransitionContext context = new ClaimStateMachine.TransitionContext(
+                BigDecimal.ZERO,
+                true,
+                true,
+                false,
+                true,
+                "benefit ceiling fully consumed");
+
+        claimStateMachine.transition(claim, ClaimStatus.APPROVED, actor, context);
+
+        assertEquals(ClaimStatus.APPROVED, claim.getStatus());
+    }
+
+    @Test
+    @DisplayName("Should reject approval when totalApproved is negative")
+    void should_reject_approval_when_total_approved_is_negative() {
+        Claim claim = baseClaim(ClaimStatus.UNDER_REVIEW);
+        claim.setApprovedAmount(new BigDecimal("-0.01"));
         User actor = user("MEDICAL_REVIEWER", "reviewer1");
 
         assertThrows(ClaimStateTransitionException.class,

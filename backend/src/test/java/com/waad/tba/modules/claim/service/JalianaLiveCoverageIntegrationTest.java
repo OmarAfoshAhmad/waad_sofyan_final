@@ -1,6 +1,7 @@
 package com.waad.tba.modules.claim.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -11,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -142,6 +144,70 @@ class JalianaLiveCoverageIntegrationTest {
     }
 
     @Test
+    void jalianaFreeZoneDiagnosticsFollowClaimContextNotAdministrativeServiceContext() {
+        Long policyId = requiredLong("select id from benefit_policies where policy_code='POL-2026-018'");
+        Long memberId = requiredLong("select min(id) from members where employer_id=151 and benefit_policy_id="
+                + policyId + " and active=true");
+        Long glucosePricingId = requiredLong("""
+                select id
+                  from provider_contract_pricing_items
+                 where contract_id=11351
+                   and service_name='FBS Glucose (Fasting)'
+                   and active=true
+                """);
+
+        CoverageResult outpatient = calculateAtPrice(policyId, memberId, glucosePricingId,
+                EncounterType.OUTPATIENT, "OUTPATIENT", "5.00");
+        assertThat(outpatient.isNotCovered()).isFalse();
+        assertThat(outpatient.getCoveragePercent()).isEqualTo(75);
+        assertThat(outpatient.getCompanyShare()).isEqualByComparingTo("3.75");
+        assertThat(outpatient.getPatientShare()).isEqualByComparingTo("1.25");
+        assertThat(outpatient.getUsageDetails()).isNotNull();
+        assertThat(outpatient.getUsageDetails().getAmountLimit()).isEqualByComparingTo("3000.00");
+
+        CoverageResult inpatient = calculateAtPrice(policyId, memberId, glucosePricingId,
+                EncounterType.INPATIENT, "INPATIENT", "5.00");
+        assertThat(inpatient.isNotCovered()).isFalse();
+        assertThat(inpatient.getCoveragePercent()).isEqualTo(75);
+        assertThat(inpatient.getCompanyShare()).isEqualByComparingTo("3.75");
+        assertThat(inpatient.getPatientShare()).isEqualByComparingTo("1.25");
+        assertThat(inpatient.getUsageDetails()).isNotNull();
+        assertThat(inpatient.getUsageDetails().getAmountLimit()).isNull();
+
+        Long administrativelyOutpatientSugarPricingId = requiredLong("""
+                select id
+                  from provider_contract_pricing_items
+                 where contract_id=11351
+                   and service_name like 'WE-127%'
+                   and active=true
+                """);
+        CoverageResult inpatientGeneralFallback = calculateAtPrice(policyId, memberId,
+                administrativelyOutpatientSugarPricingId, EncounterType.INPATIENT, "INPATIENT", "5.00");
+        assertThat(inpatientGeneralFallback.isNotCovered()).isFalse();
+        assertThat(inpatientGeneralFallback.getCoveragePercent()).isEqualTo(75);
+        assertThat(inpatientGeneralFallback.getCompanyShare()).isEqualByComparingTo("3.75");
+        assertThat(inpatientGeneralFallback.getPatientShare()).isEqualByComparingTo("1.25");
+        assertThat(inpatientGeneralFallback.getRefusalReason()).isNull();
+
+        Long ctPricingId = requiredLong("""
+                select id
+                  from provider_contract_pricing_items
+                 where contract_id=11351
+                   and service_name like 'CT-001%'
+                   and active=true
+                """);
+        CoverageResult inpatientCt = calculateAtPrice(policyId, memberId,
+                ctPricingId, EncounterType.INPATIENT, "INPATIENT", "350.00");
+        assertThat(inpatientCt.isNotCovered()).isFalse();
+        assertThat(inpatientCt.getCoveragePercent()).isEqualTo(75);
+        assertThat(inpatientCt.getCompanyShare()).isEqualByComparingTo("262.50");
+        assertThat(inpatientCt.getPatientShare()).isEqualByComparingTo("87.50");
+        assertThat(inpatientCt.getUsageDetails()).isNotNull();
+        assertThat(inpatientCt.getUsageDetails().getAmountLimit()).isNull();
+        assertThat(inpatientCt.getRefusalReason()).isNull();
+    }
+
+    @Test
     void kayanCosmeticDentalIsUncoveredWhileRoutineDentalKeepsItsConfiguredShare() {
         Long policyId = requiredLong("select id from benefit_policies where policy_code='POL-2026-001'");
         Long memberId = requiredLong("select min(id) from members where employer_id=1 and benefit_policy_id=" + policyId + " and active=true");
@@ -201,18 +267,39 @@ class JalianaLiveCoverageIntegrationTest {
     private CoverageResult calculateAtContractPrice(Long policyId, Long memberId, Long pricingItemId) {
         BigDecimal price = jdbcTemplate.queryForObject(
                 "select contract_price from provider_contract_pricing_items where id=?", BigDecimal.class, pricingItemId);
+        return calculateAtPrice(policyId, memberId, pricingItemId, LocalDate.of(2026, 8, 31),
+                EncounterType.OUTPATIENT, "OUTPATIENT",
+                price.toPlainString());
+    }
+
+    private CoverageResult calculateAtPrice(Long policyId, Long memberId, Long pricingItemId,
+                                            EncounterType encounterType, String claimContextCode, String price) {
+        return calculateAtPrice(policyId, memberId, pricingItemId, LocalDate.of(2026, 1, 1),
+                encounterType, claimContextCode, price);
+    }
+
+    private CoverageResult calculateAtPrice(Long policyId, Long memberId, Long pricingItemId,
+                                            LocalDate serviceDate, EncounterType encounterType,
+                                            String claimContextCode, String price) {
+        BigDecimal amount = new BigDecimal(price);
         ClaimLineInput line = ClaimLineInput.builder().lineId("kayan-" + pricingItemId)
                 .pricingItemId(pricingItemId).quantity(1)
-                .enteredUnitPrice(price).contractPrice(price).build();
+                .enteredUnitPrice(amount).contractPrice(amount).build();
         return coverageEngineService.calculateBulk(BulkCoverageEngineRequest.builder()
                 .policyId(policyId).memberId(memberId).serviceYear(2026)
-                .serviceDate(LocalDate.of(2026, 8, 31)).encounterType(EncounterType.OUTPATIENT)
-                .claimContextCode("OUTPATIENT").lines(List.of(line)).build()).getFirst();
+                .serviceDate(serviceDate).encounterType(encounterType)
+                .claimContextCode(claimContextCode).lines(List.of(line)).build()).getFirst();
     }
 
     private Long requiredLong(String sql) {
-        Long value = jdbcTemplate.queryForObject(sql, Long.class);
-        assertThat(value).as(sql).isNotNull();
+        Long value;
+        try {
+            value = jdbcTemplate.queryForObject(sql, Long.class);
+        } catch (EmptyResultDataAccessException ex) {
+            assumeTrue(false, "Live review dataset prerequisite is missing: " + sql);
+            return null;
+        }
+        assumeTrue(value != null, "Live review dataset prerequisite is missing: " + sql);
         return value;
     }
 }

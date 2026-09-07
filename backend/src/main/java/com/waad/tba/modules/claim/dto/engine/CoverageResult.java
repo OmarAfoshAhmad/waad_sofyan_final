@@ -135,7 +135,7 @@ public class CoverageResult {
     /** معرّف القاعدة المطبّقة (للتدقيق) */
     private Long appliedRuleId;
 
-    /** معرّف التصنيف الذي طُبّقت عليه القاعدة (بعد خوارزمية المرآة) */
+    /** معرّف التصنيف الذي طُبّقت عليه قاعدة التغطية للتدقيق. */
     private Long resolvedCategoryId;
 
     /**

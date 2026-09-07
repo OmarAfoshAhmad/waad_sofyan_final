@@ -182,9 +182,10 @@ export const providerApi = {
    * @param {number} [claimData.attachmentCount] - Number of attachments
    * @returns {Promise<Object>} Claim response with validation results
    */
-  submitClaim: async (claimData) => {
-    const response = await api.post(`${PROVIDER_BASE_URL}/claims/submit`, claimData);
-    return response.data;
+  submitClaim: async () => {
+    throw new Error(
+      'تم إيقاف مسار إدخال مطالبات مقدم الخدمة القديم. استخدم claimsService.createDirectEntryClaim من شاشة إدخال المطالبات الجديدة.'
+    );
   },
 
   /**
@@ -286,7 +287,7 @@ export const providerApi = {
 
   /**
    * Cancel a registered visit (Provider Portal).
-   * 
+   *
    * @param {number} visitId - Visit ID
    * @returns {Promise<Object>} ProviderVisitResponse
    */

@@ -178,13 +178,13 @@ class ClaimAnnualCeilingIntegrationTest extends PostgresIntegrationTestBase {
         assertThat(second.getStatus()).isEqualTo(ClaimStatus.APPROVED);
         assertThat(second.getApprovedAmount()).isEqualByComparingTo("400.00");
 
-        // The ceiling is exhausted. The next service value is entirely patient
-        // limit excess; with no insurer payment the direct-entry claim is stored
-        // as REJECTED instead of manufacturing a zero-value approval.
+        // The ceiling is exhausted. The next service value has no payable insurer
+        // amount, so direct entry stores it as REJECTED instead of manufacturing a
+        // zero-value approval.
         ClaimViewDto third = submit(f, new BigDecimal("0.01"));
         assertThat(third.getStatus()).isEqualTo(ClaimStatus.REJECTED);
         assertThat(third.getApprovedAmount()).isZero();
-        assertThat(third.getPatientCoPay()).isEqualByComparingTo("0.01");
+        assertThat(third.getRefusedAmount()).isEqualByComparingTo("0.01");
     }
 
     @Test
@@ -195,19 +195,21 @@ class ClaimAnnualCeilingIntegrationTest extends PostgresIntegrationTestBase {
         // discount BEFORE mode -> discount=80, companyShare=720.
         //
         // WAAD-FIN-1.0: the 720 ceiling caps settlementBase before the 80/20
-        // split and before the provider discount. Excess 280 belongs to patient.
+        // split and before the provider discount. Excess 280 is a refused
+        // benefit-limit amount, not the beneficiary's normal co-pay.
         Fixture f = buildFixture(suffix, new BigDecimal("720.00"), 80, new BigDecimal("10.00"), true);
 
         ClaimViewDto claim = submit(f, new BigDecimal("1000.00"));
         assertThat(claim.getStatus()).isEqualTo(ClaimStatus.APPROVED);
         assertThat(claim.getApprovedAmount()).isEqualByComparingTo("518.40");
-        assertThat(claim.getPatientCoPay()).isEqualByComparingTo("424.00");
+        assertThat(claim.getPatientCoPay()).isEqualByComparingTo("144.00");
         assertThat(claim.getCompanyDiscountAmount()).isEqualByComparingTo("57.60");
-        assertThat(claim.getRefusedAmount()).isEqualByComparingTo("0.00");
+        assertThat(claim.getRefusedAmount()).isEqualByComparingTo("280.00");
 
         ClaimViewDto next = submit(f, new BigDecimal("1.00"));
         assertThat(next.getStatus()).isEqualTo(ClaimStatus.REJECTED);
-        assertThat(next.getPatientCoPay()).isEqualByComparingTo("1.00");
+        assertThat(next.getPatientCoPay()).isEqualByComparingTo("0.00");
+        assertThat(next.getRefusedAmount()).isEqualByComparingTo("1.00");
     }
 
     /**
@@ -216,9 +218,8 @@ class ClaimAnnualCeilingIntegrationTest extends PostgresIntegrationTestBase {
      * "characterize the pre-discount annual ceiling bucket defect"). Same
      * exact scenario -- gross=1000, coverage=80%, 10% discount BEFORE mode,
      * ceiling set to the correct net definition (720.00) -- now approves
-     * exactly 720.00 with zero coverage-time refusal, because
-     * BenefitBucketLimitService no longer injects a discount-blind synthetic
-     * bucket into coverage calculation.
+     * exactly 720.00 inside the binding limit, while the 280.00 excess is
+     * recorded as a refused benefit-limit amount rather than normal co-pay.
      */
     @Test
     @WithMockUser(username = "admin", roles = { "SUPER_ADMIN" })
@@ -230,8 +231,8 @@ class ClaimAnnualCeilingIntegrationTest extends PostgresIntegrationTestBase {
 
         assertThat(claim.getStatus()).isEqualTo(ClaimStatus.APPROVED);
         assertThat(claim.getApprovedAmount()).isEqualByComparingTo("518.40");
-        assertThat(claim.getPatientCoPay()).isEqualByComparingTo("424.00");
+        assertThat(claim.getPatientCoPay()).isEqualByComparingTo("144.00");
         assertThat(claim.getCompanyDiscountAmount()).isEqualByComparingTo("57.60");
-        assertThat(claim.getRefusedAmount()).isEqualByComparingTo("0.00");
+        assertThat(claim.getRefusedAmount()).isEqualByComparingTo("280.00");
     }
 }

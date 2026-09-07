@@ -13,6 +13,9 @@ const BASE_URL = '/medical-categories';
  */
 const unwrap = (response) => response.data?.data || response.data;
 
+export const isCanonicalCoverageCategory = (category) =>
+  category?.active !== false && category?.deleted !== true && typeof category?.code === 'string' && category.code.startsWith('CAT-');
+
 /**
  * Get paginated medical categories list
  * @param {Object} params - Query parameters
@@ -101,6 +104,16 @@ export const hardDeleteMedicalCategory = async (id) => {
 export const getAllMedicalCategories = async () => {
   const response = await axiosClient.get(`${BASE_URL}/all`);
   return unwrap(response);
+};
+
+/**
+ * Get only canonical active categories used by coverage rules and claim-entry choices.
+ * Legacy codes may remain visible in admin/audit screens, but should not be offered
+ * as operational choices for new rules or classification suggestions.
+ */
+export const getCanonicalCoverageCategories = async () => {
+  const categories = await getAllMedicalCategories();
+  return (categories || []).filter(isCanonicalCoverageCategory);
 };
 
 /**

@@ -6,7 +6,7 @@
  * more providers than intended, and this is the only place a clerk can
  * see the effect before it is written.
  */
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSnackbar } from 'notistack';
@@ -55,6 +55,7 @@ import { ModernPageHeader } from 'components/tba';
 import { providerStandardServicesService } from 'services/api/providerStandardServices.service';
 import { providersService } from 'services/api/providers.service';
 import { getAllMedicalCategories } from 'services/api/medical-categories.service';
+import { getActiveClaimContexts } from 'services/api/claim-contexts.service';
 import StandardServiceFormDialog from './components/StandardServiceFormDialog';
 
 const STANDARD_SERVICES_QUERY_KEY = ['provider-standard-services-catalog'];
@@ -73,14 +74,18 @@ const PROVIDER_TYPES = [
 
 const SummaryGrid = ({ summary, title, fields }) => (
   <Box sx={{ mt: 2 }}>
-    <Typography variant="subtitle2" sx={{ mb: 1 }}>{title}</Typography>
+    <Typography variant="subtitle2" sx={{ mb: 1 }}>
+      {title}
+    </Typography>
     <Grid container spacing={1}>
       {fields.map(([label, value]) => (
         <Grid size={{ xs: 6, sm: 4 }} key={label}>
           <Card variant="outlined">
             <CardContent sx={{ p: '0.75rem !important', textAlign: 'center' }}>
               <Typography variant="h5">{value}</Typography>
-              <Typography variant="caption" color="text.secondary">{label}</Typography>
+              <Typography variant="caption" color="text.secondary">
+                {label}
+              </Typography>
             </CardContent>
           </Card>
         </Grid>
@@ -163,6 +168,11 @@ export default function ProviderStandardServicesPage() {
     queryFn: getAllMedicalCategories
   });
 
+  const { data: claimContexts = [] } = useQuery({
+    queryKey: ['active-claim-contexts'],
+    queryFn: getActiveClaimContexts
+  });
+
   // Both the admin management list and the active-only selection picker
   // above read the same underlying catalog -- a create/update must refresh
   // both, or the new service would only appear after a full page reload.
@@ -209,17 +219,21 @@ export default function ProviderStandardServicesPage() {
     }
   };
 
-  const buildRequest = () => ({
-    serviceCodes: selectedCodes,
-    scope,
-    providerTypes: scope === 'PROVIDER_TYPES' ? providerTypes : undefined,
-    providerIds: scope === 'SELECTED_PROVIDERS' ? selectedProviders.map((p) => p.id) : undefined
-  });
+  const buildRequest = useCallback(
+    () => ({
+      serviceCodes: selectedCodes,
+      scope,
+      providerTypes: scope === 'PROVIDER_TYPES' ? providerTypes : undefined,
+      providerIds: scope === 'SELECTED_PROVIDERS' ? selectedProviders.map((p) => p.id) : undefined
+    }),
+    [providerTypes, scope, selectedCodes, selectedProviders]
+  );
 
   const previewMutation = useMutation({
-    mutationFn: () => (mode === 'REVOKE'
-      ? providerStandardServicesService.previewRevoke(buildRequest())
-      : providerStandardServicesService.previewProvisioning(buildRequest())),
+    mutationFn: () =>
+      mode === 'REVOKE'
+        ? providerStandardServicesService.previewRevoke(buildRequest())
+        : providerStandardServicesService.previewProvisioning(buildRequest()),
     onSuccess: (data) => {
       setPreviewResult(data);
       setApplyResult(null);
@@ -227,23 +241,22 @@ export default function ProviderStandardServicesPage() {
   });
 
   const applyMutation = useMutation({
-    mutationFn: () => (mode === 'REVOKE'
-      ? providerStandardServicesService.applyRevoke(buildRequest())
-      : providerStandardServicesService.applyProvisioning(buildRequest())),
+    mutationFn: () =>
+      mode === 'REVOKE'
+        ? providerStandardServicesService.applyRevoke(buildRequest())
+        : providerStandardServicesService.applyProvisioning(buildRequest()),
     onSuccess: (data) => setApplyResult(data)
   });
 
-  const canPreview = selectedCodes.length > 0
-    && (scope !== 'PROVIDER_TYPES' || providerTypes.length > 0)
-    && (scope !== 'SELECTED_PROVIDERS' || selectedProviders.length > 0);
+  const canPreview =
+    selectedCodes.length > 0 &&
+    (scope !== 'PROVIDER_TYPES' || providerTypes.length > 0) &&
+    (scope !== 'SELECTED_PROVIDERS' || selectedProviders.length > 0);
 
-  const requestSignature = useMemo(
-    () => JSON.stringify({ mode, ...buildRequest() }),
-    [mode, selectedCodes, scope, providerTypes, selectedProviders]
-  );
+  const requestSignature = useMemo(() => JSON.stringify({ mode, ...buildRequest() }), [buildRequest, mode]);
   const [previewedSignature, setPreviewedSignature] = useState(null);
-  const canApply = previewResult != null && previewedSignature === requestSignature
-    && (mode !== 'REVOKE' || previewResult.assignmentsToRevoke > 0);
+  const canApply =
+    previewResult != null && previewedSignature === requestSignature && (mode !== 'REVOKE' || previewResult.assignmentsToRevoke > 0);
 
   const handleModeChange = (nextMode) => {
     setMode(nextMode);
@@ -308,28 +321,38 @@ export default function ProviderStandardServicesPage() {
         {loadingAllServices ? (
           <CircularProgress size={24} />
         ) : allStandardServices.length === 0 ? (
-          <Typography variant="body2" color="text.secondary">لا توجد خدمات مهنية قياسية بعد.</Typography>
+          <Typography variant="body2" color="text.secondary">
+            لا توجد خدمات مهنية قياسية بعد.
+          </Typography>
         ) : (
           <List dense disablePadding>
             {allStandardServices.map((service) => (
-              <ListItem
-                key={service.id}
-                disableGutters
-                sx={{ opacity: service.active ? 1 : 0.55 }}
-              >
+              <ListItem key={service.id} disableGutters sx={{ opacity: service.active ? 1 : 0.55 }}>
                 <ListItemText
                   primary={
                     <Stack direction="row" spacing={1} alignItems="center">
-                      <Typography variant="body2" fontWeight={600}>{service.nameAr || service.name}</Typography>
+                      <Typography variant="body2" fontWeight={600}>
+                        {service.nameAr || service.name}
+                      </Typography>
                       <Chip size="small" label={service.code} variant="outlined" />
+                      {service.defaultClaimContextCode && (
+                        <Chip
+                          size="small"
+                          color="info"
+                          variant="outlined"
+                          label={
+                            claimContexts.find((context) => context.code === service.defaultClaimContextCode)?.nameAr ||
+                            service.defaultClaimContextCode
+                          }
+                        />
+                      )}
                       {!service.active && <Chip size="small" color="default" label="معطّلة" />}
                     </Stack>
                   }
                   secondary={`${service.categoryName || service.categoryCode || '—'}${
                     service.defaultProviderTypes?.length
-                      ? ' · افتراضية لـ: ' + service.defaultProviderTypes
-                          .map((t) => PROVIDER_TYPES.find((p) => p.value === t)?.label || t)
-                          .join('، ')
+                      ? ' · افتراضية لـ: ' +
+                        service.defaultProviderTypes.map((t) => PROVIDER_TYPES.find((p) => p.value === t)?.label || t).join('، ')
                       : ''
                   }`}
                 />
@@ -357,9 +380,7 @@ export default function ProviderStandardServicesPage() {
                 <Grid size={{ xs: 12, sm: 6, md: 3 }} key={service.code}>
                   <Card
                     variant="outlined"
-                    onClick={() => setSelectedCodes((prev) => (
-                      checked ? prev.filter((c) => c !== service.code) : [...prev, service.code]
-                    ))}
+                    onClick={() => setSelectedCodes((prev) => (checked ? prev.filter((c) => c !== service.code) : [...prev, service.code]))}
                     sx={{
                       cursor: 'pointer',
                       borderColor: checked ? 'primary.main' : undefined,
@@ -386,7 +407,14 @@ export default function ProviderStandardServicesPage() {
       </MainCard>
 
       <MainCard sx={{ mt: 2 }} title="2. النطاق">
-        <RadioGroup row value={scope} onChange={(e) => { setScope(e.target.value); setPreviewResult(null); }}>
+        <RadioGroup
+          row
+          value={scope}
+          onChange={(e) => {
+            setScope(e.target.value);
+            setPreviewResult(null);
+          }}
+        >
           <FormControlLabel value="PROVIDER_TYPES" control={<Radio />} label="حسب نوع المرفق" />
           <FormControlLabel value="ALL_ACTIVE" control={<Radio />} label="كل المرافق النشطة" />
           <FormControlLabel value="SELECTED_PROVIDERS" control={<Radio />} label="مرافق محددة" />
@@ -400,12 +428,16 @@ export default function ProviderStandardServicesPage() {
               multiple
               value={providerTypes}
               label="أنواع المرافق"
-              onChange={(e) => { setProviderTypes(e.target.value); setPreviewResult(null); }}
-              renderValue={(selected) => selected
-                .map((v) => PROVIDER_TYPES.find((t) => t.value === v)?.label || v).join('، ')}
+              onChange={(e) => {
+                setProviderTypes(e.target.value);
+                setPreviewResult(null);
+              }}
+              renderValue={(selected) => selected.map((v) => PROVIDER_TYPES.find((t) => t.value === v)?.label || v).join('، ')}
             >
               {PROVIDER_TYPES.map((type) => (
-                <MenuItem key={type.value} value={type.value}>{type.label}</MenuItem>
+                <MenuItem key={type.value} value={type.value}>
+                  {type.label}
+                </MenuItem>
               ))}
             </Select>
           </FormControl>
@@ -420,11 +452,12 @@ export default function ProviderStandardServicesPage() {
             getOptionLabel={(option) => option.name || ''}
             isOptionEqualToValue={(a, b) => a.id === b.id}
             loading={providerSearchLoading}
-            onChange={(_, value) => { setSelectedProviders(value); setPreviewResult(null); }}
+            onChange={(_, value) => {
+              setSelectedProviders(value);
+              setPreviewResult(null);
+            }}
             onInputChange={(_, value) => handleProviderSearch(value)}
-            renderInput={(params) => (
-              <TextField {...params} size="small" label="ابحث عن مرافق" placeholder="اسم المرفق..." />
-            )}
+            renderInput={(params) => <TextField {...params} size="small" label="ابحث عن مرافق" placeholder="اسم المرفق..." />}
           />
         )}
       </MainCard>
@@ -437,7 +470,8 @@ export default function ProviderStandardServicesPage() {
 
         {mode === 'REVOKE' && (
           <Alert severity="info" sx={{ mb: 2 }}>
-            السحب لا يؤثر إطلاقاً على أي خدمة لها أثر مالي — أي مرفق سبق أن سُجّلت له مطالبة بهذه الخدمة لن تُسحَب منه، وسيظهر السبب صراحة باسم المرفق والخدمة أدناه.
+            السحب لا يؤثر إطلاقاً على أي خدمة لها أثر مالي — أي مرفق سبق أن سُجّلت له مطالبة بهذه الخدمة لن تُسحَب منه، وسيظهر السبب صراحة
+            باسم المرفق والخدمة أدناه.
           </Alert>
         )}
 
@@ -449,7 +483,7 @@ export default function ProviderStandardServicesPage() {
             disabled={!canPreview || previewMutation.isPending}
             onClick={handlePreview}
           >
-            {previewMutation.isPending ? 'جارٍ المعاينة…' : (mode === 'REVOKE' ? 'معاينة السحب' : 'معاينة قبل التطبيق')}
+            {previewMutation.isPending ? 'جارٍ المعاينة…' : mode === 'REVOKE' ? 'معاينة السحب' : 'معاينة قبل التطبيق'}
           </Button>
           <Button
             variant="contained"
@@ -458,8 +492,12 @@ export default function ProviderStandardServicesPage() {
             onClick={handleApplyClick}
           >
             {applyMutation.isPending
-              ? (mode === 'REVOKE' ? 'جارٍ السحب…' : 'جارٍ التطبيق…')
-              : (mode === 'REVOKE' ? 'سحب الخدمات القياسية' : 'تطبيق الخدمات القياسية')}
+              ? mode === 'REVOKE'
+                ? 'جارٍ السحب…'
+                : 'جارٍ التطبيق…'
+              : mode === 'REVOKE'
+                ? 'سحب الخدمات القياسية'
+                : 'تطبيق الخدمات القياسية'}
           </Button>
         </Stack>
 
@@ -470,8 +508,8 @@ export default function ProviderStandardServicesPage() {
         )}
         {applyMutation.isError && (
           <Alert severity="error" sx={{ mt: 2 }}>
-            {applyMutation.error?.response?.data?.message
-              || (mode === 'REVOKE' ? 'تعذر السحب. حاول مرة أخرى.' : 'تعذر التطبيق. حاول مرة أخرى.')}
+            {applyMutation.error?.response?.data?.message ||
+              (mode === 'REVOKE' ? 'تعذر السحب. حاول مرة أخرى.' : 'تعذر التطبيق. حاول مرة أخرى.')}
           </Alert>
         )}
 
@@ -496,7 +534,9 @@ export default function ProviderStandardServicesPage() {
               fields={(mode === 'REVOKE' ? REVOKE_SUMMARY_FIELDS : APPLY_SUMMARY_FIELDS)(applyResult)}
             />
             {mode === 'REVOKE' && <BlockedAssignmentsList blockedAssignments={applyResult.blockedAssignments} />}
-            <Button sx={{ mt: 2 }} onClick={() => navigate('/providers')}>العودة إلى قائمة المرافق</Button>
+            <Button sx={{ mt: 2 }} onClick={() => navigate('/providers')}>
+              العودة إلى قائمة المرافق
+            </Button>
           </>
         )}
       </MainCard>
@@ -505,9 +545,9 @@ export default function ProviderStandardServicesPage() {
         <DialogTitle>تأكيد السحب الجماعي</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            سيتم سحب {previewResult?.assignmentsToRevoke ?? 0} إسناد خدمة قياسية من المرافق المطابقة للنطاق المحدد.
-            الخدمات التي لها أثر مالي (مطالبات مسجّلة) لن تُسحَب — ستبقى كما هي وسيظهر السبب صراحة.
-            هذا الإجراء يمكن التراجع عنه لاحقاً بإعادة التطبيق من نفس الصفحة.
+            سيتم سحب {previewResult?.assignmentsToRevoke ?? 0} إسناد خدمة قياسية من المرافق المطابقة للنطاق المحدد. الخدمات التي لها أثر
+            مالي (مطالبات مسجّلة) لن تُسحَب — ستبقى كما هي وسيظهر السبب صراحة. هذا الإجراء يمكن التراجع عنه لاحقاً بإعادة التطبيق من نفس
+            الصفحة.
           </DialogContentText>
         </DialogContent>
         <DialogActions>
@@ -523,13 +563,10 @@ export default function ProviderStandardServicesPage() {
         onClose={() => setFormDialogOpen(false)}
         onSubmit={handleFormSubmit}
         submitting={createMutation.isPending || updateMutation.isPending}
-        error={
-          createMutation.error?.response?.data?.message
-          || updateMutation.error?.response?.data?.message
-          || null
-        }
+        error={createMutation.error?.response?.data?.message || updateMutation.error?.response?.data?.message || null}
         service={editingService}
         categories={medicalCategories}
+        claimContexts={claimContexts}
       />
     </Box>
   );

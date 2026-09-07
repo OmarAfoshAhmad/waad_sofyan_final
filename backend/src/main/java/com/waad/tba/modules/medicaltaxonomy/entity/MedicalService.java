@@ -156,6 +156,16 @@ public class MedicalService {
     private PricingMode pricingMode = PricingMode.CONTRACT_PRICE;
 
     /**
+     * Administrative default context for standard MANUAL_AMOUNT services.
+     *
+     * This is not a coverage decision and must not override the claim's own
+     * claimContextCode. It only helps clerks see where a standard invoice
+     * service is normally intended to be used (OUTPATIENT vs INPATIENT, etc.).
+     */
+    @Column(name = "default_claim_context_code", length = 60)
+    private String defaultClaimContextCode;
+
+    /**
      * Master catalog flag.
      * {@code true} = canonical reference entry; {@code false} = alias/variant.
      */

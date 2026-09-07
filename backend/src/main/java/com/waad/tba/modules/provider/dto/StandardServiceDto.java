@@ -20,6 +20,7 @@ public class StandardServiceDto {
     private Long categoryId;
     private String categoryCode;
     private String categoryName;
+    private String defaultClaimContextCode;
     private boolean active;
     @Builder.Default
     private List<com.waad.tba.modules.provider.entity.Provider.ProviderType> defaultProviderTypes = List.of();

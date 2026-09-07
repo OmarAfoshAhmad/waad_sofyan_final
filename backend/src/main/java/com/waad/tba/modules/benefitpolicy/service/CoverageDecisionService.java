@@ -7,7 +7,6 @@ import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRuleRepository;
 import com.waad.tba.modules.claimcontext.repository.ClaimContextDefinitionRepository;
 import com.waad.tba.modules.medicaltaxonomy.entity.MedicalCategory;
-import com.waad.tba.modules.medicaltaxonomy.enums.CategoryContext;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalCategoryRepository;
 import com.waad.tba.modules.providercontract.enums.EncounterType;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +22,8 @@ import java.math.BigDecimal;
 @Service
 @RequiredArgsConstructor
 public class CoverageDecisionService {
+    private static final String GENERAL_INPATIENT_CATEGORY_CODE = "CAT-COV-INPATIENT";
+
     private final BenefitPolicyRepository policyRepository;
     private final BenefitPolicyRuleRepository ruleRepository;
     private final MedicalCategoryRepository categoryRepository;
@@ -45,13 +46,17 @@ public class CoverageDecisionService {
         }
 
         EncounterType context = request.encounterType() != null ? request.encounterType() : EncounterType.OUTPATIENT;
-        if (category.getContexts() != null && !category.getContexts().isEmpty()) {
-            CategoryContext categoryContext = CategoryContext.valueOf(context.name());
-            if (!category.getContexts().contains(CategoryContext.ANY)
-                    && !category.getContexts().contains(categoryContext)) {
-                return rejected(categoryId, CoverageDecisionSource.CONTEXT_MISMATCH, "CONTEXT_MISMATCH");
-            }
-        }
+        /*
+         * Financial boundary:
+         * - MedicalCategory is the service classification only.
+         * - claimContextCode is the whole-claim financial context.
+         *
+         * Older data still carries medical_category_contexts, but that table must not
+         * veto coverage decisions. A diagnostic category such as labs/imaging can be
+         * valid in outpatient, inpatient, maternity and pregnancy-complication claims
+         * depending on the policy rule. The exact rule lookup below is therefore the
+         * single financial authority for category+claim-context eligibility.
+         */
 
         BenefitPolicy policy = request.policyId() == null
                 ? null : policyRepository.findById(request.policyId()).orElse(null);
@@ -77,12 +82,26 @@ public class CoverageDecisionService {
         BenefitPolicyRule rule = ruleRepository.findBestRuleForClaimContext(
                 request.policyId(), category.getId(), category.getParentId(), exactContext)
                 .orElse(null);
+        boolean generalInpatientFallback = false;
+        if (rule == null && "INPATIENT".equals(exactContext)) {
+            MedicalCategory inpatientGeneral = categoryRepository.findActiveByCode(GENERAL_INPATIENT_CATEGORY_CODE)
+                    .filter(candidate -> !candidate.isDeleted())
+                    .orElse(null);
+            if (inpatientGeneral != null && !inpatientGeneral.getId().equals(category.getId())) {
+                rule = ruleRepository.findBestRuleForClaimContext(
+                                request.policyId(), inpatientGeneral.getId(), inpatientGeneral.getParentId(), exactContext)
+                        .orElse(null);
+                generalInpatientFallback = rule != null;
+            }
+        }
         if (rule == null) {
             return rejected(categoryId, CoverageDecisionSource.NO_BENEFIT_RULE, "NO_BENEFIT_RULE");
         }
         Long matchingCategoryId = rule.getMedicalCategory() != null
                 ? rule.getMedicalCategory().getId() : categoryId;
-        CoverageDecisionSource source = matchingCategoryId.equals(category.getId())
+        CoverageDecisionSource source = generalInpatientFallback
+                ? CoverageDecisionSource.GENERAL_INPATIENT_RULE
+                : matchingCategoryId.equals(category.getId())
                 ? CoverageDecisionSource.EXACT_CATEGORY_RULE
                 : CoverageDecisionSource.PARENT_CATEGORY_RULE;
         var limits = bucketLimitService.findApplicable(rule.getId(), request.memberId(), request.serviceDate(),

@@ -206,12 +206,15 @@ public class ClaimPendingServiceService {
     private void assertPositiveCoverageRule(Claim claim, Long categoryId) {
         var member = claim.getMember();
         var policy = memberContextResolver.resolveForOrFail(member, claim.getServiceDate()).policy();
-        var context = claim.getEncounterType() != null ? claim.getEncounterType()
-                : com.waad.tba.modules.providercontract.enums.EncounterType.OUTPATIENT;
-        var rule = ruleRepository.findBestRuleForContext(policy.getId(), categoryId, null, context,
-                        com.waad.tba.modules.providercontract.enums.EncounterType.ANY)
+        String claimContextCode = claim.getClaimContextCode() != null && !claim.getClaimContextCode().isBlank()
+                ? claim.getClaimContextCode().trim().toUpperCase(Locale.ROOT)
+                : (claim.getEncounterType() != null
+                        ? claim.getEncounterType().name()
+                        : com.waad.tba.modules.providercontract.enums.EncounterType.OUTPATIENT.name());
+        var rule = ruleRepository.findBestRuleForClaimContext(policy.getId(), categoryId, null, claimContextCode)
                 .orElseThrow(() -> new BusinessRuleException(
-                        "لا يمكن اعتماد الخدمة: التصنيف لا يملك قاعدة تغطية صريحة في الوثيقة. أضف قاعدة موجبة ثم أعد القرار."));
+                        "لا يمكن اعتماد الخدمة: التصنيف لا يملك قاعدة تغطية صريحة في سياق المطالبة "
+                                + claimContextCode + ". أضف قاعدة موجبة ثم أعد القرار."));
         if (rule.getEffectiveCoveragePercent() <= 0) {
             throw new BusinessRuleException("لا يمكن اعتماد خدمة بنسبة تغطية صفرية أو سالبة");
         }

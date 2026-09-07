@@ -1,5 +1,4 @@
-import React from 'react';
-import { Box, Button, Typography, alpha, Tooltip } from '@mui/material';
+import { Box, Button, Typography, alpha, Tooltip, TextField } from '@mui/material';
 import RejectIcon from '@mui/icons-material/Block';
 import WarnIcon from '@mui/icons-material/WarningAmber';
 
@@ -16,6 +15,9 @@ export const ClaimTotalsFooter = ({
   setRejectionInput,
   openRejectDialog,
   totals,
+  beneficiaryPaidAmount = '',
+  beneficiarySettlement,
+  onBeneficiaryPaidAmountChange,
   theme,
   lines,
   t,
@@ -28,8 +30,24 @@ export const ClaimTotalsFooter = ({
   const showRejected = isClaimRejected || allLinesRejected;
   const requiresClaimRejection = !showRejected && hasUncoveredLines;
   const netApproved = totals.total - totals.refused;
+  const settlement = beneficiarySettlement || {
+    paid: 0,
+    appliedToBaseShare: 0,
+    appliedToRefused: 0,
+    remainingBeneficiaryShare: totals.employee || 0,
+    providerRefusedBalance: totals.refused || 0,
+    excessPayment: 0
+  };
+  const showSettlementDetails = settlement.paid > 0;
+  const beneficiaryDisplayLabel = showSettlementDetails ? 'متبقي على المستفيد' : 'التزام المستفيد';
+  const beneficiaryDisplayAmount = showSettlementDetails ? settlement.remainingBeneficiaryShare : totals.employee;
+  const settlementTooltip = showSettlementDetails
+    ? `يغطي من التزام المستفيد: ${settlement.appliedToBaseShare.toFixed(2)} د.ل، من المرفوض: ${settlement.appliedToRefused.toFixed(
+        2
+      )} د.ل، المتبقي على مقدم الخدمة: ${settlement.providerRefusedBalance.toFixed(2)} د.ل`
+    : 'مبلغ دفعه المستفيد خارج التأمين. لا يغير التغطية أو السقوف؛ يوزّع فقط على الحصة ثم المرفوض.';
 
-  const saveDisabled = saving || !isDirty || coveragePending || financialDataUnavailable;
+  const saveDisabled = saving || !isDirty || coveragePending || financialDataUnavailable || Boolean(saveDisabledReason);
   const saveDisabledTitle =
     saveDisabledReason ||
     (saving
@@ -70,7 +88,13 @@ export const ClaimTotalsFooter = ({
             disabled={saveDisabled}
             sx={{ px: '2.0rem', fontWeight: 600 }}
           >
-            {saving ? t('claimEntry.saving') : showRejected ? 'حفظ (مرفوضة)' : requiresClaimRejection ? 'رفض وحفظ المطالبة' : t('claimEntry.saveAndAdd')}
+            {saving
+              ? t('claimEntry.saving')
+              : showRejected
+                ? 'حفظ (مرفوضة)'
+                : requiresClaimRejection
+                  ? 'رفض وحفظ المطالبة'
+                  : t('claimEntry.saveAndAdd')}
           </Button>
         </span>
       </Tooltip>
@@ -122,6 +146,37 @@ export const ClaimTotalsFooter = ({
         </Tooltip>
       )}
 
+      <Tooltip title={settlementTooltip} arrow>
+        <TextField
+          size="small"
+          label="مدفوع من المستفيد"
+          value={beneficiaryPaidAmount}
+          onChange={(event) => {
+            const value = event.target.value.replace(/[^\d.]/g, '');
+            const parts = value.split('.');
+            onBeneficiaryPaidAmountChange?.(parts.length > 2 ? `${parts[0]}.${parts.slice(1).join('')}` : value);
+          }}
+          inputProps={{ inputMode: 'decimal', min: 0, style: { textAlign: 'center', fontWeight: 800 } }}
+          sx={{
+            width: 138,
+            flexShrink: 0,
+            '& .MuiInputBase-root': { height: 36 },
+            '& .MuiInputLabel-root': { fontSize: '0.72rem' }
+          }}
+          error={settlement.excessPayment > 0}
+          helperText={
+            settlement.excessPayment > 0
+              ? `زائد ${settlement.excessPayment.toFixed(2)}`
+              : showSettlementDetails
+                ? settlement.appliedToRefused > 0
+                  ? `من المرفوض ${settlement.appliedToRefused.toFixed(2)}`
+                  : `من الحصة ${settlement.appliedToBaseShare.toFixed(2)}`
+                : ' '
+          }
+          FormHelperTextProps={{ sx: { m: 0, mt: 0.1, textAlign: 'center', fontSize: '0.65rem', lineHeight: 1 } }}
+        />
+      </Tooltip>
+
       <Box sx={{ mr: 'auto', display: 'flex', gap: '2.0rem', alignItems: 'flex-start' }}>
         <Box sx={{ textAlign: 'center' }}>
           <Typography variant="caption" display="block" color="text.secondary" sx={{ fontSize: '0.8rem', fontWeight: 700 }}>
@@ -168,12 +223,37 @@ export const ClaimTotalsFooter = ({
           </Box>
         )}
         {visibleColumns.patientShare && (
+          <Tooltip
+            title={
+              showSettlementDetails
+                ? `التزام المستفيد قبل الدفع: ${totals.employee.toFixed(2)} د.ل، المدفوع منه: ${settlement.appliedToBaseShare.toFixed(2)} د.ل`
+                : ''
+            }
+            arrow
+            disableHoverListener={!showSettlementDetails}
+          >
+            <Box sx={{ textAlign: 'center' }}>
+              <Typography variant="caption" display="block" color="warning.dark" sx={{ fontSize: '0.8rem', fontWeight: 700 }}>
+                {beneficiaryDisplayLabel}
+              </Typography>
+              <Typography variant="subtitle2" fontWeight={800} color="warning.dark" sx={{ fontSize: '1.15rem' }}>
+                {beneficiaryDisplayAmount.toFixed(2)}
+              </Typography>
+            </Box>
+          </Tooltip>
+        )}
+        {showSettlementDetails && (
           <Box sx={{ textAlign: 'center' }}>
-            <Typography variant="caption" display="block" color="warning.dark" sx={{ fontSize: '0.8rem', fontWeight: 700 }}>
-              التزام المستفيد
+            <Typography variant="caption" display="block" color="text.secondary" sx={{ fontSize: '0.75rem', fontWeight: 700 }}>
+              على مقدم الخدمة
             </Typography>
-            <Typography variant="subtitle2" fontWeight={800} color="warning.dark" sx={{ fontSize: '1.15rem' }}>
-              {totals.employee.toFixed(2)}
+            <Typography
+              variant="subtitle2"
+              fontWeight={800}
+              color={settlement.providerRefusedBalance > 0 ? 'error.dark' : 'success.main'}
+              sx={{ fontSize: '1.0rem' }}
+            >
+              {settlement.providerRefusedBalance.toFixed(2)}
             </Typography>
           </Box>
         )}

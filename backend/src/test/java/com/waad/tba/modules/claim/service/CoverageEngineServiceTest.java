@@ -13,6 +13,8 @@ import com.waad.tba.modules.benefitpolicy.service.CoverageDecisionService;
 import com.waad.tba.modules.claim.dto.engine.BulkCoverageEngineRequest;
 import com.waad.tba.modules.claim.dto.engine.ClaimLineInput;
 import com.waad.tba.modules.claim.dto.engine.CoverageResult;
+import com.waad.tba.modules.medicaltaxonomy.entity.MedicalCategory;
+import com.waad.tba.modules.providercontract.entity.ProviderContractPricingItem;
 import com.waad.tba.modules.providercontract.enums.EncounterType;
 import com.waad.tba.modules.providercontract.repository.ProviderContractPricingItemRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -26,6 +28,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -103,6 +106,37 @@ class CoverageEngineServiceTest {
         assertMoney("250.00", result.getPatientShare());
         assertEquals("لا توجد قاعدة تغطية فعالة للتصنيف في سياق المطالبة OUTPATIENT",
                 result.getRefusalReason());
+    }
+
+    @Test
+    @DisplayName("معاينة المطالبة تعتمد تصنيف عقد المزود لا تصنيفاً قديماً مرسلاً من الواجهة")
+    void pricingItemCategoryIsCanonicalForLiveCoveragePreview() {
+        MedicalCategory canonicalCategory = MedicalCategory.builder()
+                .id(321L)
+                .code("CAT-COV-DIAG-FEES")
+                .name("أشعة وتحاليل ورسوم أطباء")
+                .active(true)
+                .build();
+        ProviderContractPricingItem pricingItem = ProviderContractPricingItem.builder()
+                .id(77L)
+                .active(true)
+                .medicalCategory(canonicalCategory)
+                .contractPrice(new BigDecimal("10.00"))
+                .build();
+        when(pricingItemRepository.findById(77L)).thenReturn(Optional.of(pricingItem));
+        coveredByRule(13L, 75, false);
+
+        ClaimLineInput input = line("LAB-INVOICE", "10.00");
+        input.setPricingItemId(77L);
+        input.setServiceCategoryId(999L);
+        input.setCategoryId(999L);
+
+        calculate(input, EncounterType.OUTPATIENT);
+
+        ArgumentCaptor<CoverageDecisionRequest> decisionRequest = ArgumentCaptor.forClass(CoverageDecisionRequest.class);
+        verify(decisionService).resolve(decisionRequest.capture());
+        assertEquals(321L, decisionRequest.getValue().serviceCategoryId());
+        assertNull(decisionRequest.getValue().overrideCategoryId());
     }
 
     @Test
