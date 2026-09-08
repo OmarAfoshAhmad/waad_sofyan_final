@@ -72,7 +72,11 @@ public final class ClaimFinancialTotals {
         BigDecimal maxPayableByBeneficiary = patient.add(refused);
         if (paid.compareTo(maxPayableByBeneficiary) > 0) {
             throw new IllegalArgumentException(
-                    "مبلغ المستفيد المدفوع لا يجوز أن يتجاوز التزام المستفيد الأصلي والمبلغ المرفوض");
+                    "مبلغ المستفيد المدفوع لا يجوز أن يتجاوز التزام المستفيد الأصلي والمبلغ المرفوض"
+                            + " (مدفوع=" + paid
+                            + "، التزام المستفيد=" + patient
+                            + "، المرفوض=" + refused
+                            + "، الحد الأعلى=" + maxPayableByBeneficiary + ")");
         }
         BigDecimal towardCopay = paid.min(patient);
         BigDecimal excessAfterCopay = paid.subtract(towardCopay).max(BigDecimal.ZERO);

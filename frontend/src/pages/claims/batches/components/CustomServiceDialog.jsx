@@ -18,6 +18,7 @@ const CLAIM_CONTEXT_LABELS = {
   OUTPATIENT: 'عيادات خارجية',
   INPATIENT: 'إيواء',
   MATERNITY: 'ولادة',
+  PREGNANCY_COMPLICATIONS: 'مضاعفات الحمل',
   EMERGENCY: 'طوارئ',
   DENTAL: 'أسنان',
   OPTICAL: 'بصريات'
@@ -38,11 +39,9 @@ const normalizeArabicSearch = (value = '') =>
     .trim();
 
 /**
- * Lets staff add a brand-new shared medical service to the catalog on the fly,
- * directly from claim entry. It does not create a provider-contract price item;
- * it stores no fixed catalog price. If a unit price is entered here, it only
- * pre-fills the active claim line; the clerk can change it every claim, and
- * quantity remains editable.
+ * Lets staff add a brand-new provider-contract service directly from claim
+ * entry. The service becomes available in this provider's contract, but its
+ * unit price remains open per claim and quantity stays editable.
  */
 export function CustomServiceDialog({
   open,
@@ -124,14 +123,14 @@ export function CustomServiceDialog({
             placeholder="سيتم إنشاؤه تلقائياً إذا ترك فارغاً"
             value={customServiceData.serviceCode}
             onChange={(e) => onFieldChange('serviceCode', e.target.value)}
-            helperText="رمز داخلي فريد في الفهرس الطبي العام؛ اتركه فارغاً ليولّده النظام تلقائياً."
+            helperText="رمز داخلي فريد في عقد مقدم الخدمة؛ اتركه فارغاً ليولّده النظام تلقائياً."
           />
 
           <TextField
             fullWidth
             type="number"
             label="سعر الوحدة لهذه المطالبة (اختياري)"
-            placeholder="اتركه فارغاً وأدخله في السطر"
+            placeholder="0.00"
             value={customServiceData.contractPrice}
             onChange={(e) => onFieldChange('contractPrice', e.target.value)}
             InputProps={{
@@ -141,7 +140,7 @@ export function CustomServiceDialog({
                 </Typography>
               )
             }}
-            helperText={`لن يُحفظ كسعر ثابت؛ إن أدخلته هنا سيُعبّئ السطر الحالي فقط. السياق الافتراضي: ${claimContextLabel(claimContextCode)}`}
+            helperText={`لا يُحفظ كسعر ثابت في العقد؛ يمكن تغييره في كل مطالبة. السياق الافتراضي: ${claimContextLabel(claimContextCode)}`}
           />
         </Stack>
       </DialogContent>

@@ -18,7 +18,7 @@ class ClaimFinancialAdjudicationServiceTest {
     @DisplayName("Benefit limit excess is provider-side refused amount, not beneficiary co-pay")
     void should_map_limit_excess_to_refused_amount_not_patient_share() throws Exception {
         ClaimFinancialAdjudicationService service =
-                new ClaimFinancialAdjudicationService(null, null, null, null, null, null);
+                new ClaimFinancialAdjudicationService(null, null, null, null, null, null, null);
         ClaimLine line = ClaimLine.builder().build();
         WaadFinancialEngine.Result financial = new WaadFinancialEngine.Result(
                 bd("3200.00"),

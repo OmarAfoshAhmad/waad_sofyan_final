@@ -24,9 +24,7 @@ import java.math.BigDecimal;
 public class CoverageDecisionService {
     private static final String GENERAL_INPATIENT_CATEGORY_CODE = "CAT-COV-INPATIENT";
     private static final java.util.Set<String> INPATIENT_BASED_CLAIM_CONTEXTS = java.util.Set.of(
-            "INPATIENT",
-            "MATERNITY",
-            "PREGNANCY_COMPLICATIONS");
+            "INPATIENT", "MATERNITY", "PREGNANCY_COMPLICATIONS");
 
     private final BenefitPolicyRepository policyRepository;
     private final BenefitPolicyRuleRepository ruleRepository;
@@ -77,10 +75,16 @@ public class CoverageDecisionService {
                 ? request.claimContextCode().trim().toUpperCase(java.util.Locale.ROOT) : context.name();
         if (explicitClaimContext) {
             var definition = claimContextRepository.findById(exactContext).orElse(null);
-            if (definition == null || !definition.isActive()
-                    || (definition.getBaseEncounterType() != EncounterType.ANY
-                    && definition.getBaseEncounterType() != context)) {
+            if (definition == null || !definition.isActive()) {
                 return rejected(categoryId, CoverageDecisionSource.CONTEXT_MISMATCH, "CLAIM_CONTEXT_MISMATCH");
+            }
+            // Claim context is the financial boundary of the whole claim. If the UI or
+            // an older draft sends a stale encounterType with a valid explicit context
+            // (e.g. OUTPATIENT + PREGNANCY_COMPLICATIONS), the context must govern.
+            // Otherwise a harmless UI round-trip turns an inpatient-based maternity
+            // rule into "not covered" until the user toggles the context away and back.
+            if (definition.getBaseEncounterType() != EncounterType.ANY) {
+                context = definition.getBaseEncounterType();
             }
         }
         BenefitPolicyRule rule = ruleRepository.findBestRuleForClaimContext(

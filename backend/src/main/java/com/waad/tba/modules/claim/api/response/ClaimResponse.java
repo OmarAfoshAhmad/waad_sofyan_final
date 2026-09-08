@@ -423,6 +423,12 @@ public class ClaimResponse {
         private BigDecimal approvedUnitPrice;
         private Integer requestedQuantity;
         private Integer approvedQuantity;
+        private BigDecimal requestedTotal;
+        private BigDecimal approvedAmount;
+        private BigDecimal companyShare;
+        private BigDecimal patientShare;
+        private String amountSource;
+        private Long appliedRuleId;
         private String rejectionReasonCode;
         private String reviewerNotes;
 

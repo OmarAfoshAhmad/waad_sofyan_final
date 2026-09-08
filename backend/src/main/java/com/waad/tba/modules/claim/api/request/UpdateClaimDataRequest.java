@@ -11,6 +11,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.List;
+import java.time.LocalDate;
 
 /**
  * API v1 Request: Update Claim Data
@@ -38,6 +39,8 @@ public class UpdateClaimDataRequest {
     @Size(max = 1000, message = "Notes must not exceed 1000 characters")
     private String notes;
 
+    private LocalDate serviceDate;
+
     private String complaint;
     private String rejectionReason;
 
@@ -53,6 +56,7 @@ public class UpdateClaimDataRequest {
     private List<ClaimLineRequest> lines;
 
     private com.waad.tba.modules.providercontract.enums.EncounterType encounterType;
+    private String claimContextCode;
     private Boolean fullCoverage;
     @jakarta.validation.constraints.DecimalMin(value = "0.00", message = "Beneficiary paid amount must be >= 0")
     private java.math.BigDecimal beneficiaryPaidAmount;
@@ -97,6 +101,7 @@ public class UpdateClaimDataRequest {
         private java.math.BigDecimal grossAmount;
         private java.math.BigDecimal coveredAmount;
         private java.math.BigDecimal refusedAmount;
+        private Long appliedRuleId;
         private String serviceCode;
         private String serviceName;
         private Boolean rejected;

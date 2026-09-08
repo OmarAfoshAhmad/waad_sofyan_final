@@ -10,9 +10,9 @@ package com.waad.tba.modules.medicaltaxonomy.enums;
  * line (e.g. a pharmacy or optics invoice total) -- there is no fixed price
  * list for this service, so no ProviderContractPricingItem is looked up.
  *
- * CLAIM_UNIT_PRICE: a shared catalog service created from claim entry. The
- * catalog stores name/category/context only; the clerk enters the unit price
- * on each claim, and quantity remains meaningful.
+ * CLAIM_UNIT_PRICE: the service belongs to the provider contract, but its unit
+ * price is entered per claim. The contract row only proves the provider may
+ * use the service; it does not impose a fixed unit price cap.
  */
 public enum PricingMode {
     CONTRACT_PRICE,

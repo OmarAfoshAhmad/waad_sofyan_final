@@ -37,6 +37,28 @@ const selectSx = {
   '& .MuiSelect-select': { display: 'flex', alignItems: 'center', py: 0, minHeight: 0 }
 };
 
+const memberIdOf = (memberOption) =>
+  memberOption?.id ?? memberOption?.memberId ?? memberOption?.M_ID ?? memberOption?.m_id ?? null;
+
+const memberNameOf = (memberOption) =>
+  memberOption?.fullName || memberOption?.name || memberOption?.memberName || memberOption?.M_NAME || memberOption?.m_name || '';
+
+const memberCardOf = (memberOption) =>
+  memberOption?.cardNumber ||
+  memberOption?.nationalNumber ||
+  memberOption?.barcode ||
+  memberOption?.M_CARD_NO ||
+  memberOption?.m_card_no ||
+  '';
+
+const memberOptionLabel = (memberOption) => {
+  if (!memberOption) return '';
+  if (typeof memberOption === 'string') return memberOption;
+  const name = memberNameOf(memberOption);
+  const card = memberCardOf(memberOption);
+  return [name, card].filter(Boolean).join(' · ');
+};
+
 export const ClaimHeaderFields = ({
   member,
   setMember,
@@ -152,8 +174,8 @@ export const ClaimHeaderFields = ({
           }}
           onInputChange={(_, v) => setMemberInput(v)}
           filterOptions={(x) => x}
-          getOptionLabel={(o) => `${o.fullName || ''} · ${o.cardNumber || o.nationalNumber || ''}`}
-          isOptionEqualToValue={(o, v) => o.id === v?.id}
+          getOptionLabel={memberOptionLabel}
+          isOptionEqualToValue={(o, v) => String(memberIdOf(o) ?? '') === String(memberIdOf(v) ?? '')}
           renderInput={(params) => (
             <TextField
               {...params}

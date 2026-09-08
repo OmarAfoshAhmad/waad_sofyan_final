@@ -123,11 +123,7 @@ public class ClaimEntryContextService {
     private List<ProviderContractPricingItemResponseDto> findGeneralServiceOptions(String query) {
         String normalizedQuery = searchNormalizer.normalize(query);
         List<MedicalService> standardServices = new ArrayList<>();
-        List<MedicalService> manualServices =
-                medicalServiceRepository.findByPricingModeAndActiveTrue(PricingMode.MANUAL_AMOUNT);
-        if (manualServices != null) {
-            standardServices.addAll(manualServices);
-        }
+        standardServices.addAll(medicalServiceRepository.findByPricingModeAndActiveTrue(PricingMode.MANUAL_AMOUNT));
         standardServices = standardServices.stream()
                 .filter(service -> normalizedQuery.isBlank()
                         || searchNormalizer.normalize(service.getName()).contains(normalizedQuery)

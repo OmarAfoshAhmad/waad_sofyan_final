@@ -49,6 +49,7 @@ export function normalizeCoverageResult(result) {
     priceRefused: toMoney(result.priceRefused),
     limitRefused: toMoney(result.limitRefused),
     systemRefusedAmount: toMoney(result.systemRefusedAmount),
+    appliedRuleId: result.appliedRuleId ?? null,
     resolvedCategoryId: result.resolvedCategoryId ?? null,
     rejectionReason: result.refusalReason || undefined
   };

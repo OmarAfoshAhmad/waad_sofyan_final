@@ -250,6 +250,8 @@ public class CreateClaimRequest {
         @Deprecated
         private java.math.BigDecimal refusedAmount;
 
+        private Long appliedRuleId;
+
         @Size(max = 50, message = "Service code must not exceed 50 characters")
         private String serviceCode;
 

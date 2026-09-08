@@ -154,6 +154,7 @@ public class ClaimLineDto {
     private BigDecimal requestedTotal;
     private BigDecimal approvedAmount;
 
+    private Long appliedRuleId;
     private Long appliedCategoryId;
     private String appliedCategoryName;
 }

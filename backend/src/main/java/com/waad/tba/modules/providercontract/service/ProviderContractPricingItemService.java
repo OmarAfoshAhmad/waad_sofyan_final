@@ -239,9 +239,7 @@ public class ProviderContractPricingItemService {
                             + "' in this contract. Update instead.");
         }
 
-        // Validate prices. CLAIM_UNIT_PRICE is still a provider-contract service,
-        // but the accepted unit price is entered on each claim line; no fixed
-        // contract cap is stored or used to create price-excess refusal.
+        // Validate prices
         PricingMode pricingMode = dto.getPricingMode() != null ? dto.getPricingMode() : PricingMode.CONTRACT_PRICE;
         BigDecimal basePrice = dto.getBasePrice() != null ? dto.getBasePrice() : BigDecimal.ZERO;
         BigDecimal contractPrice = dto.getContractPrice() != null ? dto.getContractPrice() : BigDecimal.ZERO;

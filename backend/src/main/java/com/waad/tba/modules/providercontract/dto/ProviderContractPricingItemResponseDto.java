@@ -82,10 +82,9 @@ public class ProviderContractPricingItemResponseDto {
     private Long medicalServiceId;
 
     /**
-     * CONTRACT_PRICE uses contractPrice/maxContractPrice as an enforceable cap.
-     * CLAIM_UNIT_PRICE belongs to the provider contract but the clerk enters
-     * the unit price per claim; zero contractPrice means "no price-excess cap".
-     * MANUAL_AMOUNT is only used by synthesized standard invoice services.
+     * CONTRACT_PRICE (default, fixed by the pricing item), CLAIM_UNIT_PRICE
+     * (allowed by provider contract but priced per claim), or MANUAL_AMOUNT
+     * for synthesized professional invoice services.
      */
     @Builder.Default
     private String pricingMode = "CONTRACT_PRICE";

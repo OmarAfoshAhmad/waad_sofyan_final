@@ -626,6 +626,7 @@ public class ClaimService {
 
         // PART 2 — CLAIM SAFETY: Protect Claim Modification After Submission
         if (claim.getStatus() != ClaimStatus.DRAFT &&
+                claim.getStatus() != ClaimStatus.SUBMITTED &&
                 claim.getStatus() != ClaimStatus.NEEDS_CORRECTION) {
             throw new IllegalStateException(
                     "Claim cannot be modified in current status: " + claim.getStatus());
@@ -683,6 +684,13 @@ public class ClaimService {
                 claim.markCoverageDirty();
             }
         }
+        if (dto.getClaimContextCode() != null && !dto.getClaimContextCode().isBlank()) {
+            String previousClaimContextCode = claim.getClaimContextCode();
+            claim.setClaimContextCode(dto.getClaimContextCode());
+            if (!Objects.equals(previousClaimContextCode, claim.getClaimContextCode())) {
+                claim.markCoverageDirty();
+            }
+        }
         if (dto.getFullCoverage() != null) {
             Boolean previousFullCoverage = claim.getFullCoverage();
             claim.setFullCoverage(dto.getFullCoverage());
@@ -690,9 +698,19 @@ public class ClaimService {
                 claim.markCoverageDirty();
             }
         }
-        if (dto.getBeneficiaryPaidAmount() != null) {
-            claim.setBeneficiaryPaidAmount(dto.getBeneficiaryPaidAmount());
-            ClaimFinancialTotals.applyBeneficiaryDirectPaymentSettlement(claim);
+        BigDecimal requestedBeneficiaryPaidAmount = dto.getBeneficiaryPaidAmount();
+        if (requestedBeneficiaryPaidAmount != null) {
+            /*
+             * Claim-line replacement re-aggregates the claim internally. A draft that
+             * already carries a beneficiary direct payment must not validate that old
+             * payment against half-built/repriced lines while the update is still in
+             * progress. Defer the settlement distribution until after the canonical
+             * line recalculation has completed.
+             */
+            claim.setBeneficiaryPaidAmount(BigDecimal.ZERO);
+            claim.setBeneficiaryPaidTowardCopay(BigDecimal.ZERO);
+            claim.setBeneficiaryPaidTowardRefusal(BigDecimal.ZERO);
+            claim.setProviderRefusalBalance(BigDecimal.ZERO);
         }
 
         // Trusted internal-entry correction path. Portal claims must be corrected
@@ -715,6 +733,10 @@ public class ClaimService {
         if (dto.getLines() != null) {
             claimMapper.replaceClaimLinesForDraft(claim, dto.getLines());
         }
+        if (requestedBeneficiaryPaidAmount != null) {
+            claim.setBeneficiaryPaidAmount(requestedBeneficiaryPaidAmount);
+            ClaimFinancialTotals.applyBeneficiaryDirectPaymentSettlement(claim);
+        }
 
         if (internalCorrectionReapproval) {
             // A corrected direct-entry claim is a complete new financial cycle.
@@ -729,6 +751,19 @@ public class ClaimService {
             financialSnapshotService.finalizeSnapshot(claim);
             claimStateMachine.transition(claim, ClaimStatus.APPROVED, currentUser);
             log.info("✅ Internal claim {} corrected and re-approved", id);
+        }
+
+        if (dto.getStatus() == ClaimStatus.DRAFT && prevStatus == ClaimStatus.SUBMITTED) {
+            // SUBMITTED is still pre-review and has no financial ledger impact.
+            // Saving it back as a draft is a deliberate operator action that keeps
+            // the claim editable without frightening "final status" errors.
+            claim.setStatus(ClaimStatus.DRAFT);
+            claim.setExpectedCompletionDate(null);
+            claim.setSlaDaysConfigured(null);
+        } else if (dto.getStatus() != null
+                && dto.getStatus() != claim.getStatus()
+                && dto.getStatus() != ClaimStatus.APPROVED) {
+            throw new BusinessRuleException("تغيير حالة المطالبة من شاشة تعديل البيانات مسموح فقط بين مسودة ومرسلة قبل بدء المراجعة");
         }
 
         // Save and return

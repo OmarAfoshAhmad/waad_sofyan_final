@@ -99,6 +99,37 @@ class ProviderContractPricingItemServiceTest {
         }
 
         @Test
+        void create_claimUnitPriceContractService_shouldAllowZeroFixedPrice() {
+                ProviderContractPricingItemCreateDto dto = ProviderContractPricingItemCreateDto.builder()
+                                .serviceCode("SYS-CLAIM-12345678")
+                                .serviceName("خدمة مضافة من المطالبة")
+                                .pricingMode(PricingMode.CLAIM_UNIT_PRICE)
+                                .basePrice(BigDecimal.ZERO)
+                                .contractPrice(BigDecimal.ZERO)
+                                .maxContractPrice(null)
+                                .build();
+
+                when(contractRepository.findById(1L)).thenReturn(Optional.of(contract));
+                when(pricingRepository.existsByContractIdAndServiceCodeAndActiveTrue(1L, "SYS-CLAIM-12345678"))
+                                .thenReturn(false);
+                when(pricingRepository.save(any(ProviderContractPricingItem.class))).thenAnswer(i -> {
+                        ProviderContractPricingItem saved = i.getArgument(0);
+                        saved.setId(102L);
+                        return saved;
+                });
+
+                ProviderContractPricingItemResponseDto result = pricingItemService.create(1L, dto);
+
+                assertThat(result.getPricingMode()).isEqualTo("CLAIM_UNIT_PRICE");
+                assertThat(result.getContractPrice()).isEqualByComparingTo(BigDecimal.ZERO);
+                assertThat(result.getMaxContractPrice()).isNull();
+
+                ArgumentCaptor<ProviderContractPricingItem> captor = ArgumentCaptor.forClass(ProviderContractPricingItem.class);
+                verify(pricingRepository).save(captor.capture());
+                assertThat(captor.getValue().getPricingMode()).isEqualTo(PricingMode.CLAIM_UNIT_PRICE);
+        }
+
+        @Test
         void create_withoutExplicitPricePeriod_shouldUseContractPeriodNotToday() {
                 ProviderContractPricingItemCreateDto dto = ProviderContractPricingItemCreateDto.builder()
                                 .serviceCode("SRV-11")
@@ -116,31 +147,6 @@ class ProviderContractPricingItemServiceTest {
                 verify(pricingRepository).save(captor.capture());
                 assertThat(captor.getValue().getEffectiveFrom()).isEqualTo(LocalDate.of(2025, 1, 1));
                 assertThat(captor.getValue().getEffectiveTo()).isEqualTo(LocalDate.of(2027, 1, 1));
-        }
-
-        @Test
-        void create_claimUnitPriceContractService_shouldAllowZeroFixedPrice() {
-                ProviderContractPricingItemCreateDto dto = ProviderContractPricingItemCreateDto.builder()
-                                .serviceCode("SYS-CLAIM-12345678")
-                                .serviceName("خدمة مضافة من المطالبة")
-                                .pricingMode(PricingMode.CLAIM_UNIT_PRICE)
-                                .basePrice(BigDecimal.ZERO)
-                                .contractPrice(BigDecimal.ZERO)
-                                .build();
-
-                when(contractRepository.findById(1L)).thenReturn(Optional.of(contract));
-                when(pricingRepository.existsByContractIdAndServiceCodeAndActiveTrue(1L, "SYS-CLAIM-12345678")).thenReturn(false);
-                when(pricingRepository.save(any(ProviderContractPricingItem.class))).thenAnswer(i -> {
-                        ProviderContractPricingItem saved = i.getArgument(0);
-                        saved.setId(102L);
-                        return saved;
-                });
-
-                ProviderContractPricingItemResponseDto result = pricingItemService.create(1L, dto);
-
-                assertThat(result.getPricingMode()).isEqualTo("CLAIM_UNIT_PRICE");
-                assertThat(result.getContractPrice()).isEqualByComparingTo(BigDecimal.ZERO);
-                assertThat(result.getMaxContractPrice()).isNull();
         }
 
         @Test

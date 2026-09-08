@@ -55,14 +55,6 @@ public class ProviderContractPricingItemCreateDto {
     private Long medicalCategoryId;
 
     /**
-     * CONTRACT_PRICE stores an enforceable contract price cap.
-     * CLAIM_UNIT_PRICE belongs to the provider contract but the clerk enters
-     * the unit price per claim, so base/contract prices may be zero.
-     */
-    @Builder.Default
-    private PricingMode pricingMode = PricingMode.CONTRACT_PRICE;
-
-    /**
      * Standard/list price (required)
      */
     @NotNull(message = "Base price is required")
@@ -82,6 +74,14 @@ public class ProviderContractPricingItemCreateDto {
      */
     @DecimalMin(value = "0.00", message = "Max contract price must be >= 0")
     private BigDecimal maxContractPrice;
+
+    /**
+     * CONTRACT_PRICE uses contractPrice as the accepted unit cap.
+     * CLAIM_UNIT_PRICE means this item is allowed by the provider contract, but
+     * the clerk enters the unit price per claim without fixed-price rejection.
+     */
+    @Builder.Default
+    private PricingMode pricingMode = PricingMode.CONTRACT_PRICE;
 
     /**
      * Unit of service
