@@ -66,6 +66,7 @@ public class ClaimDataUpdateDto {
     private String complaint;
     private String rejectionReason;
     private EncounterType encounterType;
+    private String claimContextCode;
     private Boolean fullCoverage;
     private BigDecimal beneficiaryPaidAmount;
 

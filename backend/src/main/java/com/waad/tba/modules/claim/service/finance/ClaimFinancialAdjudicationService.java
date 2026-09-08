@@ -6,7 +6,9 @@ import com.waad.tba.modules.benefitpolicy.service.EffectiveLimitResolver;
 import com.waad.tba.modules.benefitpolicy.service.LimitBalanceReader;
 import com.waad.tba.modules.claim.entity.Claim;
 import com.waad.tba.modules.claim.entity.ClaimLine;
+import com.waad.tba.modules.claimcontext.repository.ClaimContextDefinitionRepository;
 import com.waad.tba.modules.member.service.MemberPolicyResolver;
+import com.waad.tba.modules.providercontract.enums.EncounterType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,6 +35,7 @@ public class ClaimFinancialAdjudicationService {
     private final EffectiveLimitResolver effectiveLimitResolver;
     private final LimitBalanceReader balanceReader;
     private final MultiLineMultiBucketEngine multiLineEngine;
+    private final ClaimContextDefinitionRepository claimContextDefinitionRepository;
 
     public record AdjudicationResult(MultiLineMultiBucketEngine.ClaimResult claimResult) {}
 
@@ -48,6 +51,7 @@ public class ClaimFinancialAdjudicationService {
                 () -> new IllegalArgumentException("serviceDate is required"));
         BenefitPolicy policy = resolvePolicy(claim, serviceDate);
         Long memberId = claim.getMember().getId();
+        EncounterType effectiveEncounterType = effectiveEncounterType(claim);
 
         // READ from the approval's own decision, never re-derived here.
         //
@@ -85,7 +89,7 @@ public class ClaimFinancialAdjudicationService {
                 throw new IllegalStateException("COVERAGE_ZERO_IS_NOT_A_VALID_BENEFIT: line index=" + index);
             }
             var effective = effectiveLimitResolver.resolve(policy.getId(), line.getAppliedRuleId(), memberId,
-                    serviceDate, claim.getEncounterType());
+                    serviceDate, effectiveEncounterType);
             var balances = claim.getPreAuthorization() == null
                     ? balanceReader.read(memberId, effective, claim.getId())
                     : balanceReader.readForPreauthorizedClaim(memberId, effective, claim.getId(),
@@ -97,8 +101,8 @@ public class ClaimFinancialAdjudicationService {
             BigDecimal contractualTotal = contractualUnit.multiply(BigDecimal.valueOf(quantity));
             inputs.add(new MultiLineMultiBucketEngine.LineInput(
                     lineKey(line, index), requested, contractualTotal,
-                    line.getCoveragePercentSnapshot(), zero(claim.getAppliedDiscountPercent()),
-                    Boolean.TRUE.equals(claim.getDiscountBeforeRejection()),
+                    line.getCoveragePercentSnapshot(), BigDecimal.ZERO,
+                    false,
                     zero(line.getManualRefusedAmount()), Boolean.TRUE.equals(line.getRejected()),
                     quantity, balances));
         }
@@ -168,6 +172,18 @@ public class ClaimFinancialAdjudicationService {
      */
     private BenefitPolicy resolvePolicy(Claim claim, LocalDate date) {
         return memberPolicyResolver.resolveForOrFail(claim.getMember(), date);
+    }
+
+    private EncounterType effectiveEncounterType(Claim claim) {
+        String contextCode = claim.getClaimContextCode();
+        if (contextCode != null && !contextCode.isBlank()) {
+            return claimContextDefinitionRepository.findByCodeAndActiveTrue(contextCode)
+                    .map(definition -> definition.getBaseEncounterType() == EncounterType.ANY
+                            ? claim.getEncounterType()
+                            : definition.getBaseEncounterType())
+                    .orElse(claim.getEncounterType());
+        }
+        return claim.getEncounterType();
     }
 
     private String lineKey(ClaimLine line, int index) {

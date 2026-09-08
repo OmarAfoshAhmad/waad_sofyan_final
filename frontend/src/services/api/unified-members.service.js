@@ -195,8 +195,10 @@ export const unifiedSearch = async (query, employerId = null) => {
         // The fallback is an enhancement only; if it fails, keep the search box calm
         // and return the strict search result instead of surfacing a generic error.
         const advancedResponse = await searchMembers({ ...criteria, size: 20 });
-        if (advancedResponse?.content?.length > 0) {
-          results = advancedResponse.content.map((m) => ({
+        const advancedPage = advancedResponse?.data || advancedResponse;
+        const advancedContent = advancedPage?.content || [];
+        if (advancedContent.length > 0) {
+          results = advancedContent.map((m) => ({
             id: m.id,
             fullName: m.fullName,
             cardNumber: m.cardNumber,

@@ -104,10 +104,10 @@ public class ClaimEntryContextService {
         Page<ProviderContractPricingItemResponseDto> contractItems = pricingItemService
                 .findEffectiveInContract(context.contractId(), serviceDate, query, pageable);
 
-        // General claim-entry services are shared medical catalog entries, not
-        // provider price-list rows. Invoice-style professional standards stay
-        // MANUAL_AMOUNT; services added from the claim window use CONTRACT_PRICE
-        // with an editable quantity and a direct unit price.
+        // General options here are shared professional invoice services only.
+        // Ad-hoc services added from claim entry are provider-contract pricing
+        // items with CLAIM_UNIT_PRICE, so they appear through contractItems and
+        // never become global fixed-price catalog rows.
         List<ProviderContractPricingItemResponseDto> generalOptions = pageable.getOffset() == 0
                 ? findGeneralServiceOptions(query)
                 : List.of();
@@ -124,8 +124,6 @@ public class ClaimEntryContextService {
         String normalizedQuery = searchNormalizer.normalize(query);
         List<MedicalService> standardServices = new ArrayList<>();
         standardServices.addAll(medicalServiceRepository.findByPricingModeAndActiveTrue(PricingMode.MANUAL_AMOUNT));
-        standardServices.addAll(medicalServiceRepository
-                .findByPricingModeAndCodeStartingWithAndActiveTrue(PricingMode.CONTRACT_PRICE, "SYS-CLAIM-"));
         standardServices = standardServices.stream()
                 .filter(service -> normalizedQuery.isBlank()
                         || searchNormalizer.normalize(service.getName()).contains(normalizedQuery)

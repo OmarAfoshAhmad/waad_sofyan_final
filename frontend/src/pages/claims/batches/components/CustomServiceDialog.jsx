@@ -18,6 +18,7 @@ const CLAIM_CONTEXT_LABELS = {
   OUTPATIENT: 'عيادات خارجية',
   INPATIENT: 'إيواء',
   MATERNITY: 'ولادة',
+  PREGNANCY_COMPLICATIONS: 'مضاعفات الحمل',
   EMERGENCY: 'طوارئ',
   DENTAL: 'أسنان',
   OPTICAL: 'بصريات'
@@ -38,10 +39,9 @@ const normalizeArabicSearch = (value = '') =>
     .trim();
 
 /**
- * Lets staff add a brand-new shared medical service to the catalog on the fly,
- * directly from claim entry. It does not create a provider-contract price item;
- * the entered amount is the current unit price for the active claim line, and
- * quantity remains editable.
+ * Lets staff add a brand-new provider-contract service directly from claim
+ * entry. The service becomes available in this provider's contract, but its
+ * unit price remains open per claim and quantity stays editable.
  */
 export function CustomServiceDialog({
   open,
@@ -123,14 +123,13 @@ export function CustomServiceDialog({
             placeholder="سيتم إنشاؤه تلقائياً إذا ترك فارغاً"
             value={customServiceData.serviceCode}
             onChange={(e) => onFieldChange('serviceCode', e.target.value)}
-            helperText="رمز داخلي فريد في الفهرس الطبي العام؛ اتركه فارغاً ليولّده النظام تلقائياً."
+            helperText="رمز داخلي فريد في عقد مقدم الخدمة؛ اتركه فارغاً ليولّده النظام تلقائياً."
           />
 
           <TextField
             fullWidth
-            required
             type="number"
-            label="سعر الوحدة الحالي (دينار ليبي)"
+            label="سعر الوحدة لهذه المطالبة (اختياري)"
             placeholder="0.00"
             value={customServiceData.contractPrice}
             onChange={(e) => onFieldChange('contractPrice', e.target.value)}
@@ -141,7 +140,7 @@ export function CustomServiceDialog({
                 </Typography>
               )
             }}
-            helperText={`ستُضاف كخدمة عامة بسعر وحدة قابل للكمية، وسياقها الافتراضي: ${claimContextLabel(claimContextCode)}`}
+            helperText={`لا يُحفظ كسعر ثابت في العقد؛ يمكن تغييره في كل مطالبة. السياق الافتراضي: ${claimContextLabel(claimContextCode)}`}
           />
         </Stack>
       </DialogContent>
@@ -152,9 +151,7 @@ export function CustomServiceDialog({
         <Button
           variant="contained"
           onClick={onSubmit}
-          disabled={
-            addingCustomService || !customServiceData.categoryId || !customServiceData.serviceName || !customServiceData.contractPrice
-          }
+          disabled={addingCustomService || !customServiceData.categoryId || !customServiceData.serviceName}
         >
           {addingCustomService ? <CircularProgress size={24} color="inherit" /> : 'إضافة الخدمة العامة واختيارها'}
         </Button>

@@ -22,6 +22,9 @@ describe('claim batch entry safety boundary', () => {
 
   it('does not let the browser construct an approved claim', () => {
     expect(entrySource).not.toMatch(/status:\s*effectivelyRejected\s*\?\s*['"]REJECTED['"]\s*:\s*['"]APPROVED['"]/);
+    expect(entrySource).toContain("saveMode === 'draft' ? 'DRAFT' : 'SUBMITTED'");
+    expect(footerSource).toContain('حفظ كمسودة');
+    expect(footerSource).toContain('إرسال');
   });
 
   it('never labels a claim with refused money as partially approved in batch details', () => {
@@ -171,18 +174,18 @@ describe('claim batch entry safety boundary', () => {
   });
 
   /**
-   * Adding a missing service from claim entry must create a shared catalog
-   * service, not a provider-contract pricing item. Unlike professional
-   * invoice standards, claim-entry general services are unit-priced so
-   * quantity remains editable.
+   * Adding a missing service from claim entry must add an open-price row to
+   * the active provider contract. It must not create a shared standard catalog
+   * service with a fixed price, because the same provider may charge different
+   * amounts for that service in future claims.
    */
-  it('adds a custom service to the shared standard catalog, not the contract price list', () => {
+  it('adds a custom service to the provider contract with an open claim unit price', () => {
     expect(entrySource).not.toContain('/provider/my-contract/pricing');
-    expect(entrySource).not.toContain('/provider-contracts/${entryContext.contractId}/pricing');
-    expect(entrySource).toContain("axiosClient.post('/provider-standard-services', payload)");
-    expect(entrySource).toContain("pricingMode: 'CONTRACT_PRICE'");
-    expect(entrySource).toContain('basePrice: priceNum');
-    expect(entrySource).toContain('defaultClaimContextCode: claimContextCode || encounterType ||');
+    expect(entrySource).not.toContain("axiosClient.post('/provider-standard-services', payload)");
+    expect(entrySource).toContain('/provider-contracts/${entryContext.contractId}/pricing');
+    expect(entrySource).toContain("pricingMode: 'CLAIM_UNIT_PRICE'");
+    expect(entrySource).toContain('basePrice: 0');
+    expect(entrySource).toContain('contractPrice: 0');
   });
 
   /**
@@ -224,10 +227,17 @@ describe('claim batch entry safety boundary', () => {
 
   it('calculates coverage for claim-created unit-priced services with editable quantity', () => {
     expect(entrySource).toContain('await handleServiceChange(selectedLineIndex, newServiceObject)');
-    expect(entrySource).toContain("pricingMode: 'CONTRACT_PRICE'");
-    expect(entrySource).toContain('unitPrice: isManualAmount ? (hasManualAmountOverride ? manualAmount : currentLine.unitPrice || 0) : price');
+    expect(entrySource).toContain("pricingMode: 'CLAIM_UNIT_PRICE'");
+    expect(entrySource).toContain("const isClaimUnitPrice = svc.pricingMode === 'CLAIM_UNIT_PRICE'");
+    expect(entrySource).toContain('svc.price || currentLine.unitPrice || 0');
     expect(entrySource).toContain('if (!isFreeText && policyId && member?.id)');
     expect(entrySource).toContain('refetchAllLinesCoverage(encounterType, nextLines, fullCoverage, claimContextCode)');
+  });
+
+  it('allows repeating claim-entry open-price services while keeping duplicate guard for normal services', () => {
+    expect(entrySource).toContain("const isClaimEntryOpenPriceService = svc.pricingMode === 'CLAIM_UNIT_PRICE'");
+    expect(entrySource).toContain('!isClaimEntryOpenPriceService &&');
+    expect(entrySource).toContain('هذه الخدمة مضافة بالفعل في بند آخر');
   });
 
   it('does not block an invoice/manual line as uncovered before the invoice amount is entered', () => {
@@ -252,7 +262,7 @@ describe('claim batch entry safety boundary', () => {
   it('does not expose generated catalog codes in the visible service label', () => {
     expect(entrySource).toContain('GENERATED_SERVICE_CODE_PATTERN = /^(PL-|SYS-)/i');
     expect(entrySource).toContain('buildServiceDisplayLabel({ code, name })');
-    expect(entrySource).toContain('buildServiceDisplayLabel({ code: finalServiceCode, name: payload.nameAr })');
+    expect(entrySource).toContain('buildServiceDisplayLabel({ code: finalServiceCode, name: payload.serviceName })');
     expect(entrySource).not.toContain("label: `${code ? '[' + code + '] ' : ''}${name}`");
     expect(entrySource).not.toContain("label: `[${finalServiceCode}] ${payload.nameAr}`");
   });

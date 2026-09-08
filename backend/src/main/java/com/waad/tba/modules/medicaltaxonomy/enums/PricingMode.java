@@ -9,8 +9,13 @@ package com.waad.tba.modules.medicaltaxonomy.enums;
  * MANUAL_AMOUNT: the clerk enters the invoice amount directly on the claim
  * line (e.g. a pharmacy or optics invoice total) -- there is no fixed price
  * list for this service, so no ProviderContractPricingItem is looked up.
+ *
+ * CLAIM_UNIT_PRICE: the service belongs to the provider contract, but its unit
+ * price is entered per claim. The contract row only proves the provider may
+ * use the service; it does not impose a fixed unit price cap.
  */
 public enum PricingMode {
     CONTRACT_PRICE,
-    MANUAL_AMOUNT
+    MANUAL_AMOUNT,
+    CLAIM_UNIT_PRICE
 }

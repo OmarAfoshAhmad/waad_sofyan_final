@@ -11,6 +11,7 @@ import com.waad.tba.modules.claim.dto.engine.BulkCoverageEngineRequest;
 import com.waad.tba.modules.claim.dto.engine.ClaimLineInput;
 import com.waad.tba.modules.claim.dto.engine.CoverageResult;
 import com.waad.tba.modules.claim.dto.engine.CoverageResult.UsageDetails;
+import com.waad.tba.modules.medicaltaxonomy.enums.PricingMode;
 import com.waad.tba.modules.providercontract.repository.ProviderContractPricingItemRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -275,6 +276,16 @@ public class CoverageEngineService {
                         Long categoryId = item.getMedicalCategory().getId();
                         line.setServiceCategoryId(categoryId);
                         line.setCategoryId(categoryId);
+                    }
+                    if (item.getPricingMode() == PricingMode.CLAIM_UNIT_PRICE) {
+                        // This item belongs to the provider contract so the
+                        // service is searchable and auditable, but its price is
+                        // intentionally entered per claim. A zero contract
+                        // price here is not a cap and must not turn the whole
+                        // line into "price excess refused" during live preview
+                        // or edit re-hydration.
+                        line.setContractPrice(ZERO);
+                        return;
                     }
                     if ((line.getContractPrice() == null || line.getContractPrice().compareTo(ZERO) <= 0)
                             && item.getContractPrice() != null) {

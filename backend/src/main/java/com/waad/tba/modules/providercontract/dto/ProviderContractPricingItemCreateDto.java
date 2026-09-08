@@ -11,6 +11,8 @@ import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
+import com.waad.tba.modules.medicaltaxonomy.enums.PricingMode;
+
 /**
  * DTO for creating a new Provider Contract Pricing Item.
  * 
@@ -73,6 +75,14 @@ public class ProviderContractPricingItemCreateDto {
      */
     @DecimalMin(value = "0.00", message = "Max contract price must be >= 0")
     private BigDecimal maxContractPrice;
+
+    /**
+     * CONTRACT_PRICE uses contractPrice as the accepted unit cap.
+     * CLAIM_UNIT_PRICE means this item is allowed by the provider contract, but
+     * the clerk enters the unit price per claim without fixed-price rejection.
+     */
+    @Builder.Default
+    private PricingMode pricingMode = PricingMode.CONTRACT_PRICE;
 
     /**
      * Unit of service

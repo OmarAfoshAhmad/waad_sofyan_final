@@ -185,12 +185,15 @@ public class ClaimMapper {
                                 : null;
                 var resolvedContract = effectiveContractResolver.resolve(
                                 claim.getProviderId(), claimEmployerId, claim.getServiceDate());
-                BigDecimal contractDiscountPercent = scale2(resolvedContract.terms().getDiscountPercent());
                 claim.setProviderContractId(resolvedContract.contract().getId());
                 claim.setContractTermsId(resolvedContract.terms().getId());
-                claim.setAppliedDiscountPercent(contractDiscountPercent);
-                claim.setDiscountBeforeRejection(
-                                Boolean.TRUE.equals(resolvedContract.terms().getDiscountBeforeRejection()));
+                // Claim entry/review adjudicates medical eligibility only. The
+                // provider contract discount is an accounting settlement matter,
+                // not a reviewer-facing reduction in the insurer commitment.
+                // Keep the contract/terms ids for audit and later settlement,
+                // but do not discount companyShare while saving a claim.
+                claim.setAppliedDiscountPercent(ZERO);
+                claim.setDiscountBeforeRejection(false);
                 claim.setFinancialCalculatedAt(LocalDateTime.now());
 
                 for (ClaimLineDto lineDto : lineDtos) {
@@ -242,6 +245,7 @@ public class ClaimMapper {
                         // canonical input. Resolve its denormalized values server-side;
                         // callers must not have to resend editable code/name fields.
                         PricingMode servicePricingMode = PricingMode.CONTRACT_PRICE;
+                        boolean claimUnitPriceLine = false;
                         if (lineDto.getMedicalServiceId() != null) {
                                 var catalogService = medicalServiceRepository.findById(lineDto.getMedicalServiceId())
                                                 .orElseThrow(() -> new IllegalArgumentException(
@@ -289,6 +293,16 @@ public class ClaimMapper {
 
                         if (matchedPricingItem != null) {
                                 resolvedPricingItemId = matchedPricingItem.getId();
+                                if (matchedPricingItem.getPricingMode() == PricingMode.CLAIM_UNIT_PRICE) {
+                                        claimUnitPriceLine = true;
+                                        servicePricingMode = PricingMode.CLAIM_UNIT_PRICE;
+                                        if (enteredUnitPrice == null
+                                                        || enteredUnitPrice.compareTo(BigDecimal.ZERO) <= 0) {
+                                                throw new BusinessRuleException("يجب إدخال سعر الوحدة لهذه الخدمة");
+                                        }
+                                        resolvedUnitPrice = enteredUnitPrice;
+                                        resolvedMaxUnitPrice = BigDecimal.ZERO;
+                                }
                                 if (!hasBusinessValue(codeToLookup)) {
                                         codeToLookup = matchedPricingItem.getServiceCode();
                                 }
@@ -298,7 +312,7 @@ public class ClaimMapper {
                                 // resolvedUnitPrice already set to the entered invoice amount above.
                         } else if ("GEN-MEDICATION".equals(codeToLookup) || "GEN-MEDICAL-SERVICE".equals(codeToLookup)) {
                                 resolvedUnitPrice = enteredUnitPrice;
-                        } else if (!pendingDirectPrice && hasBusinessValue(codeToLookup)) {
+                        } else if (!claimUnitPriceLine && !pendingDirectPrice && hasBusinessValue(codeToLookup)) {
                                 EffectivePriceResponseDto priceResponse = providerContractService.getEffectivePrice(
                                                 claim.getProviderId(), claimEmployerId, codeToLookup, claim.getServiceDate());
 
@@ -492,7 +506,9 @@ public class ClaimMapper {
                                                                         ? effectiveLineRejectionReason
                                                                         : lineDto.getManualRefusalReason())
                                         .unitPrice(resolvedUnitPrice != null ? resolvedUnitPrice : enteredUnitPrice)
-                                        .amountSource(manualAmountLine ? "MANUAL_AMOUNT" : "CONTRACT_PRICE")
+                                        .amountSource(manualAmountLine
+                                                        ? "MANUAL_AMOUNT"
+                                                        : claimUnitPriceLine ? "CLAIM_UNIT_PRICE" : "CONTRACT_PRICE")
                                         .totalPrice(result.getEffectiveTotal())
                                         .requestedUnitPrice(requestedUnitPrice)
                                         .approvedUnitPrice(result.getEffectiveUnitPrice())
@@ -761,6 +777,7 @@ public class ClaimMapper {
                                 .requestedTotal(line.getRequestedTotal())
                                 .approvedAmount(line.getApprovedAmount())
                                 .refusedAmount(line.getRefusedAmount())
+                                .appliedRuleId(line.getAppliedRuleId())
                                 .rejected(Boolean.TRUE.equals(line.getRejected()))
                                 .rejectionReason(line.getRejectionReason())
                                 .manualRefusedAmount(line.getManualRefusedAmount())

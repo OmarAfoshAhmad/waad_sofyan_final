@@ -132,7 +132,7 @@ public enum ClaimStatus {
      * claims must use an explicit lifecycle command first.
      */
     public boolean allowsEdit() {
-        return this == DRAFT || this == NEEDS_CORRECTION;
+        return this == DRAFT || this == SUBMITTED || this == NEEDS_CORRECTION;
     }
 
     // ========== LEGACY COMPATIBILITY ==========

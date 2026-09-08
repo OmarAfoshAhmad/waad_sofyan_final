@@ -2,6 +2,7 @@ package com.waad.tba.modules.providercontract.service;
 
 import com.waad.tba.common.exception.BusinessRuleException;
 import com.waad.tba.modules.medicaltaxonomy.entity.MedicalCategory;
+import com.waad.tba.modules.medicaltaxonomy.enums.PricingMode;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalCategoryRepository;
 import com.waad.tba.modules.medicaldictionary.service.MedicalDictionaryNormalizer;
 import com.waad.tba.modules.providercontract.dto.*;
@@ -239,12 +240,15 @@ public class ProviderContractPricingItemService {
         }
 
         // Validate prices
+        PricingMode pricingMode = dto.getPricingMode() != null ? dto.getPricingMode() : PricingMode.CONTRACT_PRICE;
         BigDecimal basePrice = dto.getBasePrice() != null ? dto.getBasePrice() : BigDecimal.ZERO;
-        BigDecimal contractPrice = dto.getContractPrice();
-        if (contractPrice == null || contractPrice.compareTo(BigDecimal.ZERO) <= 0) {
+        BigDecimal contractPrice = dto.getContractPrice() != null ? dto.getContractPrice() : BigDecimal.ZERO;
+        if (pricingMode == PricingMode.CONTRACT_PRICE && contractPrice.compareTo(BigDecimal.ZERO) <= 0) {
             throw new BusinessRuleException("Contract price must be greater than zero");
         }
-        BigDecimal maxContractPrice = normalizeMaxContractPrice(contractPrice, dto.getMaxContractPrice());
+        BigDecimal maxContractPrice = pricingMode == PricingMode.CLAIM_UNIT_PRICE
+                ? null
+                : normalizeMaxContractPrice(contractPrice, dto.getMaxContractPrice());
 
         // Build entity (MedicalService FK removed in V229)
         ProviderContractPricingItem item = ProviderContractPricingItem.builder()
@@ -256,6 +260,7 @@ public class ProviderContractPricingItemService {
                 .basePrice(basePrice)
                 .contractPrice(contractPrice)
                 .maxContractPrice(maxContractPrice)
+                .pricingMode(pricingMode)
                 .effectiveFrom(dto.getEffectiveFrom() != null ? dto.getEffectiveFrom() : contract.getStartDate())
                 .effectiveTo(dto.getEffectiveTo() != null ? dto.getEffectiveTo() : toPriceEndExclusive(contract.getEndDate()))
                 .notes(dto.getNotes())

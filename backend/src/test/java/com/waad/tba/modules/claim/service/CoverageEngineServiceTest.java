@@ -14,6 +14,7 @@ import com.waad.tba.modules.claim.dto.engine.BulkCoverageEngineRequest;
 import com.waad.tba.modules.claim.dto.engine.ClaimLineInput;
 import com.waad.tba.modules.claim.dto.engine.CoverageResult;
 import com.waad.tba.modules.medicaltaxonomy.entity.MedicalCategory;
+import com.waad.tba.modules.medicaltaxonomy.enums.PricingMode;
 import com.waad.tba.modules.providercontract.entity.ProviderContractPricingItem;
 import com.waad.tba.modules.providercontract.enums.EncounterType;
 import com.waad.tba.modules.providercontract.repository.ProviderContractPricingItemRepository;
@@ -268,6 +269,42 @@ class CoverageEngineServiceTest {
                 .map(result -> result.getUsageDetails().getApprovedAmountForLimit())
                 .reduce(BigDecimal.ZERO, BigDecimal::add));
         assertEquals("ELIGIBLE_AMOUNT", results.get(1).getUsageDetails().getConsumptionBasis());
+    }
+
+    @Test
+    @DisplayName("خدمة مضافة من المطالبة: السعر المفتوح لا يتحول إلى سقف عقد صفري عند إعادة الحساب")
+    void claimUnitPricePricingItemKeepsEnteredPriceDuringLivePreviewAndEditHydration() {
+        MedicalCategory diagnosticCategory = MedicalCategory.builder()
+                .id(5451L)
+                .code("CAT-COV-DIAG-FEES")
+                .name("أشعة وتحاليل ورسوم أطباء")
+                .active(true)
+                .build();
+        ProviderContractPricingItem pricingItem = ProviderContractPricingItem.builder()
+                .id(31881L)
+                .active(true)
+                .medicalCategory(diagnosticCategory)
+                .pricingMode(PricingMode.CLAIM_UNIT_PRICE)
+                .contractPrice(BigDecimal.ZERO)
+                .maxContractPrice(null)
+                .build();
+        when(pricingItemRepository.findById(31881L)).thenReturn(Optional.of(pricingItem));
+        coveredByRule(63L, 75, false);
+        useLimits(limit(604L, "سقف مضاعفات الحمل", "1500.00", "0.00"));
+
+        ClaimLineInput input = line("CLAIM-OPEN-PRICE", "6000.00");
+        input.setPricingItemId(31881L);
+        input.setServiceCategoryId(5451L);
+        input.setCategoryId(5451L);
+
+        CoverageResult result = calculate(input, EncounterType.INPATIENT);
+
+        assertMoney("6000.00", result.getRequestedTotal());
+        assertMoney("6000.00", result.getEffectiveTotal());
+        assertMoney("0.00", result.getPriceRefused());
+        assertMoney("4500.00", result.getLimitRefused());
+        assertMoney("1125.00", result.getCompanyShare());
+        assertMoney("375.00", result.getPatientShare());
     }
 
     @Test
