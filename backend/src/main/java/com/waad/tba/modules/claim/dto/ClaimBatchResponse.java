@@ -52,12 +52,20 @@ public class ClaimBatchResponse {
     public static ClaimBatchResponse from(ClaimBatch batch, Object[] totals) {
         ClaimBatchResponse response = from(batch);
         if (response == null) return null;
+        totals = unwrapSingleResultRow(totals);
         response.setClaimsCount(numberAt(totals, 0).longValue());
         response.setTotalClaimsAmount(decimalAt(totals, 1));
         response.setTotalApprovedAmount(decimalAt(totals, 2));
         response.setTotalRefusedAmount(decimalAt(totals, 3));
         response.setTotalPatientShare(decimalAt(totals, 4));
         return response;
+    }
+
+    private static Object[] unwrapSingleResultRow(Object[] totals) {
+        if (totals != null && totals.length == 1 && totals[0] instanceof Object[] row) {
+            return row;
+        }
+        return totals;
     }
 
     private static Number numberAt(Object[] totals, int index) {
