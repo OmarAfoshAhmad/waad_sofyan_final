@@ -1458,11 +1458,8 @@ export default function ClaimBatchEntry() {
     if (saving) return 'جارٍ حفظ المطالبة.';
     if (entryContextBlockReason) return entryContextBlockReason;
     if (coveragePending) return 'انتظر اكتمال حساب التغطية والسقوف لكل البنود قبل الحفظ.';
-    if (beneficiarySettlement.excessPayment > 0) {
-      return 'المبلغ المدفوع من المستفيد أكبر من التزامه والمبلغ المرفوض.';
-    }
     return null;
-  }, [beneficiarySettlement.excessPayment, coveragePending, entryContextBlockReason, saving]);
+  }, [coveragePending, entryContextBlockReason, saving]);
 
   const resetForm = useCallback(() => {
     setMember(null);
@@ -1732,14 +1729,6 @@ export default function ClaimBatchEntry() {
       enqueueSnackbar('لا يمكن الحفظ أثناء انتظار قرار محرك التغطية. انتظر اكتمال تحديث جميع البنود.', {
         variant: 'warning',
         autoHideDuration: 5000
-      });
-      return;
-    }
-
-    if (beneficiarySettlement.excessPayment > 0) {
-      enqueueSnackbar('المبلغ المدفوع من المستفيد أكبر من التزامه والمبلغ المرفوض. عدّل المبلغ قبل الحفظ.', {
-        variant: 'error',
-        autoHideDuration: 7000
       });
       return;
     }

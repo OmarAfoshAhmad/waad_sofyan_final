@@ -272,9 +272,9 @@ describe('claim batch entry safety boundary', () => {
     expect(lineSource).toContain('opt.serviceName || opt.name ||');
   });
 
-  it('blocks saving when beneficiary payment exceeds copay plus refusal', () => {
-    expect(entrySource).toContain('beneficiarySettlement.excessPayment > 0');
-    expect(entrySource).toContain('المبلغ المدفوع من المستفيد أكبر من التزامه والمبلغ المرفوض');
+  it('allows beneficiary payment to exceed copay plus refusal without blocking save', () => {
+    expect(entrySource).not.toContain('beneficiarySettlement.excessPayment > 0');
+    expect(entrySource).not.toContain('المبلغ المدفوع من المستفيد أكبر من التزامه والمبلغ المرفوض');
     expect(footerSource).toContain('Boolean(saveDisabledReason)');
   });
 
