@@ -1149,6 +1149,18 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
                         @Param("dateFrom") LocalDate dateFrom,
                         @Param("dateTo") LocalDate dateTo);
 
+        @Query("SELECT COUNT(c), " +
+                        "COALESCE(SUM(c.requestedAmount), 0), " +
+                        "COALESCE(SUM(COALESCE(c.netProviderAmount, c.approvedAmount, 0) + COALESCE(c.companyDiscountAmount, 0)), 0), " +
+                        "COALESCE(SUM(CASE " +
+                        "  WHEN COALESCE(c.beneficiaryPaidAmount, 0) >= COALESCE(c.refusedAmount, 0) THEN 0 " +
+                        "  ELSE COALESCE(c.refusedAmount, 0) - COALESCE(c.beneficiaryPaidAmount, 0) END), 0), " +
+                        "COALESCE(SUM(COALESCE(c.patientCoPay, 0) + COALESCE(c.beneficiaryPaidAmount, 0)), 0) " +
+                        "FROM Claim c " +
+                        "WHERE c.active = true " +
+                        "AND c.claimBatch.id = :batchId")
+        Object[] getBatchDisplayFinancialSummary(@Param("batchId") Long batchId);
+
         // ═══════════════════════════════════════════════════════════════════════════════
         // TICKET 1: ANNUAL LIMIT CONSUMPTION TRACKING (Phase Lite)
         // Sum APPROVED claims for member by benefit year

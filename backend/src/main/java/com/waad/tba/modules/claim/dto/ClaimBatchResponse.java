@@ -3,6 +3,7 @@ package com.waad.tba.modules.claim.dto;
 import com.waad.tba.modules.claim.entity.ClaimBatch;
 import lombok.Builder;
 import lombok.Data;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
@@ -22,6 +23,11 @@ public class ClaimBatchResponse {
     private String statusLabel;
     private LocalDateTime createdAt;
     private LocalDateTime closedAt;
+    private Long claimsCount;
+    private BigDecimal totalClaimsAmount;
+    private BigDecimal totalApprovedAmount;
+    private BigDecimal totalRefusedAmount;
+    private BigDecimal totalPatientShare;
 
     public static ClaimBatchResponse from(ClaimBatch batch) {
         if (batch == null) return null;
@@ -41,6 +47,29 @@ public class ClaimBatchResponse {
             .createdAt(batch.getCreatedAt())
             .closedAt(batch.getClosedAt())
             .build();
+    }
+
+    public static ClaimBatchResponse from(ClaimBatch batch, Object[] totals) {
+        ClaimBatchResponse response = from(batch);
+        if (response == null) return null;
+        response.setClaimsCount(numberAt(totals, 0).longValue());
+        response.setTotalClaimsAmount(decimalAt(totals, 1));
+        response.setTotalApprovedAmount(decimalAt(totals, 2));
+        response.setTotalRefusedAmount(decimalAt(totals, 3));
+        response.setTotalPatientShare(decimalAt(totals, 4));
+        return response;
+    }
+
+    private static Number numberAt(Object[] totals, int index) {
+        if (totals == null || totals.length <= index || totals[index] == null) return 0L;
+        return (Number) totals[index];
+    }
+
+    private static BigDecimal decimalAt(Object[] totals, int index) {
+        if (totals == null || totals.length <= index || totals[index] == null) return BigDecimal.ZERO;
+        if (totals[index] instanceof BigDecimal value) return value;
+        if (totals[index] instanceof Number value) return BigDecimal.valueOf(value.doubleValue());
+        return BigDecimal.ZERO;
     }
 
     private static String getMonthLabelAr(int month) {

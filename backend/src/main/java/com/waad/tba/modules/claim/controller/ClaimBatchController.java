@@ -57,7 +57,7 @@ public class ClaimBatchController {
         if (batch == null) {
             return ResponseEntity.notFound().build();
         }
-        return ResponseEntity.ok(ClaimBatchResponse.from(batch));
+        return ResponseEntity.ok(claimBatchService.toResponse(batch));
     }
 
     /**
@@ -81,12 +81,12 @@ public class ClaimBatchController {
         log.info("📂 Opening batch for provider={}, employer={}, period={}/{}", scopedProviderId, scopedEmployerId, month, year);
         ClaimBatch existing = claimBatchService.getExistingBatch(scopedProviderId, scopedEmployerId, year, month);
         if (existing != null) {
-            return ResponseEntity.ok(ClaimBatchResponse.from(existing));
+            return ResponseEntity.ok(claimBatchService.toResponse(existing));
         }
 
         // If not found, explicitly create and return 201
         ClaimBatch batch = claimBatchService.createBatch(scopedProviderId, scopedEmployerId, year, month);
-        return ResponseEntity.status(HttpStatus.CREATED).body(ClaimBatchResponse.from(batch));
+        return ResponseEntity.status(HttpStatus.CREATED).body(claimBatchService.toResponse(batch));
     }
 
     /**
@@ -106,7 +106,6 @@ public class ClaimBatchController {
         Long scopedProviderId = authorizationService.resolveProviderScope(currentUser, providerId);
         Long scopedEmployerId = authorizationService.resolveEmployerScope(currentUser, employerId);
 
-        List<ClaimBatch> batches = claimBatchService.findBatches(scopedProviderId, scopedEmployerId, year, month);
-        return ResponseEntity.ok(batches.stream().map(ClaimBatchResponse::from).toList());
+        return ResponseEntity.ok(claimBatchService.findBatchResponses(scopedProviderId, scopedEmployerId, year, month));
     }
 }

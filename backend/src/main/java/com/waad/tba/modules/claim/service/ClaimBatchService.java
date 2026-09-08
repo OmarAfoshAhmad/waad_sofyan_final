@@ -4,7 +4,9 @@ import com.waad.tba.common.exception.BusinessRuleException;
 import com.waad.tba.common.exception.ResourceNotFoundException;
 import com.waad.tba.common.service.SystemSettingsService;
 import com.waad.tba.modules.claim.entity.ClaimBatch;
+import com.waad.tba.modules.claim.dto.ClaimBatchResponse;
 import com.waad.tba.modules.claim.repository.ClaimBatchRepository;
+import com.waad.tba.modules.claim.repository.ClaimRepository;
 import com.waad.tba.modules.employer.repository.EmployerRepository;
 import com.waad.tba.modules.provider.repository.ProviderRepository;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +30,7 @@ import java.util.List;
 public class ClaimBatchService {
 
     private final ClaimBatchRepository claimBatchRepository;
+    private final ClaimRepository claimRepository;
     private final ProviderRepository providerRepository;
     private final EmployerRepository employerRepository;
     private final SystemSettingsService systemSettingsService;
@@ -49,6 +52,19 @@ public class ClaimBatchService {
             return claimBatchRepository.findByEmployerIdAndBatchYearAndBatchMonth(employerId, year, month);
         }
         return claimBatchRepository.findByBatchYearAndBatchMonth(year, month);
+    }
+
+    @Transactional(readOnly = true)
+    public List<ClaimBatchResponse> findBatchResponses(Long providerId, Long employerId, int year, int month) {
+        return findBatches(providerId, employerId, year, month).stream()
+                .map(batch -> ClaimBatchResponse.from(batch, claimRepository.getBatchDisplayFinancialSummary(batch.getId())))
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public ClaimBatchResponse toResponse(ClaimBatch batch) {
+        if (batch == null) return null;
+        return ClaimBatchResponse.from(batch, claimRepository.getBatchDisplayFinancialSummary(batch.getId()));
     }
 
     /**

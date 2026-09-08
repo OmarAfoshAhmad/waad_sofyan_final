@@ -123,15 +123,16 @@ const ProviderBatchCard = ({
 
   // patientShare = المطلوب - المعتمد للمزود - المرفوض
   // (المكوّن المفقود الذي يجعل الأرقام تبدو غير متطابقة إذا لم يُعرض)
-  const safeAmount = summaryData?.totalClaimsAmount || 0;
-  const safeCovered = summaryData?.totalApprovedAmount || 0;
-  const safeRefused = summaryData?.totalRefusedAmount || 0;
+  const effectiveSummary = provider.realBatch?.claimsCount != null ? provider.realBatch : summaryData;
+  const safeAmount = effectiveSummary?.totalClaimsAmount || 0;
+  const safeCovered = effectiveSummary?.totalApprovedAmount || 0;
+  const safeRefused = effectiveSummary?.totalRefusedAmount || 0;
   const stats = {
-    requestsCount: summaryData?.claimsCount || 0,
+    requestsCount: effectiveSummary?.claimsCount || 0,
     amount: safeAmount,
     covered: safeCovered,
     refused: safeRefused,
-    patientShare: Math.max(0, safeAmount - safeCovered - safeRefused)
+    patientShare: effectiveSummary?.totalPatientShare != null ? Number(effectiveSummary.totalPatientShare) : Math.max(0, safeAmount - safeCovered - safeRefused)
   };
 
   return (
