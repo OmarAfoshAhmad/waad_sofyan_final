@@ -406,6 +406,13 @@ const SystemSettingsPage = () => {
         ...(dataToSave.pdfSettingsId
           ? [
               reportSettingsService.updateSettings(dataToSave.pdfSettingsId, {
+                companyName: dataToSave.companyName,
+                companyBusinessType: dataToSave.businessType,
+                logoUrl: dataToSave.logoUrl || null,
+                address: dataToSave.address,
+                phone: dataToSave.phone,
+                email: dataToSave.email,
+                website: dataToSave.website,
                 claimReportTitle: dataToSave.claimReportTitle,
                 claimReportPrimaryColor: dataToSave.claimReportPrimaryColor,
                 claimReportIntro: dataToSave.claimReportIntro,

@@ -15,7 +15,9 @@ import java.util.List;
 public class ClaimReportDto {
     private String reportDate;
     private String companyName;
+    private String companyBusinessType;
     private String companyLogoBase64;
+    private String companyLogoUrl;
     private List<ClaimStatementReportDto> groupedClaims;
 
     // Summary info for the cover page

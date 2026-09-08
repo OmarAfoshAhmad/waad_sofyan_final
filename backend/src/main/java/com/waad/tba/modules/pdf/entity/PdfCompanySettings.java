@@ -33,6 +33,9 @@ public class PdfCompanySettings {
     @Column(name = "company_name", nullable = false, length = 255)
     private String companyName;
 
+    @Column(name = "company_business_type", length = 255)
+    private String companyBusinessType;
+
     @Column(name = "logo_url", length = 512)
     private String logoUrl;
 

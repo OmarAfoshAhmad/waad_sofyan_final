@@ -38,6 +38,7 @@ public class PdfCompanySettingsService {
         log.info("[PdfSettingsService] Verifying schema integrity for pdf_company_settings...");
         try {
             String[] columns = {
+                "company_business_type",
                 "claim_report_title", "claim_report_primary_color", "claim_report_intro",
                 "claim_report_footer_note", "claim_report_sig_right_top", "claim_report_sig_right_bottom",
                 "claim_report_sig_left_top", "claim_report_sig_left_bottom"
@@ -124,6 +125,12 @@ public class PdfCompanySettingsService {
         // Update fields
         if (updates.getCompanyName() != null) {
             existing.setCompanyName(updates.getCompanyName());
+        }
+        if (updates.getCompanyBusinessType() != null) {
+            existing.setCompanyBusinessType(updates.getCompanyBusinessType());
+        }
+        if (updates.getLogoUrl() != null) {
+            existing.setLogoUrl(updates.getLogoUrl());
         }
         if (updates.getAddress() != null) {
             existing.setAddress(updates.getAddress());
@@ -276,6 +283,7 @@ public class PdfCompanySettingsService {
     private PdfCompanySettings getDefaultSettings() {
         return PdfCompanySettings.builder()
             .companyName("نظام وعد الطبي")
+            .companyBusinessType("إدارة النفقات الطبية")
             .address("الرياض، المملكة العربية السعودية")
             .phone("+966 XX XXX XXXX")
             .email("info@waad-system.com")

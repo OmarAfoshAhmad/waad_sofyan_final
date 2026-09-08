@@ -80,13 +80,23 @@
       #page-running-header .h-center img {
         max-width: 60px;
         max-height: 36px;
-        vertical-align: middle;
+        display: block;
+        margin: 0 auto 1.5mm auto;
       }
 
       #page-running-header .h-center .co-name {
         font-size: 13pt;
         font-weight: bold;
         color: #1a1a1a;
+        display: block;
+      }
+
+      #page-running-header .h-center .co-business {
+        display: block;
+        margin-top: 0.5mm;
+        font-size: 8.5pt;
+        font-weight: normal;
+        color: #555;
       }
 
       /* For browser/iframe: show static header at top */
@@ -127,13 +137,23 @@
       #screen-header .h-center img {
         max-width: 60px;
         max-height: 36px;
-        vertical-align: middle;
+        display: block;
+        margin: 0 auto 1.5mm auto;
       }
 
       #screen-header .h-center .co-name {
         font-size: 13pt;
         font-weight: bold;
         color: #1a1a1a;
+        display: block;
+      }
+
+      #screen-header .h-center .co-business {
+        display: block;
+        margin-top: 0.5mm;
+        font-size: 8.5pt;
+        font-weight: normal;
+        color: #555;
       }
 
       /* Hide screen header when printing (PDF renderer does not use it) */
@@ -479,7 +499,17 @@
           th:src="${report.companyLogoBase64}"
           alt=""
         />
-        <span class="co-name" th:text="${report.reportTitle}">شركة وعد لإدارة النفقات الطبية</span>
+        <img
+          th:if="${(report.companyLogoBase64 == null or #strings.isEmpty(report.companyLogoBase64)) and report.companyLogoUrl != null and !#strings.isEmpty(report.companyLogoUrl)}"
+          th:src="${report.companyLogoUrl}"
+          alt=""
+        />
+        <span class="co-name" th:text="${report.companyName}">شركة وعد لإدارة النفقات الطبية</span>
+        <span
+          class="co-business"
+          th:if="${report.companyBusinessType != null and !#strings.isEmpty(report.companyBusinessType)}"
+          th:text="${report.companyBusinessType}"
+          >إدارة النفقات الطبية</span>
       </span>
       <span class="h-right">
         التاريخ &nbsp;<span th:text="${report.reportDate}">-</span><br />
@@ -498,7 +528,17 @@
           th:src="${report.companyLogoBase64}"
           alt=""
         />
-        <span class="co-name" th:text="${report.reportTitle}">شركة وعد لإدارة النفقات الطبية</span>
+        <img
+          th:if="${(report.companyLogoBase64 == null or #strings.isEmpty(report.companyLogoBase64)) and report.companyLogoUrl != null and !#strings.isEmpty(report.companyLogoUrl)}"
+          th:src="${report.companyLogoUrl}"
+          alt=""
+        />
+        <span class="co-name" th:text="${report.companyName}">شركة وعد لإدارة النفقات الطبية</span>
+        <span
+          class="co-business"
+          th:if="${report.companyBusinessType != null and !#strings.isEmpty(report.companyBusinessType)}"
+          th:text="${report.companyBusinessType}"
+          >إدارة النفقات الطبية</span>
       </span>
       <span class="h-right">
         التاريخ &nbsp;<span th:text="${report.reportDate}">-</span><br />
