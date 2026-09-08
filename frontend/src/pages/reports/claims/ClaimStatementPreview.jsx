@@ -16,7 +16,8 @@ const ClaimStatementPreview = () => {
   const iframeRef = useRef(null);
   const [loading, setLoading] = useState(true);
 
-  const previewUrl = `/api/reports/claims/html?claimIds=${claimIds}&onlyRejected=${onlyRejected}&batchCode=${encodeURIComponent(batchCode)}`;
+  const reportQuery = `claimIds=${claimIds}&onlyRejected=${onlyRejected}&batchCode=${encodeURIComponent(batchCode)}`;
+  const pdfUrl = `/api/reports/claims/pdf?${reportQuery}`;
   const claimCount = claimIds ? claimIds.split(',').length : 0;
 
   useEffect(() => {
@@ -27,7 +28,12 @@ const ClaimStatementPreview = () => {
   }, [claimIds, navigate, enqueueSnackbar]);
 
   const handlePrint = () => {
-    if (iframeRef.current) iframeRef.current.contentWindow.print();
+    if (iframeRef.current?.contentWindow) {
+      iframeRef.current.contentWindow.focus();
+      iframeRef.current.contentWindow.print();
+    } else {
+      window.open(pdfUrl, '_blank', 'noopener,noreferrer');
+    }
   };
 
   return (
@@ -105,7 +111,7 @@ const ClaimStatementPreview = () => {
               '&.Mui-disabled': { color: 'rgba(255,255,255,0.25)', borderColor: 'rgba(255,255,255,0.1)' }
             }}
           >
-            طباعة
+            طباعة المعروض
           </Button>
         </Stack>
       </Box>
@@ -160,7 +166,7 @@ const ClaimStatementPreview = () => {
             <iframe
               title="Claim Statement Preview"
               ref={iframeRef}
-              src={previewUrl}
+              src={pdfUrl}
               style={{ width: '100%', height: '100%', minHeight: '297mm', border: 'none', display: 'block' }}
               onLoad={() => setLoading(false)}
             />

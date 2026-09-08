@@ -88,6 +88,23 @@ class MultiLineMultiBucketEngineTest {
     }
 
     @Test
+    void priorSubmittedClaimsReserveTheCeilingBeforeTheNextDecision() {
+        var general = balanceWithCommittedAndReserved(1L, "POLICY:GENERAL",
+                BenefitScopeType.POLICY_GENERAL, "60000.00", "0.00", "62.00");
+
+        var result = engine.evaluate(1L, List.of(
+                line("large-subsequent-claim", "69000.00", 75, set(1L, general))));
+
+        var financial = result.lines().get(0).financial();
+        assertThat(financial.bindingAvailableLimit()).isEqualByComparingTo("59938.00");
+        assertThat(financial.insideLimit()).isEqualByComparingTo("59938.00");
+        assertThat(financial.patientLimitExcess()).isEqualByComparingTo("9062.00");
+        assertThat(financial.insurerFinalPayment()).isEqualByComparingTo("44953.50");
+        assertThat(financial.patientCoverageShare()).isEqualByComparingTo("14984.50");
+        assertThat(result.signedRemainingByLimit().get("POLICY:GENERAL")).isZero();
+    }
+
+    @Test
     void rejectsBalancesBelongingToAnotherFamilyMember() {
         assertThatThrownBy(() -> engine.evaluate(1L,
                 List.of(line("L1", set(2L, balance(2L, "GROUP", BenefitScopeType.GROUP, "100.00"))))))
@@ -125,15 +142,25 @@ class MultiLineMultiBucketEngineTest {
     private LimitBalanceReader.LimitBalance balance(Long memberId, String key, BenefitScopeType scope,
                                                      String available) {
         BigDecimal limitValue = new BigDecimal(available);
+        return balanceWithCommittedAndReserved(memberId, key, scope, available, "0.00", "0.00");
+    }
+
+    private LimitBalanceReader.LimitBalance balanceWithCommittedAndReserved(Long memberId, String key,
+                                                     BenefitScopeType scope, String effectiveLimit,
+                                                     String committed, String reserved) {
+        BigDecimal limitValue = new BigDecimal(effectiveLimit);
+        BigDecimal committedValue = new BigDecimal(committed);
+        BigDecimal reservedValue = new BigDecimal(reserved);
+        BigDecimal actualRemaining = limitValue.subtract(committedValue);
+        BigDecimal reservableAvailable = actualRemaining.subtract(reservedValue);
         var definition = new ApplicableLimitDefinition(key, scope, BeneficiaryScopeType.MEMBER,
                 scope == BenefitScopeType.POLICY_GENERAL ? null : Math.abs((long) key.hashCode()),
                 10L, 20L, null, limitValue, "ANNUAL",
                 LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31), 1, 0);
         var effective = new EffectiveLimit(definition, limitValue, SourceType.POLICY_DEFAULT, null, null);
-        // no committed, no reserved: both balances equal the full limit.
         // The occurrence dimension is null -- this bucket declares no times
         // limit, which is not the same as having none left.
-        return new LimitBalanceReader.LimitBalance(effective, BigDecimal.ZERO, BigDecimal.ZERO,
-                limitValue, limitValue, null, null, null, null, null);
+        return new LimitBalanceReader.LimitBalance(effective, committedValue, reservedValue,
+                actualRemaining, reservableAvailable, null, null, null, null, null);
     }
 }

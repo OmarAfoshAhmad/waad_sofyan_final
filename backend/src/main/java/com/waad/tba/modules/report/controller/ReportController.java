@@ -5,6 +5,7 @@ import com.waad.tba.modules.report.dto.ClaimReportDto;
 import com.waad.tba.modules.report.service.PdfExportService;
 import com.waad.tba.modules.report.service.ReportDataService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -18,6 +19,7 @@ import org.springframework.web.bind.annotation.ResponseBody;
 import org.thymeleaf.TemplateEngine;
 import org.thymeleaf.context.Context;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 @Controller
@@ -43,7 +45,7 @@ public class ReportController {
         return "reports/claim-report";
     }
 
-    /** تنزيل PDF - الآلية الموحدة (HTML → PDF) */
+    /** معاينة/طباعة PDF داخل المتصفح - الآلية الموحدة (HTML → PDF) */
     @GetMapping("/claims/pdf")
     @ResponseBody
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER', 'MEDICAL_REVIEWER', 'DATA_ENTRY', 'PROVIDER_STAFF', 'EMPLOYER_ADMIN')")
@@ -62,9 +64,11 @@ public class ReportController {
 
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_PDF);
-            headers.setContentDispositionFormData("filename",
-                    "claim_statement_" + (reportData.getBatchCode() != null ? reportData.getBatchCode() : "report")
-                            + ".pdf");
+            headers.setContentDisposition(ContentDisposition.inline()
+                    .filename("claim_statement_"
+                            + (reportData.getBatchCode() != null ? reportData.getBatchCode() : "report")
+                            + ".pdf", StandardCharsets.UTF_8)
+                    .build());
 
             return ResponseEntity.ok().headers(headers).body(pdfBytes);
         } catch (Exception e) {

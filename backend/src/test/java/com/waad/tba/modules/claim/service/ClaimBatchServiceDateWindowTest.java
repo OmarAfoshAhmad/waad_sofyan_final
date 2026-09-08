@@ -12,6 +12,7 @@ import com.waad.tba.common.exception.BusinessRuleException;
 import com.waad.tba.common.service.SystemSettingsService;
 import com.waad.tba.modules.claim.entity.ClaimBatch;
 import com.waad.tba.modules.claim.repository.ClaimBatchRepository;
+import com.waad.tba.modules.claim.repository.ClaimRepository;
 import com.waad.tba.modules.employer.repository.EmployerRepository;
 import com.waad.tba.modules.provider.repository.ProviderRepository;
 
@@ -23,6 +24,7 @@ class ClaimBatchServiceDateWindowTest {
     void setUp() {
         service = new ClaimBatchService(
                 mock(ClaimBatchRepository.class),
+                mock(ClaimRepository.class),
                 mock(ProviderRepository.class),
                 mock(EmployerRepository.class),
                 mock(SystemSettingsService.class));

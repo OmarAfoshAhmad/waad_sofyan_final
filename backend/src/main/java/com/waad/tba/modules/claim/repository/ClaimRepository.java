@@ -2,6 +2,7 @@ package com.waad.tba.modules.claim.repository;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.math.BigDecimal;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -116,6 +117,75 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
                         "GROUP BY cl.claim.member.id")
         List<com.waad.tba.modules.claim.projection.MemberLimitConsumptionProjection> sumLimitConsumptionByMembersAndPeriodExcludingClaim(
                         @Param("memberIds") java.util.Collection<Long> memberIds,
+                        @Param("periodStart") LocalDate periodStart,
+                        @Param("periodEnd") LocalDate periodEnd,
+                        @Param("excludeClaimId") Long excludeClaimId);
+
+        /**
+         * Submitted/under-review claims are not accounting commits yet, but they are
+         * real operational holds: the next claim must not see the same ceiling as
+         * fully available while those claims are waiting for review. Read them from
+         * claim_lines because the append-only benefit ledger reserves preauth holds,
+         * not review-queue claims.
+         */
+        @Query(value = """
+                        select coalesce(sum(coalesce(cl.limit_consumption, 0)), 0)
+                          from claims c
+                          join claim_lines cl on cl.claim_id = c.id
+                         where c.active = true
+                           and c.member_id = :memberId
+                           and c.policy_id = :policyId
+                           and c.status in ('SUBMITTED', 'UNDER_REVIEW')
+                           and cl.current_line = true
+                           and coalesce(cl.limit_consumption, 0) > 0
+                           and c.service_date >= :periodStart
+                           and (:periodEnd is null or c.service_date <= :periodEnd)
+                           and (:excludeClaimId is null or c.id <> :excludeClaimId)
+                        """, nativeQuery = true)
+        BigDecimal sumSubmittedGeneralLimitConsumption(
+                        @Param("memberId") Long memberId,
+                        @Param("policyId") Long policyId,
+                        @Param("periodStart") LocalDate periodStart,
+                        @Param("periodEnd") LocalDate periodEnd,
+                        @Param("excludeClaimId") Long excludeClaimId);
+
+        /**
+         * Same review-queue hold as above, but scoped to a benefit bucket. The
+         * recursive walk is deliberate: a line linked to a child bucket also spends
+         * its parent group bucket, so a later sibling service must see that parent
+         * capacity as already reserved.
+         */
+        @Query(value = """
+                        with recursive rule_bucket_tree(rule_id, bucket_id, parent_bucket_id) as (
+                            select brb.rule_id, b.id, b.parent_bucket_id
+                              from benefit_rule_buckets brb
+                              join benefit_limit_buckets b on b.id = brb.bucket_id
+                            union all
+                            select t.rule_id, p.id, p.parent_bucket_id
+                              from rule_bucket_tree t
+                              join benefit_limit_buckets p on p.id = t.parent_bucket_id
+                        )
+                        select coalesce(sum(held.limit_consumption), 0)
+                          from (
+                            select distinct cl.id, coalesce(cl.limit_consumption, 0) as limit_consumption
+                              from claims c
+                              join claim_lines cl on cl.claim_id = c.id
+                              join rule_bucket_tree rbt
+                                on rbt.rule_id = cl.applied_rule_id
+                               and rbt.bucket_id = :bucketId
+                             where c.active = true
+                               and c.member_id = :memberId
+                               and c.status in ('SUBMITTED', 'UNDER_REVIEW')
+                               and cl.current_line = true
+                               and coalesce(cl.limit_consumption, 0) > 0
+                               and c.service_date >= :periodStart
+                               and (:periodEnd is null or c.service_date <= :periodEnd)
+                               and (:excludeClaimId is null or c.id <> :excludeClaimId)
+                          ) held
+                        """, nativeQuery = true)
+        BigDecimal sumSubmittedBucketLimitConsumption(
+                        @Param("memberId") Long memberId,
+                        @Param("bucketId") Long bucketId,
                         @Param("periodStart") LocalDate periodStart,
                         @Param("periodEnd") LocalDate periodEnd,
                         @Param("excludeClaimId") Long excludeClaimId);

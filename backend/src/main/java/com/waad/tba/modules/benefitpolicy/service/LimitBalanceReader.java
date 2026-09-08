@@ -479,9 +479,15 @@ public class LimitBalanceReader {
                         definition.periodEnd(), excludeClaimId);
                 reserved = consumptionRepository.sumGeneralScopeReserved(
                         memberId, definition.policyId(), definition.periodStart(), definition.periodEnd());
+                reserved = reserved.add(claimRepository.sumSubmittedGeneralLimitConsumption(
+                        memberId, definition.policyId(), definition.periodStart(),
+                        definition.periodEnd(), excludeClaimId));
             } else {
                 committed = amount(bucketBalances, definition, Status.COMMITTED);
                 reserved = amount(bucketBalances, definition, Status.RESERVED);
+                reserved = reserved.add(claimRepository.sumSubmittedBucketLimitConsumption(
+                        memberId, definition.bucketId(), definition.periodStart(),
+                        definition.periodEnd(), excludeClaimId));
             }
             // A count-only bucket constrains occurrences and not money, so it
             // has no monetary balance to report. Null here means "this
