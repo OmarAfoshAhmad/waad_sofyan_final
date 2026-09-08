@@ -36,16 +36,18 @@ export const ClaimTotalsFooter = ({
     appliedToRefused: 0,
     remainingBeneficiaryShare: totals.employee || 0,
     providerRefusedBalance: totals.refused || 0,
-    excessPayment: 0
+    excessPayment: 0,
+    finalBeneficiaryShare: totals.employee || 0
   };
   const showSettlementDetails = settlement.paid > 0;
-  const beneficiaryDisplayLabel = showSettlementDetails ? 'متبقي على المستفيد' : 'التزام المستفيد';
-  const beneficiaryDisplayAmount = showSettlementDetails ? settlement.remainingBeneficiaryShare : totals.employee;
+  const effectiveRefused = showSettlementDetails ? settlement.providerRefusedBalance : totals.refused;
+  const beneficiaryDisplayLabel = 'التزام المستفيد';
+  const beneficiaryDisplayAmount = showSettlementDetails ? settlement.finalBeneficiaryShare : totals.employee;
   const settlementTooltip = showSettlementDetails
-    ? `يغطي من التزام المستفيد: ${settlement.appliedToBaseShare.toFixed(2)} د.ل، من المرفوض: ${settlement.appliedToRefused.toFixed(
+    ? `التزام المستفيد الأساسي: ${totals.employee.toFixed(2)} د.ل، مدفوع خارج التأمين: ${settlement.paid.toFixed(2)} د.ل، خُصم من المرفوض: ${settlement.appliedToRefused.toFixed(
         2
       )} د.ل، المتبقي على مقدم الخدمة: ${settlement.providerRefusedBalance.toFixed(2)} د.ل`
-    : 'مبلغ دفعه المستفيد خارج التأمين. لا يغير التغطية أو السقوف؛ يوزّع فقط على الحصة ثم المرفوض.';
+    : 'مبلغ إضافي دفعه المستفيد خارج التأمين؛ يضاف إلى التزامه ويخصم من المرفوض.';
 
   const blockingDisabled = saving || coveragePending || financialDataUnavailable || Boolean(saveDisabledReason);
   const draftDisabled = blockingDisabled || !isDirty;
@@ -159,7 +161,7 @@ export const ClaimTotalsFooter = ({
       <Tooltip title={settlementTooltip} arrow>
         <TextField
           size="small"
-          label="مدفوع من المستفيد"
+          label="مدفوع المستفيد"
           value={beneficiaryPaidAmount}
           onChange={(event) => {
             const value = event.target.value.replace(/[^\d.]/g, '');
@@ -176,18 +178,16 @@ export const ClaimTotalsFooter = ({
           error={false}
           helperText={
             settlement.excessPayment > 0
-              ? `خارج التأمين ${settlement.excessPayment.toFixed(2)}`
+              ? `فائض خارج المرفوض ${settlement.excessPayment.toFixed(2)}`
               : showSettlementDetails
-                ? settlement.appliedToRefused > 0
-                  ? `من المرفوض ${settlement.appliedToRefused.toFixed(2)}`
-                  : `من الحصة ${settlement.appliedToBaseShare.toFixed(2)}`
+                ? `يخصم من المرفوض ${settlement.appliedToRefused.toFixed(2)}`
                 : ' '
           }
           FormHelperTextProps={{ sx: { m: 0, mt: 0.1, textAlign: 'center', fontSize: '0.65rem', lineHeight: 1 } }}
         />
       </Tooltip>
 
-      <Box sx={{ mr: 'auto', display: 'flex', gap: '2.0rem', alignItems: 'flex-start' }}>
+      <Box sx={{ mr: 'auto', display: 'flex', gap: '1.2rem', alignItems: 'flex-start' }}>
         <Box sx={{ textAlign: 'center' }}>
           <Typography variant="caption" display="block" color="text.secondary" sx={{ fontSize: '0.8rem', fontWeight: 700 }}>
             الإجمالي
@@ -197,13 +197,13 @@ export const ClaimTotalsFooter = ({
           </Typography>
         </Box>
 
-        {totals.refused > 0 && (
+        {effectiveRefused > 0 && (
           <Box sx={{ textAlign: 'center' }}>
             <Typography variant="caption" display="block" color="error.main" sx={{ fontSize: '0.8rem', fontWeight: 700 }}>
               المرفوض
             </Typography>
             <Typography variant="subtitle2" fontWeight={800} color="error.main" sx={{ fontSize: '1.15rem' }}>
-              {totals.refused.toFixed(2)}
+              {effectiveRefused.toFixed(2)}
             </Typography>
           </Box>
         )}
@@ -236,7 +236,7 @@ export const ClaimTotalsFooter = ({
           <Tooltip
             title={
               showSettlementDetails
-                ? `التزام المستفيد قبل الدفع: ${totals.employee.toFixed(2)} د.ل، المدفوع منه: ${settlement.appliedToBaseShare.toFixed(2)} د.ل`
+                ? `يشمل التزامه الأساسي ${totals.employee.toFixed(2)} د.ل + مدفوع خارج التأمين ${settlement.paid.toFixed(2)} د.ل`
                 : ''
             }
             arrow
@@ -247,10 +247,20 @@ export const ClaimTotalsFooter = ({
                 {beneficiaryDisplayLabel}
               </Typography>
               <Typography variant="subtitle2" fontWeight={800} color="warning.dark" sx={{ fontSize: '1.15rem' }}>
-                {beneficiaryDisplayAmount.toFixed(2)}
-              </Typography>
-            </Box>
-          </Tooltip>
+              {beneficiaryDisplayAmount.toFixed(2)}
+            </Typography>
+          </Box>
+        </Tooltip>
+        )}
+        {showSettlementDetails && (
+          <Box sx={{ textAlign: 'center' }}>
+            <Typography variant="caption" display="block" color="text.secondary" sx={{ fontSize: '0.75rem', fontWeight: 700 }}>
+              مدفوع خارج التأمين
+            </Typography>
+            <Typography variant="subtitle2" fontWeight={800} color="info.dark" sx={{ fontSize: '1.0rem' }}>
+              {settlement.paid.toFixed(2)}
+            </Typography>
+          </Box>
         )}
         {showSettlementDetails && (
           <Box sx={{ textAlign: 'center' }}>

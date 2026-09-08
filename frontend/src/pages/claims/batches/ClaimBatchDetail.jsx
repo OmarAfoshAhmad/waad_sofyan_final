@@ -287,10 +287,22 @@ export default function ClaimBatchDetail() {
       claim.status === 'REJECTED' && (!claim.refusedAmount || claim.refusedAmount === 0)
         ? claim.requestedAmount || 0
         : claim.refusedAmount || 0;
+    const paidAmount = Number(claim.beneficiaryPaidAmount) || 0;
     const providerBalance = Number(claim.providerRefusalBalance);
-    if (Number.isFinite(providerBalance)) return Math.max(0, providerBalance);
-    const paidTowardRefusal = Number(claim.beneficiaryPaidTowardRefusal) || 0;
+    const paidTowardRefusal = paidAmount > 0 ? Math.min(paidAmount, rawRefused) : Number(claim.beneficiaryPaidTowardRefusal) || 0;
+    if (paidAmount <= 0 && Number.isFinite(providerBalance)) return Math.max(0, providerBalance);
     return Math.max(0, rawRefused - paidTowardRefusal);
+  };
+
+  const getBeneficiaryCommitment = (claim) => {
+    if (!claim || claim.status === 'NEEDS_CORRECTION') return 0;
+    return (Number(claim.patientCoPay) || 0) + (Number(claim.beneficiaryPaidAmount) || 0);
+  };
+
+  const getClaimPaperReference = (claim, fallbackSequence) => {
+    const storedReference = String(claim?.claimNumber || '').trim();
+    if (storedReference) return storedReference;
+    return `${batchCode}/${String(fallbackSequence).padStart(4, '0')}`;
   };
 
   const hasProviderRefusalBalance = (claim) => getDisplayRefused(claim) > 0;
@@ -364,7 +376,7 @@ export default function ClaimBatchDetail() {
         case 'beneficiaryPaid':
           return Number(claim?.beneficiaryPaidAmount) || 0;
         case 'copay':
-          return Number(claim.patientCoPay) || 0;
+          return getBeneficiaryCommitment(claim);
         case 'index':
           return idx;
         default:
@@ -387,6 +399,20 @@ export default function ClaimBatchDetail() {
       })
       .map((entry) => entry.claim);
   }, [claims, tableState.sorting]);
+
+  const claimDisplayOrder = useMemo(() => {
+    return [...claims]
+      .sort((a, b) => {
+        const aTime = new Date(a?.createdAt || a?.serviceDate || 0).getTime() || 0;
+        const bTime = new Date(b?.createdAt || b?.serviceDate || 0).getTime() || 0;
+        if (aTime !== bTime) return aTime - bTime;
+        return (Number(a?.id) || 0) - (Number(b?.id) || 0);
+      })
+      .reduce((map, claim, index) => {
+        map.set(claim.id, index + 1);
+        return map;
+      }, new Map());
+  }, [claims]);
 
   // Paginated Data for the table
   const paginatedClaims = useMemo(() => {
@@ -431,7 +457,7 @@ export default function ClaimBatchDetail() {
     claims.forEach((c, idx) => {
       worksheet.addRow({
         index: idx + 1,
-        ref: `${batchCode}/${String(idx + 1).padStart(4, '0')}`,
+        ref: getClaimPaperReference(c, claimDisplayOrder.get(c.id) || idx + 1),
         provider: provider?.name || '-',
         patient: c.memberName || '-',
         serviceDate: c.serviceDate || '-',
@@ -439,7 +465,7 @@ export default function ClaimBatchDetail() {
         amount: c.requestedAmount || 0,
         covered: getInsurerCommitment(c),
         refused: getDisplayRefused(c),
-        copay: c.patientCoPay || 0,
+        copay: getBeneficiaryCommitment(c),
         beneficiaryPaid: c.beneficiaryPaidAmount || 0,
         paid: getNetProviderAmount(c)
       });
@@ -557,7 +583,7 @@ export default function ClaimBatchDetail() {
       amount: claims.reduce((s, c) => s + (c.requestedAmount || 0), 0),
       covered: visibleFinancialClaims.reduce((s, c) => s + getInsurerCommitment(c), 0),
       refused: claims.reduce((s, c) => s + getDisplayRefused(c), 0),
-      copay: visibleFinancialClaims.reduce((s, c) => s + (c.patientCoPay || 0), 0),
+      copay: visibleFinancialClaims.reduce((s, c) => s + getBeneficiaryCommitment(c), 0),
       beneficiaryPaid: claims.reduce((s, c) => s + (Number(c.beneficiaryPaidAmount) || 0), 0),
       paid: payableClaims.reduce((s, c) => s + (c.netProviderAmount || 0), 0)
     };
@@ -602,6 +628,7 @@ export default function ClaimBatchDetail() {
 
   const renderCell = (claim, column, rowIndex) => {
     const index = tableState.page * tableState.pageSize + rowIndex;
+    const displaySequence = claimDisplayOrder.get(claim.id) || index + 1;
     switch (column.id) {
       case 'select':
         return (
@@ -615,11 +642,8 @@ export default function ClaimBatchDetail() {
       case 'ref':
         return (
           <Stack direction="row" spacing={0.3} alignItems="baseline" dir="ltr" justifyContent="center">
-            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
-              {batchCode}/
-            </Typography>
             <Typography variant="body2" fontWeight={700} color="primary.main" sx={{ fontSize: '0.95rem' }}>
-              {String(index + 1).padStart(4, '0')}
+              {getClaimPaperReference(claim, displaySequence)}
             </Typography>
           </Stack>
         );
@@ -718,11 +742,10 @@ export default function ClaimBatchDetail() {
           return <Typography variant="body2" color="text.secondary">—</Typography>;
         }
         const paidAmount = Number(claim.beneficiaryPaidAmount) || 0;
-        const paidTowardCopay = Number(claim.beneficiaryPaidTowardCopay) || 0;
-        const paidTowardRefusal = Number(claim.beneficiaryPaidTowardRefusal) || 0;
+        const paidTowardRefusal = Math.min(paidAmount, Number(claim.refusedAmount) || 0);
         const paidTooltip =
           paidAmount > 0
-            ? `من التزام المستفيد: ${paidTowardCopay.toFixed(2)} د.ل، من المرفوض: ${paidTowardRefusal.toFixed(2)} د.ل`
+            ? `مدفوع خارج التأمين ويخصم من المرفوض: ${paidTowardRefusal.toFixed(2)} د.ل`
             : '';
         return (
           <Tooltip title={paidTooltip} arrow placement="top">
@@ -739,7 +762,7 @@ export default function ClaimBatchDetail() {
       case 'copay':
         return (
           <Typography variant="body2" color="info.main" fontWeight={600}>
-            {(claim.patientCoPay || 0).toFixed(2)}
+            {getBeneficiaryCommitment(claim).toFixed(2)}
           </Typography>
         );
       case 'paid':

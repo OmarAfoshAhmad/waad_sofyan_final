@@ -9,36 +9,36 @@ import org.junit.jupiter.api.Test;
 class ClaimFinancialTotalsTest {
 
     @Test
-    void beneficiaryDirectPaymentIsAppliedToBaseCopayFirst() {
+    void beneficiaryDirectPaymentIsAdditionalShareThatReducesProviderRefusal() {
         Claim claim = claim("750.00", "200.00", "500.00");
 
         ClaimFinancialTotals.applyBeneficiaryDirectPaymentSettlement(claim);
 
         assertThat(claim.getBeneficiaryPaidAmount()).isEqualByComparingTo("500.00");
-        assertThat(claim.getBeneficiaryPaidTowardCopay()).isEqualByComparingTo("500.00");
-        assertThat(claim.getBeneficiaryPaidTowardRefusal()).isEqualByComparingTo("0.00");
-        assertThat(claim.getProviderRefusalBalance()).isEqualByComparingTo("200.00");
+        assertThat(claim.getBeneficiaryPaidTowardCopay()).isEqualByComparingTo("0.00");
+        assertThat(claim.getBeneficiaryPaidTowardRefusal()).isEqualByComparingTo("200.00");
+        assertThat(claim.getProviderRefusalBalance()).isEqualByComparingTo("0.00");
     }
 
     @Test
-    void beneficiaryDirectPaymentExcessReducesProviderRefusalBalance() {
-        Claim claim = claim("750.00", "200.00", "850.00");
+    void beneficiaryDirectPaymentPartialAmountReducesProviderRefusalBalance() {
+        Claim claim = claim("1000.00", "576.00", "144.00");
 
         ClaimFinancialTotals.applyBeneficiaryDirectPaymentSettlement(claim);
 
-        assertThat(claim.getBeneficiaryPaidTowardCopay()).isEqualByComparingTo("750.00");
-        assertThat(claim.getBeneficiaryPaidTowardRefusal()).isEqualByComparingTo("100.00");
-        assertThat(claim.getProviderRefusalBalance()).isEqualByComparingTo("100.00");
+        assertThat(claim.getBeneficiaryPaidTowardCopay()).isEqualByComparingTo("0.00");
+        assertThat(claim.getBeneficiaryPaidTowardRefusal()).isEqualByComparingTo("144.00");
+        assertThat(claim.getProviderRefusalBalance()).isEqualByComparingTo("432.00");
     }
 
     @Test
-    void beneficiaryDirectPaymentMayExceedCopayAndRefusalWithoutChangingProviderBalanceBelowZero() {
+    void beneficiaryDirectPaymentMayExceedRefusalWithoutChangingProviderBalanceBelowZero() {
         Claim claim = claim("750.00", "200.00", "1000.00");
 
         ClaimFinancialTotals.applyBeneficiaryDirectPaymentSettlement(claim);
 
         assertThat(claim.getBeneficiaryPaidAmount()).isEqualByComparingTo("1000.00");
-        assertThat(claim.getBeneficiaryPaidTowardCopay()).isEqualByComparingTo("750.00");
+        assertThat(claim.getBeneficiaryPaidTowardCopay()).isEqualByComparingTo("0.00");
         assertThat(claim.getBeneficiaryPaidTowardRefusal()).isEqualByComparingTo("200.00");
         assertThat(claim.getProviderRefusalBalance()).isEqualByComparingTo("0.00");
     }

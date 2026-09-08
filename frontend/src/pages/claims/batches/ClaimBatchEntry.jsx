@@ -1437,12 +1437,12 @@ export default function ClaimBatchEntry() {
     const paid = Math.max(0, parseFloat(beneficiaryPaidAmount) || 0);
     const baseBeneficiaryShare = Math.max(0, totals.employee || 0);
     const refused = Math.max(0, totals.refused || 0);
-    const appliedToBaseShare = Math.min(paid, baseBeneficiaryShare);
-    const extraPaid = Math.max(0, paid - appliedToBaseShare);
-    const appliedToRefused = Math.min(extraPaid, refused);
-    const remainingBeneficiaryShare = Math.max(0, baseBeneficiaryShare - appliedToBaseShare);
+    const appliedToBaseShare = 0;
+    const appliedToRefused = Math.min(paid, refused);
+    const remainingBeneficiaryShare = 0;
     const providerRefusedBalance = Math.max(0, refused - appliedToRefused);
-    const excessPayment = Math.max(0, extraPaid - appliedToRefused);
+    const excessPayment = Math.max(0, paid - appliedToRefused);
+    const finalBeneficiaryShare = baseBeneficiaryShare + paid;
 
     return {
       paid,
@@ -1450,7 +1450,8 @@ export default function ClaimBatchEntry() {
       appliedToRefused,
       remainingBeneficiaryShare,
       providerRefusedBalance,
-      excessPayment
+      excessPayment,
+      finalBeneficiaryShare
     };
   }, [beneficiaryPaidAmount, totals.employee, totals.refused]);
 

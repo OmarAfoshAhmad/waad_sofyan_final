@@ -67,11 +67,9 @@ public final class ClaimFinancialTotals {
 
     public static void applyBeneficiaryDirectPaymentSettlement(Claim claim) {
         BigDecimal paid = money(claim.getBeneficiaryPaidAmount());
-        BigDecimal patient = money(claim.getPatientCoPay());
         BigDecimal refused = money(claim.getRefusedAmount());
-        BigDecimal towardCopay = paid.min(patient);
-        BigDecimal excessAfterCopay = paid.subtract(towardCopay).max(BigDecimal.ZERO);
-        BigDecimal towardRefusal = excessAfterCopay.min(refused);
+        BigDecimal towardCopay = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        BigDecimal towardRefusal = paid.min(refused);
         BigDecimal providerBalance = refused.subtract(towardRefusal).max(BigDecimal.ZERO);
 
         claim.setBeneficiaryPaidAmount(paid);
