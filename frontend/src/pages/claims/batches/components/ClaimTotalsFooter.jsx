@@ -173,10 +173,10 @@ export const ClaimTotalsFooter = ({
             '& .MuiInputBase-root': { height: 36 },
             '& .MuiInputLabel-root': { fontSize: '0.72rem' }
           }}
-          error={settlement.excessPayment > 0}
+          error={false}
           helperText={
             settlement.excessPayment > 0
-              ? `زائد ${settlement.excessPayment.toFixed(2)}`
+              ? `خارج التأمين ${settlement.excessPayment.toFixed(2)}`
               : showSettlementDetails
                 ? settlement.appliedToRefused > 0
                   ? `من المرفوض ${settlement.appliedToRefused.toFixed(2)}`

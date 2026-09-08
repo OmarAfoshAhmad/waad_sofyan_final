@@ -87,20 +87,34 @@ public class CoverageDecisionService {
                 context = definition.getBaseEncounterType();
             }
         }
-        BenefitPolicyRule rule = ruleRepository.findBestRuleForClaimContext(
-                request.policyId(), category.getId(), category.getParentId(), exactContext)
-                .orElse(null);
-        boolean generalInpatientFallback = false;
-        if (rule == null && INPATIENT_BASED_CLAIM_CONTEXTS.contains(exactContext)) {
+        boolean inpatientBasedContext = INPATIENT_BASED_CLAIM_CONTEXTS.contains(exactContext);
+        BenefitPolicyRule generalInpatientRule = null;
+        if (inpatientBasedContext) {
             MedicalCategory inpatientGeneral = categoryRepository.findActiveByCode(GENERAL_INPATIENT_CATEGORY_CODE)
                     .filter(candidate -> !candidate.isDeleted())
                     .orElse(null);
             if (inpatientGeneral != null && !inpatientGeneral.getId().equals(category.getId())) {
-                rule = ruleRepository.findBestRuleForClaimContext(
+                generalInpatientRule = ruleRepository.findBestRuleForClaimContext(
                                 request.policyId(), inpatientGeneral.getId(), inpatientGeneral.getParentId(), exactContext)
                         .orElse(null);
-                generalInpatientFallback = rule != null;
             }
+        }
+
+        BenefitPolicyRule rule = null;
+        boolean generalInpatientFallback = false;
+        if (generalInpatientRule != null) {
+            // In inpatient-derived claim contexts (إيواء، الحمل والولادة، مضاعفات الحمل)
+            // the claim context is the financial boundary. A service can remain
+            // classified as diagnostics/outpatient in the catalog, but financially
+            // it must consume the same general inpatient bucket as the rest of the
+            // claim. Otherwise a standard/open-price service can appear to have a
+            // separate ceiling inside the same claim.
+            rule = generalInpatientRule;
+            generalInpatientFallback = true;
+        } else {
+            rule = ruleRepository.findBestRuleForClaimContext(
+                    request.policyId(), category.getId(), category.getParentId(), exactContext)
+                    .orElse(null);
         }
         if (rule == null) {
             return rejected(categoryId, CoverageDecisionSource.NO_BENEFIT_RULE, "NO_BENEFIT_RULE");

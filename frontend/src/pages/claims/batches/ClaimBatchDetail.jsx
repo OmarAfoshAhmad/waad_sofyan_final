@@ -550,15 +550,16 @@ export default function ClaimBatchDetail() {
 
   // Totals for footer
   const totals = useMemo(() => {
-    const financiallyFinal = (claim) => ['APPROVED', 'BATCHED', 'SETTLED', 'PAID'].includes(claim.status);
-    const finalizedClaims = claims.filter(financiallyFinal);
+    const financiallyVisible = (claim) => claim.status !== 'NEEDS_CORRECTION';
+    const visibleFinancialClaims = claims.filter(financiallyVisible);
+    const payableClaims = claims.filter((claim) => ['APPROVED', 'BATCHED', 'SETTLED', 'PAID'].includes(claim.status));
     return {
       amount: claims.reduce((s, c) => s + (c.requestedAmount || 0), 0),
-      covered: finalizedClaims.reduce((s, c) => s + getInsurerCommitment(c), 0),
+      covered: visibleFinancialClaims.reduce((s, c) => s + getInsurerCommitment(c), 0),
       refused: claims.reduce((s, c) => s + getDisplayRefused(c), 0),
-      copay: finalizedClaims.reduce((s, c) => s + (c.patientCoPay || 0), 0),
+      copay: visibleFinancialClaims.reduce((s, c) => s + (c.patientCoPay || 0), 0),
       beneficiaryPaid: claims.reduce((s, c) => s + (Number(c.beneficiaryPaidAmount) || 0), 0),
-      paid: finalizedClaims.reduce((s, c) => s + (c.netProviderAmount || 0), 0)
+      paid: payableClaims.reduce((s, c) => s + (c.netProviderAmount || 0), 0)
     };
   }, [claims]);
 

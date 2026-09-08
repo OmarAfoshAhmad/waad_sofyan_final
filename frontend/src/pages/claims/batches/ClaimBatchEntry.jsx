@@ -1977,8 +1977,8 @@ export default function ClaimBatchEntry() {
               <Chip
                 size="small"
                 variant="filled"
-                label={isDirty ? t('claimEntry.statusDraft') : t('claimEntry.statusNew')}
-                color={isDirty ? 'warning' : 'primary'}
+                label={editingClaimId ? `تعديل مطالبة #${editingClaimId}` : isDirty ? t('claimEntry.statusDraft') : t('claimEntry.statusNew')}
+                color={editingClaimId ? 'info' : isDirty ? 'warning' : 'primary'}
                 sx={{ fontWeight: 600, fontSize: '0.85rem' }}
               />
               {entryContext && policyInfo && (

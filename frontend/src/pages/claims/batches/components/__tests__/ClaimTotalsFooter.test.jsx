@@ -17,7 +17,7 @@ function renderFooter(financialDataUnavailable) {
         t={(key) => key === 'claimEntry.saveAndAdd' ? 'حفظ وإضافة' : key} visibleColumns={{}} />
     </ThemeProvider>
   );
-  return screen.getByRole('button', { name: 'حفظ وإضافة' });
+  return screen.getByRole('button', { name: 'إرسال' });
 }
 
 describe('ClaimTotalsFooter financial fail-closed gate', () => {

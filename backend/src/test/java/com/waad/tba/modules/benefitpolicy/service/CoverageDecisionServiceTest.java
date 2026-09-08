@@ -136,8 +136,6 @@ class CoverageDecisionServiceTest {
         when(claimContextRepository.findById("MATERNITY")).thenReturn(Optional.of(
                 ClaimContextDefinition.builder().code("MATERNITY").nameAr("ولادة وحمل")
                         .baseEncounterType(EncounterType.INPATIENT).active(true).build()));
-        when(ruleRepository.findBestRuleForClaimContext(1L, 55L, null, "MATERNITY"))
-                .thenReturn(Optional.empty());
         when(categoryRepository.findActiveByCode("CAT-COV-INPATIENT")).thenReturn(Optional.of(inpatientGeneral));
         when(ruleRepository.findBestRuleForClaimContext(1L, 77L, null, "MATERNITY"))
                 .thenReturn(Optional.of(rule));
@@ -184,6 +182,38 @@ class CoverageDecisionServiceTest {
     }
 
     @Test
+    void inpatientBasedClaimContextPrefersGeneralInpatientRuleEvenWhenServiceCategoryHasContextRule() {
+        MedicalCategory diagnosticCategory = category(55L, null, Set.of(CategoryContext.OUTPATIENT));
+        diagnosticCategory.setCode("CAT-COV-DIAG-FEES");
+        MedicalCategory inpatientGeneral = category(77L, null, Set.of(CategoryContext.INPATIENT));
+        inpatientGeneral.setCode("CAT-COV-INPATIENT");
+        BenefitPolicy policy = BenefitPolicy.builder().id(1L).build();
+        BenefitPolicyRule diagnosticRule = BenefitPolicyRule.builder().id(41L).benefitPolicy(policy)
+                .medicalCategory(diagnosticCategory).coveragePercent(75).encounterType(EncounterType.INPATIENT)
+                .claimContextCode("MATERNITY").active(true).deleted(false).build();
+        BenefitPolicyRule generalRule = BenefitPolicyRule.builder().id(42L).benefitPolicy(policy)
+                .medicalCategory(inpatientGeneral).coveragePercent(75).encounterType(EncounterType.INPATIENT)
+                .claimContextCode("MATERNITY").active(true).deleted(false).build();
+        when(categoryRepository.findById(55L)).thenReturn(Optional.of(diagnosticCategory));
+        when(policyRepository.findById(1L)).thenReturn(Optional.of(policy));
+        when(claimContextRepository.findById("MATERNITY")).thenReturn(Optional.of(
+                ClaimContextDefinition.builder().code("MATERNITY").nameAr("ولادة وحمل")
+                        .baseEncounterType(EncounterType.INPATIENT).active(true).build()));
+        when(categoryRepository.findActiveByCode("CAT-COV-INPATIENT")).thenReturn(Optional.of(inpatientGeneral));
+        when(ruleRepository.findBestRuleForClaimContext(1L, 77L, null, "MATERNITY"))
+                .thenReturn(Optional.of(generalRule));
+
+        var decision = service.resolve(CoverageDecisionRequest.builder().policyId(1L)
+                .serviceCategoryId(55L).memberId(7L)
+                .encounterType(EncounterType.INPATIENT).claimContextCode("MATERNITY").build());
+
+        assertThat(decision.covered()).isTrue();
+        assertThat(decision.source()).isEqualTo(CoverageDecisionSource.GENERAL_INPATIENT_RULE);
+        assertThat(decision.appliedRule().getId()).isEqualTo(42L);
+        assertThat(decision.appliedRule().getId()).isNotEqualTo(diagnosticRule.getId());
+    }
+
+    @Test
     void pregnancyComplicationsFallsBackToTheGenericInpatientRuleWhenServiceCategoryHasNoContextRule() {
         MedicalCategory diagnosticCategory = category(55L, null, Set.of(CategoryContext.OUTPATIENT));
         MedicalCategory inpatientGeneral = category(77L, null, Set.of(CategoryContext.INPATIENT));
@@ -197,8 +227,6 @@ class CoverageDecisionServiceTest {
         when(claimContextRepository.findById("PREGNANCY_COMPLICATIONS")).thenReturn(Optional.of(
                 ClaimContextDefinition.builder().code("PREGNANCY_COMPLICATIONS").nameAr("مضاعفات الحمل")
                         .baseEncounterType(EncounterType.INPATIENT).active(true).build()));
-        when(ruleRepository.findBestRuleForClaimContext(1L, 55L, null, "PREGNANCY_COMPLICATIONS"))
-                .thenReturn(Optional.empty());
         when(categoryRepository.findActiveByCode("CAT-COV-INPATIENT")).thenReturn(Optional.of(inpatientGeneral));
         when(ruleRepository.findBestRuleForClaimContext(1L, 77L, null, "PREGNANCY_COMPLICATIONS"))
                 .thenReturn(Optional.of(rule));

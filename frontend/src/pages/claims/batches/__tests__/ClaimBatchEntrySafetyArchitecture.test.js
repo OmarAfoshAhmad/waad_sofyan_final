@@ -27,6 +27,11 @@ describe('claim batch entry safety boundary', () => {
     expect(footerSource).toContain('إرسال');
   });
 
+  it('labels edit mode as an edited claim rather than a new claim', () => {
+    expect(entrySource).toContain('تعديل مطالبة #${editingClaimId}');
+    expect(entrySource).toContain("color={editingClaimId ? 'info' : isDirty ? 'warning' : 'primary'}");
+  });
+
   it('never labels a claim with refused money as partially approved in batch details', () => {
     expect(detailSource).not.toContain('معتمدة جزئ');
     expect(detailSource).toContain('getDisplayRefused(claim)');
@@ -38,6 +43,12 @@ describe('claim batch entry safety boundary', () => {
     expect(detailSource).toContain('beneficiaryPaidTowardRefusal');
     expect(detailSource).toContain("label: 'على مقدم الخدمة'");
     expect(detailSource).toContain('getReviewerDisplayStatus(claim)');
+  });
+
+  it('includes draft and submitted claims in visible batch financial totals', () => {
+    expect(detailSource).toContain("const financiallyVisible = (claim) => claim.status !== 'NEEDS_CORRECTION'");
+    expect(detailSource).toContain('visibleFinancialClaims.reduce((s, c) => s + getInsurerCommitment(c), 0)');
+    expect(detailSource).toContain("const payableClaims = claims.filter((claim) => ['APPROVED', 'BATCHED', 'SETTLED', 'PAID'].includes(claim.status))");
   });
 
   it('keeps provider contract discount out of the medical reviewer batch table', () => {
@@ -275,6 +286,8 @@ describe('claim batch entry safety boundary', () => {
   it('allows beneficiary payment to exceed copay plus refusal without blocking save', () => {
     expect(entrySource).not.toContain('beneficiarySettlement.excessPayment > 0');
     expect(entrySource).not.toContain('المبلغ المدفوع من المستفيد أكبر من التزامه والمبلغ المرفوض');
+    expect(footerSource).toContain('خارج التأمين');
+    expect(footerSource).not.toContain('زائد ');
     expect(footerSource).toContain('Boolean(saveDisabledReason)');
   });
 
