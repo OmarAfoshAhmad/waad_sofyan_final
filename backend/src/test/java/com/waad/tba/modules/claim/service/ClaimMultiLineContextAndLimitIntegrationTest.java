@@ -143,6 +143,40 @@ class ClaimMultiLineContextAndLimitIntegrationTest extends PostgresIntegrationTe
 
     @Test
     @WithMockUser(username = "admin", roles = { "SUPER_ADMIN" })
+    void maternityAndPregnancyContextsOverrideOutpatientDefaultClassificationWithContextGeneralRule() {
+        String suffix = UUID.randomUUID().toString().substring(0, 8);
+        Fixture f = fixture(suffix, new BigDecimal("5000.00"));
+
+        MedicalCategory outpatientOnly = category("CAT-OPD-MAT-" + suffix, "خدمة مصنفة عيادات خارجية");
+        MedicalCategory inpatientGeneral = category("CAT-COV-INPATIENT", "إيواء عام " + suffix);
+
+        ruleWithClaimContext(f.policy(), outpatientOnly, EncounterType.OUTPATIENT, "OUTPATIENT", 75,
+                bucket(f.policy(), "OPD-MAT-" + suffix, EncounterType.OUTPATIENT, new BigDecimal("1000.00"), null));
+        ruleWithClaimContext(f.policy(), inpatientGeneral, EncounterType.INPATIENT, "MATERNITY", 75,
+                bucket(f.policy(), "MAT-GEN-" + suffix, EncounterType.INPATIENT, new BigDecimal("4000.00"), null));
+        ruleWithClaimContext(f.policy(), inpatientGeneral, EncounterType.INPATIENT, "PREGNANCY_COMPLICATIONS", 75,
+                bucket(f.policy(), "PREG-GEN-" + suffix, EncounterType.INPATIENT, new BigDecimal("1500.00"), null));
+
+        MedicalService sugar = manualService(outpatientOnly, "SUGAR-MAT-" + suffix, "تحليل سكر مصنف عيادات خارجية");
+
+        ClaimViewDto maternity = submit(f, EncounterType.INPATIENT, "MATERNITY", List.of(
+                ClaimLineDto.builder().medicalServiceId(sugar.getId()).manualAmount(new BigDecimal("1000.00")).quantity(1).build()));
+        ClaimViewDto complications = submit(f, EncounterType.INPATIENT, "PREGNANCY_COMPLICATIONS", List.of(
+                ClaimLineDto.builder().medicalServiceId(sugar.getId()).manualAmount(new BigDecimal("2000.00")).quantity(1).build()));
+
+        assertThat(maternity.getLines().get(0).getRejected()).isFalse();
+        assertThat(maternity.getLines().get(0).getCompanyShare()).isEqualByComparingTo("750.00");
+        assertThat(maternity.getLines().get(0).getPatientShare()).isEqualByComparingTo("250.00");
+
+        assertThat(complications.getLines().get(0).getRejected()).isFalse();
+        assertThat(complications.getLines().get(0).getApprovedAmount()).isEqualByComparingTo("1125.00");
+        assertThat(complications.getLines().get(0).getRefusedAmount()).isEqualByComparingTo("500.00");
+        assertThat(complications.getLines().get(0).getCompanyShare()).isEqualByComparingTo("1125.00");
+        assertThat(complications.getLines().get(0).getPatientShare()).isEqualByComparingTo("375.00");
+    }
+
+    @Test
+    @WithMockUser(username = "admin", roles = { "SUPER_ADMIN" })
     void oneMultiLineClaimCannotOverdrawTheGeneralAnnualCeiling() {
         String suffix = UUID.randomUUID().toString().substring(0, 8);
         Fixture f = fixture(suffix, new BigDecimal("700.00"));
@@ -218,9 +252,14 @@ class ClaimMultiLineContextAndLimitIntegrationTest extends PostgresIntegrationTe
 
     private BenefitPolicyRule rule(BenefitPolicy policy, MedicalCategory category, EncounterType context,
             int coveragePercent, BenefitLimitBucket bucket) {
+        return ruleWithClaimContext(policy, category, context, context.name(), coveragePercent, bucket);
+    }
+
+    private BenefitPolicyRule ruleWithClaimContext(BenefitPolicy policy, MedicalCategory category, EncounterType context,
+            String claimContextCode, int coveragePercent, BenefitLimitBucket bucket) {
         BenefitPolicyRule rule = ruleRepository.save(BenefitPolicyRule.builder()
                 .benefitPolicy(policy).medicalCategory(category)
-                .encounterType(context).claimContextCode(context.name())
+                .encounterType(context).claimContextCode(claimContextCode)
                 .coveragePercent(coveragePercent).active(true).deleted(false).build());
         ruleBucketRepository.save(BenefitRuleBucket.builder().rule(rule).bucket(bucket).build());
         return rule;
@@ -260,12 +299,16 @@ class ClaimMultiLineContextAndLimitIntegrationTest extends PostgresIntegrationTe
     }
 
     private ClaimViewDto submit(Fixture f, EncounterType context, List<ClaimLineDto> lines) {
+        return submit(f, context, context.name(), lines);
+    }
+
+    private ClaimViewDto submit(Fixture f, EncounterType context, String claimContextCode, List<ClaimLineDto> lines) {
         Visit visit = visitRepository.save(Visit.builder()
                 .member(f.member()).providerId(f.provider().getId()).visitDate(LocalDate.now())
                 .status(VisitStatus.REGISTERED).build());
         return claimService.createClaim(ClaimCreateDto.builder()
                 .visitId(visit.getId()).serviceDate(LocalDate.now())
-                .encounterType(context).claimContextCode(context.name())
+                .encounterType(context).claimContextCode(claimContextCode)
                 .lines(lines).build());
     }
 }

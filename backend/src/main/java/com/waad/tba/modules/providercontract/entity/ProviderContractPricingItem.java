@@ -1,6 +1,7 @@
 package com.waad.tba.modules.providercontract.entity;
 
 import com.waad.tba.modules.medicaltaxonomy.entity.MedicalCategory;
+import com.waad.tba.modules.medicaltaxonomy.enums.PricingMode;
 import com.waad.tba.modules.providercontract.enums.ClassificationStatus;
 import com.waad.tba.modules.providercontract.enums.ConfidenceLevel;
 import com.waad.tba.modules.providercontract.enums.EncounterType;
@@ -84,6 +85,11 @@ public class ProviderContractPricingItem {
     @DecimalMin(value = "0.00")
     @Column(name = "max_contract_price", precision = 15, scale = 2)
     private BigDecimal maxContractPrice;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "pricing_mode", length = 30, nullable = false)
+    @Builder.Default
+    private PricingMode pricingMode = PricingMode.CONTRACT_PRICE;
 
     // Auto-calculated: (basePrice - contractPrice) / basePrice * 100
     @DecimalMin(value = "0.00")

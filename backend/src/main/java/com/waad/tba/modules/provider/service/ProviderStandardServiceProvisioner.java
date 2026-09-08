@@ -121,7 +121,8 @@ public class ProviderStandardServiceProvisioner {
                 .orElseThrow(() -> new BusinessRuleException("التصنيف الطبي المحدد غير موجود"));
         String defaultClaimContextCode = requireActiveClaimContext(dto.getDefaultClaimContextCode());
         PricingMode pricingMode = dto.getPricingMode() == null ? PricingMode.MANUAL_AMOUNT : dto.getPricingMode();
-        if (pricingMode != PricingMode.MANUAL_AMOUNT && pricingMode != PricingMode.CONTRACT_PRICE) {
+        if (pricingMode != PricingMode.MANUAL_AMOUNT
+                && pricingMode != PricingMode.CONTRACT_PRICE) {
             throw new BusinessRuleException("نوع تسعير الخدمة غير مدعوم");
         }
         BigDecimal basePrice = dto.getBasePrice();
@@ -129,7 +130,6 @@ public class ProviderStandardServiceProvisioner {
                 && (basePrice == null || basePrice.compareTo(BigDecimal.ZERO) <= 0)) {
             throw new BusinessRuleException("سعر الوحدة إلزامي للخدمة العامة ذات الكمية");
         }
-
         MedicalService service = medicalServiceRepository.save(MedicalService.builder()
                 .code(code)
                 .name(dto.getNameAr().trim())

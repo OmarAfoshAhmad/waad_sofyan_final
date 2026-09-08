@@ -426,9 +426,13 @@ export default function ClaimBatchEntry() {
       setCustomServiceError('يرجى إدخال اسم الخدمة');
       return;
     }
-    const priceNum = parseFloat(customServiceData.contractPrice);
-    if (isNaN(priceNum) || priceNum <= 0) {
-      setCustomServiceError('يرجى إدخال سعر وحدة صحيح أكبر من صفر');
+    if (!entryContext?.contractId) {
+      setCustomServiceError('لا يوجد عقد مقدم خدمة فعّال لإضافة هذه الخدمة إليه بتاريخ المطالبة');
+      return;
+    }
+    const priceNum = customServiceData.contractPrice === '' ? 0 : parseFloat(customServiceData.contractPrice);
+    if (customServiceData.contractPrice !== '' && (isNaN(priceNum) || priceNum <= 0)) {
+      setCustomServiceError('إذا أدخلت سعراً، يجب أن يكون سعر وحدة صحيحاً أكبر من صفر');
       return;
     }
 
@@ -440,43 +444,42 @@ export default function ClaimBatchEntry() {
       const finalServiceCode = customServiceData.serviceCode.trim() || `SYS-CLAIM-${Date.now().toString().slice(-8)}`;
 
       const payload = {
-        code: finalServiceCode,
-        nameAr: customServiceData.serviceName.trim(),
-        nameEn: null,
-        categoryId: Number(finalCategoryId),
-        pricingMode: 'CONTRACT_PRICE',
-        basePrice: priceNum,
-        defaultClaimContextCode: claimContextCode || encounterType || 'OUTPATIENT',
-        defaultProviderTypes: []
+        serviceCode: finalServiceCode,
+        serviceName: customServiceData.serviceName.trim(),
+        medicalCategoryId: Number(finalCategoryId),
+        pricingMode: 'CLAIM_UNIT_PRICE',
+        basePrice: 0,
+        contractPrice: 0,
+        maxContractPrice: null,
+        effectiveFrom: serviceDate || undefined,
+        notes: `أضيفت من شاشة إدخال المطالبات بسعر مفتوح لكل مطالبة. السياق الافتراضي عند الإضافة: ${claimContextCode || encounterType || 'OUTPATIENT'}`
       };
 
-      // Create the shared medical catalog service, then use it on this claim
-      // as a direct unit-priced service. It is not a provider-contract price
-      // item, but it is also not an invoice-style MANUAL_AMOUNT line; quantity
-      // must stay editable for services added from claim entry.
-      const response = await axiosClient.post('/provider-standard-services', payload);
+      // Add the service to the active provider contract, but with an open
+      // per-claim unit price. It will appear for this provider later, yet the
+      // clerk may enter 100 in one claim and 250 in another without creating
+      // a price-excess refusal.
+      const response = await axiosClient.post(`/provider-contracts/${entryContext.contractId}/pricing`, payload);
       const createdService = response.data?.data || response.data;
 
-      const newServiceId = createdService.medicalServiceId || createdService.serviceId || createdService.id;
-
       const newServiceObject = {
-        id: newServiceId,
-        medicalServiceId: newServiceId,
-        pricingItemId: null,
-        pricingMode: 'CONTRACT_PRICE',
-        directPrice: true,
+        id: createdService.id,
+        medicalServiceId: null,
+        pricingItemId: createdService.id,
+        pricingMode: 'CLAIM_UNIT_PRICE',
+        directPrice: false,
         serviceCode: finalServiceCode,
-        serviceName: payload.nameAr,
+        serviceName: payload.serviceName,
         categoryId: Number(finalCategoryId),
         serviceCategoryId: Number(finalCategoryId),
         medicalCategoryId: Number(finalCategoryId),
         categoryName: createdService.categoryName || '',
         serviceCategoryName: createdService.categoryName || '',
         medicalCategoryName: createdService.categoryName || '',
-        claimContextCode: payload.defaultClaimContextCode,
-        label: buildServiceDisplayLabel({ code: finalServiceCode, name: payload.nameAr }),
-        contractPrice: priceNum,
-        maxContractPrice: priceNum,
+        claimContextCode: claimContextCode || encounterType || 'OUTPATIENT',
+        label: buildServiceDisplayLabel({ code: finalServiceCode, name: payload.serviceName }),
+        contractPrice: 0,
+        maxContractPrice: 0,
         price: priceNum
       };
 
@@ -1097,13 +1100,13 @@ export default function ClaimBatchEntry() {
       if (needsBackendRefresh && policyId && member?.id) {
         if (coverageRefetchTimerRef.current) clearTimeout(coverageRefetchTimerRef.current);
         coverageRefetchTimerRef.current = setTimeout(() => {
-          refetchAllLinesCoverage(encounterType, linesRef.current).then((updated) => {
+          refetchAllLinesCoverage(encounterType, linesRef.current, fullCoverage, claimContextCode).then((updated) => {
             if (updated) setLines(updated);
           });
         }, 600);
       }
     },
-    [recompute, policyId, member?.id, refetchAllLinesCoverage, encounterType]
+    [recompute, policyId, member?.id, refetchAllLinesCoverage, encounterType, fullCoverage, claimContextCode]
   );
 
   const handleServiceChange = useCallback(
@@ -1162,6 +1165,7 @@ export default function ClaimBatchEntry() {
       // per-row bounds-check tooltip never fires for a price that was never
       // a contract price to begin with.
       const isManualAmount = svc.pricingMode === 'MANUAL_AMOUNT';
+      const isClaimUnitPrice = svc.pricingMode === 'CLAIM_UNIT_PRICE';
       const manualAmount = Number(options.manualAmount);
       const hasManualAmountOverride = Number.isFinite(manualAmount) && manualAmount > 0;
 
@@ -1169,7 +1173,7 @@ export default function ClaimBatchEntry() {
         service: svc,
         medicalServiceId: svc.medicalServiceId || null,
         pricingItemId: isManualAmount ? null : svc.pricingItemId || null,
-        pricingMode: isManualAmount ? 'MANUAL_AMOUNT' : 'CONTRACT_PRICE',
+        pricingMode: isManualAmount ? 'MANUAL_AMOUNT' : isClaimUnitPrice ? 'CLAIM_UNIT_PRICE' : 'CONTRACT_PRICE',
         serviceName: svc.serviceName || (typeof val === 'string' ? val : ''),
         serviceCode: svc.serviceCode || '',
         medicalCategoryId: resolvedCategoryId,
@@ -1177,9 +1181,9 @@ export default function ClaimBatchEntry() {
         serviceCategoryId: resolvedCategoryId,
         serviceCategoryName: resolvedCategoryName,
         quantity: isManualAmount ? 1 : currentLine.quantity || 1,
-        unitPrice: isManualAmount ? (hasManualAmountOverride ? manualAmount : currentLine.unitPrice || 0) : price,
-        contractPrice: isManualAmount ? 0 : maxPrice,
-        maxContractPrice: isManualAmount ? 0 : maxPrice,
+        unitPrice: isManualAmount ? (hasManualAmountOverride ? manualAmount : currentLine.unitPrice || 0) : isClaimUnitPrice ? (svc.price || currentLine.unitPrice || 0) : price,
+        contractPrice: isManualAmount || isClaimUnitPrice ? 0 : maxPrice,
+        maxContractPrice: isManualAmount || isClaimUnitPrice ? 0 : maxPrice,
         ...(isFreeText ? failedCoverageResult('الخدمة النصية غير مرتبطة بخدمة معتمدة ولا يمكن احتساب تغطيتها') : { coveragePending: true })
       };
 
@@ -1231,13 +1235,13 @@ export default function ClaimBatchEntry() {
 
     let active = true;
     setEditCoverageLoading(true);
-    Promise.resolve(refetchCoverageOnEditRef.current(encounterType, fullCoverage)).finally(() => {
+    Promise.resolve(refetchCoverageOnEditRef.current(encounterType, fullCoverage, claimContextCode)).finally(() => {
       if (active) setEditCoverageLoading(false);
     });
     return () => {
       active = false;
     };
-  }, [editingClaimId, editHydrationVersion, policyId, member?.id, encounterType, serviceDate, fullCoverage]);
+  }, [editingClaimId, editHydrationVersion, policyId, member?.id, encounterType, serviceDate, fullCoverage, claimContextCode]);
 
   const addLine = useCallback(() => {
     setLines((p) => [...p, newLine()]);
@@ -1418,6 +1422,9 @@ export default function ClaimBatchEntry() {
 
   const saveDisabledReason = useMemo(() => {
     if (saving) return 'جارٍ حفظ المطالبة.';
+    if (editingClaimId && editingClaim?.status && !['DRAFT', 'NEEDS_CORRECTION'].includes(editingClaim.status)) {
+      return `هذه المطالبة حالتها ${editingClaim.status} ولا يمكن تعديلها من شاشة الإدخال. أرجعها للتصحيح أو أنشئ مطالبة جديدة.`;
+    }
     if (!isDirty) return 'لا توجد تغييرات جديدة للحفظ.';
     if (entryContextBlockReason) return entryContextBlockReason;
     if (coveragePending) return 'انتظر اكتمال حساب التغطية والسقوف لكل البنود قبل الحفظ.';
@@ -1425,7 +1432,7 @@ export default function ClaimBatchEntry() {
       return 'المبلغ المدفوع من المستفيد أكبر من التزامه والمبلغ المرفوض.';
     }
     return null;
-  }, [beneficiarySettlement.excessPayment, coveragePending, entryContextBlockReason, isDirty, saving]);
+  }, [beneficiarySettlement.excessPayment, coveragePending, editingClaim?.status, editingClaimId, entryContextBlockReason, isDirty, saving]);
 
   const resetForm = useCallback(() => {
     setMember(null);
@@ -1645,7 +1652,7 @@ export default function ClaimBatchEntry() {
     }, 1600);
   };
 
-  const handleSave = async (resetAfter = false) => {
+  const handleSave = async (resetAfter = false, saveMode = 'submit') => {
     if (isSavingRef.current) return;
 
     if (entryContextBlockReason) {
@@ -1783,10 +1790,12 @@ export default function ClaimBatchEntry() {
         doctorName: doctorName.trim(),
         complaint,
         notes,
-        // Approval is a server-owned transition. The browser may explicitly
-        // request rejection, but a positive claim must enter through DRAFT so
-        // ClaimService finalizes the canonical snapshot and state transition.
-        status: effectivelyRejected ? 'REJECTED' : null,
+        // Draft-first workflow:
+        // - "حفظ كمسودة" persists DRAFT and keeps the claim editable.
+        // - "إرسال" persists SUBMITTED for review/next workflow step.
+        // - explicit full rejection remains REJECTED.
+        // Do not send null here: null is the legacy direct-approval path.
+        status: effectivelyRejected ? 'REJECTED' : saveMode === 'draft' ? 'DRAFT' : 'SUBMITTED',
         rejectionReason: effectivelyRejected ? effectiveRejectionReason : null,
         preAuthorizationId: preAuthId ? parseInt(preAuthId) : null,
         encounterType,
@@ -1798,6 +1807,7 @@ export default function ClaimBatchEntry() {
         // لا تصل أسطر بلا medicalServiceId أو pricingItemId إلى الخادم.
         lines: activeLines.map((l) => {
           const isManualAmountLine = (l.pricingMode || l.service?.pricingMode) === 'MANUAL_AMOUNT';
+          const isClaimUnitPriceLine = (l.pricingMode || l.service?.pricingMode) === 'CLAIM_UNIT_PRICE';
           return {
             id: typeof l.id === 'number' ? l.id : null,
             medicalServiceId: l.medicalServiceId || l.service?.medicalServiceId || l.service?.serviceId || null,
@@ -1925,7 +1935,7 @@ export default function ClaimBatchEntry() {
       invalidateBatchData();
       // ✅ FIX: Restore ceiling in current form after deletion
       if (member?.id && policyId) {
-        setTimeout(() => refetchCoverageOnEditRef.current(encounterType), 200);
+        setTimeout(() => refetchCoverageOnEditRef.current(encounterType, fullCoverage, claimContextCode), 200);
       }
     } catch (err) {
       enqueueSnackbar(err.message || 'فشل إلغاء المطالبة', { variant: 'error' });

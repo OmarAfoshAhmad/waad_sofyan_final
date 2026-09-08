@@ -2,6 +2,7 @@ package com.waad.tba.modules.providercontract.dto;
 
 import com.waad.tba.common.validation.ValidDateRange;
 import com.waad.tba.common.validation.ValidPricingRange;
+import com.waad.tba.modules.medicaltaxonomy.enums.PricingMode;
 import jakarta.validation.constraints.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -52,6 +53,14 @@ public class ProviderContractPricingItemCreateDto {
      * Optional category override
      */
     private Long medicalCategoryId;
+
+    /**
+     * CONTRACT_PRICE stores an enforceable contract price cap.
+     * CLAIM_UNIT_PRICE belongs to the provider contract but the clerk enters
+     * the unit price per claim, so base/contract prices may be zero.
+     */
+    @Builder.Default
+    private PricingMode pricingMode = PricingMode.CONTRACT_PRICE;
 
     /**
      * Standard/list price (required)

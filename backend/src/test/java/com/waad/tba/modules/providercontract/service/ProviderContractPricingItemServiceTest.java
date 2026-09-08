@@ -22,6 +22,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 
 import com.waad.tba.common.exception.BusinessRuleException;
+import com.waad.tba.modules.medicaltaxonomy.enums.PricingMode;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalCategoryRepository;
 import com.waad.tba.modules.providercontract.dto.ProviderContractPricingItemCreateDto;
 import com.waad.tba.modules.providercontract.dto.ProviderContractPricingItemResponseDto;
@@ -115,6 +116,31 @@ class ProviderContractPricingItemServiceTest {
                 verify(pricingRepository).save(captor.capture());
                 assertThat(captor.getValue().getEffectiveFrom()).isEqualTo(LocalDate.of(2025, 1, 1));
                 assertThat(captor.getValue().getEffectiveTo()).isEqualTo(LocalDate.of(2027, 1, 1));
+        }
+
+        @Test
+        void create_claimUnitPriceContractService_shouldAllowZeroFixedPrice() {
+                ProviderContractPricingItemCreateDto dto = ProviderContractPricingItemCreateDto.builder()
+                                .serviceCode("SYS-CLAIM-12345678")
+                                .serviceName("خدمة مضافة من المطالبة")
+                                .pricingMode(PricingMode.CLAIM_UNIT_PRICE)
+                                .basePrice(BigDecimal.ZERO)
+                                .contractPrice(BigDecimal.ZERO)
+                                .build();
+
+                when(contractRepository.findById(1L)).thenReturn(Optional.of(contract));
+                when(pricingRepository.existsByContractIdAndServiceCodeAndActiveTrue(1L, "SYS-CLAIM-12345678")).thenReturn(false);
+                when(pricingRepository.save(any(ProviderContractPricingItem.class))).thenAnswer(i -> {
+                        ProviderContractPricingItem saved = i.getArgument(0);
+                        saved.setId(102L);
+                        return saved;
+                });
+
+                ProviderContractPricingItemResponseDto result = pricingItemService.create(1L, dto);
+
+                assertThat(result.getPricingMode()).isEqualTo("CLAIM_UNIT_PRICE");
+                assertThat(result.getContractPrice()).isEqualByComparingTo(BigDecimal.ZERO);
+                assertThat(result.getMaxContractPrice()).isNull();
         }
 
         @Test

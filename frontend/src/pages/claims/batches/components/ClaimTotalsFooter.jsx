@@ -73,31 +73,69 @@ export const ClaimTotalsFooter = ({
         bgcolor: showRejected ? alpha(theme.palette.error.main, 0.04) : alpha(theme.palette.primary.main, 0.02)
       }}
     >
-      <Tooltip title={saveDisabled ? saveDisabledTitle : ''} arrow disableHoverListener={!saveDisabled}>
-        <span>
-          <Button
-            variant="contained"
-            color={showRejected || requiresClaimRejection ? 'error' : 'primary'}
-            onClick={() => {
-              if (requiresClaimRejection) {
-                openRejectDialog('claim');
-                return;
-              }
-              handleSave(true);
-            }}
-            disabled={saveDisabled}
-            sx={{ px: '2.0rem', fontWeight: 600 }}
-          >
-            {saving
-              ? t('claimEntry.saving')
-              : showRejected
-                ? 'حفظ (مرفوضة)'
-                : requiresClaimRejection
-                  ? 'رفض وحفظ المطالبة'
-                  : t('claimEntry.saveAndAdd')}
-          </Button>
-        </span>
-      </Tooltip>
+      {!showRejected && !requiresClaimRejection && (
+        <Tooltip title={saveDisabled ? saveDisabledTitle : 'يحفظ المطالبة كمسودة قابلة للتعديل دون اعتمادها'} arrow disableHoverListener={!saveDisabled}>
+          <span>
+            <Button
+              variant="outlined"
+              color="primary"
+              onClick={() => handleSave(false, 'draft')}
+              disabled={saveDisabled}
+              sx={{ px: '1.4rem', fontWeight: 700 }}
+            >
+              {saving ? t('claimEntry.saving') : 'حفظ كمسودة'}
+            </Button>
+          </span>
+        </Tooltip>
+      )}
+
+      {!showRejected && !requiresClaimRejection && (
+        <Tooltip title={saveDisabled ? saveDisabledTitle : 'إرسال المطالبة للدفعة/المراجعة بعد اكتمال البيانات'} arrow disableHoverListener={!saveDisabled}>
+          <span>
+            <Button
+              variant="contained"
+              color="primary"
+              onClick={() => handleSave(true, 'submit')}
+              disabled={saveDisabled}
+              sx={{ px: '1.6rem', fontWeight: 800 }}
+            >
+              {saving ? t('claimEntry.saving') : 'إرسال'}
+            </Button>
+          </span>
+        </Tooltip>
+      )}
+
+      {requiresClaimRejection && (
+        <Tooltip title="لا يمكن إرسال مطالبة تحتوي بنداً غير مغطى؛ افتح الرفض وحدد السبب." arrow>
+          <span>
+            <Button
+              variant="contained"
+              color="error"
+              onClick={() => openRejectDialog('claim')}
+              disabled={saving || financialDataUnavailable || Boolean(saveDisabledReason)}
+              sx={{ px: '1.6rem', fontWeight: 800 }}
+            >
+              رفض وحفظ المطالبة
+            </Button>
+          </span>
+        </Tooltip>
+      )}
+
+      {showRejected && (
+        <Tooltip title={saveDisabled ? saveDisabledTitle : ''} arrow disableHoverListener={!saveDisabled}>
+          <span>
+            <Button
+              variant="contained"
+              color="error"
+              onClick={() => handleSave(true, 'submit')}
+              disabled={saveDisabled}
+              sx={{ px: '1.6rem', fontWeight: 800 }}
+            >
+              {saving ? t('claimEntry.saving') : 'حفظ الرفض'}
+            </Button>
+          </span>
+        </Tooltip>
+      )}
 
       {!isClaimRejected && !allLinesRejected ? (
         <Button

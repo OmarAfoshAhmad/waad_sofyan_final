@@ -13,9 +13,10 @@ import java.math.BigDecimal;
 import com.waad.tba.modules.medicaltaxonomy.enums.PricingMode;
 
 /**
- * Creates a shared medical service. Professional standard services default to
- * invoice-priced MANUAL_AMOUNT. Claim-entry "add general service" may opt into
- * CONTRACT_PRICE so quantity remains meaningful for that claim path.
+ * Creates a shared professional standard service. These services are
+ * invoice-priced MANUAL_AMOUNT catalog entries. Claim-entry ad-hoc services are
+ * stored on the active provider contract instead, so they can keep an open
+ * per-claim unit price without becoming a global fixed-price catalog item.
  */
 @Data
 @NoArgsConstructor

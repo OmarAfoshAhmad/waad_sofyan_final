@@ -40,7 +40,8 @@ const normalizeArabicSearch = (value = '') =>
 /**
  * Lets staff add a brand-new shared medical service to the catalog on the fly,
  * directly from claim entry. It does not create a provider-contract price item;
- * the entered amount is the current unit price for the active claim line, and
+ * it stores no fixed catalog price. If a unit price is entered here, it only
+ * pre-fills the active claim line; the clerk can change it every claim, and
  * quantity remains editable.
  */
 export function CustomServiceDialog({
@@ -128,10 +129,9 @@ export function CustomServiceDialog({
 
           <TextField
             fullWidth
-            required
             type="number"
-            label="سعر الوحدة الحالي (دينار ليبي)"
-            placeholder="0.00"
+            label="سعر الوحدة لهذه المطالبة (اختياري)"
+            placeholder="اتركه فارغاً وأدخله في السطر"
             value={customServiceData.contractPrice}
             onChange={(e) => onFieldChange('contractPrice', e.target.value)}
             InputProps={{
@@ -141,7 +141,7 @@ export function CustomServiceDialog({
                 </Typography>
               )
             }}
-            helperText={`ستُضاف كخدمة عامة بسعر وحدة قابل للكمية، وسياقها الافتراضي: ${claimContextLabel(claimContextCode)}`}
+            helperText={`لن يُحفظ كسعر ثابت؛ إن أدخلته هنا سيُعبّئ السطر الحالي فقط. السياق الافتراضي: ${claimContextLabel(claimContextCode)}`}
           />
         </Stack>
       </DialogContent>
@@ -152,9 +152,7 @@ export function CustomServiceDialog({
         <Button
           variant="contained"
           onClick={onSubmit}
-          disabled={
-            addingCustomService || !customServiceData.categoryId || !customServiceData.serviceName || !customServiceData.contractPrice
-          }
+          disabled={addingCustomService || !customServiceData.categoryId || !customServiceData.serviceName}
         >
           {addingCustomService ? <CircularProgress size={24} color="inherit" /> : 'إضافة الخدمة العامة واختيارها'}
         </Button>

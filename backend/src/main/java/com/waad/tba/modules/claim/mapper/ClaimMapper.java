@@ -259,6 +259,8 @@ public class ClaimMapper {
                         // directly, there is no contract price list to look up at all.
                         boolean manualAmountLine = !pendingDirectPrice
                                         && servicePricingMode == PricingMode.MANUAL_AMOUNT;
+                        boolean claimUnitPriceLine = !pendingDirectPrice
+                                        && servicePricingMode == PricingMode.CLAIM_UNIT_PRICE;
                         if (manualAmountLine) {
                                 if (lineDto.getPricingItemId() != null) {
                                         throw new BusinessRuleException(
@@ -275,6 +277,14 @@ public class ClaimMapper {
                                                 "لا يمكن إدخال مبلغ يدوي لخدمة مُسعَّرة عبر عقد مقدم الخدمة");
                         }
 
+                        if (claimUnitPriceLine) {
+                                if (enteredUnitPrice == null || enteredUnitPrice.compareTo(BigDecimal.ZERO) <= 0) {
+                                        throw new BusinessRuleException("يجب إدخال سعر الوحدة لهذه الخدمة العامة");
+                                }
+                                resolvedUnitPrice = enteredUnitPrice;
+                                resolvedMaxUnitPrice = BigDecimal.ZERO;
+                        }
+
                         ProviderContractPricingItem matchedPricingItem = (pendingDirectPrice || manualAmountLine) ? null
                                         : resolvePricingItemForLine(
                                                         resolvedContract.contract().getId(), claim.getServiceDate(),
@@ -289,6 +299,15 @@ public class ClaimMapper {
 
                         if (matchedPricingItem != null) {
                                 resolvedPricingItemId = matchedPricingItem.getId();
+                                if (matchedPricingItem.getPricingMode() == PricingMode.CLAIM_UNIT_PRICE) {
+                                        claimUnitPriceLine = true;
+                                        servicePricingMode = PricingMode.CLAIM_UNIT_PRICE;
+                                        if (enteredUnitPrice == null || enteredUnitPrice.compareTo(BigDecimal.ZERO) <= 0) {
+                                                throw new BusinessRuleException("يجب إدخال سعر الوحدة لهذه الخدمة العامة");
+                                        }
+                                        resolvedUnitPrice = enteredUnitPrice;
+                                        resolvedMaxUnitPrice = BigDecimal.ZERO;
+                                }
                                 if (!hasBusinessValue(codeToLookup)) {
                                         codeToLookup = matchedPricingItem.getServiceCode();
                                 }
@@ -296,6 +315,8 @@ public class ClaimMapper {
 
                         if (manualAmountLine) {
                                 // resolvedUnitPrice already set to the entered invoice amount above.
+                        } else if (claimUnitPriceLine) {
+                                // resolvedUnitPrice already set to the entered unit price above.
                         } else if ("GEN-MEDICATION".equals(codeToLookup) || "GEN-MEDICAL-SERVICE".equals(codeToLookup)) {
                                 resolvedUnitPrice = enteredUnitPrice;
                         } else if (!pendingDirectPrice && hasBusinessValue(codeToLookup)) {

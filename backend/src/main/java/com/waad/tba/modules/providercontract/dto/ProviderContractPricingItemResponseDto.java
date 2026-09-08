@@ -82,9 +82,10 @@ public class ProviderContractPricingItemResponseDto {
     private Long medicalServiceId;
 
     /**
-     * CONTRACT_PRICE (default, from the pricing item) or MANUAL_AMOUNT (the
-     * clerk enters the invoice amount; contractPrice/maxContractPrice are
-     * null because there is no price list for it).
+     * CONTRACT_PRICE uses contractPrice/maxContractPrice as an enforceable cap.
+     * CLAIM_UNIT_PRICE belongs to the provider contract but the clerk enters
+     * the unit price per claim; zero contractPrice means "no price-excess cap".
+     * MANUAL_AMOUNT is only used by synthesized standard invoice services.
      */
     @Builder.Default
     private String pricingMode = "CONTRACT_PRICE";
@@ -158,6 +159,7 @@ public class ProviderContractPricingItemResponseDto {
                 .maxContractPrice(entity.getMaxContractPrice())
                 .discountPercent(entity.getDiscountPercent())
                 .savingsAmount(entity.getSavingsAmount())
+                .pricingMode(entity.getPricingMode() != null ? entity.getPricingMode().name() : "CONTRACT_PRICE")
                 .encounterType(entity.getEncounterType() != null ? entity.getEncounterType().name() : "ANY")
                 .claimContextCode(entity.getClaimContextCode())
                 .unit(entity.getUnit())
