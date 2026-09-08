@@ -139,8 +139,8 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
                            and cl.current_line = true
                            and coalesce(cl.limit_consumption, 0) > 0
                            and c.service_date >= :periodStart
-                           and (:periodEnd is null or c.service_date <= :periodEnd)
-                           and (:excludeClaimId is null or c.id <> :excludeClaimId)
+                           and (cast(:periodEnd as date) is null or c.service_date <= :periodEnd)
+                           and (cast(:excludeClaimId as bigint) is null or c.id <> :excludeClaimId)
                         """, nativeQuery = true)
         BigDecimal sumSubmittedGeneralLimitConsumption(
                         @Param("memberId") Long memberId,
@@ -179,8 +179,8 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
                                and cl.current_line = true
                                and coalesce(cl.limit_consumption, 0) > 0
                                and c.service_date >= :periodStart
-                               and (:periodEnd is null or c.service_date <= :periodEnd)
-                               and (:excludeClaimId is null or c.id <> :excludeClaimId)
+                               and (cast(:periodEnd as date) is null or c.service_date <= :periodEnd)
+                               and (cast(:excludeClaimId as bigint) is null or c.id <> :excludeClaimId)
                           ) held
                         """, nativeQuery = true)
         BigDecimal sumSubmittedBucketLimitConsumption(

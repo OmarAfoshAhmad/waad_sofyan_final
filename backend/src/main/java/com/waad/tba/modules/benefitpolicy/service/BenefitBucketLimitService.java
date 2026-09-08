@@ -3,6 +3,7 @@ package com.waad.tba.modules.benefitpolicy.service;
 import com.waad.tba.modules.benefitpolicy.entity.*;
 import com.waad.tba.modules.benefitpolicy.enums.*;
 import com.waad.tba.modules.benefitpolicy.repository.*;
+import com.waad.tba.modules.claim.repository.ClaimRepository;
 import com.waad.tba.modules.providercontract.enums.EncounterType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -20,6 +21,7 @@ public class BenefitBucketLimitService {
     private final BenefitRuleBucketRepository ruleBucketRepository;
     private final BenefitBucketConsumptionRepository consumptionRepository;
     private final BenefitPolicyRuleRepository policyRuleRepository;
+    private final ClaimRepository claimRepository;
 
     @Transactional(readOnly = true)
     public List<LimitSnapshot> findApplicable(Long ruleId, Long memberId, LocalDate serviceDate,
@@ -53,6 +55,10 @@ public class BenefitBucketLimitService {
             Period period = period(bucket, date);
             BigDecimal usedAmount = consumptionRepository.sumCommittedAmount(memberId, bucket.getId(),
                     period.start(), period.end(), excludeClaimId);
+            BigDecimal submittedReservation = claimRepository.sumSubmittedBucketLimitConsumption(
+                    memberId, bucket.getId(), period.start(), period.end(), excludeClaimId);
+            usedAmount = Optional.ofNullable(usedAmount).orElse(BigDecimal.ZERO)
+                    .add(Optional.ofNullable(submittedReservation).orElse(BigDecimal.ZERO));
             Integer usedTimes = consumptionRepository.sumCommittedTimes(memberId, bucket.getId(),
                     period.start(), period.end(), excludeClaimId);
             long usedDays = consumptionRepository.countCommittedServiceDays(memberId, bucket.getId(),
@@ -73,8 +79,11 @@ public class BenefitBucketLimitService {
                     memberId, policy.getId(), annual.start(), annual.end(), excludeClaimId);
             BigDecimal reserved = consumptionRepository.sumGeneralScopeReserved(
                     memberId, policy.getId(), annual.start(), annual.end());
+            BigDecimal submittedReservation = claimRepository.sumSubmittedGeneralLimitConsumption(
+                    memberId, policy.getId(), annual.start(), annual.end(), excludeClaimId);
             BigDecimal unavailable = Optional.ofNullable(committed).orElse(BigDecimal.ZERO)
-                    .add(Optional.ofNullable(reserved).orElse(BigDecimal.ZERO));
+                    .add(Optional.ofNullable(reserved).orElse(BigDecimal.ZERO))
+                    .add(Optional.ofNullable(submittedReservation).orElse(BigDecimal.ZERO));
             result.add(new LimitSnapshot(null, "السقف السنوي العام", policy.getAnnualLimit(), null, null,
                     unavailable, 0, 0, false, CountingMethod.EACH_LINE,
                     ConsumptionBasis.ELIGIBLE_AMOUNT, false, annual.start(), annual.end()));

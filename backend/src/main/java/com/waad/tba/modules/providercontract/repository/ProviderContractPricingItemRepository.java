@@ -159,7 +159,9 @@ public interface ProviderContractPricingItemRepository extends JpaRepository<Pro
        @Query("SELECT p FROM ProviderContractPricingItem p " +
                      "WHERE p.contract.id = :contractId " +
                      "AND p.active = true " +
-                     "AND p.serviceCode = :serviceCode")
+                     "AND p.serviceCode = :serviceCode " +
+                     "ORDER BY CASE WHEN p.medicalCategory IS NOT NULL THEN 0 ELSE 1 END, " +
+                     "p.updatedAt DESC, p.id DESC")
        List<ProviderContractPricingItem> findListActiveUnmappedByContractAndServiceCode(
                      @Param("contractId") Long contractId,
                      @Param("serviceCode") String serviceCode);
@@ -171,7 +173,9 @@ public interface ProviderContractPricingItemRepository extends JpaRepository<Pro
 
        /** Find active pricing item by service code (any mapping status). */
        @Query("SELECT p FROM ProviderContractPricingItem p " +
-                     "WHERE p.contract.id = :contractId AND p.active = true AND p.serviceCode = :serviceCode")
+                     "WHERE p.contract.id = :contractId AND p.active = true AND p.serviceCode = :serviceCode " +
+                     "ORDER BY CASE WHEN p.medicalCategory IS NOT NULL THEN 0 ELSE 1 END, " +
+                     "p.updatedAt DESC, p.id DESC")
        List<ProviderContractPricingItem> findListByContractIdAndServiceCodeActiveTrue(
                      @Param("contractId") Long contractId,
                      @Param("serviceCode") String serviceCode);
@@ -185,7 +189,12 @@ public interface ProviderContractPricingItemRepository extends JpaRepository<Pro
         * Find active pricing item by service name (any mapping status). Uses native
         * SQL with explicit CAST to avoid bytea type inference.
         */
-       @Query(value = "SELECT * FROM provider_contract_pricing_items WHERE contract_id = :contractId AND active = true AND lower(service_name::text) = lower(cast(:serviceName as text))", nativeQuery = true)
+       @Query(value = "SELECT * FROM provider_contract_pricing_items " +
+                     "WHERE contract_id = :contractId AND active = true " +
+                     "AND lower(service_name::text) = lower(cast(:serviceName as text)) " +
+                     "ORDER BY CASE WHEN medical_category_id IS NOT NULL THEN 0 ELSE 1 END, " +
+                     "updated_at DESC NULLS LAST, id DESC",
+                     nativeQuery = true)
        List<ProviderContractPricingItem> findListByContractIdAndServiceNameActiveTrue(
                      @Param("contractId") Long contractId,
                      @Param("serviceName") String serviceName);
@@ -370,7 +379,9 @@ public interface ProviderContractPricingItemRepository extends JpaRepository<Pro
                      "     OR LOWER(p.serviceCode) LIKE LOWER(CONCAT('%', :q, '%')) " +
                      "     OR LOWER(p.serviceName) LIKE LOWER(CONCAT('%', :q, '%')) " +
                      "     OR LOWER(p.categoryName) LIKE LOWER(CONCAT('%', :q, '%'))) " +
-                     "AND (:categoryId IS NULL OR mc.id = :categoryId)")
+                     "AND (:categoryId IS NULL OR mc.id = :categoryId) " +
+                     "ORDER BY CASE WHEN p.medicalCategory IS NOT NULL THEN 0 ELSE 1 END, " +
+                     "p.updatedAt DESC, p.id DESC")
        Page<ProviderContractPricingItem> searchByServiceCodeOrNameAndCategory(
                      @Param("contractId") Long contractId,
                      @Param("q") String q,
