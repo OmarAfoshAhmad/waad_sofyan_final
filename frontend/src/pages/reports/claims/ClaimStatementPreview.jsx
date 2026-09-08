@@ -17,7 +17,7 @@ const ClaimStatementPreview = () => {
   const [loading, setLoading] = useState(true);
 
   const reportQuery = `claimIds=${claimIds}&onlyRejected=${onlyRejected}&batchCode=${encodeURIComponent(batchCode)}`;
-  const pdfUrl = `/api/reports/claims/pdf?${reportQuery}`;
+  const previewUrl = `/api/reports/claims/html?${reportQuery}`;
   const claimCount = claimIds ? claimIds.split(',').length : 0;
 
   useEffect(() => {
@@ -32,7 +32,7 @@ const ClaimStatementPreview = () => {
       iframeRef.current.contentWindow.focus();
       iframeRef.current.contentWindow.print();
     } else {
-      window.open(pdfUrl, '_blank', 'noopener,noreferrer');
+      window.open(previewUrl, '_blank', 'noopener,noreferrer');
     }
   };
 
@@ -166,7 +166,7 @@ const ClaimStatementPreview = () => {
             <iframe
               title="Claim Statement Preview"
               ref={iframeRef}
-              src={pdfUrl}
+              src={previewUrl}
               style={{ width: '100%', height: '100%', minHeight: '297mm', border: 'none', display: 'block' }}
               onLoad={() => setLoading(false)}
             />

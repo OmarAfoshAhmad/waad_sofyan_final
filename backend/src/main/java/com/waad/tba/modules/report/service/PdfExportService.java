@@ -6,7 +6,10 @@ import org.springframework.stereotype.Service;
 import org.xhtmlrenderer.pdf.ITextRenderer;
 
 import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
 import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 @Service
 public class PdfExportService {
@@ -15,10 +18,19 @@ public class PdfExportService {
         try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
             ITextRenderer renderer = new ITextRenderer();
             
-            // Shared font for Arabic RTL - you need an arabic font like Cairo or Amiri.
-            // But for now, we add the default ones or load from resources if exists.
-            File fontFile = new ClassPathResource("fonts/Cairo-Regular.ttf").getFile();
-            if (fontFile.exists()) {
+            ClassPathResource fontResource = new ClassPathResource("fonts/Cairo-Regular.ttf");
+            if (fontResource.exists()) {
+                File fontFile;
+                try {
+                    fontFile = fontResource.getFile();
+                } catch (Exception ex) {
+                    Path tempFont = Files.createTempFile("waad-cairo-regular-", ".ttf");
+                    try (InputStream input = fontResource.getInputStream()) {
+                        Files.copy(input, tempFont, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                    }
+                    tempFont.toFile().deleteOnExit();
+                    fontFile = tempFont.toFile();
+                }
                 renderer.getFontResolver().addFont(fontFile.getAbsolutePath(), BaseFont.IDENTITY_H, BaseFont.EMBEDDED);
             }
             

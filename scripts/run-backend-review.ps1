@@ -16,6 +16,33 @@ if (-not (Test-Path -LiteralPath $backendDir)) {
   throw "لم أجد مجلد backend داخل: $repoRoot"
 }
 
+if (-not $env:JAVA_HOME -or -not (Test-Path -LiteralPath (Join-Path $env:JAVA_HOME "bin\java.exe"))) {
+  $jdkCandidates = @(
+    "C:\Program Files\Java\jdk-21",
+    "C:\Program Files\Java\jdk-24",
+    "C:\Program Files\Java\jdk-23",
+    "C:\Program Files\Java\jdk-20",
+    "C:\Program Files\Eclipse Adoptium\jdk-21*",
+    "C:\Program Files\Microsoft\jdk-21*"
+  )
+
+  foreach ($candidate in $jdkCandidates) {
+    $resolved = Get-Item -Path $candidate -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($resolved -and (Test-Path -LiteralPath (Join-Path $resolved.FullName "bin\java.exe"))) {
+      $env:JAVA_HOME = $resolved.FullName
+      break
+    }
+  }
+}
+
+if (-not $env:JAVA_HOME -or -not (Test-Path -LiteralPath (Join-Path $env:JAVA_HOME "bin\java.exe"))) {
+  throw "لم أجد JDK 17+ لتشغيل Maven/Spring Boot. ثبّت JDK 17 أو أحدث أو اضبط JAVA_HOME."
+}
+
+$env:Path = "$env:JAVA_HOME\bin;$env:Path"
+$env:MAVEN_OPTS = "-Xmx512m -XX:MaxMetaspaceSize=256m"
+Write-Host "استخدام Java من: $env:JAVA_HOME" -ForegroundColor Cyan
+
 Write-Host "إيقاف أي عملية تستخدم المنفذ $Port ..." -ForegroundColor Cyan
 $listeners = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue
 $processIds = @($listeners | Select-Object -ExpandProperty OwningProcess -Unique)

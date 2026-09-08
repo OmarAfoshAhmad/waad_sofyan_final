@@ -301,7 +301,7 @@ export default function ClaimBatchDetail() {
 
   const getClaimPaperReference = (claim, fallbackSequence) => {
     const storedReference = String(claim?.claimNumber || '').trim();
-    if (storedReference) return storedReference;
+    if (storedReference.includes('/') || storedReference.startsWith(batchCode)) return storedReference;
     return `${batchCode}/${String(fallbackSequence).padStart(4, '0')}`;
   };
 
@@ -401,7 +401,8 @@ export default function ClaimBatchDetail() {
   }, [claims, tableState.sorting]);
 
   const claimDisplayOrder = useMemo(() => {
-    return [...claims]
+    const allBatchClaims = claimsResponse?.items || claimsResponse?.content || [];
+    return [...allBatchClaims]
       .sort((a, b) => {
         const aTime = new Date(a?.createdAt || a?.serviceDate || 0).getTime() || 0;
         const bTime = new Date(b?.createdAt || b?.serviceDate || 0).getTime() || 0;
@@ -412,7 +413,7 @@ export default function ClaimBatchDetail() {
         map.set(claim.id, index + 1);
         return map;
       }, new Map());
-  }, [claims]);
+  }, [claimsResponse]);
 
   // Paginated Data for the table
   const paginatedClaims = useMemo(() => {

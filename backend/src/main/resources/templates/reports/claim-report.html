@@ -606,7 +606,7 @@
         </tr>
         <tr>
           <td class="td-bullet">•</td>
-          <td class="td-label">عدد المطاليات المسلّمة:</td>
+          <td class="td-label">عدد المطالبات المسلّمة:</td>
           <td class="td-value">
             <span class="count-circle" th:text="${report.claimCount}">0</span>
           </td>
@@ -635,7 +635,7 @@
           <tr>
             <td style="width: 50%">
               <span class="lbl">Claim No.</span>
-              <span class="val" th:text="${claim.claimId}">-</span>
+              <span class="val" th:text="${claim.paperReference ?: (claim.claimNumber ?: claim.claimId)}">-</span>
             </td>
             <td style="width: 50%">
               <span class="lbl">Batch No.</span>

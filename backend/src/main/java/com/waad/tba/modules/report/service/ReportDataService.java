@@ -20,7 +20,9 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -57,6 +59,7 @@ public class ReportDataService {
 
                 String batchCode = (providedBatchCode != null && !providedBatchCode.isEmpty()) ? providedBatchCode : "N/A";
                 String providerName = "N/A";
+                Map<Long, Map<Long, Integer>> claimOrderByBatchId = new HashMap<>();
 
                 // Find first valid provider name and batch code from all claims
                 for (Claim c : claims) {
@@ -98,6 +101,27 @@ public class ReportDataService {
                                 currentBatchCode = claim.getClaimBatch().getBatchCode();
                         } else if (!batchCode.equals("N/A")) {
                                 currentBatchCode = batchCode;
+                        }
+
+                        String paperReference = claim.getClaimNumber();
+                        Long claimBatchId = claim.getClaimBatch() != null ? claim.getClaimBatch().getId() : null;
+                        if (claimBatchId != null && currentBatchCode != null && !currentBatchCode.equals("N/A")) {
+                                Map<Long, Integer> batchOrder = claimOrderByBatchId.computeIfAbsent(claimBatchId, id -> {
+                                        List<Claim> batchClaims = claimRepository
+                                                        .findByClaimBatchIdAndActiveTrueOrderByCreatedAtAscIdAsc(id);
+                                        Map<Long, Integer> order = new HashMap<>();
+                                        for (int index = 0; index < batchClaims.size(); index++) {
+                                                order.put(batchClaims.get(index).getId(), index + 1);
+                                        }
+                                        return order;
+                                });
+                                Integer sequence = batchOrder.get(claim.getId());
+                                if (sequence != null) {
+                                        paperReference = currentBatchCode + "/" + String.format("%04d", sequence);
+                                }
+                        }
+                        if (paperReference == null || paperReference.isBlank()) {
+                                paperReference = String.valueOf(claim.getId());
                         }
                         
                         String diagnosis = claim.getDiagnosisDescription() != null ? claim.getDiagnosisDescription()
@@ -180,6 +204,8 @@ public class ReportDataService {
                                         .patientRef(patientRef)
                                         .batchCode(currentBatchCode)
                                         .claimId(claim.getId())
+                                        .claimNumber(claim.getClaimNumber())
+                                        .paperReference(paperReference)
                                         .originNo(claim.getMember() != null && claim.getMember().getCardNumber() != null
                                                         ? claim.getMember().getCardNumber()
                                                         : null)

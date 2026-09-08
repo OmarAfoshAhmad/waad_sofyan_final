@@ -24,6 +24,8 @@ public class ClaimStatementReportDto {
     private String currentContract; // Provider Name
     private String batchCode; // Batch Code (رقم الدفعة)
     private Long claimId; // Internal Claim ID
+    private String claimNumber; // User-facing claim reference
+    private String paperReference; // Batch-prefixed paper reference
     private String originNo; // Origin No. (رقم الإصل) - shown on detail page header
     private String complaint; // Complaints field
     private String diagnosis;
