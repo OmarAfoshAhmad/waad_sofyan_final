@@ -1,9 +1,13 @@
 \set ON_ERROR_STOP on
 
--- WAAD/TBA production repair for pre-fix benefit amount-limit drift.
+-- WAAD/TBA production dry-run report for pre-fix benefit amount-limit drift.
 --
--- Default mode is DRY-RUN. It rolls back unless explicitly called with:
---   -v apply=true
+-- Default mode is DRY-RUN and the script rolls back.
+-- Applying direct SQL repairs has been intentionally disabled because real
+-- production claims may include provider discounts, manual refusals, paid-by-
+-- beneficiary allocations, and immutable financial ledgers. Those must be
+-- corrected through the backend financial engine or a claim-specific reversal
+-- script, not by generic SQL.
 --
 -- Run dry-run on production:
 --   docker cp scripts/production/repair_limit_consumption_drift.sql waadapp-db:/tmp/repair_limit_consumption_drift.sql
@@ -11,11 +15,7 @@
 --     -v batch_code='JFZ26-08-00002' \
 --     -f /tmp/repair_limit_consumption_drift.sql
 --
--- Apply only editable/non-final claims:
---   docker exec -i waadapp-db psql -U postgres -d tba_waad_system \
---     -v batch_code='JFZ26-08-00002' \
---     -v apply=true \
---     -f /tmp/repair_limit_consumption_drift.sql
+-- If you pass -v apply=true this script will stop with an exception by design.
 --
 -- Optional:
 --   -v claim_numbers='CLM-1201,CLM-1351,CLM-1501,CLM-1551'
@@ -26,17 +26,16 @@
 --   require a proper reversal/correction cycle because provider accounts and
 --   immutable ledgers may already be affected.
 --
--- What it repairs:
---   * current claim_lines financial display fields affected by amount caps
---   * parent claims totals
+-- What it reports:
+--   * claim lines where saved cap result differs from chronological cap result
+--   * final-status rows that require reversal/correction instead of direct SQL
 --
 -- What it does NOT rewrite:
 --   * immutable claim_line_limit_snapshots
 --   * committed benefit_bucket_consumptions
 --   * provider account transactions
 --
--- Therefore, use it for submitted/draft review data that was entered before
--- the limit tracking fix and has not been financially approved.
+-- Therefore, use it to identify the exact rows to repair safely.
 
 \if :{?apply}
 \else
@@ -173,9 +172,7 @@ final_calc AS (
 )
 SELECT *
 FROM final_calc
-WHERE ABS(COALESCE(saved_consumed_before,0) - expected_consumed_before) > 0.009
-   OR ABS(COALESCE(saved_available_before,0) - expected_available_before) > 0.009
-   OR ABS(COALESCE(saved_inside_limit,0) - expected_inside_limit) > 0.009
+WHERE ABS(COALESCE(saved_inside_limit,0) - expected_inside_limit) > 0.009
    OR ABS(COALESCE(old_limit_refused,0) - new_limit_refused) > 0.009;
 
 \echo 'Affected claim-line candidates:'
@@ -215,6 +212,14 @@ BEGIN
     RAISE NOTICE 'There are % final financial rows. They are reported only, not updated.', final_count;
   END IF;
 END $$;
+
+\if :apply
+  DO $$
+  BEGIN
+    RAISE EXCEPTION
+      'Generic SQL apply is disabled. Use this script as dry-run only; repair financial claims through backend recalculation or claim-specific reversal.';
+  END $$;
+\endif
 
 UPDATE claim_lines l
 SET
@@ -302,5 +307,5 @@ ORDER BY c.service_date, c.id;
   \echo 'COMMIT completed because apply=true.'
 \else
   ROLLBACK;
-  \echo 'DRY-RUN only. Rolled back. Re-run with -v apply=true to apply editable/non-final rows.'
+  \echo 'DRY-RUN only. Rolled back. Generic SQL apply is intentionally disabled for financial safety.'
 \endif

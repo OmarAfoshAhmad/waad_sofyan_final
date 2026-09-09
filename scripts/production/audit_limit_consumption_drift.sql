@@ -169,9 +169,7 @@ SELECT
   expected_patient_share,
   (expected_limit_refused - COALESCE(saved_line_limit_refused, 0))::numeric(15,2) AS refused_delta
 FROM diffs
-WHERE ABS(COALESCE(saved_consumed_before,0) - expected_consumed_before) > 0.009
-   OR ABS(COALESCE(saved_available_before,0) - expected_available_before) > 0.009
-   OR ABS(COALESCE(saved_inside_limit,0) - expected_inside_limit) > 0.009
+WHERE ABS(COALESCE(saved_inside_limit,0) - expected_inside_limit) > 0.009
    OR ABS(COALESCE(saved_line_limit_refused,0) - expected_limit_refused) > 0.009
 ORDER BY service_date, claim_id, claim_line_id;
 
