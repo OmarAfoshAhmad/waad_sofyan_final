@@ -1299,7 +1299,11 @@ export default function ClaimBatchEntry() {
   // and mapped lines have all reached committed React state.
   useEffect(() => {
     if (!editingClaimId || !editHydrationVersion) return;
-    if (!editingClaim || editCoverageRefreshClaimRef.current === editingClaimId) return;
+    if (!editingClaim) return;
+    if (editCoverageRefreshClaimRef.current === editingClaimId) {
+      setEditCoverageLoading(false);
+      return;
+    }
 
     const editableStatuses = new Set(['DRAFT', 'SUBMITTED', 'NEEDS_CORRECTION']);
     if (!editableStatuses.has(editingClaim.status)) {
@@ -1925,11 +1929,14 @@ export default function ClaimBatchEntry() {
         // التحقق أعلاه يعتمد activeLines، ويجب أن يستخدم الحفظ المصدر نفسه حتى
         // لا تصل أسطر بلا medicalServiceId أو pricingItemId إلى الخادم.
         lines: activeLines.map((l) => {
-          const isManualAmountLine = (l.pricingMode || l.service?.pricingMode) === 'MANUAL_AMOUNT';
+          const medicalServiceId = l.medicalServiceId || l.service?.medicalServiceId || l.service?.serviceId || null;
+          const pricingItemId = l.pricingItemId ?? l.service?.pricingItemId ?? null;
+          const pricingMode = l.pricingMode || l.service?.pricingMode;
+          const isManualAmountLine = pricingMode === 'MANUAL_AMOUNT' && !!medicalServiceId && !pricingItemId;
           return {
             id: typeof l.id === 'number' ? l.id : null,
-            medicalServiceId: l.medicalServiceId || l.service?.medicalServiceId || l.service?.serviceId || null,
-            pricingItemId: isManualAmountLine ? null : (l.pricingItemId ?? l.service?.pricingItemId ?? null),
+            medicalServiceId,
+            pricingItemId: isManualAmountLine ? null : pricingItemId,
             serviceName: l.serviceName || l.service?.serviceName || '',
             serviceCode: l.serviceCode || l.service?.serviceCode || '',
             serviceCategoryId:

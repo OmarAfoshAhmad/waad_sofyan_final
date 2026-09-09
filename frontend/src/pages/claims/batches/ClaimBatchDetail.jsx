@@ -637,7 +637,7 @@ export default function ClaimBatchDetail() {
       align: 'right',
       headerAlign: 'center',
       headerSx: { textAlign: 'center' },
-      cellSx: { textAlign: 'right' },
+      cellSx: { textAlign: 'right', direction: 'rtl' },
       sortable: true
     },
     { id: 'serviceDate', label: 'تاريخ الخدمة', minWidth: '7rem', align: 'center', sortable: true },
@@ -735,17 +735,18 @@ export default function ClaimBatchDetail() {
             direction="row"
             spacing={1}
             alignItems="center"
-            justifyContent="flex-end"
-            sx={{ overflow: 'hidden', minWidth: 0, width: '100%' }}
+            justifyContent="flex-start"
+            dir="rtl"
+            sx={{ overflow: 'hidden', minWidth: 0, width: '100%', textAlign: 'right' }}
           >
             <Avatar sx={{ width: '1.35rem', height: '1.35rem', fontSize: '0.7rem', bgcolor: 'grey.500', flexShrink: 0 }}>
               {claim.memberName?.charAt(0)}
             </Avatar>
-            <Box sx={{ overflow: 'hidden', minWidth: 0, textAlign: 'right', flex: '0 1 auto' }}>
-              <Typography variant="body2" fontWeight={600} noWrap>
+            <Box sx={{ overflow: 'hidden', minWidth: 0, textAlign: 'right', flex: '1 1 auto' }}>
+              <Typography variant="body2" fontWeight={600} noWrap align="right" dir="rtl">
                 {claim.memberName}
               </Typography>
-              <Typography variant="caption" color="text.secondary" noWrap>
+              <Typography variant="caption" color="text.secondary" noWrap align="right" dir="rtl" sx={{ display: 'block' }}>
                 {claim.memberCardNumber}
               </Typography>
             </Box>
