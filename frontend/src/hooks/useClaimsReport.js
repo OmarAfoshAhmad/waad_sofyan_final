@@ -25,7 +25,7 @@ export const FINAL_CLAIM_STATUSES = [CLAIM_STATUS.APPROVED, CLAIM_STATUS.BATCHED
 /**
  * All claim statuses for filter dropdown
  */
-export const ALL_CLAIM_STATUSES = FINAL_CLAIM_STATUSES;
+export const ALL_CLAIM_STATUSES = Object.values(CLAIM_STATUS);
 
 /**
  * Arabic labels for claim statuses
@@ -47,6 +47,18 @@ export const CLAIM_STATUS_LABELS = {
  */
 const unwrap = (response) => response.data?.data ?? response.data;
 
+const normalizeArabicSearch = (value) =>
+  String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[أإآٱ]/g, 'ا')
+    .replace(/ؤ/g, 'و')
+    .replace(/ئ/g, 'ي')
+    .replace(/ى/g, 'ي')
+    .replace(/ة/g, 'ه')
+    .replace(/[\u064B-\u065F\u0670]/g, '')
+    .replace(/ـ/g, '');
+
 /**
  * Default filter state
  */
@@ -60,7 +72,8 @@ export const DEFAULT_FILTERS = {
 /**
  * useClaimsReport Hook
  *
- * Fetches claims for operational reporting with client-side filtering.
+ * Fetches claims for operational reporting with backend filtering where the API
+ * supports it. The remaining client checks are compatibility guards.
  *
  * @param {Object} options
  * @param {number|null} options.employerId - Employer ID for filtering
@@ -90,20 +103,30 @@ export const useClaimsReport = ({ employerId, providerId, filters = DEFAULT_FILT
 
     try {
       const params = {
-        size: 9999 // Fetch all for client-side filtering
+        page: 1,
+        size: 500,
+        sortBy: 'serviceDate',
+        sortDir: 'desc'
       };
 
       if (employerId) {
         params.employerId = employerId;
       }
+      if (providerId) params.providerId = providerId;
+      if (filters.memberSearch?.trim()) params.search = filters.memberSearch.trim();
+      if (filters.dateFrom) params.dateFrom = filters.dateFrom;
+      if (filters.dateTo) params.dateTo = filters.dateTo;
 
-      // Provider filtering is done client-side for better compatibility
-      // ⚠️ FIXED: Use /v1/claims to match Backend API
-      const response = await axiosClient.get('/claims', { params });
-      const data = unwrap(response);
-
-      // Handle different response formats
-      const claimsList = data?.items ?? data?.content ?? data ?? [];
+      const selectedStatuses = filters.statuses?.length ? filters.statuses : FINAL_CLAIM_STATUSES;
+      const responses = await Promise.all(
+        selectedStatuses.map((status) =>
+          axiosClient.get('/claims', {
+            params: { ...params, status }
+          })
+        )
+      );
+      const pages = responses.map(unwrap);
+      const claimsList = pages.flatMap((data) => data?.items ?? data?.content ?? data ?? []);
 
       if (!Array.isArray(claimsList)) {
         throw new Error('Invalid claims data format');
@@ -118,18 +141,22 @@ export const useClaimsReport = ({ employerId, providerId, filters = DEFAULT_FILT
         status: claim.status,
         requestedAmount: parseFloat(claim.requestedAmount) || 0,
         approvedAmount: claim.approvedAmount != null ? parseFloat(claim.approvedAmount) : null,
-        visitDate: claim.visitDate,
+        claimNumber: claim.paperReference || claim.claimNumber || claim.id,
+        paperReference: claim.paperReference,
+        serviceDate: claim.serviceDate,
+        visitDate: claim.serviceDate,
         updatedAt: claim.updatedAt,
         // Keep raw for potential drill-down
         _raw: claim
       }));
 
       setClaims(mappedClaims);
+      const firstPage = pages[0] || {};
       setPagination({
-        page: data?.page ?? 0,
-        size: data?.size ?? mappedClaims.length,
-        totalElements: data?.total ?? data?.totalElements ?? mappedClaims.length,
-        totalPages: data?.totalPages ?? 1
+        page: firstPage?.page ?? 0,
+        size: firstPage?.size ?? mappedClaims.length,
+        totalElements: pages.reduce((sum, data) => sum + (data?.total ?? data?.totalElements ?? 0), 0) || mappedClaims.length,
+        totalPages: Math.max(...pages.map((data) => data?.totalPages ?? 1), 1)
       });
     } catch (err) {
       console.error('❌ Failed to fetch claims:', err);
@@ -138,7 +165,7 @@ export const useClaimsReport = ({ employerId, providerId, filters = DEFAULT_FILT
     } finally {
       setLoading(false);
     }
-  }, [employerId]);
+  }, [employerId, providerId, filters.memberSearch, filters.dateFrom, filters.dateTo, filters.statuses]);
 
   /**
    * Initial fetch and refetch on employerId/providerId change
@@ -153,26 +180,25 @@ export const useClaimsReport = ({ employerId, providerId, filters = DEFAULT_FILT
   const filteredClaims = useMemo(() => {
     let result = [...claims];
 
-    // Filter by provider (client-side)
-    if (providerId) {
-      result = result.filter((claim) => {
-        const claimProviderId = claim._raw?.provider?.id ?? claim._raw?.providerId;
-        return claimProviderId === providerId;
-      });
-    }
-
-    // ENFORCED: Operational report excludes non-final workflow statuses
-    result = result.filter((claim) => FINAL_CLAIM_STATUSES.includes(claim.status));
-
-    // Filter by status (multi-select)
-    if (filters.statuses && filters.statuses.length > 0) {
-      result = result.filter((claim) => filters.statuses.includes(claim.status));
-    }
+    const selectedStatuses = filters.statuses?.length ? filters.statuses : FINAL_CLAIM_STATUSES;
+    result = result.filter((claim) => selectedStatuses.includes(claim.status));
 
     // Filter by member name (text search)
     if (filters.memberSearch && filters.memberSearch.trim()) {
-      const search = filters.memberSearch.trim().toLowerCase();
-      result = result.filter((claim) => claim.memberName.toLowerCase().includes(search));
+      const search = normalizeArabicSearch(filters.memberSearch);
+      result = result.filter((claim) =>
+        [
+          claim.memberName,
+          claim.claimNumber,
+          claim.paperReference,
+          claim._raw?.claimBatchCode,
+          claim._raw?.memberNationalNumber,
+          claim._raw?.memberCardNumber,
+          claim._raw?.employeeNumber
+        ]
+          .map(normalizeArabicSearch)
+          .some((value) => value.includes(search))
+      );
     }
 
     // Filter by date range (from)
@@ -180,7 +206,8 @@ export const useClaimsReport = ({ employerId, providerId, filters = DEFAULT_FILT
       const fromDate = new Date(filters.dateFrom);
       fromDate.setHours(0, 0, 0, 0);
       result = result.filter((claim) => {
-        const claimDate = new Date(claim.visitDate || claim.updatedAt);
+        if (!claim.serviceDate) return false;
+        const claimDate = new Date(claim.serviceDate);
         return claimDate >= fromDate;
       });
     }
@@ -190,7 +217,8 @@ export const useClaimsReport = ({ employerId, providerId, filters = DEFAULT_FILT
       const toDate = new Date(filters.dateTo);
       toDate.setHours(23, 59, 59, 999);
       result = result.filter((claim) => {
-        const claimDate = new Date(claim.visitDate || claim.updatedAt);
+        if (!claim.serviceDate) return false;
+        const claimDate = new Date(claim.serviceDate);
         return claimDate <= toDate;
       });
     }

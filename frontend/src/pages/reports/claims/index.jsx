@@ -93,14 +93,14 @@ const ClaimsReport = () => {
   const handleExportExcel = () => {
     try {
       const exportData = claims.map((claim) => ({
-        'رقم المطالبة': claim._raw?.claimNumber || claim.id,
+        'رقم المطالبة': claim.paperReference || claim._raw?.paperReference || claim._raw?.claimNumber || claim.id,
         'اسم المؤمن عليه': claim.memberName,
         الشريك: claim.employerName,
         'مقدم الخدمة': claim.providerName,
         الحالة: CLAIM_STATUS_LABELS[claim.status] || claim.status,
         'المبلغ المطلوب': claim.requestedAmount,
         'المبلغ المعتمد': claim._raw?.approvedAmount || '-',
-        'تاريخ الزيارة': claim.visitDate || '-',
+        'تاريخ الخدمة': claim.serviceDate || '-',
         'آخر تحديث': claim.updatedAt ? new Date(claim.updatedAt).toLocaleDateString('en-GB') : '-'
       }));
       const timestamp = new Date().toISOString().slice(0, 10);

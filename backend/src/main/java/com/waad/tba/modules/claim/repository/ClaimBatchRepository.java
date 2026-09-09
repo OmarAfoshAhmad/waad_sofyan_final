@@ -2,6 +2,7 @@ package com.waad.tba.modules.claim.repository;
 
 import com.waad.tba.modules.claim.entity.ClaimBatch;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -10,9 +11,14 @@ import org.springframework.stereotype.Repository;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import jakarta.persistence.LockModeType;
 
 @Repository
 public interface ClaimBatchRepository extends JpaRepository<ClaimBatch, Long> {
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT b FROM ClaimBatch b WHERE b.id = :id")
+    Optional<ClaimBatch> findByIdForUpdate(@Param("id") Long id);
 
     Optional<ClaimBatch> findByProviderIdAndEmployerIdAndBatchYearAndBatchMonth(
         Long providerId, Long employerId, Integer batchYear, Integer batchMonth

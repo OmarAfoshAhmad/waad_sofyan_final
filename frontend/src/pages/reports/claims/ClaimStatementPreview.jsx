@@ -1,8 +1,9 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Box, Stack, Typography, Button, Divider, CircularProgress, Chip } from '@mui/material';
 import { Print as PrintIcon, ArrowBack as ArrowBackIcon, ReceiptLong as ReceiptIcon } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
+import axiosClient from 'utils/axios';
 
 const ClaimStatementPreview = () => {
   const location = useLocation();
@@ -15,9 +16,20 @@ const ClaimStatementPreview = () => {
   const batchCode = queryParams.get('batchCode') || '';
   const iframeRef = useRef(null);
   const [loading, setLoading] = useState(true);
+  const [frameHeight, setFrameHeight] = useState('297mm');
+  const [reportHtml, setReportHtml] = useState('');
 
-  const reportQuery = `claimIds=${claimIds}&onlyRejected=${onlyRejected}&batchCode=${encodeURIComponent(batchCode)}`;
-  const previewUrl = `/api/reports/claims/html?${reportQuery}`;
+  const previewUrl = useMemo(() => {
+    const reportQuery = new URLSearchParams();
+    (claimIds || '')
+      .split(',')
+      .map((id) => id.trim())
+      .filter(Boolean)
+      .forEach((id) => reportQuery.append('claimIds', id));
+    reportQuery.set('onlyRejected', String(onlyRejected));
+    if (batchCode) reportQuery.set('batchCode', batchCode);
+    return `/reports/claims/html?${reportQuery.toString()}`;
+  }, [batchCode, claimIds, onlyRejected]);
   const claimCount = claimIds ? claimIds.split(',').length : 0;
 
   useEffect(() => {
@@ -27,10 +39,54 @@ const ClaimStatementPreview = () => {
     }
   }, [claimIds, navigate, enqueueSnackbar]);
 
+  useEffect(() => {
+    if (!claimIds) return undefined;
+
+    let mounted = true;
+    setLoading(true);
+    setReportHtml('');
+    setFrameHeight('297mm');
+
+    axiosClient
+      .get(previewUrl, {
+        responseType: 'text',
+        headers: { Accept: 'text/html' },
+        transformResponse: [(data) => data]
+      })
+      .then((response) => {
+        if (mounted) setReportHtml(response.data || '');
+      })
+      .catch((error) => {
+        if (!mounted) return;
+        setLoading(false);
+        enqueueSnackbar(error?.userMessage || 'تعذر تحميل معاينة التقرير', { variant: 'error' });
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [claimIds, enqueueSnackbar, previewUrl]);
+
   const handlePrint = () => {
     if (iframeRef.current?.contentWindow) {
       iframeRef.current.contentWindow.focus();
       iframeRef.current.contentWindow.print();
+    }
+  };
+
+  const syncIframeHeight = () => {
+    setLoading(false);
+    try {
+      const doc = iframeRef.current?.contentDocument;
+      const height = Math.max(
+        doc?.documentElement?.scrollHeight || 0,
+        doc?.body?.scrollHeight || 0
+      );
+      if (height > 0) {
+        setFrameHeight(`${height}px`);
+      }
+    } catch {
+      setFrameHeight('297mm');
     }
   };
 
@@ -132,7 +188,7 @@ const ClaimStatementPreview = () => {
           sx={{
             position: 'relative',
             width: '210mm',
-            minHeight: '297mm',
+            minHeight: frameHeight,
             bgcolor: '#fff',
             boxShadow: '0 4px 6px rgba(0,0,0,0.3), 0 12px 40px rgba(0,0,0,0.5)',
             borderRadius: '1px',
@@ -160,13 +216,13 @@ const ClaimStatementPreview = () => {
               </Typography>
             </Box>
           )}
-          {claimIds && (
+          {claimIds && reportHtml && (
             <iframe
               title="Claim Statement Preview"
               ref={iframeRef}
-              src={previewUrl}
-              style={{ width: '100%', height: '100%', minHeight: '297mm', border: 'none', display: 'block' }}
-              onLoad={() => setLoading(false)}
+              srcDoc={reportHtml}
+              style={{ width: '100%', height: frameHeight, minHeight: '297mm', border: 'none', display: 'block' }}
+              onLoad={syncIframeHeight}
             />
           )}
         </Box>

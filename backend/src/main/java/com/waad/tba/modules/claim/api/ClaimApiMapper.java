@@ -220,6 +220,7 @@ public class ClaimApiMapper {
                                 .id(dto.getId())
                                 .claimContextCode(dto.getClaimContextCode())
                                 .claimNumber(dto.getClaimNumber())
+                                .paperReference(dto.getPaperReference())
 
                                 // Related entities
                                 .memberId(dto.getMemberId())

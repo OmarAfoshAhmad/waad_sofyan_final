@@ -49,6 +49,7 @@ public class ClaimResponse {
      * Claim Number (formatted reference: CLM-YYYYMMDD-XXXX)
      */
     private String claimNumber;
+    private String paperReference;
 
     // ═══════════════════════════════════════════════════════════════════════════
     // RELATED ENTITIES

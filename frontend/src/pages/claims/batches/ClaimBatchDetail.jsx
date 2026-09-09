@@ -307,6 +307,8 @@ export default function ClaimBatchDetail() {
   }, [realBatch, employer, year]);
 
   const getClaimPaperReference = (claim, fallbackSequence) => {
+    const paperReference = String(claim?.paperReference || '').trim();
+    if (paperReference) return paperReference;
     const storedReference = String(claim?.claimNumber || '').trim();
     if (storedReference.includes('/') || storedReference.startsWith(batchCode)) return storedReference;
     return `${batchCode}/${String(fallbackSequence).padStart(4, '0')}`;
@@ -391,6 +393,7 @@ export default function ClaimBatchDetail() {
       items = items.filter((c, idx) => {
         const paperRef = getClaimPaperReference(c, claimDisplayOrder.get(c.id) || idx + 1);
         const references = [
+          c.paperReference,
           c.claimNumber,
           c.externalClaimRef,
           c.referenceNumber,
@@ -398,6 +401,7 @@ export default function ClaimBatchDetail() {
           paperRef,
           batchCode,
           ...getReferenceParts(c.claimNumber),
+          ...getReferenceParts(c.paperReference),
           ...getReferenceParts(c.externalClaimRef),
           ...getReferenceParts(paperRef)
         ];
@@ -664,10 +668,10 @@ export default function ClaimBatchDetail() {
           ? { label: 'مرفوضة', color: 'error', bgcolor: '#fff1f0', border: '#ffa39e' }
           : { label: 'مقبولة', color: 'success', bgcolor: '#f6ffed', border: '#b7eb8f' },
       SETTLED: { label: 'تمت التسوية', color: 'success', bgcolor: '#f6ffed', border: '#b7eb8f' },
-      PAID: { label: 'مدفوعة', color: 'success', bgcolor: '#f6ffed', border: '#b7eb8f' },
       BATCHED: { label: 'في دفعة', color: 'info', bgcolor: '#e6f7ff', border: '#91d5ff' },
       NEEDS_CORRECTION: { label: 'تحتاج تصحيح', color: 'warning', bgcolor: '#fffbe6', border: '#ffe58f' },
       PENDING: { label: 'قيد الانتظار', color: 'warning', bgcolor: '#fffbe6', border: '#ffe58f' },
+      APPROVAL_IN_PROGRESS: { label: 'جاري معالجة الموافقة', color: 'warning', bgcolor: '#fffbe6', border: '#ffe58f' },
       REJECTED: { label: 'مرفوضة', color: 'error', bgcolor: '#fff1f0', border: '#ffa39e' },
       UNDER_REVIEW: { label: 'تحت المراجعة', color: 'info', bgcolor: '#e6f7ff', border: '#91d5ff' },
       DRAFT: { label: 'مسودة', color: 'default', bgcolor: '#fafafa', border: '#d9d9d9' },
@@ -1076,11 +1080,11 @@ export default function ClaimBatchDetail() {
                   <MenuItem value="PENDING">قيد الانتظار</MenuItem>
                   <MenuItem value="DRAFT">مسودة</MenuItem>
                   <MenuItem value="NEEDS_CORRECTION">تحتاج تصحيح</MenuItem>
+                  <MenuItem value="APPROVAL_IN_PROGRESS">جاري معالجة الموافقة</MenuItem>
                   <MenuItem value="APPROVED">مقبولة</MenuItem>
                   <MenuItem value="REJECTED">مرفوضة</MenuItem>
                   <MenuItem value="BATCHED">في دفعة</MenuItem>
                   <MenuItem value="SETTLED">تمت التسوية</MenuItem>
-                  <MenuItem value="PAID">مدفوعة</MenuItem>
                 </TextField>
 
                 <Button
@@ -1093,8 +1097,8 @@ export default function ClaimBatchDetail() {
                     tableState.setPage(0);
                   }}
                   sx={{
-                    minWidth: '7.5rem',
-                    width: '7.5rem',
+                    minWidth: '9rem',
+                    width: '9rem',
                     height: '2.25rem',
                     borderRadius: 1,
                     whiteSpace: 'nowrap',

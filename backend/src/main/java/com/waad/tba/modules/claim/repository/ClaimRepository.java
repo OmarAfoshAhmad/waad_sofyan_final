@@ -29,6 +29,8 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
 
         List<Claim> findByClaimBatchIdAndActiveTrueOrderByCreatedAtAscIdAsc(Long claimBatchId);
 
+        long countByClaimBatchId(Long claimBatchId);
+
         /**
          * Count claims EVER linked to a specific benefit policy — including
          * cancelled/soft-deleted ones (c.active = false). Used to permanently
@@ -350,6 +352,7 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
         @EntityGraph(attributePaths = { "member", "member.benefitPolicy", "member.employer", "preAuthorization",
                         "visit" })
         @Query(value = "SELECT c FROM Claim c " +
+                        "LEFT JOIN c.claimBatch cb " +
                         "WHERE c.active = true " +
                         "AND (LOWER(c.providerName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) " +
                         "OR LOWER(c.diagnosisDescription) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) " +
@@ -365,6 +368,7 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
         @EntityGraph(attributePaths = { "member", "member.benefitPolicy", "member.employer", "preAuthorization",
                         "visit" })
         @Query(value = "SELECT c FROM Claim c " +
+                        "LEFT JOIN c.claimBatch cb " +
                         "WHERE c.active = true " +
                         "AND (:employerId IS NULL OR c.member.employer.id = :employerId) " +
                         "AND (:providerId IS NULL OR c.providerId = :providerId) " +
@@ -375,9 +379,12 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
                         "AND (CAST(:createdAtFrom AS timestamp) IS NULL OR c.createdAt >= :createdAtFrom) " +
                         "AND (CAST(:createdAtTo AS timestamp) IS NULL OR c.createdAt < :createdAtTo) " +
                         "AND (LOWER(c.providerName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) " +
+                        "OR LOWER(c.claimNumber) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) " +
+                        "OR LOWER(c.paperReference) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) " +
+                        "OR LOWER(cb.batchCode) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) " +
                         "OR LOWER(c.diagnosisDescription) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) " +
                         "OR LOWER(c.member.fullName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) " +
-                        "OR LOWER(c.member.civilId) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))", countQuery = "SELECT COUNT(c) FROM Claim c WHERE c.active = true AND (:employerId IS NULL OR c.member.employer.id = :employerId) AND (:providerId IS NULL OR c.providerId = :providerId) AND (:claimBatchId IS NULL OR c.claimBatch.id = :claimBatchId) AND (:status IS NULL OR c.status = :status) AND (CAST(:dateFrom AS date) IS NULL OR c.serviceDate >= :dateFrom) AND (CAST(:dateTo AS date) IS NULL OR c.serviceDate <= :dateTo) AND (CAST(:createdAtFrom AS timestamp) IS NULL OR c.createdAt >= :createdAtFrom) AND (CAST(:createdAtTo AS timestamp) IS NULL OR c.createdAt < :createdAtTo) AND (LOWER(c.providerName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) OR LOWER(c.diagnosisDescription) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) OR LOWER(c.member.fullName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) OR LOWER(c.member.civilId) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))")
+                        "OR LOWER(c.member.civilId) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))", countQuery = "SELECT COUNT(c) FROM Claim c LEFT JOIN c.claimBatch cb WHERE c.active = true AND (:employerId IS NULL OR c.member.employer.id = :employerId) AND (:providerId IS NULL OR c.providerId = :providerId) AND (:claimBatchId IS NULL OR c.claimBatch.id = :claimBatchId) AND (:status IS NULL OR c.status = :status) AND (CAST(:dateFrom AS date) IS NULL OR c.serviceDate >= :dateFrom) AND (CAST(:dateTo AS date) IS NULL OR c.serviceDate <= :dateTo) AND (CAST(:createdAtFrom AS timestamp) IS NULL OR c.createdAt >= :createdAtFrom) AND (CAST(:createdAtTo AS timestamp) IS NULL OR c.createdAt < :createdAtTo) AND (LOWER(c.providerName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) OR LOWER(c.claimNumber) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) OR LOWER(c.paperReference) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) OR LOWER(cb.batchCode) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) OR LOWER(c.diagnosisDescription) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) OR LOWER(c.member.fullName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) OR LOWER(c.member.civilId) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))")
         Page<Claim> searchPagedWithFilters(
                         @Param("keyword") String keyword,
                         @Param("employerId") Long employerId,
@@ -1602,6 +1609,7 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
                         "LEFT JOIN FETCH m.benefitPolicy bp " +
                         "LEFT JOIN FETCH m.employer e " +
                         " " +
+                        "LEFT JOIN c.claimBatch cb " +
                         "LEFT JOIN FETCH c.preAuthorization pa " +
                         "WHERE c.active = true " +
                         "AND c.providerId IN :providerIds " +
@@ -1614,9 +1622,12 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
                         "AND (CAST(:createdAtFrom AS timestamp) IS NULL OR c.createdAt >= :createdAtFrom) " +
                         "AND (CAST(:createdAtTo AS timestamp) IS NULL OR c.createdAt < :createdAtTo) " +
                         "AND (LOWER(c.providerName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) " +
+                        "OR LOWER(c.claimNumber) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) " +
+                        "OR LOWER(c.paperReference) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) " +
+                        "OR LOWER(cb.batchCode) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) " +
                         "OR LOWER(c.diagnosisDescription) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) " +
                         "OR LOWER(m.fullName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) " +
-                        "OR LOWER(m.civilId) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))", countQuery = "SELECT COUNT(c) FROM Claim c LEFT JOIN c.member m "
+                        "OR LOWER(m.civilId) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))", countQuery = "SELECT COUNT(c) FROM Claim c LEFT JOIN c.member m LEFT JOIN c.claimBatch cb "
                                         +
                                         "WHERE c.active = true AND c.providerId IN :providerIds " +
                                         "AND (:providerId IS NULL OR c.providerId = :providerId) " +
@@ -1629,6 +1640,12 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
                                         +
                                         "AND (CAST(:createdAtTo AS timestamp) IS NULL OR c.createdAt < :createdAtTo) " +
                                         "AND (LOWER(c.providerName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) "
+                                        +
+                                        "OR LOWER(c.claimNumber) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) "
+                                        +
+                                        "OR LOWER(c.paperReference) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) "
+                                        +
+                                        "OR LOWER(cb.batchCode) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) "
                                         +
                                         "OR LOWER(c.diagnosisDescription) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) "
                                         +

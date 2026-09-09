@@ -23,6 +23,7 @@ public class ClaimViewDto {
      * Claim Number (formatted reference: CLM-YYYYMMDD-XXXX or just ID)
      */
     private String claimNumber;
+    private String paperReference;
 
     // Member information
     private Long memberId;

@@ -23,7 +23,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 @Controller
-@RequestMapping("/api/reports")
+@RequestMapping({"/api/v1/reports", "/api/reports"})
 @RequiredArgsConstructor
 public class ReportController {
 
@@ -42,6 +42,7 @@ public class ReportController {
             Model model) {
         ClaimReportDto reportData = reportDataService.getClaimReportData(claimIds, onlyRejected, batchCode);
         model.addAttribute("report", reportData);
+        model.addAttribute("pdfMode", false);
         return "reports/claim-report";
     }
 
@@ -58,6 +59,7 @@ public class ReportController {
 
             Context context = new Context();
             context.setVariable("report", reportData);
+            context.setVariable("pdfMode", true);
             String htmlString = templateEngine.process("reports/claim-report", context);
 
             byte[] pdfBytes = pdfExportService.generatePdfFromHtml(htmlString);

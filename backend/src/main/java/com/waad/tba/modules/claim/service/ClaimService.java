@@ -359,7 +359,7 @@ public class ClaimService {
         com.waad.tba.modules.claim.entity.ClaimBatch claimBatch = null;
         if (dto.getClaimBatchId() != null) {
             claimBatchService.validateBatchIsOpen(dto.getClaimBatchId());
-            claimBatch = claimBatchRepository.findById(dto.getClaimBatchId()).orElse(null);
+            claimBatch = claimBatchRepository.findByIdForUpdate(dto.getClaimBatchId()).orElse(null);
 
             if (claimBatch != null) {
                 if (!claimBatch.getProviderId().equals(provider.getId()) ||
@@ -381,6 +381,7 @@ public class ClaimService {
                     serviceEmployer.getId(),
                     date.getYear(),
                     date.getMonthValue());
+            claimBatch = claimBatchRepository.findByIdForUpdate(claimBatch.getId()).orElse(claimBatch);
         }
 
         ClaimStatus requestedInitialStatus = dto.getStatus();
@@ -408,6 +409,7 @@ public class ClaimService {
         // SUBMITTED, to start the reviewed workflow) are untouched here — their
         // financial snapshot is finalized later by ClaimReviewService.
         boolean isDirectEntry = requestedInitialStatus == null;
+        assignStablePaperReference(claim, claimBatch);
         Claim savedClaim = claimRepository.save(claim);
 
         if (requestedInitialStatus == ClaimStatus.REJECTED) {
@@ -473,6 +475,17 @@ public class ClaimService {
         }
 
         return claimMapper.toViewDto(savedClaim);
+    }
+
+    private void assignStablePaperReference(Claim claim, com.waad.tba.modules.claim.entity.ClaimBatch claimBatch) {
+        if (claim == null || claim.getPaperReference() != null || claimBatch == null || claimBatch.getId() == null) {
+            return;
+        }
+        long nextSequence = claimRepository.countByClaimBatchId(claimBatch.getId()) + 1;
+        String batchCode = claimBatch.getBatchCode();
+        if (batchCode != null && !batchCode.isBlank()) {
+            claim.setPaperReference(batchCode + "/" + String.format("%04d", nextSequence));
+        }
     }
 
     /**

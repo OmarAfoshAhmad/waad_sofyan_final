@@ -682,6 +682,7 @@ public class ClaimMapper {
                                 .claimContextCode(claim.getClaimContextCode())
                                 .claimNumber(claim.getClaimNumber() != null ? claim.getClaimNumber()
                                                 : "CLM-" + claim.getId())
+                                .paperReference(claim.getPaperReference())
                                 .memberId(member != null ? member.getId() : null)
                                 .memberFullName(member != null ? member.getFullName() : null)
                                 .memberName(member != null ? member.getFullName() : null)

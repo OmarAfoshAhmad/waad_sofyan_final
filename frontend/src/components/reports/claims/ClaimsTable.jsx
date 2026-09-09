@@ -56,7 +56,7 @@ const safeString = (value) => {
  */
 const COLUMNS = [
   {
-    id: 'id',
+    id: 'claimNumber',
     label: 'رقم المطالبة',
     minWidth: '7.5rem',
     align: 'center',
@@ -109,7 +109,7 @@ const COLUMNS = [
   },
   {
     id: 'visitDate',
-    label: 'تاريخ الزيارة',
+    label: 'تاريخ الخدمة',
     minWidth: '8.125rem',
     align: 'center',
     format: formatDate,

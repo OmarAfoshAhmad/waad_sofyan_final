@@ -91,6 +91,15 @@ public class Claim {
     @Column(name = "claim_number", length = 100, unique = true)
     private String claimNumber;
 
+    /**
+     * Stable paper-facing reference within a claim batch, e.g.
+     * JFZ26-08-00002/0010. It is assigned once and must never be derived from
+     * the current visible order because cancellations/deletions would renumber
+     * paper forms already handled by operators.
+     */
+    @Column(name = "paper_reference", length = 140)
+    private String paperReference;
+
     @Column(name = "direct_entry_idempotency_key", length = 120)
     private String directEntryIdempotencyKey;
 

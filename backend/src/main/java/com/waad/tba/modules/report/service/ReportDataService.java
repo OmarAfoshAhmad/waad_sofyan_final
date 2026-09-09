@@ -25,9 +25,7 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Base64;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -67,7 +65,6 @@ public class ReportDataService {
 
                 String batchCode = (providedBatchCode != null && !providedBatchCode.isEmpty()) ? providedBatchCode : "N/A";
                 String providerName = "N/A";
-                Map<Long, Map<Long, Integer>> claimOrderByBatchId = new HashMap<>();
 
                 // Find first valid provider name and batch code from all claims
                 for (Claim c : claims) {
@@ -120,25 +117,14 @@ public class ReportDataService {
                                 currentBatchCode = batchCode;
                         }
 
-                        String paperReference = claim.getClaimNumber();
-                        Long claimBatchId = claim.getClaimBatch() != null ? claim.getClaimBatch().getId() : null;
-                        if (claimBatchId != null && currentBatchCode != null && !currentBatchCode.equals("N/A")) {
-                                Map<Long, Integer> batchOrder = claimOrderByBatchId.computeIfAbsent(claimBatchId, id -> {
-                                        List<Claim> batchClaims = claimRepository
-                                                        .findByClaimBatchIdAndActiveTrueOrderByCreatedAtAscIdAsc(id);
-                                        Map<Long, Integer> order = new HashMap<>();
-                                        for (int index = 0; index < batchClaims.size(); index++) {
-                                                order.put(batchClaims.get(index).getId(), index + 1);
-                                        }
-                                        return order;
-                                });
-                                Integer sequence = batchOrder.get(claim.getId());
-                                if (sequence != null) {
-                                        paperReference = currentBatchCode + "/" + String.format("%04d", sequence);
-                                }
+                        String paperReference = claim.getPaperReference();
+                        if ((paperReference == null || paperReference.isBlank()) && claim.getClaimNumber() != null
+                                        && claim.getClaimNumber().contains("/")) {
+                                paperReference = claim.getClaimNumber();
                         }
                         if (paperReference == null || paperReference.isBlank()) {
-                                paperReference = String.valueOf(claim.getId());
+                                paperReference = claim.getClaimNumber() != null ? claim.getClaimNumber()
+                                                : String.valueOf(claim.getId());
                         }
                         
                         String diagnosis = claim.getDiagnosisDescription() != null ? claim.getDiagnosisDescription()
@@ -147,8 +133,7 @@ public class ReportDataService {
                         List<ClaimStatementItemDto> items = new ArrayList<>();
                         BigDecimal subTotalGross = BigDecimal.ZERO;
                         BigDecimal subTotalRejected = BigDecimal.ZERO;
-                        BigDecimal subTotalPatientShare = claim.getPatientCoPay() != null ? claim.getPatientCoPay()
-                                        : BigDecimal.ZERO;
+                        BigDecimal subTotalPatientShare = BigDecimal.ZERO;
 
                         for (ClaimLine line : claim.getLines()) {
                                 BigDecimal gross = line.getRequestedUnitPrice() != null
@@ -199,6 +184,11 @@ public class ReportDataService {
 
                                 subTotalGross = subTotalGross.add(gross);
                                 subTotalRejected = subTotalRejected.add(rejected);
+                                if (Boolean.TRUE.equals(onlyRejected)) {
+                                        subTotalPatientShare = subTotalPatientShare.add(line.getPatientShare() != null
+                                                        ? line.getPatientShare()
+                                                        : BigDecimal.ZERO);
+                                }
                         }
 
                         // If filtering only rejections and no items left, skip the whole claim card
@@ -207,6 +197,10 @@ public class ReportDataService {
                         }
 
                         BigDecimal subTotalNet = subTotalGross.subtract(subTotalRejected);
+                        if (!Boolean.TRUE.equals(onlyRejected)) {
+                                subTotalPatientShare = claim.getPatientCoPay() != null ? claim.getPatientCoPay()
+                                                : BigDecimal.ZERO;
+                        }
                         BigDecimal subTotalExpectedNet = subTotalNet;
                         if (subTotalExpectedNet.compareTo(BigDecimal.ZERO) < 0) {
                                 subTotalExpectedNet = BigDecimal.ZERO;
@@ -256,7 +250,15 @@ public class ReportDataService {
                 String generalBusinessType = firstNonBlank(uiConfigService.getBusinessType(),
                                 settings.getCompanyBusinessType(), "إدارة النفقات الطبية");
                 String generalLogoUrl = firstNonBlank(uiConfigService.getLogoUrl(), settings.getLogoUrl(), "");
-                if (logoBase64.isBlank() && "/images/waad-logo.png".equals(generalLogoUrl)) {
+                String normalizedLogoUrl = generalLogoUrl == null ? "" : generalLogoUrl.trim();
+                if (!normalizedLogoUrl.isBlank() && !normalizedLogoUrl.startsWith("/")
+                                && !normalizedLogoUrl.startsWith("http://")
+                                && !normalizedLogoUrl.startsWith("https://")
+                                && !normalizedLogoUrl.startsWith("data:")) {
+                        normalizedLogoUrl = "/" + normalizedLogoUrl;
+                }
+                if (logoBase64.isBlank() && ("/images/waad-logo.png".equals(normalizedLogoUrl)
+                                || normalizedLogoUrl.endsWith("/images/waad-logo.png"))) {
                         logoBase64 = loadDefaultLogoBase64();
                 }
 
@@ -275,7 +277,7 @@ public class ReportDataService {
                                 .companyName(generalCompanyName)
                                 .companyBusinessType(generalBusinessType)
                                 .companyLogoBase64(logoBase64)
-                                .companyLogoUrl(generalLogoUrl)
+                                .companyLogoUrl(normalizedLogoUrl)
                                 .groupedClaims(groupedClaims)
                                 .batchCode(batchCode)
                                 .providerName(providerName)
