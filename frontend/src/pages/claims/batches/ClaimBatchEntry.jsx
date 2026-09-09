@@ -2175,7 +2175,7 @@ export default function ClaimBatchEntry() {
                 color="secondary"
                 startIcon={<BackIcon sx={{ ml: 1, mr: 0 }} />}
                 onClick={() => navigate(detailUrl)}
-                sx={{}}
+                sx={{ minWidth: '5rem', height: '2.25rem', borderRadius: 1, whiteSpace: 'nowrap' }}
               >
                 {t('claimEntry.backToList')}
               </Button>

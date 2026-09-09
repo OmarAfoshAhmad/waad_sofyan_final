@@ -172,8 +172,15 @@ export const ClaimTotalsFooter = ({
           sx={{
             width: 138,
             flexShrink: 0,
+            alignSelf: 'center',
             '& .MuiInputBase-root': { height: 36 },
-            '& .MuiInputLabel-root': { fontSize: '0.72rem' }
+            '& .MuiInputLabel-root': { fontSize: '0.72rem' },
+            '& .MuiFormHelperText-root': {
+              position: 'absolute',
+              top: '100%',
+              left: 0,
+              right: 0
+            }
           }}
           error={false}
           helperText={
