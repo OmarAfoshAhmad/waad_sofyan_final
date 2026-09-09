@@ -377,12 +377,14 @@ export default function ClaimBatchDetail() {
   const claims = useMemo(() => {
     let items = claimsResponse?.items || claimsResponse?.content || [];
 
-    // Keep newest claims first by default (before any table-level sorting).
+    // Keep first-entered claims first by default. The paper reference is a
+    // stable paper-facing sequence and must not be inverted just because a
+    // newer claim was added later.
     items = [...items].sort((a, b) => {
       const aTime = new Date(a?.createdAt || 0).getTime() || 0;
       const bTime = new Date(b?.createdAt || 0).getTime() || 0;
-      if (aTime !== bTime) return bTime - aTime;
-      return (Number(b?.id) || 0) - (Number(a?.id) || 0);
+      if (aTime !== bTime) return aTime - bTime;
+      return (Number(a?.id) || 0) - (Number(b?.id) || 0);
     });
 
     // 1. Search Filter
@@ -449,6 +451,8 @@ export default function ClaimBatchDetail() {
           return new Date(claim.serviceDate || 0).getTime() || 0;
         case 'status':
           return String(claim.status || '').toLowerCase();
+        case 'ref':
+          return getClaimPaperReference(claim, claimDisplayOrder.get(claim.id) || idx + 1);
         case 'amount':
           return Number(claim.requestedAmount) || 0;
         case 'covered':
@@ -482,7 +486,7 @@ export default function ClaimBatchDetail() {
         return 0;
       })
       .map((entry) => entry.claim);
-  }, [claims, tableState.sorting]);
+  }, [claimDisplayOrder, claims, tableState.sorting]);
 
   // Paginated Data for the table
   const paginatedClaims = useMemo(() => {
@@ -625,7 +629,7 @@ export default function ClaimBatchDetail() {
       align: 'center',
       sortable: false
     },
-    { id: 'ref', label: 'المرجع', minWidth: '8rem', align: 'center', sortable: false },
+    { id: 'ref', label: 'المرجع', minWidth: '8rem', align: 'center', sortable: true },
     {
       id: 'patient',
       label: 'الاسم (المستفيد)',

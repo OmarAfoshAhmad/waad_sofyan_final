@@ -246,8 +246,10 @@ describe('claim batch entry safety boundary', () => {
   });
 
   it('allows repeating claim-entry open-price services while keeping duplicate guard for normal services', () => {
-    expect(entrySource).toContain("const isClaimEntryOpenPriceService = svc.pricingMode === 'CLAIM_UNIT_PRICE'");
-    expect(entrySource).toContain('!isClaimEntryOpenPriceService &&');
+    expect(entrySource).toContain('const isClaimEntryOpenPriceService = (svc = {}) =>');
+    expect(entrySource).toContain("pricingMode === 'CLAIM_UNIT_PRICE'");
+    expect(entrySource).toContain("startsWith('SYS-CLAIM-')");
+    expect(entrySource).toContain('!claimEntryOpenPriceService &&');
     expect(entrySource).toContain('هذه الخدمة مضافة بالفعل في بند آخر');
   });
 

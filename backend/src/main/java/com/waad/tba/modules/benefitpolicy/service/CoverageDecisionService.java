@@ -23,6 +23,7 @@ import java.math.BigDecimal;
 @RequiredArgsConstructor
 public class CoverageDecisionService {
     private static final String GENERAL_INPATIENT_CATEGORY_CODE = "CAT-COV-INPATIENT";
+    private static final String GENERAL_OUTPATIENT_CATEGORY_CODE = "CAT-COV-OUTPATIENT";
     private static final java.util.Set<String> INPATIENT_BASED_CLAIM_CONTEXTS = java.util.Set.of(
             "INPATIENT", "MATERNITY", "PREGNANCY_COMPLICATIONS");
 
@@ -116,6 +117,18 @@ public class CoverageDecisionService {
                     request.policyId(), category.getId(), category.getParentId(), exactContext)
                     .orElse(null);
         }
+        boolean generalOutpatientFallback = false;
+        if (rule == null && "OUTPATIENT".equals(exactContext)) {
+            MedicalCategory outpatientGeneral = categoryRepository.findActiveByCode(GENERAL_OUTPATIENT_CATEGORY_CODE)
+                    .filter(candidate -> !candidate.isDeleted())
+                    .orElse(null);
+            if (outpatientGeneral != null && !outpatientGeneral.getId().equals(category.getId())) {
+                rule = ruleRepository.findBestRuleForClaimContext(
+                                request.policyId(), outpatientGeneral.getId(), outpatientGeneral.getParentId(), exactContext)
+                        .orElse(null);
+                generalOutpatientFallback = rule != null;
+            }
+        }
         if (rule == null) {
             return rejected(categoryId, CoverageDecisionSource.NO_BENEFIT_RULE, "NO_BENEFIT_RULE");
         }
@@ -123,6 +136,8 @@ public class CoverageDecisionService {
                 ? rule.getMedicalCategory().getId() : categoryId;
         CoverageDecisionSource source = generalInpatientFallback
                 ? CoverageDecisionSource.GENERAL_INPATIENT_RULE
+                : generalOutpatientFallback
+                ? CoverageDecisionSource.GENERAL_OUTPATIENT_RULE
                 : matchingCategoryId.equals(category.getId())
                 ? CoverageDecisionSource.EXACT_CATEGORY_RULE
                 : CoverageDecisionSource.PARENT_CATEGORY_RULE;

@@ -132,6 +132,18 @@ const GENERATED_SERVICE_CODE_PATTERN = /^(PL-|SYS-)/i;
 
 const isGeneratedServiceCode = (code = '') => GENERATED_SERVICE_CODE_PATTERN.test(String(code).trim());
 
+const isClaimEntryOpenPriceService = (svc = {}) => {
+  const pricingMode = svc?.pricingMode || svc?.service?.pricingMode;
+  const code = svc?.serviceCode || svc?.code || svc?.medicalServiceCode || '';
+
+  return (
+    pricingMode === 'CLAIM_UNIT_PRICE' ||
+    String(code).trim().toUpperCase().startsWith('SYS-CLAIM-') ||
+    Boolean(svc?.claimEntryOpenPrice || svc?.openClaimUnitPrice) ||
+    (svc?.pricingItemId && !svc?.medicalServiceId && Number(svc?.contractPrice || 0) === 0 && Number(svc?.maxContractPrice || 0) === 0)
+  );
+};
+
 const buildServiceDisplayLabel = ({ code = '', name = '' } = {}) => {
   const cleanCode = String(code || '').trim();
   const cleanName = String(name || '').trim();
@@ -1156,13 +1168,13 @@ export default function ClaimBatchEntry() {
 
       const code = svc?.serviceCode || svc?.code;
       const isGeneralService = code === 'GEN-MEDICATION' || code === 'GEN-MEDICAL-SERVICE';
-      const isClaimEntryOpenPriceService = svc.pricingMode === 'CLAIM_UNIT_PRICE';
+      const claimEntryOpenPriceService = isClaimEntryOpenPriceService(svc);
 
       const currentLines = linesRef.current || lines;
 
       const isDuplicate =
         !isGeneralService &&
-        !isClaimEntryOpenPriceService &&
+        !claimEntryOpenPriceService &&
         currentLines.some((l, i) => {
           if (i === idx) return false;
           const existingName = l.serviceName || l.service?.serviceName || l.service?.name;
@@ -1462,6 +1474,8 @@ export default function ClaimBatchEntry() {
     return null;
   }, [coveragePending, entryContextBlockReason, saving]);
 
+  const detailUrl = `/claims/batches/detail?employerId=${employerId}&providerId=${providerId}&month=${month}&year=${year}`;
+
   const resetForm = useCallback(() => {
     setMember(null);
     setMemberInput('');
@@ -1486,6 +1500,33 @@ export default function ClaimBatchEntry() {
     setEditCoverageLoading(false);
     setTimeout(() => memberRef.current?.focus(), 120);
   }, [defaultDate]);
+
+  const cancelClaimEntry = useCallback(async () => {
+    skipAutosaveRef.current = true;
+    try {
+      localStorage.removeItem(draftStorageKey);
+    } catch {
+      // Local draft cleanup should never block leaving the screen.
+    }
+
+    try {
+      const batchIdForDelete = draftBatchId || currentBatch?.id;
+      if (!editingClaimId && batchIdForDelete) {
+        await claimsService.deleteDraft(batchIdForDelete);
+      }
+    } catch (error) {
+      console.warn('Failed to delete claim entry draft', error);
+      enqueueSnackbar('تم إغلاق شاشة الإدخال، لكن تعذر حذف نسخة المسودة المؤقتة من الخادم', { variant: 'warning' });
+    } finally {
+      resetForm();
+      setDraftVersion(null);
+      setAutoSaveStatus('idle');
+      setTimeout(() => {
+        skipAutosaveRef.current = false;
+        navigate(detailUrl);
+      }, 0);
+    }
+  }, [currentBatch?.id, detailUrl, draftBatchId, draftStorageKey, editingClaimId, enqueueSnackbar, navigate, resetForm]);
 
   const restoreServerDraft = useCallback(() => {
     recoveryDismissedRef.current = true;
@@ -1964,7 +2005,6 @@ export default function ClaimBatchEntry() {
     }
   };
 
-  const detailUrl = `/claims/batches/detail?employerId=${employerId}&providerId=${providerId}&month=${month}&year=${year}`;
   const monthLabel = MONTHS_AR[(month || 1) - 1];
 
   return (
@@ -2046,11 +2086,19 @@ export default function ClaimBatchEntry() {
                 </Tooltip>
               )}
 
-              <Tooltip title={t('claimEntry.discardChanges')}>
+              <Tooltip title="إلغاء الإدخال الحالي ومسح المسودة المؤقتة">
                 <span>
-                  <IconButton size="small" onClick={resetForm} disabled={!isDirty} color="error">
-                    <DiscardIcon sx={{ fontSize: '1.2rem' }} />
-                  </IconButton>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    color="error"
+                    startIcon={<DiscardIcon sx={{ fontSize: '1.05rem', ml: 1, mr: 0 }} />}
+                    onClick={cancelClaimEntry}
+                    disabled={!isDirty && !draftVersion}
+                    sx={{ minWidth: '8.5rem', height: '2.25rem', borderRadius: 1, whiteSpace: 'nowrap' }}
+                  >
+                    {editingClaimId ? 'إلغاء التعديل' : 'إلغاء المطالبة'}
+                  </Button>
                 </span>
               </Tooltip>
 
