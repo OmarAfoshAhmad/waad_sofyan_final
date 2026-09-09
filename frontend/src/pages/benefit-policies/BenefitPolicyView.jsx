@@ -35,7 +35,8 @@ import {
   Info as InfoIcon,
   Rule as RuleIcon,
   AccountTree as StructureIcon,
-  People as PeopleIcon
+  People as PeopleIcon,
+  WarningAmber as WarningAmberIcon
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
@@ -209,6 +210,20 @@ const BenefitPolicyView = () => {
     message: ''
   });
   const [gapOverrideDialogOpen, setGapOverrideDialogOpen] = useState(false);
+  const [adminCorrectionDialogOpen, setAdminCorrectionDialogOpen] = useState(false);
+  const [adminCorrectionDraftReason, setAdminCorrectionDraftReason] = useState('');
+  const [administrativeCorrection, setAdministrativeCorrection] = useState({ enabled: false, reason: '' });
+
+  const administrativeCorrectionConfig = useMemo(
+    () =>
+      administrativeCorrection.enabled
+        ? {
+            administrativeCorrection: true,
+            correctionReason: administrativeCorrection.reason
+          }
+        : {},
+    [administrativeCorrection]
+  );
 
   // ═══════════════════════════════════════════════════════════════════════════
   // DATA FETCHING
@@ -571,6 +586,26 @@ const BenefitPolicyView = () => {
               </Button>
             )}
 
+            {policy?.status !== 'ARCHIVED' && policy?.status !== 'CANCELLED' && (
+              <Button
+                startIcon={<WarningAmberIcon />}
+                onClick={() => {
+                  if (administrativeCorrection.enabled) {
+                    setAdministrativeCorrection({ enabled: false, reason: '' });
+                    setAdminCorrectionDraftReason('');
+                  } else {
+                    setAdminCorrectionDialogOpen(true);
+                  }
+                }}
+                variant={administrativeCorrection.enabled ? 'contained' : 'outlined'}
+                color={administrativeCorrection.enabled ? 'warning' : 'secondary'}
+                size="small"
+                disabled={isLoading_Action}
+              >
+                {administrativeCorrection.enabled ? 'إيقاف التصحيح' : 'تصحيح إداري'}
+              </Button>
+            )}
+
             {/* Revert to Draft Button */}
             {statusConfig.canRevertToDraft && (
               <Button
@@ -633,17 +668,6 @@ const BenefitPolicyView = () => {
           ))}
         </Alert>
       )}
-      {(gapReport?.rulesWithoutBucket?.length > 0 || gapReport?.bucketsWithoutRule?.length > 0) && (
-        <Alert severity="info" sx={{ mb: '0.75rem' }}>
-          <Typography variant="body2">
-            {gapReport.rulesWithoutBucket?.length > 0 &&
-              `${gapReport.rulesWithoutBucket.length} قاعدة تغطية بلا وعاء سقف مرتبط (يُطبَّق عليها السقف العام فقط). `}
-            {gapReport.bucketsWithoutRule?.length > 0 &&
-              `${gapReport.bucketsWithoutRule.length} وعاء سقف نشط لا تُحيل إليه أي قاعدة (لن يُقرأ أبداً).`}
-          </Typography>
-        </Alert>
-      )}
-
       {/* Tabs Navigation */}
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: '0.5rem', mt: -3 }}>
         <Tabs value={activeTab} onChange={handleTabChange} textColor="primary" indicatorColor="primary">
@@ -763,6 +787,7 @@ const BenefitPolicyView = () => {
           policyDefaultCoveragePercent={policy?.defaultCoveragePercent}
           policyStartDate={policy?.startDate}
           policyEndDate={policy?.endDate}
+          administrativeCorrectionConfig={administrativeCorrectionConfig}
         />
       )}
 
@@ -776,6 +801,56 @@ const BenefitPolicyView = () => {
         loading={isLoading_Action}
         confirmColor={dialogState.action === 'delete' || dialogState.action === 'cancel' ? 'error' : 'primary'}
       />
+
+      <Dialog
+        open={adminCorrectionDialogOpen}
+        onClose={() => setAdminCorrectionDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          <Stack direction="row" spacing={1} alignItems="center">
+            <WarningAmberIcon color="warning" />
+            <Typography variant="h5">تفعيل التصحيح الإداري</Typography>
+          </Stack>
+        </DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={2}>
+            <Alert severity="warning">
+              هذا الوضع مخصص لتصحيح خطأ إدخال في قواعد وثيقة مستخدمة قبل الاعتماد المالي. لا يسمح بالحذف أو الاستبدال الشامل، وسيتم تسجيل السبب
+              في سجل التدقيق.
+            </Alert>
+            <TextField
+              label="سبب التصحيح الإداري"
+              value={adminCorrectionDraftReason}
+              onChange={(e) => setAdminCorrectionDraftReason(e.target.value)}
+              placeholder="مثال: تصحيح نسبة تغطية العيادات الخارجية من 100 إلى 80 قبل الاعتماد المالي"
+              multiline
+              minRows={3}
+              fullWidth
+              required
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAdminCorrectionDialogOpen(false)}>إلغاء</Button>
+          <Button
+            variant="contained"
+            color="warning"
+            onClick={() => {
+              const reason = adminCorrectionDraftReason.trim();
+              if (reason.length < 10) {
+                enqueueSnackbar('اكتب سبباً واضحاً للتصحيح الإداري', { variant: 'warning' });
+                return;
+              }
+              setAdministrativeCorrection({ enabled: true, reason });
+              setAdminCorrectionDialogOpen(false);
+            }}
+          >
+            تفعيل التصحيح
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Critical-gap override: activation refused a rule naming a claim
           context that is missing or disabled -- that rule can never apply

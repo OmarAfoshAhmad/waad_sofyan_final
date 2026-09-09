@@ -34,7 +34,8 @@ vi.mock('services/api/benefit-structure.service', () => ({
 }));
 
 vi.mock('services/api/medical-categories.service', () => ({
-  getAllMedicalCategories: vi.fn().mockResolvedValue([])
+  getAllMedicalCategories: vi.fn().mockResolvedValue([]),
+  getCanonicalCoverageCategories: vi.fn().mockResolvedValue([])
 }));
 
 vi.mock('services/api/medical-services.service', () => ({
@@ -128,7 +129,7 @@ function renderTab({ rules, structure, gapReport }) {
   );
 }
 
-describe('BenefitPolicyRulesTab: real context filter and gap-badge interaction', () => {
+describe('BenefitPolicyRulesTab: real context and limit filters', () => {
   it('shows a valid generic context without falsely labelling it as legacy', async () => {
     renderTab({
       rules: [OUTPATIENT_RULE, PREGNANCY_RULE],
@@ -187,15 +188,10 @@ describe('BenefitPolicyRulesTab: real context filter and gap-badge interaction',
     expect(screen.queryByText('علاج طبيعي')).not.toBeInTheDocument();
   });
 
-  it('toggling the gap chip hides a rule group backed by a real shared bucket, and keeps rules that rely on no bucket at all', async () => {
+  it('filters benefits by whether they have an explicit benefit cap', async () => {
     const user = userEvent.setup();
     renderTab({
       rules: [OUTPATIENT_RULE, PREGNANCY_RULE],
-      // Neither standalone rule links its own bucket -- under the current
-      // model that is *always* advisory-flagged (it may deliberately rely
-      // on an individual cap or the policy's general ceiling instead), so
-      // both are expected to stay under "قواعد بها فجوة". The one row that
-      // can genuinely read as "no gap" is a real, bucket-backed group.
       structure: {
         groups: [{ id: 501, code: 'GRP-DENTAL', nameAr: 'مجموعة الأسنان الأساسية', active: true, contextType: 'OUTPATIENT' }],
         buckets: [{ id: 900, benefitGroupId: 501, code: 'B-DENTAL', nameAr: 'وعاء الأسنان', amountLimit: 500, periodType: 'ANNUAL' }],
@@ -207,8 +203,17 @@ describe('BenefitPolicyRulesTab: real context filter and gap-badge interaction',
     await screen.findByText('علاج طبيعي');
     expect(screen.getByText('مجموعة الأسنان الأساسية')).toBeInTheDocument();
 
-    const gapChip = screen.getByText(/قواعد بها فجوة/);
-    await user.click(gapChip);
+    const limitSelect = screen.getByText(/^كل السقوف/);
+    await user.click(limitSelect);
+    let listbox = await screen.findByRole('listbox');
+    await user.click(within(listbox).getByText(/^منافع لها سقف/));
+
+    expect(screen.getByText('مجموعة الأسنان الأساسية')).toBeInTheDocument();
+    expect(screen.queryByText('علاج طبيعي')).not.toBeInTheDocument();
+
+    await user.click(screen.getByText(/^منافع لها سقف/));
+    listbox = await screen.findByRole('listbox');
+    await user.click(within(listbox).getByText(/^منافع بدون سقوف/));
 
     expect(screen.getByText('علاج طبيعي')).toBeInTheDocument();
     expect(screen.getByText('خدمات الولادة المعقدة')).toBeInTheDocument();

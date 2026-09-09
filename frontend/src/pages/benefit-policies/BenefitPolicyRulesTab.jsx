@@ -48,8 +48,7 @@ import {
   Download as DownloadIcon,
   FileDownload as FileDownloadIcon,
   FileUpload as FileUploadIcon,
-  Edit as EditIcon,
-  WarningAmber as WarningAmberIcon
+  Edit as EditIcon
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSnackbar } from 'notistack';
@@ -736,7 +735,8 @@ const BenefitPolicyRulesTab = ({
   policyDefaultCoveragePercent,
   policyStartDate,
   policyEndDate,
-  onOpenStructure
+  onOpenStructure,
+  administrativeCorrectionConfig
 }) => {
   const queryClient = useQueryClient();
   const { enqueueSnackbar } = useSnackbar();
@@ -759,14 +759,11 @@ const BenefitPolicyRulesTab = ({
   // BenefitPolicyGapAuditService). Reuses the same P1 audit the policy-view
   // page's warning banner reads, so "what's wrong" is answered identically
   // everywhere, not by a second, possibly-drifting computation here.
-  const [showGapsOnly, setShowGapsOnly] = useState(false);
+  const [limitFilter, setLimitFilter] = useState('ALL');
   const [viewMode, setViewMode] = useState('ACTIVE'); // 'ACTIVE', 'DELETED' (trash includes soft-deleted and disabled)
   const [categoryCoverageInputs, setCategoryCoverageInputs] = useState({});
   const [bulkSavingCoverage, setBulkSavingCoverage] = useState(false);
   const [categoryCoverageModalOpen, setCategoryCoverageModalOpen] = useState(false);
-  const [adminCorrectionDialogOpen, setAdminCorrectionDialogOpen] = useState(false);
-  const [adminCorrectionDraftReason, setAdminCorrectionDraftReason] = useState('');
-  const [administrativeCorrection, setAdministrativeCorrection] = useState({ enabled: false, reason: '' });
   const [individualLimitDialog, setIndividualLimitDialog] = useState({
     open: false,
     rule: null,
@@ -785,17 +782,7 @@ const BenefitPolicyRulesTab = ({
   const [sortDirection, setSortDirection] = useState('asc');
 
   const defaultOrderRef = useRef({ active: [], deleted: [] });
-
-  const administrativeCorrectionConfig = useMemo(
-    () =>
-      administrativeCorrection.enabled
-        ? {
-            administrativeCorrection: true,
-            correctionReason: administrativeCorrection.reason
-          }
-        : {},
-    [administrativeCorrection]
-  );
+  const administrativeCorrectionEnabled = !!administrativeCorrectionConfig?.administrativeCorrection;
 
   // ═══════════════════════════════════════════════════════════════════════════
   // DATA FETCHING
@@ -856,12 +843,6 @@ const BenefitPolicyRulesTab = ({
     enabled: !!policyId,
     staleTime: 0
   });
-  const gapRuleIds = useMemo(() => {
-    const ids = new Set();
-    (gapReport?.rulesWithoutBucket || []).forEach((g) => ids.add(g.ruleId));
-    (gapReport?.rulesWithUnknownContext || []).forEach((g) => ids.add(g.ruleId));
-    return ids;
-  }, [gapReport]);
   const criticalGapRuleIds = useMemo(() => {
     const ids = new Set();
     (gapReport?.rulesWithUnknownContext || []).forEach((g) => ids.add(g.ruleId));
@@ -1262,7 +1243,7 @@ const BenefitPolicyRulesTab = ({
 
   const canEdit = policyStatus !== 'ARCHIVED' && policyStatus !== 'CANCELLED' && isDynamicallyEditable;
   const canAdministrativeCorrect = policyStatus !== 'ARCHIVED' && policyStatus !== 'CANCELLED';
-  const canModifyRules = canEdit || (canAdministrativeCorrect && administrativeCorrection.enabled);
+  const canModifyRules = canEdit || (canAdministrativeCorrect && administrativeCorrectionEnabled);
   const isLoading =
     createMutation.isPending ||
     updateMutation.isPending ||
@@ -1801,9 +1782,16 @@ const BenefitPolicyRulesTab = ({
       groups: activeRules.filter((rule) => rule.groupSource).length,
       individuals: activeRules.filter((rule) => !rule.groupSource).length,
       byContext,
-      gaps: activeRules.filter((rule) => rule.appliedBucketLinks?.length === 0 || gapRuleIds.has(rule.id)).length
+      withLimit: activeRules.filter((rule) => {
+        const limit = rule.groupSource ? rule.bucket : rule.displayBucket;
+        return !!limit && (limit.amountLimit != null || limit.timesLimit != null || limit.daysLimit != null);
+      }).length,
+      withoutLimit: activeRules.filter((rule) => {
+        const limit = rule.groupSource ? rule.bucket : rule.displayBucket;
+        return !limit || (limit.amountLimit == null && limit.timesLimit == null && limit.daysLimit == null);
+      }).length
     };
-  }, [normalizedRules, gapRuleIds]);
+  }, [normalizedRules]);
 
   const filteredRules = useMemo(() => {
     const query = normalizeArabicSearch(ruleSearch.trim());
@@ -1823,8 +1811,16 @@ const BenefitPolicyRulesTab = ({
       statusFiltered = statusFiltered.filter((r) => (r.claimContextCode || r.encounterType || 'ANY') === contextFilter);
     }
 
-    if (showGapsOnly) {
-      statusFiltered = statusFiltered.filter((r) => r.appliedBucketLinks?.length === 0 || gapRuleIds.has(r.id));
+    if (limitFilter === 'WITH_LIMIT') {
+      statusFiltered = statusFiltered.filter((r) => {
+        const limit = r.groupSource ? r.bucket : r.displayBucket;
+        return !!limit && (limit.amountLimit != null || limit.timesLimit != null || limit.daysLimit != null);
+      });
+    } else if (limitFilter === 'WITHOUT_LIMIT') {
+      statusFiltered = statusFiltered.filter((r) => {
+        const limit = r.groupSource ? r.bucket : r.displayBucket;
+        return !limit || (limit.amountLimit == null && limit.timesLimit == null && limit.daysLimit == null);
+      });
     }
 
     const filtered =
@@ -1868,7 +1864,7 @@ const BenefitPolicyRulesTab = ({
       const cmp = String(aVal).localeCompare(String(bVal), 'ar');
       return sortDirection === 'asc' ? cmp : -cmp;
     });
-  }, [normalizedRules, ruleSearch, sortBy, sortDirection, viewMode, filterType, contextFilter, showGapsOnly, gapRuleIds]);
+  }, [normalizedRules, ruleSearch, sortBy, sortDirection, viewMode, filterType, contextFilter, limitFilter]);
 
   const pagedRules = useMemo(
     () => filteredRules.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage),
@@ -2120,33 +2116,6 @@ const BenefitPolicyRulesTab = ({
               </Tooltip>
             )}
 
-            {canAdministrativeCorrect && (
-              <Tooltip
-                title={
-                  administrativeCorrection.enabled
-                    ? `التصحيح الإداري مفعل: ${administrativeCorrection.reason}`
-                    : 'تفعيل تصحيح إداري محدود لقواعد وثيقة مستخدمة'
-                }
-              >
-                <Button
-                  color={administrativeCorrection.enabled ? 'warning' : 'secondary'}
-                  variant={administrativeCorrection.enabled ? 'contained' : 'outlined'}
-                  startIcon={<WarningAmberIcon />}
-                  onClick={() => {
-                    if (administrativeCorrection.enabled) {
-                      setAdministrativeCorrection({ enabled: false, reason: '' });
-                      setAdminCorrectionDraftReason('');
-                    } else {
-                      setAdminCorrectionDialogOpen(true);
-                    }
-                  }}
-                  sx={{ height: '2.25rem', fontWeight: 700, whiteSpace: 'nowrap' }}
-                >
-                  {administrativeCorrection.enabled ? 'إيقاف التصحيح' : 'تصحيح إداري'}
-                </Button>
-              </Tooltip>
-            )}
-
             <Tooltip title="نسخ قواعد التغطية من وثيقة شركة أخرى كما هي">
               <span>
                 <IconButton
@@ -2233,8 +2202,8 @@ const BenefitPolicyRulesTab = ({
         )}
         {/* Editability Alert */}
         {!isDynamicallyEditable && (
-          <Alert severity={administrativeCorrection.enabled ? 'info' : 'warning'} sx={{ mb: 2 }}>
-            {administrativeCorrection.enabled
+          <Alert severity={administrativeCorrectionEnabled ? 'info' : 'warning'} sx={{ mb: 2 }}>
+            {administrativeCorrectionEnabled
               ? 'وضع التصحيح الإداري مفعل: يسمح بتحديث القواعد/النِسب والسقوف الفردية والاستيراد الدمجي فقط. سيمنع الخادم العملية إذا كانت هناك مطالبات دخلت المراجعة أو الاعتماد أو التسوية.'
               : 'هذه الوثيقة مقفلة لأنها تحتوي على مطالبات أو موافقات مسبقة فعلية. يمكن للمشرف تفعيل تصحيح إداري محدود فقط للأخطاء التشغيلية قبل الاعتماد المالي.'}
           </Alert>
@@ -2292,21 +2261,26 @@ const BenefitPolicyRulesTab = ({
             ))}
           </TextField>
 
-          <Tooltip title="قواعد بلا وعاء سقف، أو مرتبطة بسياق مطالبة غير موجود/معطّل">
-            <Chip
-              clickable
-              size="medium"
-              variant={showGapsOnly ? 'filled' : 'outlined'}
-              color={showGapsOnly ? 'warning' : 'default'}
-              icon={<WarningAmberIcon fontSize="small" />}
-              label={`قواعد بها فجوة (${filterStats.gaps})`}
-              onClick={() => {
-                setShowGapsOnly((v) => !v);
-                setPage(0);
-              }}
-              sx={{ height: '2.5rem', fontWeight: 600 }}
-            />
-          </Tooltip>
+          <TextField
+            select
+            size="small"
+            value={limitFilter}
+            onChange={(e) => {
+              setLimitFilter(e.target.value);
+              setPage(0);
+            }}
+            sx={{ minWidth: 175, '& .MuiOutlinedInput-root': { height: '2.5rem' } }}
+          >
+            <MenuItem value="ALL" sx={{ fontWeight: 500 }}>
+              كل السقوف ({filterStats.all})
+            </MenuItem>
+            <MenuItem value="WITH_LIMIT" sx={{ fontWeight: 500 }}>
+              منافع لها سقف ({filterStats.withLimit})
+            </MenuItem>
+            <MenuItem value="WITHOUT_LIMIT" sx={{ fontWeight: 500 }}>
+              منافع بدون سقوف ({filterStats.withoutLimit})
+            </MenuItem>
+          </TextField>
 
           {selectedRowIds.length > 0 && (
             <Button
@@ -2515,57 +2489,6 @@ const BenefitPolicyRulesTab = ({
         hardDeleteMode={viewMode === 'DELETED'}
       />
 
-      <Dialog
-        open={adminCorrectionDialogOpen}
-        onClose={() => setAdminCorrectionDialogOpen(false)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>
-          <Stack direction="row" spacing={1} alignItems="center">
-            <WarningAmberIcon color="warning" />
-            <Typography variant="h5">تفعيل التصحيح الإداري</Typography>
-          </Stack>
-        </DialogTitle>
-        <DialogContent dividers>
-          <Stack spacing={2}>
-            <Alert severity="warning">
-              هذا الوضع مخصص لتصحيح خطأ إدخال في قواعد وثيقة مستخدمة قبل الاعتماد المالي. لا يسمح بالحذف أو الاستبدال الشامل، وسيتم تسجيل السبب
-              في سجل التدقيق.
-            </Alert>
-            <TextField
-              label="سبب التصحيح الإداري"
-              value={adminCorrectionDraftReason}
-              onChange={(e) => setAdminCorrectionDraftReason(e.target.value)}
-              placeholder="مثال: تصحيح نسبة تغطية العيادات الخارجية من 100 إلى 80 قبل الاعتماد المالي"
-              multiline
-              minRows={3}
-              fullWidth
-              required
-            />
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setAdminCorrectionDialogOpen(false)}>إلغاء</Button>
-          <Button
-            variant="contained"
-            color="warning"
-            onClick={() => {
-              const reason = adminCorrectionDraftReason.trim();
-              if (reason.length < 10) {
-                enqueueSnackbar('اكتب سبباً واضحاً للتصحيح الإداري', { variant: 'warning' });
-                return;
-              }
-              setClearOld(false);
-              setAdministrativeCorrection({ enabled: true, reason });
-              setAdminCorrectionDialogOpen(false);
-            }}
-          >
-            تفعيل التصحيح
-          </Button>
-        </DialogActions>
-      </Dialog>
-
       {/* Category Coverage Modal */}
       <CategoryCoverageModal
         open={categoryCoverageModalOpen}
@@ -2673,7 +2596,7 @@ const BenefitPolicyRulesTab = ({
 
             {!importResult && (
               <Box sx={{ mt: 1 }}>
-                {administrativeCorrection.enabled && (
+                {administrativeCorrectionEnabled && (
                   <Alert severity="warning" sx={{ mb: 1.5 }}>
                     التصحيح الإداري مفعل. سيتم السماح بالدمج/التحديث فقط، ولا يسمح بالاستبدال الشامل لوثيقة مستخدمة.
                   </Alert>
@@ -2684,7 +2607,7 @@ const BenefitPolicyRulesTab = ({
                       checked={clearOld}
                       onChange={(e) => setClearOld(e.target.checked)}
                       color="error"
-                      disabled={administrativeCorrection.enabled}
+                      disabled={administrativeCorrectionEnabled}
                     />
                   }
                   label={
@@ -2889,7 +2812,12 @@ BenefitPolicyRulesTab.propTypes = {
   policyDefaultCoveragePercent: PropTypes.number,
   policyStartDate: PropTypes.string,
   policyEndDate: PropTypes.string,
-  onOpenStructure: PropTypes.func
+  onOpenStructure: PropTypes.func,
+  administrativeCorrectionConfig: PropTypes.object
+};
+
+BenefitPolicyRulesTab.defaultProps = {
+  administrativeCorrectionConfig: {}
 };
 
 export default BenefitPolicyRulesTab;
