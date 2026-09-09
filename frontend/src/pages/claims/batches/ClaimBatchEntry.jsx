@@ -404,7 +404,26 @@ export default function ClaimBatchEntry() {
   }, [refetchAllLinesCoverageCallback]);
 
   const editHydrationContextRef = useRef(null);
+  const editCoverageRefreshClaimRef = useRef(null);
   const isSavingRef = useRef(false);
+
+  const lineFinancialSignature = useCallback(
+    (line) =>
+      [
+        line?.coveragePercent,
+        line?.byCompany,
+        line?.byEmployee,
+        line?.refusedAmount,
+        line?.priceRefused,
+        line?.limitRefused,
+        line?.systemRefusedAmount,
+        line?.appliedRuleId,
+        line?.resolvedCategoryId
+      ]
+        .map((value) => (value == null ? '' : String(value)))
+        .join('|'),
+    []
+  );
 
   // Custom Service Addition States
   const [customServiceDialogOpen, setCustomServiceDialogOpen] = useState(false);
@@ -1280,14 +1299,55 @@ export default function ClaimBatchEntry() {
   // and mapped lines have all reached committed React state.
   useEffect(() => {
     if (!editingClaimId || !editHydrationVersion) return;
-    // An existing claim already carries the authoritative financial snapshot
-    // returned by the backend. Do not recalculate on mere open/reload: doing so
-    // races against partially hydrated member/context state and can overwrite a
-    // correct saved decision with a transient "not covered" preview. Any real
-    // user edit (service, quantity, price, context, date, member) still calls
-    // refetchAllLinesCoverage through the normal change handlers.
-    setEditCoverageLoading(false);
-  }, [editingClaimId, editHydrationVersion]);
+    if (!editingClaim || editCoverageRefreshClaimRef.current === editingClaimId) return;
+
+    const editableStatuses = new Set(['DRAFT', 'SUBMITTED', 'NEEDS_CORRECTION']);
+    if (!editableStatuses.has(editingClaim.status)) {
+      setEditCoverageLoading(false);
+      return;
+    }
+    if (!policyId || !member?.id || !serviceDate || serviceDate !== debouncedServiceDate) return;
+    if (!entryContext || entryContext.serviceDate !== serviceDate || entryContext.policyId !== policyId) return;
+
+    editCoverageRefreshClaimRef.current = editingClaimId;
+    setEditCoverageLoading(true);
+
+    const beforeSignatures = (linesRef.current || []).map(lineFinancialSignature);
+    refetchAllLinesCoverage(encounterType, linesRef.current, fullCoverage, claimContextCode)
+      .then((updated) => {
+        if (!updated) return;
+        const afterSignatures = updated.map(lineFinancialSignature);
+        const changed =
+          beforeSignatures.length !== afterSignatures.length ||
+          beforeSignatures.some((signature, index) => signature !== afterSignatures[index]);
+        if (changed) {
+          setLines(updated);
+          setIsDirty(true);
+          enqueueSnackbar('تم تحديث حساب المطالبة حسب قواعد الوثيقة الحالية. راجع القيم ثم احفظ.', {
+            variant: 'info',
+            autoHideDuration: 7000
+          });
+        }
+      })
+      .finally(() => {
+        setEditCoverageLoading(false);
+      });
+  }, [
+    editingClaim,
+    editingClaimId,
+    editHydrationVersion,
+    policyId,
+    member?.id,
+    serviceDate,
+    debouncedServiceDate,
+    entryContext,
+    encounterType,
+    fullCoverage,
+    claimContextCode,
+    refetchAllLinesCoverage,
+    enqueueSnackbar,
+    lineFinancialSignature
+  ]);
 
   const addLine = useCallback(() => {
     setLines((p) => [...p, newLine()]);
