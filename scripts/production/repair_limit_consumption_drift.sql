@@ -79,6 +79,11 @@ target_claims AS (
       OR c.claim_number = ANY (regexp_split_to_array(p.claim_numbers, '\s*,\s*'))
     )
 ),
+latest_snapshots AS (
+  SELECT claim_line_id, MAX(calculation_version) AS calculation_version
+  FROM claim_line_limit_snapshots
+  GROUP BY claim_line_id
+),
 binding_limits AS (
   SELECT
     s.id AS snapshot_id,
@@ -111,6 +116,9 @@ binding_limits AS (
     COALESCE(l.price_excess_refused, 0)::numeric(15,2) AS price_excess_refused,
     COALESCE(l.provider_contract_discount, 0)::numeric(15,2) AS provider_contract_discount
   FROM claim_line_limit_snapshots s
+  JOIN latest_snapshots ls
+    ON ls.claim_line_id = s.claim_line_id
+   AND ls.calculation_version = s.calculation_version
   JOIN target_claims c ON c.id = s.claim_id
   JOIN claim_lines l ON l.id = s.claim_line_id
   LEFT JOIN claim_batches cb ON cb.id = c.claim_batch_id
