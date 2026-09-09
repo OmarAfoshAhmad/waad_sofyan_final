@@ -481,9 +481,10 @@ public class ClaimService {
         if (claim == null || claim.getPaperReference() != null || claimBatch == null || claimBatch.getId() == null) {
             return;
         }
-        long nextSequence = claimRepository.countByClaimBatchId(claimBatch.getId()) + 1;
         String batchCode = claimBatch.getBatchCode();
         if (batchCode != null && !batchCode.isBlank()) {
+            Long maxSequence = claimRepository.findMaxPaperReferenceSequenceByClaimBatchId(claimBatch.getId());
+            long nextSequence = (maxSequence == null ? 0L : maxSequence) + 1L;
             claim.setPaperReference(batchCode + "/" + String.format("%04d", nextSequence));
         }
     }

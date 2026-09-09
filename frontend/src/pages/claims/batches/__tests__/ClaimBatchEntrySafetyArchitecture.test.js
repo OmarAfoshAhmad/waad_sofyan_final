@@ -45,6 +45,15 @@ describe('claim batch entry safety boundary', () => {
     expect(detailSource).toContain('getReviewerDisplayStatus(claim)');
   });
 
+  it('never invents a paper claim reference from the current visible row order', () => {
+    expect(detailSource).toContain('const getClaimPaperReference = (claim) =>');
+    expect(detailSource).toContain('if (paperReference) return paperReference');
+    expect(detailSource).toContain('if (storedReference) return storedReference');
+    expect(detailSource).not.toContain('${batchCode}/${String(fallbackSequence)');
+    expect(detailSource).not.toContain('getClaimPaperReference(claim,');
+    expect(detailSource).not.toContain('getClaimPaperReference(c,');
+  });
+
   it('includes draft and submitted claims in visible batch financial totals', () => {
     expect(detailSource).toContain("const financiallyVisible = (claim) => claim.status !== 'NEEDS_CORRECTION'");
     expect(detailSource).toContain('visibleFinancialClaims.reduce((s, c) => s + getInsurerCommitment(c), 0)');

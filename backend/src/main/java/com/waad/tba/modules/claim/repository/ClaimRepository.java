@@ -30,7 +30,16 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
 
         List<Claim> findByClaimBatchIdAndActiveTrueOrderByCreatedAtAscIdAsc(Long claimBatchId);
 
-        long countByClaimBatchId(Long claimBatchId);
+        @Query(value = """
+                        SELECT COALESCE(MAX(CAST(regexp_replace(c.paper_reference, '^.*/([0-9]+)$', '\\1') AS BIGINT)), 0)
+                        FROM claims c
+                        JOIN claim_batches cb ON cb.id = c.claim_batch_id
+                        WHERE c.claim_batch_id = :claimBatchId
+                          AND c.paper_reference IS NOT NULL
+                          AND c.paper_reference LIKE CONCAT(cb.batch_code, '/%')
+                          AND c.paper_reference ~ '/[0-9]+$'
+                        """, nativeQuery = true)
+        Long findMaxPaperReferenceSequenceByClaimBatchId(@Param("claimBatchId") Long claimBatchId);
 
         /**
          * Count claims EVER linked to a specific benefit policy — including

@@ -306,12 +306,12 @@ export default function ClaimBatchDetail() {
     return '...';
   }, [realBatch, employer, year]);
 
-  const getClaimPaperReference = (claim, fallbackSequence) => {
+  const getClaimPaperReference = (claim) => {
     const paperReference = String(claim?.paperReference || '').trim();
     if (paperReference) return paperReference;
     const storedReference = String(claim?.claimNumber || '').trim();
-    if (storedReference.includes('/') || storedReference.startsWith(batchCode)) return storedReference;
-    return `${batchCode}/${String(fallbackSequence).padStart(4, '0')}`;
+    if (storedReference) return storedReference;
+    return claim?.id ? `CLM-${claim.id}` : '';
   };
 
   const normalizeArabicSearch = (value) =>
@@ -359,21 +359,6 @@ export default function ClaimBatchDetail() {
     return claim.status || 'APPROVED';
   };
 
-  const claimDisplayOrder = useMemo(() => {
-    const allBatchClaims = claimsResponse?.items || claimsResponse?.content || [];
-    return [...allBatchClaims]
-      .sort((a, b) => {
-        const aTime = new Date(a?.createdAt || a?.serviceDate || 0).getTime() || 0;
-        const bTime = new Date(b?.createdAt || b?.serviceDate || 0).getTime() || 0;
-        if (aTime !== bTime) return aTime - bTime;
-        return (Number(a?.id) || 0) - (Number(b?.id) || 0);
-      })
-      .reduce((map, claim, index) => {
-        map.set(claim.id, index + 1);
-        return map;
-      }, new Map());
-  }, [claimsResponse]);
-
   const claims = useMemo(() => {
     let items = claimsResponse?.items || claimsResponse?.content || [];
 
@@ -392,8 +377,8 @@ export default function ClaimBatchDetail() {
       const normalizedSearch = normalizeSearchToken(searchTerm);
       const normalizedArabic = normalizeArabicSearch(searchTerm);
       const searchVariants = getArabicSearchVariants(searchTerm);
-      items = items.filter((c, idx) => {
-        const paperRef = getClaimPaperReference(c, claimDisplayOrder.get(c.id) || idx + 1);
+      items = items.filter((c) => {
+        const paperRef = getClaimPaperReference(c);
         const references = [
           c.paperReference,
           c.claimNumber,
@@ -434,7 +419,7 @@ export default function ClaimBatchDetail() {
     }
 
     return items;
-  }, [batchCode, claimDisplayOrder, claimsResponse, searchTerm, statusFilter]);
+  }, [batchCode, claimsResponse, searchTerm, statusFilter]);
 
   const sortedClaims = useMemo(() => {
     const sorting = tableState.sorting?.[0];
@@ -452,7 +437,7 @@ export default function ClaimBatchDetail() {
         case 'status':
           return String(claim.status || '').toLowerCase();
         case 'ref':
-          return getClaimPaperReference(claim, claimDisplayOrder.get(claim.id) || idx + 1);
+          return getClaimPaperReference(claim);
         case 'amount':
           return Number(claim.requestedAmount) || 0;
         case 'covered':
@@ -486,7 +471,7 @@ export default function ClaimBatchDetail() {
         return 0;
       })
       .map((entry) => entry.claim);
-  }, [claimDisplayOrder, claims, tableState.sorting]);
+  }, [claims, tableState.sorting]);
 
   // Paginated Data for the table
   const paginatedClaims = useMemo(() => {
@@ -524,7 +509,7 @@ export default function ClaimBatchDetail() {
     claims.forEach((c, idx) => {
       worksheet.addRow({
         index: idx + 1,
-        ref: getClaimPaperReference(c, claimDisplayOrder.get(c.id) || idx + 1),
+        ref: getClaimPaperReference(c),
         provider: provider?.name || '-',
         patient: c.memberName || '-',
         serviceDate: c.serviceDate || '-',
@@ -702,9 +687,7 @@ export default function ClaimBatchDetail() {
     );
   };
 
-  const renderCell = (claim, column, rowIndex) => {
-    const index = tableState.page * tableState.pageSize + rowIndex;
-    const displaySequence = claimDisplayOrder.get(claim.id) || index + 1;
+  const renderCell = (claim, column) => {
     switch (column.id) {
       case 'select':
         return (
@@ -719,7 +702,7 @@ export default function ClaimBatchDetail() {
         return (
           <Stack direction="row" spacing={0.3} alignItems="baseline" dir="ltr" justifyContent="center">
             <Typography variant="body2" fontWeight={700} color="primary.main" sx={{ fontSize: '0.95rem' }}>
-              {getClaimPaperReference(claim, displaySequence)}
+              {getClaimPaperReference(claim)}
             </Typography>
           </Stack>
         );
