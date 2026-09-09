@@ -14,6 +14,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import com.waad.tba.modules.claim.entity.Claim;
+import com.waad.tba.modules.claim.entity.ClaimStatus;
 import com.waad.tba.modules.claim.projection.MonthlyTrendProjection;
 import com.waad.tba.modules.claim.projection.CostsByProviderProjection;
 import com.waad.tba.modules.claim.projection.ServiceDistributionProjection;
@@ -61,6 +62,10 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
          */
         @Query("SELECT COUNT(c) FROM Claim c WHERE c.policyId = :policyId")
         long countByPolicyId(@Param("policyId") Long policyId);
+
+        @Query("SELECT COUNT(c) FROM Claim c WHERE c.policyId = :policyId AND c.status NOT IN :eligibleStatuses")
+        long countByPolicyIdAndStatusNotIn(@Param("policyId") Long policyId,
+                        @Param("eligibleStatuses") java.util.Collection<ClaimStatus> eligibleStatuses);
 
         /**
          * Precautionary, employer-wide lock: true if this employer has ANY

@@ -250,9 +250,11 @@ public class BenefitPolicyRuleController {
     public ResponseEntity<ApiResponse<BenefitPolicyRuleResponseDto>> update(
             @PathVariable("policyId") Long policyId,
             @PathVariable("ruleId") Long ruleId,
-            @Valid @RequestBody BenefitPolicyRuleUpdateDto dto) {
+            @Valid @RequestBody BenefitPolicyRuleUpdateDto dto,
+            @RequestParam(name = "administrativeCorrection", defaultValue = "false") boolean administrativeCorrection,
+            @RequestParam(name = "correctionReason", required = false) String correctionReason) {
 
-        assertMutableRule(policyId, ruleId);
+        assertMutableRule(policyId, ruleId, administrativeCorrection, correctionReason);
 
         log.info("Updating rule {} for policy {}", ruleId, policyId);
 
@@ -382,6 +384,18 @@ public class BenefitPolicyRuleController {
 
     private void assertMutableRule(Long policyId, Long ruleId) {
         policyService.assertDraftConfiguration(policyId);
+        ruleService.assertBelongsToPolicy(ruleId, policyId);
+    }
+
+    private void assertMutableRule(
+            Long policyId,
+            Long ruleId,
+            boolean administrativeCorrection,
+            String correctionReason) {
+        policyService.assertDraftConfigurationOrAdministrativeCorrection(
+                policyId,
+                administrativeCorrection,
+                correctionReason);
         ruleService.assertBelongsToPolicy(ruleId, policyId);
     }
 

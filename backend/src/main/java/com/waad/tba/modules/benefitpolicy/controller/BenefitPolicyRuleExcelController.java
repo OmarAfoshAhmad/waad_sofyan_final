@@ -82,12 +82,22 @@ public class BenefitPolicyRuleExcelController {
     public ResponseEntity<ApiResponse<ExcelImportResult>> importRules(
             @PathVariable Long policyId,
             @RequestParam("file") MultipartFile file,
-            @RequestParam(name = "clearOld", defaultValue = "false") boolean clearOld) {
+            @RequestParam(name = "clearOld", defaultValue = "false") boolean clearOld,
+            @RequestParam(name = "administrativeCorrection", defaultValue = "false") boolean administrativeCorrection,
+            @RequestParam(name = "correctionReason", required = false) String correctionReason) {
 
-        policyService.assertDraftConfiguration(policyId);
+        if (clearOld && administrativeCorrection) {
+            throw new com.waad.tba.common.exception.BusinessRuleException(
+                    "لا يمكن استخدام التصحيح الإداري مع مسح القواعد القديمة؛ التصحيح الإداري يسمح بالتحديث/الإضافة فقط.");
+        }
 
-        log.info("[BPRuleExcel] Import requested: policyId={}, file={}, size={}, clearOld={}",
-                policyId, file.getOriginalFilename(), file.getSize(), clearOld);
+        policyService.assertDraftConfigurationOrAdministrativeCorrection(
+                policyId,
+                administrativeCorrection,
+                correctionReason);
+
+        log.info("[BPRuleExcel] Import requested: policyId={}, file={}, size={}, clearOld={}, administrativeCorrection={}",
+                policyId, file.getOriginalFilename(), file.getSize(), clearOld, administrativeCorrection);
 
         if (file.isEmpty()) {
             ExcelImportResult emptyResult = ExcelImportResult.builder()

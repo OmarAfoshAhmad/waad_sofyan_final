@@ -243,7 +243,16 @@ export const initializeStandardRules = async (policyId) => {
  * @returns {Promise<Object>} Updated rule
  */
 export const updatePolicyRule = async (policyId, ruleId, payload, config = {}) => {
-  const response = await axiosClient.put(`/benefit-policies/${policyId}/rules/${ruleId}`, payload, config);
+  const { administrativeCorrection, correctionReason, ...axiosConfig } = config || {};
+  const params = {
+    ...(axiosConfig.params || {}),
+    ...(administrativeCorrection ? { administrativeCorrection: true, correctionReason } : {})
+  };
+
+  const response = await axiosClient.put(`/benefit-policies/${policyId}/rules/${ruleId}`, payload, {
+    ...axiosConfig,
+    params
+  });
   return unwrap(response);
 };
 
@@ -378,11 +387,20 @@ export const downloadPolicyRulesTemplate = async (policyId) => {
  * @param {boolean} clearOld - Clear old data before import
  * @returns {Promise<ExcelImportResult>} Import result with summary and errors
  */
-export const importPolicyRulesFromExcel = async (policyId, file, clearOld = false) => {
+export const importPolicyRulesFromExcel = async (policyId, file, clearOld = false, options = {}) => {
   const formData = new FormData();
   formData.append('file', file);
+  const params = {
+    clearOld,
+    ...(options.administrativeCorrection
+      ? {
+          administrativeCorrection: true,
+          correctionReason: options.correctionReason
+        }
+      : {})
+  };
   const response = await axiosClient.post(`/benefit-policies/${policyId}/rules/import`, formData, {
-    params: { clearOld },
+    params,
     headers: { 'Content-Type': 'multipart/form-data' },
     timeout: 120000
   });

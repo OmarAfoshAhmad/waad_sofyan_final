@@ -14,6 +14,7 @@ import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy.BenefitPolicyStat
 import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRuleRepository;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitLimitBucketRepository;
+import com.waad.tba.modules.claim.entity.ClaimStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -22,6 +23,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -38,6 +40,11 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class BenefitPolicyService {
+
+    private static final java.util.Set<ClaimStatus> ADMIN_CORRECTION_ELIGIBLE_CLAIM_STATUSES = EnumSet.of(
+            ClaimStatus.DRAFT,
+            ClaimStatus.SUBMITTED,
+            ClaimStatus.NEEDS_CORRECTION);
 
     private final BenefitPolicyRepository benefitPolicyRepository;
     private final EmployerRepository employerRepository;
@@ -993,6 +1000,74 @@ public class BenefitPolicyService {
             throw new BusinessRuleException(structureBlockReason
                     + " إعداد قواعد ومجموعات الوثيقة متاح فقط للوثائق التي لم يصدر عليها أي مطالبات أو موافقات مسبقة فعلية.");
         }
+    }
+
+    /**
+     * Controlled exception for correcting a policy configuration that has only
+     * operational, not financially final, claims attached to it.
+     *
+     * This is intentionally narrower than {@link #assertDraftConfiguration(Long)}:
+     * it exists for reviewer/test-data correction such as fixing an entered
+     * coverage percentage without forcing the whole batch to be re-entered. Once a
+     * claim reaches review/approval/settlement or any pre-authorization exists, the
+     * policy must be versioned or repaired through an explicit recalculation script
+     * instead of silently changing the rules underneath historical decisions.
+     */
+    @Transactional
+    public void assertDraftConfigurationOrAdministrativeCorrection(
+            Long policyId,
+            boolean administrativeCorrection,
+            String correctionReason) {
+
+        String structureBlockReason = policyEditBlockReason(policyId);
+        if (structureBlockReason == null) {
+            assertDraftConfiguration(policyId);
+            return;
+        }
+
+        if (!administrativeCorrection) {
+            throw new BusinessRuleException(structureBlockReason
+                    + " إعداد قواعد ومجموعات الوثيقة متاح فقط للوثائق التي لم يصدر عليها أي مطالبات أو موافقات مسبقة فعلية.");
+        }
+
+        BenefitPolicy policy = benefitPolicyRepository.findById(policyId)
+                .orElseThrow(() -> new BusinessRuleException("Benefit policy not found: " + policyId));
+
+        if (!policy.isActive()) {
+            throw new BusinessRuleException("الوثيقة غير نشطة");
+        }
+        if (policy.getStatus() == BenefitPolicyStatus.CANCELLED || policy.getStatus() == BenefitPolicyStatus.EXPIRED) {
+            throw new BusinessRuleException("لا يمكن إجراء تصحيح إداري على وثيقة منتهية أو ملغاة؛ أنشئ إصدارًا جديدًا.");
+        }
+
+        String normalizedReason = correctionReason == null ? "" : correctionReason.trim();
+        if (normalizedReason.length() < 10) {
+            throw new BusinessRuleException("سبب التصحيح الإداري مطلوب ويجب أن يوضح الخطأ المراد تصحيحه.");
+        }
+
+        long preAuthCount = preAuthorizationRepository.countByPolicyId(policyId);
+        if (preAuthCount > 0) {
+            throw new BusinessRuleException(
+                    "لا يمكن التصحيح الإداري المباشر لأن الوثيقة مرتبطة بموافقات مسبقة؛ استخدم إصدارًا جديدًا أو سكريبت إعادة حساب.");
+        }
+
+        Long employerId = policy.getEmployer() == null ? null : policy.getEmployer().getId();
+        if (employerId != null && claimRepository.existsUnresolvedLegacyClaimForEmployer(employerId)) {
+            throw new BusinessRuleException("توجد مطالبات تاريخية غير محسومة تمنع التصحيح الإداري حتى مراجعة إسنادها.");
+        }
+
+        long nonEligibleClaims = claimRepository.countByPolicyIdAndStatusNotIn(
+                policyId,
+                ADMIN_CORRECTION_ELIGIBLE_CLAIM_STATUSES);
+        if (nonEligibleClaims > 0) {
+            throw new BusinessRuleException(
+                    "لا يمكن التصحيح الإداري المباشر لأن بعض المطالبات دخلت المراجعة أو الاعتماد أو التسوية؛ استخدم سكريبت إعادة حساب مضبوط.");
+        }
+
+        audit("BENEFIT_POLICY_ADMIN_CORRECTION_ALLOWED", policyId,
+                "Administrative correction allowed for used policy before financial finalization. reason="
+                        + normalizedReason);
+        log.warn("[BENEFIT_POLICY_ADMIN_CORRECTION_ALLOWED] policyId={}, reason={}", policyId, normalizedReason);
     }
 
     /**
