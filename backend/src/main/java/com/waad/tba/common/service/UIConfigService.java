@@ -21,6 +21,7 @@ public class UIConfigService {
     public static final String DATE_DISPLAY_FORMAT_KEY = "DATE_DISPLAY_FORMAT";
     public static final String SYSTEM_NAME_AR_KEY = "SYSTEM_NAME_AR";
     public static final String SYSTEM_NAME_EN_KEY = "SYSTEM_NAME_EN";
+    public static final String BUSINESS_TYPE_KEY = "BUSINESS_TYPE";
 
     public static final String BENEFICIARY_NUMBER_FORMAT_KEY = "BENEFICIARY_NUMBER_FORMAT";
     public static final String BENEFICIARY_NUMBER_PREFIX_KEY = "BENEFICIARY_NUMBER_PREFIX";
@@ -59,7 +60,7 @@ public class UIConfigService {
 
     // UI / Appearance
     public String getLogoUrl() {
-        return getSetting(LOGO_URL_KEY, "");
+        return getSetting(LOGO_URL_KEY, "/images/waad-logo.png");
     }
 
     public String getFontFamily() {
@@ -80,6 +81,10 @@ public class UIConfigService {
 
     public String getSystemNameEn() {
         return getSetting(SYSTEM_NAME_EN_KEY, "TBA WAAD System");
+    }
+
+    public String getBusinessType() {
+        return getSetting(BUSINESS_TYPE_KEY, "إدارة النفقات الطبية");
     }
 
     // Member Numbering
@@ -116,7 +121,8 @@ public class UIConfigService {
                 getFontSizeBase(),
                 getDateDisplayFormat(),
                 getSystemNameAr(),
-                getSystemNameEn());
+                getSystemNameEn(),
+                getBusinessType());
     }
 
     public record UiConfigDto(
@@ -125,6 +131,7 @@ public class UIConfigService {
             int fontSizeBase,
             String dateDisplayFormat,
             String systemNameAr,
-            String systemNameEn) {
+            String systemNameEn,
+            String businessType) {
     }
 }

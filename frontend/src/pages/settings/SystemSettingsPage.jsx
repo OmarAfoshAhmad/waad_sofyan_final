@@ -47,6 +47,7 @@ import EmailSettingsTab from './EmailSettingsTab';
 const KEYS = {
   systemNameAr: 'SYSTEM_NAME_AR',
   systemNameEn: 'SYSTEM_NAME_EN',
+  businessType: 'BUSINESS_TYPE',
   logoUrl: 'LOGO_URL',
   fontFamily: 'FONT_FAMILY',
   fontSizeBase: 'FONT_SIZE_BASE',
@@ -268,7 +269,6 @@ const SystemSettingsPage = () => {
         companyName: company.name || 'وعد',
         companyCode: company.code || 'WAAD',
         companyActive: company.active !== undefined ? Boolean(company.active) : true,
-        businessType: company.businessType || 'إدارة النفقات الطبية',
         phone: company.phone || '',
         email: company.email || '',
         address: company.address || '',
@@ -277,6 +277,7 @@ const SystemSettingsPage = () => {
         systemNameAr: cleanStr(byKey.get(KEYS.systemNameAr), 'نظام واعد الطبي'),
         systemNameEn: cleanStr(byKey.get(KEYS.systemNameEn), 'TBA WAAD System'),
         logoUrl: cleanStr(byKey.get(KEYS.logoUrl), company.logoUrl || ''),
+        businessType: cleanStr(byKey.get(KEYS.businessType), company.businessType || 'إدارة النفقات الطبية'),
         fontFamily: byKey.get(KEYS.fontFamily) || 'Tajawal',
         fontSizeBase: toInt(byKey.get(KEYS.fontSizeBase), 14),
         dateDisplayFormat: byKey.get(KEYS.dateDisplayFormat) || 'dd/MM/yyyy',
@@ -377,6 +378,7 @@ const SystemSettingsPage = () => {
         }),
         saveSettingIfExists(KEYS.systemNameAr, dataToSave.companyName), // Mirror companyName
         saveSettingIfExists(KEYS.systemNameEn, dataToSave.companyName), // Mirror companyName
+        saveSettingIfExists(KEYS.businessType, dataToSave.businessType),
         saveSettingIfExists(KEYS.logoUrl, dataToSave.logoUrl),
         saveSettingIfExists(KEYS.fontFamily, dataToSave.fontFamily),
         saveSettingIfExists(KEYS.fontSizeBase, dataToSave.fontSizeBase),
@@ -442,7 +444,8 @@ const SystemSettingsPage = () => {
         fontSizeBase: dataToSave.fontSizeBase,
         dateDisplayFormat: dataToSave.dateDisplayFormat,
         systemNameAr: dataToSave.companyName,
-        systemNameEn: dataToSave.companyName
+        systemNameEn: dataToSave.companyName,
+        businessType: dataToSave.businessType
       });
 
       // Sync the global visual context (Navbar, Title, etc)

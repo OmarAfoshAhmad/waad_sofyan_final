@@ -3,6 +3,7 @@ package com.waad.tba.modules.report.service;
 import com.waad.tba.modules.claim.entity.Claim;
 import com.waad.tba.modules.claim.entity.ClaimLine;
 import com.waad.tba.modules.claim.repository.ClaimRepository;
+import com.waad.tba.common.service.UIConfigService;
 import com.waad.tba.modules.pdf.entity.PdfCompanySettings;
 import com.waad.tba.modules.pdf.service.PdfCompanySettingsService;
 import com.waad.tba.modules.report.dto.ClaimReportDto;
@@ -11,10 +12,14 @@ import com.waad.tba.modules.report.dto.ClaimStatementReportDto;
 import com.waad.tba.modules.rbac.entity.User;
 import com.waad.tba.security.AuthorizationService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.ResourceLoader;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.security.access.AccessDeniedException;
 
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -26,11 +31,14 @@ import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ReportDataService {
 
         private final ClaimRepository claimRepository;
         private final PdfCompanySettingsService settingsService;
+        private final UIConfigService uiConfigService;
         private final AuthorizationService authorizationService;
+        private final ResourceLoader resourceLoader;
 
         @Transactional(readOnly = true)
         public ClaimReportDto getClaimReportData(List<Long> claimIds, Boolean onlyRejected, String providedBatchCode) {
@@ -78,18 +86,27 @@ public class ReportDataService {
                         String insuranceNumber = "—";
                         String patientRef = "—";
                         if (claim.getMember() != null) {
+                                var principal = claim.getMember().getPrincipalMember();
                                 // patientRef = Beneficiary No. (Card Number)
                                 if (claim.getMember().getCardNumber() != null && !claim.getMember().getCardNumber().isBlank()) {
                                         patientRef = claim.getMember().getCardNumber();
                                 }
                                 
-                                // insuranceNumber = Employee No. (True Employee ID)
-                                if (claim.getMember().getEmployeeNumber() != null && !claim.getMember().getEmployeeNumber().isBlank()) {
+                                // insuranceNumber = Employee No. of the principal subscriber.
+                                if (principal != null && principal.getEmployeeNumber() != null && !principal.getEmployeeNumber().isBlank()) {
+                                        insuranceNumber = principal.getEmployeeNumber();
+                                } else if (claim.getMember().getEmployeeNumber() != null && !claim.getMember().getEmployeeNumber().isBlank()) {
                                         insuranceNumber = claim.getMember().getEmployeeNumber();
+                                } else if (principal != null && principal.getPolicyNumber() != null && !principal.getPolicyNumber().isBlank()) {
+                                        insuranceNumber = principal.getPolicyNumber();
                                 } else if (claim.getMember().getPolicyNumber() != null && !claim.getMember().getPolicyNumber().isBlank()) {
                                         insuranceNumber = claim.getMember().getPolicyNumber();
+                                } else if (principal != null && principal.getNationalNumber() != null && !principal.getNationalNumber().isBlank()) {
+                                        insuranceNumber = principal.getNationalNumber();
                                 } else if (claim.getMember().getNationalNumber() != null && !claim.getMember().getNationalNumber().isBlank()) {
                                         insuranceNumber = claim.getMember().getNationalNumber();
+                                } else if (principal != null && principal.getCardNumber() != null && !principal.getCardNumber().isBlank()) {
+                                        insuranceNumber = principal.getCardNumber();
                                 } else if (patientRef != null && !patientRef.equals("—")) {
                                         insuranceNumber = patientRef;
                                 }
@@ -235,6 +252,13 @@ public class ReportDataService {
                 String logoBase64 = settings.getLogoBase64DataUrl();
                 if (logoBase64 == null)
                         logoBase64 = "";
+                String generalCompanyName = firstNonBlank(uiConfigService.getSystemNameAr(), settings.getCompanyName(), "وعد");
+                String generalBusinessType = firstNonBlank(uiConfigService.getBusinessType(),
+                                settings.getCompanyBusinessType(), "إدارة النفقات الطبية");
+                String generalLogoUrl = firstNonBlank(uiConfigService.getLogoUrl(), settings.getLogoUrl(), "");
+                if (logoBase64.isBlank() && "/images/waad-logo.png".equals(generalLogoUrl)) {
+                        logoBase64 = loadDefaultLogoBase64();
+                }
 
                 // Default Intro Text with batch replacement if necessary
                 String intro = settings.getClaimReportIntro();
@@ -248,10 +272,10 @@ public class ReportDataService {
 
                 return ClaimReportDto.builder()
                                 .reportDate(LocalDate.now().format(dateFormatter))
-                                .companyName(settings.getCompanyName())
-                                .companyBusinessType(settings.getCompanyBusinessType())
+                                .companyName(generalCompanyName)
+                                .companyBusinessType(generalBusinessType)
                                 .companyLogoBase64(logoBase64)
-                                .companyLogoUrl(settings.getLogoUrl())
+                                .companyLogoUrl(generalLogoUrl)
                                 .groupedClaims(groupedClaims)
                                 .batchCode(batchCode)
                                 .providerName(providerName)
@@ -287,5 +311,34 @@ public class ReportDataService {
                                                 ? settings.getClaimReportSigLeftBottom()
                                                 : "إدارة الحسابات")
                                 .build();
+        }
+
+        private String firstNonBlank(String... values) {
+                if (values == null) {
+                        return "";
+                }
+                for (String value : values) {
+                        if (value != null && !value.isBlank()) {
+                                return value;
+                        }
+                }
+                return "";
+        }
+
+        private String loadDefaultLogoBase64() {
+                try {
+                        Resource logo = resourceLoader.getResource("classpath:static/images/waad-logo.png");
+                        if (!logo.exists()) {
+                                return "";
+                        }
+                        byte[] bytes = logo.getInputStream().readAllBytes();
+                        if (bytes.length == 0) {
+                                return "";
+                        }
+                        return "data:image/png;base64," + Base64.getEncoder().encodeToString(bytes);
+                } catch (IOException ex) {
+                        log.warn("Could not load default report logo: {}", ex.getMessage());
+                        return "";
+                }
         }
 }

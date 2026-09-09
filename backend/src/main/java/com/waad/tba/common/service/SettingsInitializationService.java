@@ -36,6 +36,7 @@ public class SettingsInitializationService {
     public static final String DATE_DISPLAY_FORMAT_KEY = "DATE_DISPLAY_FORMAT";
     public static final String SYSTEM_NAME_AR_KEY = "SYSTEM_NAME_AR";
     public static final String SYSTEM_NAME_EN_KEY = "SYSTEM_NAME_EN";
+    public static final String BUSINESS_TYPE_KEY = "BUSINESS_TYPE";
     public static final String PRIMARY_COLOR_KEY = "PRIMARY_COLOR";
     public static final String SECONDARY_COLOR_KEY = "SECONDARY_COLOR";
     public static final String INFO_COLOR_KEY = "INFO_COLOR";
@@ -170,8 +171,8 @@ public class SettingsInitializationService {
             log.info("✅ Created default setting: {} = 6", PASSWORD_RESET_OTP_LENGTH_KEY);
         }
 
-        ensureDefaultSetting(LOGO_URL_KEY, "", SystemSetting.SettingValueType.STRING,
-                "Public logo URL used by the frontend shell", "UI", true, "");
+        ensureDefaultSetting(LOGO_URL_KEY, "/images/waad-logo.png", SystemSetting.SettingValueType.STRING,
+                "Public logo URL used by the frontend shell and reports", "UI", true, "");
         ensureDefaultSetting(FONT_FAMILY_KEY, "Tajawal", SystemSetting.SettingValueType.STRING,
                 "Default UI font family", "UI", true, "");
         ensureDefaultSetting(FONT_SIZE_BASE_KEY, "14", SystemSetting.SettingValueType.INTEGER,
@@ -183,6 +184,8 @@ public class SettingsInitializationService {
                 "Arabic system display name", "UI", true, "");
         ensureDefaultSetting(SYSTEM_NAME_EN_KEY, "TBA WAAD System", SystemSetting.SettingValueType.STRING,
                 "English system display name", "UI", true, "");
+        ensureDefaultSetting(BUSINESS_TYPE_KEY, "إدارة النفقات الطبية", SystemSetting.SettingValueType.STRING,
+                "Company business/activity type shown in reports and public branding", "UI", true, "");
         ensureDefaultSetting(PRIMARY_COLOR_KEY, "#00838F", SystemSetting.SettingValueType.STRING,
                 "Primary brand color", "UI", true, "");
         ensureDefaultSetting(SECONDARY_COLOR_KEY, "#42A5F5", SystemSetting.SettingValueType.STRING,
