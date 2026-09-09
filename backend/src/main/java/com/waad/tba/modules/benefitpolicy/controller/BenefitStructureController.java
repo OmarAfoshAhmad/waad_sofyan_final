@@ -97,8 +97,14 @@ public class BenefitStructureController {
     @PutMapping("/rules/{ruleId}/individual-limit")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<BucketResponse>> upsertIndividualLimit(@PathVariable Long policyId,
-            @PathVariable Long ruleId, @Valid @RequestBody IndividualLimitRequest request) {
-        policyService.assertDraftConfiguration(policyId);
+            @PathVariable Long ruleId,
+            @Valid @RequestBody IndividualLimitRequest request,
+            @RequestParam(name = "administrativeCorrection", defaultValue = "false") boolean administrativeCorrection,
+            @RequestParam(name = "correctionReason", required = false) String correctionReason) {
+        policyService.assertDraftConfigurationOrAdministrativeCorrection(
+                policyId,
+                administrativeCorrection,
+                correctionReason);
         return ResponseEntity.ok(ApiResponse.success(service.upsertIndividualLimit(policyId, ruleId, request)));
     }
 
@@ -132,7 +138,18 @@ public class BenefitStructureController {
             @PathVariable Long policyId,
             @RequestPart("file") org.springframework.web.multipart.MultipartFile file,
             @RequestParam(defaultValue = "true") boolean dryRun,
-            @RequestParam(defaultValue = "MERGE") BenefitStructureImportService.ImportMode mode) {
-        return ResponseEntity.ok(ApiResponse.success(importService.importWorkbook(policyId, file, dryRun, mode)));
+            @RequestParam(defaultValue = "MERGE") BenefitStructureImportService.ImportMode mode,
+            @RequestParam(name = "administrativeCorrection", defaultValue = "false") boolean administrativeCorrection,
+            @RequestParam(name = "correctionReason", required = false) String correctionReason) {
+        if (mode == BenefitStructureImportService.ImportMode.REPLACE && administrativeCorrection) {
+            throw new com.waad.tba.common.exception.BusinessRuleException(
+                    "لا يمكن استخدام التصحيح الإداري مع الاستبدال الشامل؛ التصحيح الإداري يسمح بالدمج/التحديث فقط.");
+        }
+        policyService.assertDraftConfigurationOrAdministrativeCorrection(
+                policyId,
+                administrativeCorrection,
+                correctionReason);
+        return ResponseEntity.ok(ApiResponse.success(
+                importService.importWorkbook(policyId, file, dryRun, mode, administrativeCorrection)));
     }
 }

@@ -23,8 +23,15 @@ export const createLimitBucket = async (policyId, payload) =>
 export const linkRuleToBucket = async (policyId, ruleId, payload) =>
   unwrap(await axiosClient.post(`/benefit-policies/${policyId}/structure/rules/${ruleId}/buckets`, payload));
 
-export const upsertIndividualBenefitLimit = async (policyId, ruleId, payload) =>
-  unwrap(await axiosClient.put(`/benefit-policies/${policyId}/structure/rules/${ruleId}/individual-limit`, payload));
+export const upsertIndividualBenefitLimit = async (policyId, ruleId, payload, options = {}) =>
+  unwrap(await axiosClient.put(`/benefit-policies/${policyId}/structure/rules/${ruleId}/individual-limit`, payload, {
+    params: options.administrativeCorrection
+      ? {
+          administrativeCorrection: true,
+          correctionReason: options.correctionReason
+        }
+      : undefined
+  }));
 
 export const deleteLimitBucket = async (policyId, bucketId) =>
   unwrap(await axiosClient.delete(`/benefit-policies/${policyId}/structure/buckets/${bucketId}`));
@@ -38,11 +45,21 @@ export const toggleBenefitGroupActive = async (policyId, groupId) =>
 export const deleteRuleBucketLink = async (policyId, linkId) =>
   unwrap(await axiosClient.delete(`/benefit-policies/${policyId}/structure/links/${linkId}`));
 
-export const importBenefitStructure = async (policyId, file, dryRun = true, mode = 'MERGE') => {
+export const importBenefitStructure = async (policyId, file, dryRun = true, mode = 'MERGE', options = {}) => {
   const formData = new FormData();
   formData.append('file', file);
+  const params = {
+    dryRun,
+    mode,
+    ...(options.administrativeCorrection
+      ? {
+          administrativeCorrection: true,
+          correctionReason: options.correctionReason
+        }
+      : {})
+  };
   return unwrap(await axiosClient.post(`/benefit-policies/${policyId}/structure/import`, formData, {
-    params: { dryRun, mode },
+    params,
     headers: { 'Content-Type': 'multipart/form-data' }
   }));
 };

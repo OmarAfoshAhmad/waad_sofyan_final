@@ -33,7 +33,8 @@ const UnifiedCoverageModal = ({
   existingRules,
   initialData,
   isEdit,
-  policyDefaultCoveragePercent
+  policyDefaultCoveragePercent,
+  administrativeCorrectionConfig
 }) => {
   const { enqueueSnackbar } = useSnackbar();
   const [loading, setLoading] = useState(false);
@@ -238,7 +239,7 @@ const UnifiedCoverageModal = ({
               claimContextCode: claimContextCode,
               notes: notes
             },
-            { suppressGlobalError: true }
+            { suppressGlobalError: true, ...administrativeCorrectionConfig }
           );
 
           await upsertIndividualBenefitLimit(policyId, initialData.id, {
@@ -247,7 +248,7 @@ const UnifiedCoverageModal = ({
             daysLimit: parsedDays,
             periodType: periodType,
             periodValue: parsedPeriodValue
-          });
+          }, administrativeCorrectionConfig);
         } else {
           // Edit Group Mode
           const groupId = initialData.id.toString().replace('group-', '');
@@ -267,7 +268,7 @@ const UnifiedCoverageModal = ({
                   claimContextCode: claimContextCode,
                   notes: notes
                 },
-                { suppressGlobalError: true }
+                { suppressGlobalError: true, ...administrativeCorrectionConfig }
               ).then(() => existingMember.id);
             } else {
               return createPolicyRule(
@@ -355,7 +356,7 @@ const UnifiedCoverageModal = ({
             daysLimit: parsedDays,
             periodType: periodType,
             periodValue: parsedPeriodValue
-          });
+          }, administrativeCorrectionConfig);
         }
       }
 
@@ -553,11 +554,13 @@ UnifiedCoverageModal.propTypes = {
   categories: PropTypes.array.isRequired,
   existingRules: PropTypes.array,
   initialData: PropTypes.object,
-  isEdit: PropTypes.bool
+  isEdit: PropTypes.bool,
+  administrativeCorrectionConfig: PropTypes.object
 };
 
 UnifiedCoverageModal.defaultProps = {
-  existingRules: []
+  existingRules: [],
+  administrativeCorrectionConfig: {}
 };
 
 export default UnifiedCoverageModal;

@@ -67,9 +67,7 @@ import {
   restorePolicyRule,
   deletePolicyRule,
   hardDeletePolicyRule,
-  copyPolicyRules,
-  downloadPolicyRulesTemplate,
-  importPolicyRulesFromExcel
+  copyPolicyRules
 } from 'services/api/benefit-policy-rules.service';
 import {
   getBenefitStructure,
@@ -766,6 +764,9 @@ const BenefitPolicyRulesTab = ({
   const [categoryCoverageInputs, setCategoryCoverageInputs] = useState({});
   const [bulkSavingCoverage, setBulkSavingCoverage] = useState(false);
   const [categoryCoverageModalOpen, setCategoryCoverageModalOpen] = useState(false);
+  const [adminCorrectionDialogOpen, setAdminCorrectionDialogOpen] = useState(false);
+  const [adminCorrectionDraftReason, setAdminCorrectionDraftReason] = useState('');
+  const [administrativeCorrection, setAdministrativeCorrection] = useState({ enabled: false, reason: '' });
   const [individualLimitDialog, setIndividualLimitDialog] = useState({
     open: false,
     rule: null,
@@ -784,6 +785,17 @@ const BenefitPolicyRulesTab = ({
   const [sortDirection, setSortDirection] = useState('asc');
 
   const defaultOrderRef = useRef({ active: [], deleted: [] });
+
+  const administrativeCorrectionConfig = useMemo(
+    () =>
+      administrativeCorrection.enabled
+        ? {
+            administrativeCorrection: true,
+            correctionReason: administrativeCorrection.reason
+          }
+        : {},
+    [administrativeCorrection]
+  );
 
   // ═══════════════════════════════════════════════════════════════════════════
   // DATA FETCHING
@@ -875,7 +887,7 @@ const BenefitPolicyRulesTab = ({
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ ruleId, payload }) => updatePolicyRule(policyId, ruleId, payload),
+    mutationFn: ({ ruleId, payload }) => updatePolicyRule(policyId, ruleId, payload, administrativeCorrectionConfig),
     onSuccess: async () => {
       enqueueSnackbar('تم تحديث القاعدة بنجاح', { variant: 'success' });
       await queryClient.invalidateQueries({ queryKey: ['benefit-policy-rules', policyId], exact: true });
@@ -933,7 +945,7 @@ const BenefitPolicyRulesTab = ({
   });
 
   const individualLimitMutation = useMutation({
-    mutationFn: ({ ruleId, payload }) => upsertIndividualBenefitLimit(policyId, ruleId, payload),
+    mutationFn: ({ ruleId, payload }) => upsertIndividualBenefitLimit(policyId, ruleId, payload, administrativeCorrectionConfig),
     onSuccess: async () => {
       enqueueSnackbar('تم حفظ سقف المنفعة الفردي', { variant: 'success' });
       await queryClient.invalidateQueries({ queryKey: ['benefit-structure', policyId] });
@@ -1004,7 +1016,13 @@ const BenefitPolicyRulesTab = ({
     setImporting(true);
     setImportResult(null);
     try {
-      const result = await importBenefitStructure(policyId, importFile, false, clearOld ? 'REPLACE' : 'MERGE');
+      const result = await importBenefitStructure(
+        policyId,
+        importFile,
+        false,
+        clearOld ? 'REPLACE' : 'MERGE',
+        administrativeCorrectionConfig
+      );
       const adaptedResult = {
         success: !result?.errors?.length,
         messageAr: result?.errors?.length ? 'اكتمل الاستيراد مع أخطاء' : 'تم استيراد المنافع والمجموعات بنجاح',
@@ -1038,7 +1056,7 @@ const BenefitPolicyRulesTab = ({
     } finally {
       setImporting(false);
     }
-  }, [importFile, policyId, clearOld, enqueueSnackbar, queryClient]);
+  }, [importFile, policyId, clearOld, administrativeCorrectionConfig, enqueueSnackbar, queryClient]);
 
   const handleOpenTemplateDialog = async () => {
     setTemplateDialogOpen(true);
@@ -1243,6 +1261,8 @@ const BenefitPolicyRulesTab = ({
   });
 
   const canEdit = policyStatus !== 'ARCHIVED' && policyStatus !== 'CANCELLED' && isDynamicallyEditable;
+  const canAdministrativeCorrect = policyStatus !== 'ARCHIVED' && policyStatus !== 'CANCELLED';
+  const canModifyRules = canEdit || (canAdministrativeCorrect && administrativeCorrection.enabled);
   const isLoading =
     createMutation.isPending ||
     updateMutation.isPending ||
@@ -1417,8 +1437,8 @@ const BenefitPolicyRulesTab = ({
                 color="error"
                 variant="outlined"
                 label="بلا سقف"
-                onClick={() => canEdit && openIndividualLimit(rule)}
-                sx={{ cursor: canEdit ? 'pointer' : 'default' }}
+                onClick={() => canModifyRules && openIndividualLimit(rule)}
+                sx={{ cursor: canModifyRules ? 'pointer' : 'default' }}
               />
             );
           }
@@ -1429,8 +1449,8 @@ const BenefitPolicyRulesTab = ({
                 color="info"
                 variant="outlined"
                 label="بلا سقف"
-                onClick={() => canEdit && openIndividualLimit(rule)}
-                sx={{ cursor: canEdit ? 'pointer' : 'default' }}
+                onClick={() => canModifyRules && openIndividualLimit(rule)}
+                sx={{ cursor: canModifyRules ? 'pointer' : 'default' }}
               />
             );
           }
@@ -1440,8 +1460,8 @@ const BenefitPolicyRulesTab = ({
               color="info"
               variant="outlined"
               label={`${limit.amountLimit} د.ل`}
-              onClick={() => canEdit && openIndividualLimit(rule)}
-              sx={{ cursor: canEdit ? 'pointer' : 'default', fontWeight: 600 }}
+              onClick={() => canModifyRules && openIndividualLimit(rule)}
+              sx={{ cursor: canModifyRules ? 'pointer' : 'default', fontWeight: 600 }}
             />
           );
         }
@@ -1475,8 +1495,8 @@ const BenefitPolicyRulesTab = ({
               color="default"
               variant="outlined"
               label={label}
-              onClick={() => canEdit && openIndividualLimit(rule)}
-              sx={{ cursor: canEdit ? 'pointer' : 'default' }}
+              onClick={() => canModifyRules && openIndividualLimit(rule)}
+              sx={{ cursor: canModifyRules ? 'pointer' : 'default' }}
             />
           );
         }
@@ -1566,7 +1586,7 @@ const BenefitPolicyRulesTab = ({
           return (
             <Stack direction="row" spacing={1} justifyContent="center">
               <Tooltip title="تعديل التغطية والحدود">
-                <IconButton size="small" color="primary" onClick={() => handleEditRule(rule)} disabled={!canEdit}>
+                <IconButton size="small" color="primary" onClick={() => handleEditRule(rule)} disabled={!canModifyRules}>
                   <EditIcon fontSize="small" />
                 </IconButton>
               </Tooltip>
@@ -1587,6 +1607,7 @@ const BenefitPolicyRulesTab = ({
       structureLoadFailed,
       toggleMutation.isPending,
       canEdit,
+      canModifyRules,
       handleEditRule,
       handleDeleteRule,
       handleRestoreRule,
@@ -2013,7 +2034,7 @@ const BenefitPolicyRulesTab = ({
           };
 
           if (row.existingRule?.id) {
-            return updatePolicyRule(policyId, row.existingRule.id, payload);
+            return updatePolicyRule(policyId, row.existingRule.id, payload, administrativeCorrectionConfig);
           } else {
             return createPolicyRule(policyId, payload);
           }
@@ -2037,7 +2058,7 @@ const BenefitPolicyRulesTab = ({
     } finally {
       setBulkSavingCoverage(false);
     }
-  }, [categoriesCoverageRows, categoryCoverageInputs, enqueueSnackbar, policyId, queryClient]);
+  }, [categoriesCoverageRows, categoryCoverageInputs, administrativeCorrectionConfig, enqueueSnackbar, policyId, queryClient]);
 
   // ═══════════════════════════════════════════════════════════════════════════
   // RENDER
@@ -2099,6 +2120,33 @@ const BenefitPolicyRulesTab = ({
               </Tooltip>
             )}
 
+            {canAdministrativeCorrect && (
+              <Tooltip
+                title={
+                  administrativeCorrection.enabled
+                    ? `التصحيح الإداري مفعل: ${administrativeCorrection.reason}`
+                    : 'تفعيل تصحيح إداري محدود لقواعد وثيقة مستخدمة'
+                }
+              >
+                <Button
+                  color={administrativeCorrection.enabled ? 'warning' : 'secondary'}
+                  variant={administrativeCorrection.enabled ? 'contained' : 'outlined'}
+                  startIcon={<WarningAmberIcon />}
+                  onClick={() => {
+                    if (administrativeCorrection.enabled) {
+                      setAdministrativeCorrection({ enabled: false, reason: '' });
+                      setAdminCorrectionDraftReason('');
+                    } else {
+                      setAdminCorrectionDialogOpen(true);
+                    }
+                  }}
+                  sx={{ height: '2.25rem', fontWeight: 700, whiteSpace: 'nowrap' }}
+                >
+                  {administrativeCorrection.enabled ? 'إيقاف التصحيح' : 'تصحيح إداري'}
+                </Button>
+              </Tooltip>
+            )}
+
             <Tooltip title="نسخ قواعد التغطية من وثيقة شركة أخرى كما هي">
               <span>
                 <IconButton
@@ -2130,7 +2178,7 @@ const BenefitPolicyRulesTab = ({
                 <IconButton
                   color="success"
                   onClick={() => setImportDialogOpen(true)}
-                  disabled={!canEdit}
+                  disabled={!canModifyRules}
                   sx={{ border: '1px solid', borderColor: 'success.main', width: '2.25rem', height: '2.25rem', borderRadius: 1 }}
                 >
                   <FileUploadIcon fontSize="small" />
@@ -2185,9 +2233,10 @@ const BenefitPolicyRulesTab = ({
         )}
         {/* Editability Alert */}
         {!isDynamicallyEditable && (
-          <Alert severity="warning" sx={{ mb: 2 }}>
-            هذه الوثيقة مقفلة مؤقتاً لأنها تحتوي على مطالبات أو موافقات مسبقة فعلية. لضمان سلامة العمليات المحاسبية، يرجى إنشاء إصدار جديد
-            أو حذف المطالبات لتفعيل التعديل مرة أخرى.
+          <Alert severity={administrativeCorrection.enabled ? 'info' : 'warning'} sx={{ mb: 2 }}>
+            {administrativeCorrection.enabled
+              ? 'وضع التصحيح الإداري مفعل: يسمح بتحديث القواعد/النِسب والسقوف الفردية والاستيراد الدمجي فقط. سيمنع الخادم العملية إذا كانت هناك مطالبات دخلت المراجعة أو الاعتماد أو التسوية.'
+              : 'هذه الوثيقة مقفلة لأنها تحتوي على مطالبات أو موافقات مسبقة فعلية. يمكن للمشرف تفعيل تصحيح إداري محدود فقط للأخطاء التشغيلية قبل الاعتماد المالي.'}
           </Alert>
         )}
 
@@ -2443,6 +2492,7 @@ const BenefitPolicyRulesTab = ({
         initialData={formModal.data}
         isEdit={formModal.isEdit}
         policyDefaultCoveragePercent={policyDefaultCoveragePercent}
+        administrativeCorrectionConfig={administrativeCorrectionConfig}
       />
 
       {/* Delete Confirmation Dialog */}
@@ -2465,11 +2515,62 @@ const BenefitPolicyRulesTab = ({
         hardDeleteMode={viewMode === 'DELETED'}
       />
 
+      <Dialog
+        open={adminCorrectionDialogOpen}
+        onClose={() => setAdminCorrectionDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          <Stack direction="row" spacing={1} alignItems="center">
+            <WarningAmberIcon color="warning" />
+            <Typography variant="h5">تفعيل التصحيح الإداري</Typography>
+          </Stack>
+        </DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={2}>
+            <Alert severity="warning">
+              هذا الوضع مخصص لتصحيح خطأ إدخال في قواعد وثيقة مستخدمة قبل الاعتماد المالي. لا يسمح بالحذف أو الاستبدال الشامل، وسيتم تسجيل السبب
+              في سجل التدقيق.
+            </Alert>
+            <TextField
+              label="سبب التصحيح الإداري"
+              value={adminCorrectionDraftReason}
+              onChange={(e) => setAdminCorrectionDraftReason(e.target.value)}
+              placeholder="مثال: تصحيح نسبة تغطية العيادات الخارجية من 100 إلى 80 قبل الاعتماد المالي"
+              multiline
+              minRows={3}
+              fullWidth
+              required
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAdminCorrectionDialogOpen(false)}>إلغاء</Button>
+          <Button
+            variant="contained"
+            color="warning"
+            onClick={() => {
+              const reason = adminCorrectionDraftReason.trim();
+              if (reason.length < 10) {
+                enqueueSnackbar('اكتب سبباً واضحاً للتصحيح الإداري', { variant: 'warning' });
+                return;
+              }
+              setClearOld(false);
+              setAdministrativeCorrection({ enabled: true, reason });
+              setAdminCorrectionDialogOpen(false);
+            }}
+          >
+            تفعيل التصحيح
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       {/* Category Coverage Modal */}
       <CategoryCoverageModal
         open={categoryCoverageModalOpen}
         onClose={() => setCategoryCoverageModalOpen(false)}
-        canEdit={canEdit}
+        canEdit={canModifyRules}
         bulkSavingCoverage={bulkSavingCoverage}
         categoriesCoverageRows={categoriesCoverageRows}
         handleCoverageInputChange={handleCoverageInputChange}
@@ -2572,8 +2673,20 @@ const BenefitPolicyRulesTab = ({
 
             {!importResult && (
               <Box sx={{ mt: 1 }}>
+                {administrativeCorrection.enabled && (
+                  <Alert severity="warning" sx={{ mb: 1.5 }}>
+                    التصحيح الإداري مفعل. سيتم السماح بالدمج/التحديث فقط، ولا يسمح بالاستبدال الشامل لوثيقة مستخدمة.
+                  </Alert>
+                )}
                 <FormControlLabel
-                  control={<Checkbox checked={clearOld} onChange={(e) => setClearOld(e.target.checked)} color="error" />}
+                  control={
+                    <Checkbox
+                      checked={clearOld}
+                      onChange={(e) => setClearOld(e.target.checked)}
+                      color="error"
+                      disabled={administrativeCorrection.enabled}
+                    />
+                  }
                   label={
                     <Typography variant="body2" color="error.main" fontWeight="bold">
                       استبدال شامل للقواعد والمجموعات الحالية

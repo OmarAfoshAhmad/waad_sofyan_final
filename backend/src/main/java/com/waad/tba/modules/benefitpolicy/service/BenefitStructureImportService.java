@@ -106,11 +106,21 @@ public class BenefitStructureImportService {
 
     @Transactional
     public BenefitStructureImportResult importWorkbook(Long policyId, MultipartFile file, boolean dryRun, ImportMode mode) {
+        return importWorkbook(policyId, file, dryRun, mode, false);
+    }
+
+    @Transactional
+    public BenefitStructureImportResult importWorkbook(
+            Long policyId,
+            MultipartFile file,
+            boolean dryRun,
+            ImportMode mode,
+            boolean allowAdministrativeCorrection) {
         BenefitPolicy policy = policyRepository.findById(policyId)
                 .orElseThrow(() -> new ResourceNotFoundException("BenefitPolicy", "id", policyId));
         Parsed parsed = parse(file);
         if (!dryRun) {
-            assertImportAllowed(policy);
+            assertImportAllowed(policy, allowAdministrativeCorrection);
         }
         List<String> errors = validate(policyId, parsed, mode);
         if (!errors.isEmpty() && !dryRun) {
@@ -149,8 +159,15 @@ public class BenefitStructureImportService {
     }
 
     private void assertImportAllowed(BenefitPolicy policy) {
+        assertImportAllowed(policy, false);
+    }
+
+    private void assertImportAllowed(BenefitPolicy policy, boolean allowAdministrativeCorrection) {
         if (!policy.isActive()) {
             throw new BusinessRuleException("لا يمكن اعتماد الاستيراد إلا لوثيقة فعالة؛ فعّل الوثيقة أولاً أو اجعلها مسودة فعالة");
+        }
+        if (allowAdministrativeCorrection) {
+            return;
         }
         if (policy.getStatus() == BenefitPolicy.BenefitPolicyStatus.DRAFT) {
             return;
