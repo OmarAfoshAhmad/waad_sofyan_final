@@ -1,9 +1,8 @@
-<!doctype html>
 <html lang="ar" dir="rtl" xmlns:th="http://www.thymeleaf.org">
   <head>
     <meta charset="UTF-8" />
     <title th:text="${report.reportTitle} + ' - كشف مراجعة وتدقيق'">كشف مراجعة وتدقيق المطالبات</title>
-    <style>
+    <style type="text/css">
       /* ═══════════════════════════════════════════
            WAAD REPORT ENGINE v3 - Flying Saucer / xhtmlrenderer
            Exact match to signed paper format
@@ -11,7 +10,7 @@
 
       @page {
         size: A4;
-        margin: 38mm 15mm 18mm 15mm;
+        margin: 12mm 15mm 14mm 15mm;
         @top-center {
           content: element(page-running-header);
           width: 180mm;
@@ -36,6 +35,7 @@
         font-size: 10pt;
         line-height: 1.55;
         direction: rtl;
+        background: #f2f2f2;
       }
 
       /* ═══════════════════════════════════════════
@@ -45,7 +45,9 @@
       #page-running-header {
         position: running(page-running-header);
         width: 180mm;
-        display: table;
+        display: none !important;
+        height: 0;
+        overflow: hidden;
         table-layout: fixed;
         border-bottom: 1.5px solid #1a1a1a;
         padding-bottom: 3mm;
@@ -101,48 +103,55 @@
 
       /* For browser/iframe: show static header at top */
       #screen-header {
-        display: table;
-        table-layout: fixed;
-        width: 100%;
-        border-bottom: 1.5px solid #1a1a1a;
-        padding-bottom: 4mm;
-        padding-top: 2mm;
-        margin-bottom: 12mm;
+        display: block;
+        position: relative;
+        width: 180mm;
+        height: 38mm;
+        border-bottom: none;
+        padding: 0;
+        margin: 0 auto 30mm auto;
+        text-align: center;
       }
 
       #screen-header .h-right,
       #screen-header .h-center,
       #screen-header .h-left {
-        display: table-cell;
-        vertical-align: middle;
+        display: block;
       }
 
       #screen-header .h-right {
+        position: absolute;
+        left: 0;
+        top: 20mm;
         text-align: right;
-        width: 30%;
-        font-size: 8.5pt;
-        line-height: 1.7;
+        width: 34mm;
+        font-size: 10pt;
+        line-height: 1.45;
+        font-weight: bold;
       }
+
       #screen-header .h-center {
         text-align: center;
-        width: 40%;
+        width: 100%;
       }
+
       #screen-header .h-left {
-        text-align: left;
-        width: 30%;
-        font-size: 9pt;
+        text-align: center;
+        width: 100%;
+        margin-top: 2mm;
+        font-size: 10pt;
         font-weight: bold;
       }
 
       #screen-header .h-center img {
-        max-width: 60px;
-        max-height: 36px;
+        max-width: 70px;
+        max-height: 44px;
         display: block;
-        margin: 0 auto 1.5mm auto;
+        margin: 0 auto 2mm auto;
       }
 
       #screen-header .h-center .co-name {
-        font-size: 13pt;
+        font-size: 19pt;
         font-weight: bold;
         color: #1a1a1a;
         display: block;
@@ -151,14 +160,21 @@
       #screen-header .h-center .co-business {
         display: block;
         margin-top: 0.5mm;
-        font-size: 8.5pt;
+        font-size: 11pt;
         font-weight: normal;
         color: #555;
       }
 
-      /* Hide screen header when printing (PDF renderer does not use it) */
+      /* Browser print/preview uses the visible report header.
+         Flying Saucer's running header is kept only for the PDF endpoint and
+         hidden in normal browser rendering to avoid the duplicated tiny header
+         seen in print preview. */
       @media print {
-        #screen-header {
+        body {
+          background: white;
+        }
+
+        #page-running-header {
           display: none !important;
         }
       }
@@ -168,36 +184,44 @@
         ═══════════════════════════════════════════ */
       .cover-page {
         page-break-after: always;
+        width: 180mm;
+        min-height: 236mm;
+        margin: 0 auto;
+        background: white;
       }
 
       .salutation {
         font-size: 12.5pt;
         font-weight: bold;
         text-align: center;
-        margin-bottom: 9mm;
-        margin-top: 8mm;
+        margin-bottom: 16mm;
+        margin-top: 0;
       }
 
       .body-text {
         font-size: 10.5pt;
         text-align: justify;
         line-height: 1.8;
-        margin-bottom: 9mm;
+        margin-bottom: 11mm;
+      }
+
+      .cover-page .body-text {
+        margin-top: 0;
       }
 
       /* ─ Bullet summary ─ */
       .summary-table {
-        width: 100%;
+        width: 56%;
         border-collapse: collapse;
-        margin-bottom: 12mm;
+        margin: 0 auto 13mm auto;
       }
 
       .summary-table tr {
-        border-bottom: 1px solid #eaeaea;
+        border-bottom: none;
       }
 
       .summary-table td {
-        padding: 4mm 0;
+        padding: 1.7mm 0;
         vertical-align: middle;
         font-size: 10.5pt;
       }
@@ -207,12 +231,13 @@
         color: #1a1a1a;
         font-size: 13pt;
         font-weight: bold;
-        padding-left: 4px;
+        padding-left: 8px;
         vertical-align: middle;
       }
 
       .summary-table .td-label {
         text-align: right;
+        font-weight: bold;
       }
 
       .summary-table .td-value {
@@ -255,7 +280,7 @@
         color: #444;
         text-align: justify;
         line-height: 1.8;
-        margin-bottom: 14mm;
+        margin: 0 0 14mm 0;
       }
 
       /* Single centered signature */
@@ -280,12 +305,17 @@
         ═══════════════════════════════════════════ */
       .detail-section {
         page-break-before: always;
+        width: 180mm;
+        min-height: 236mm;
+        margin: 0 auto;
+        background: white;
+        padding-top: 0;
       }
 
       .claim-card {
         border: 1px solid #bbb;
         border-bottom: none;
-        margin: 0;
+        margin: 0 0 0 0;
         padding: 0;
         page-break-inside: avoid;
       }
@@ -468,13 +498,47 @@
 
       /* Hide the PDF running header in browser – it lives in @page margin only */
       @media screen {
+        html {
+          background: #f2f2f2;
+        }
+
+        body {
+          width: 210mm;
+          min-height: 297mm;
+          margin: 0 auto;
+          padding: 14mm 15mm;
+          background: white;
+          box-shadow: 0 0 8px rgba(0, 0, 0, 0.18);
+        }
+
         #page-running-header {
           display: none !important;
+        }
+
+        .detail-section {
+          margin-top: 18mm;
+          padding-top: 0;
+        }
+      }
+
+      @media print {
+        body {
+          width: auto;
+          min-height: auto;
+          margin: 0;
+          padding: 0;
+          box-shadow: none;
+        }
+
+        #screen-header,
+        .cover-page,
+        .detail-section {
+          width: 180mm;
         }
       }
     </style>
     <!-- Flying Saucer: CSS custom properties not supported – inject actual colors via Thymeleaf -->
-    <style th:inline="text">
+    <style type="text/css" th:inline="text">
       /* thead stays silver – no override needed */
       /* subtotal individual cells override via .sub-gross/.sub-net/.sub-rejected */
       .col-grn {
@@ -512,8 +576,8 @@
           >إدارة النفقات الطبية</span>
       </span>
       <span class="h-right">
-        التاريخ &nbsp;<span th:text="${report.reportDate}">-</span><br />
-        الصفحة &nbsp;<span class="page-number"></span>
+        التاريخ &#160;<span th:text="${report.reportDate}">-</span><br />
+        الصفحة &#160;<span class="page-number"></span>
       </span>
     </div>
 
@@ -521,7 +585,6 @@
      SCREEN HEADER (visible in browser/iframe only)
 ═══════════════════════════════════════════ -->
     <div id="screen-header">
-      <span class="h-left" th:text="${report.batchCode}">JFZ25-00225-07/2025</span>
       <span class="h-center">
         <img
           th:if="${report.companyLogoBase64 != null and !#strings.isEmpty(report.companyLogoBase64)}"
@@ -540,9 +603,10 @@
           th:text="${report.companyBusinessType}"
           >إدارة النفقات الطبية</span>
       </span>
+      <span class="h-left" th:text="${report.batchCode}">JFZ25-00225-07/2025</span>
       <span class="h-right">
-        التاريخ &nbsp;<span th:text="${report.reportDate}">-</span><br />
-        الصفحة &nbsp;1
+        التاريخ &#160;<span th:text="${report.reportDate}">-</span><br />
+        الصفحة &#160;1
       </span>
     </div>
 
@@ -550,7 +614,7 @@
      PAGE 1 – COVER LETTER
 ═══════════════════════════════════════════ -->
     <div class="cover-page">
-      <div class="salutation">السادة:&nbsp;<span th:text="${report.providerName}">-</span></div>
+      <div class="salutation">السادة:&#160;<span th:text="${report.providerName}">-</span></div>
 
       <!-- SECTION_02 fix: introText is an admin-configurable free-text field
            persisted in system_settings. th:utext rendered it as raw HTML — a

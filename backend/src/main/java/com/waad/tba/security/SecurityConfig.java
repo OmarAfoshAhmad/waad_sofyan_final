@@ -159,6 +159,9 @@ public class SecurityConfig {
                         // from this same origin.
                         .contentSecurityPolicy(csp -> csp.policyDirectives(
                                 "default-src 'self'; object-src 'none'; base-uri 'self'; "
+                                        + "style-src 'self' 'unsafe-inline'; "
+                                        + "img-src 'self' data: blob:; "
+                                        + "frame-src 'self' blob:; "
                                         + "frame-ancestors 'self'"))
 
                         // Hardware and location APIs have no part in this

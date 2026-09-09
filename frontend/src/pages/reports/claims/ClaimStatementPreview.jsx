@@ -31,8 +31,6 @@ const ClaimStatementPreview = () => {
     if (iframeRef.current?.contentWindow) {
       iframeRef.current.contentWindow.focus();
       iframeRef.current.contentWindow.print();
-    } else {
-      window.open(previewUrl, '_blank', 'noopener,noreferrer');
     }
   };
 

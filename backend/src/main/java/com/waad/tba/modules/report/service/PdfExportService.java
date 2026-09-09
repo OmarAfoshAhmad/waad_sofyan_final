@@ -34,10 +34,32 @@ public class PdfExportService {
                 renderer.getFontResolver().addFont(fontFile.getAbsolutePath(), BaseFont.IDENTITY_H, BaseFont.EMBEDDED);
             }
             
-            renderer.setDocumentFromString(html);
+            renderer.setDocumentFromString(toPdfSafeXhtml(html));
             renderer.layout();
             renderer.createPDF(outputStream);
             return outputStream.toByteArray();
         }
+    }
+
+    private String toPdfSafeXhtml(String html) {
+        if (html == null || html.isBlank()) {
+            return "<html><head><title></title></head><body></body></html>";
+        }
+
+        String xhtml = html
+                .replace("\uFEFF", "")
+                .stripLeading()
+                .replace("&nbsp;", "&#160;");
+
+        xhtml = xhtml.replaceFirst("(?is)^<!doctype[^>]*>\\s*", "");
+
+        xhtml = xhtml.replaceAll("(?i)<meta([^>/]*?)>", "<meta$1 />");
+        xhtml = xhtml.replaceAll("(?i)<link([^>/]*?)>", "<link$1 />");
+        xhtml = xhtml.replaceAll("(?i)<img([^>/]*?)>", "<img$1 />");
+        xhtml = xhtml.replaceAll("(?i)<br([^>/]*?)>", "<br$1 />");
+        xhtml = xhtml.replaceAll("(?i)<hr([^>/]*?)>", "<hr$1 />");
+        xhtml = xhtml.replaceAll("(?i)<input([^>/]*?)>", "<input$1 />");
+
+        return xhtml;
     }
 }
