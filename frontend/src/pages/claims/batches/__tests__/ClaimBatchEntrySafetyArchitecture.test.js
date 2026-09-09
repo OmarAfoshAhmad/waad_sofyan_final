@@ -41,7 +41,7 @@ describe('claim batch entry safety boundary', () => {
   it('shows provider refusal balance after beneficiary payment in batch details', () => {
     expect(detailSource).toContain('providerRefusalBalance');
     expect(detailSource).toContain('beneficiaryPaidTowardRefusal');
-    expect(detailSource).toContain("label: 'على مقدم الخدمة'");
+    expect(detailSource).toContain("label: 'المرفوض'");
     expect(detailSource).toContain('getReviewerDisplayStatus(claim)');
   });
 
@@ -230,9 +230,10 @@ describe('claim batch entry safety boundary', () => {
   });
 
   it('submits the entered amount as manualAmount for a manual-amount line, not as a contract unitPrice', () => {
-    expect(entrySource).toContain("const isManualAmountLine = (l.pricingMode || l.service?.pricingMode) === 'MANUAL_AMOUNT'");
+    expect(entrySource).toContain("const pricingMode = l.pricingMode || l.service?.pricingMode");
+    expect(entrySource).toContain("const isManualAmountLine = pricingMode === 'MANUAL_AMOUNT' && !!medicalServiceId && !pricingItemId");
     expect(entrySource).toContain('manualAmount: isManualAmountLine ? parseFloat(l.unitPrice) || 0 : null');
-    expect(entrySource).toContain('medicalServiceId: l.medicalServiceId || l.service?.medicalServiceId || l.service?.serviceId || null');
+    expect(entrySource).toContain('const medicalServiceId = l.medicalServiceId || l.service?.medicalServiceId || l.service?.serviceId || null');
     expect(entrySource).toContain('pricingItemId: isManualAmountLine ? null :');
   });
 

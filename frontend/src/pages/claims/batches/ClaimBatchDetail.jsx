@@ -513,7 +513,7 @@ export default function ClaimBatchDetail() {
       { header: 'الحالة', key: 'status', width: 14 },
       { header: 'المبلغ الإجمالي', key: 'amount', width: 16 },
       { header: 'التزام الشركة', key: 'covered', width: 14 },
-      { header: 'على مقدم الخدمة', key: 'refused', width: 16 },
+      { header: 'المرفوض', key: 'refused', width: 16 },
       { header: 'نصيب المؤمن عليه', key: 'copay', width: 18 },
       { header: 'مدفوع المستفيد', key: 'beneficiaryPaid', width: 18 },
       { header: 'المستحق للمزود', key: 'paid', width: 16 }
@@ -645,7 +645,7 @@ export default function ClaimBatchDetail() {
     { id: 'amount', label: 'الإجمالي', minWidth: '5rem', align: 'center', sortable: true },
     { id: 'copay', label: 'التزام المستفيد', minWidth: '5rem', align: 'center', sortable: true },
     { id: 'covered', label: 'التزام الشركة', minWidth: '5rem', align: 'center', sortable: true },
-    { id: 'refused', label: 'على مقدم الخدمة', minWidth: '6.5rem', align: 'center', sortable: true },
+    { id: 'refused', label: 'المرفوض', minWidth: '6.5rem', align: 'center', sortable: true },
     { id: 'beneficiaryPaid', label: 'مدفوع المستفيد', minWidth: '7.5rem', align: 'center', sortable: true },
     { id: 'actions', label: 'إجراءات', minWidth: '5rem', align: 'center', sortable: false }
   ];
@@ -1263,7 +1263,7 @@ export default function ClaimBatchDetail() {
                   {[
                     ['الإجمالي', totals.amount],
                     ['التزام الشركة', totals.covered],
-                    ['على مقدم الخدمة', totals.refused],
+                    ['المرفوض', totals.refused],
                     ['مدفوع المستفيد', totals.beneficiaryPaid],
                     ['التزام المستفيد', totals.copay]
                   ].map(([label, value]) => (
