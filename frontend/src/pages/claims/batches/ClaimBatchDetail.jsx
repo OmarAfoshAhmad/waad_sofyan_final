@@ -329,6 +329,16 @@ export default function ClaimBatchDetail() {
       .replace(/[\\/_\-–—\s]+/g, '')
       .replace(/[^\p{L}\p{N}]/gu, '');
 
+  const getArabicSearchVariants = (value) => {
+    const normalized = normalizeSearchToken(value);
+    if (!normalized) return [];
+
+    const variants = new Set([normalized]);
+    if (normalized.endsWith('ه')) variants.add(`${normalized.slice(0, -1)}ا`);
+    if (normalized.endsWith('ا')) variants.add(`${normalized.slice(0, -1)}ه`);
+    return [...variants];
+  };
+
   const getReferenceParts = (reference) => {
     const raw = String(reference || '').trim();
     const lastPart = raw.includes('/') ? raw.split('/').pop() : raw;
@@ -377,6 +387,7 @@ export default function ClaimBatchDetail() {
     if (searchTerm) {
       const normalizedSearch = normalizeSearchToken(searchTerm);
       const normalizedArabic = normalizeArabicSearch(searchTerm);
+      const searchVariants = getArabicSearchVariants(searchTerm);
       items = items.filter((c, idx) => {
         const paperRef = getClaimPaperReference(c, claimDisplayOrder.get(c.id) || idx + 1);
         const references = [
@@ -401,6 +412,7 @@ export default function ClaimBatchDetail() {
 
         return (
           normalizedFields.some((value) => value.includes(normalizedSearch)) ||
+          normalizedFields.some((value) => searchVariants.some((variant) => value.includes(variant))) ||
           arabicFields.some((value) => value.includes(normalizedArabic))
         );
       });
@@ -1059,12 +1071,16 @@ export default function ClaimBatchDetail() {
                   <MenuItem value="">
                     <em>الكل</em>
                   </MenuItem>
-                  <MenuItem value="APPROVED">معتمدة</MenuItem>
-                  <MenuItem value="NEEDS_CORRECTION">معلقة للمراجعة</MenuItem>
-                  <MenuItem value="PENDING">قيد الانتظار</MenuItem>
+                  <MenuItem value="SUBMITTED">مقدمة</MenuItem>
                   <MenuItem value="UNDER_REVIEW">تحت المراجعة</MenuItem>
+                  <MenuItem value="PENDING">قيد الانتظار</MenuItem>
                   <MenuItem value="DRAFT">مسودة</MenuItem>
+                  <MenuItem value="NEEDS_CORRECTION">تحتاج تصحيح</MenuItem>
+                  <MenuItem value="APPROVED">مقبولة</MenuItem>
                   <MenuItem value="REJECTED">مرفوضة</MenuItem>
+                  <MenuItem value="BATCHED">في دفعة</MenuItem>
+                  <MenuItem value="SETTLED">تمت التسوية</MenuItem>
+                  <MenuItem value="PAID">مدفوعة</MenuItem>
                 </TextField>
 
                 <Button
@@ -1076,7 +1092,15 @@ export default function ClaimBatchDetail() {
                     setStatusFilter('');
                     tableState.setPage(0);
                   }}
-                  sx={{ minWidth: '7.5rem', height: '2.25rem', borderRadius: 1 }}
+                  sx={{
+                    minWidth: '7.5rem',
+                    width: '7.5rem',
+                    height: '2.25rem',
+                    borderRadius: 1,
+                    whiteSpace: 'nowrap',
+                    flexShrink: 0,
+                    px: 1.5
+                  }}
                 >
                   إعادة ضبط
                 </Button>
