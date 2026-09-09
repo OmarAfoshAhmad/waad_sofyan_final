@@ -1,4 +1,5 @@
 import PropTypes from 'prop-types';
+import { useState } from 'react';
 // material-ui
 import Stack from '@mui/material/Stack';
 import Box from '@mui/material/Box';
@@ -20,9 +21,10 @@ import waadLogoFallback from 'assets/images/waad-logo.png';
  */
 export default function LogoMain({ reverse }) {
   const { getLogoSrc, hasLogo, getInitials, primaryColor, companyName } = useCompanySettings();
+  const [fallbackLogo, setFallbackLogo] = useState(false);
 
   // Determine logo source
-  const logoSrc = hasLogo() ? getLogoSrc() : waadLogoFallback;
+  const logoSrc = fallbackLogo ? waadLogoFallback : (hasLogo() ? getLogoSrc() : waadLogoFallback);
 
   return (
     <Stack direction="row" alignItems="center" spacing={1}>
@@ -31,6 +33,7 @@ export default function LogoMain({ reverse }) {
           component="img"
           src={logoSrc}
           alt={companyName || 'Waad TPA'}
+          onError={() => setFallbackLogo(true)}
           sx={{
             height: '2.5rem',
             width: 'auto',

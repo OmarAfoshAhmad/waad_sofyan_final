@@ -14,6 +14,18 @@ export { waadLogoDefault };
 
 const STORAGE_KEY = 'companySettings';
 
+function normalizeLogoSrc(src) {
+  const value = String(src || '').trim();
+  if (!value) return waadLogoDefault;
+  if (value.startsWith('data:') || value.startsWith('http://') || value.startsWith('https://') || value.startsWith('/')) {
+    return value;
+  }
+  if (value === 'images/waad-logo.png' || value.endsWith('/images/waad-logo.png')) {
+    return waadLogoDefault;
+  }
+  return `/${value.replace(/^\/+/, '')}`;
+}
+
 // Default settings (used when nothing saved yet)
 const DEFAULT_SETTINGS = {
   companyName: 'وعد',
@@ -108,7 +120,7 @@ export function CompanySettingsProvider({ children }) {
    */
   const getLogoSrc = useCallback(() => {
     if (settings.logoBase64) return settings.logoBase64;
-    if (settings.logoUrl) return settings.logoUrl;
+    if (settings.logoUrl) return normalizeLogoSrc(settings.logoUrl);
     return waadLogoDefault;
   }, [settings.logoBase64, settings.logoUrl]);
 
