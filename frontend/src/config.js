@@ -90,7 +90,7 @@ export const DEFAULT_THEME_MODE = ThemeMode.LIGHT;
  * - container: false (مرن - Full width)
  */
 const config = {
-  fontFamily: `'Cairo', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', sans-serif`,
+  fontFamily: `'Tajawal', 'Cairo', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', sans-serif`,
   i18n: 'ar', // Phase D1.5: Arabic as default language
   menuOrientation: MenuOrientation.VERTICAL, // Fixed: Sidebar navigation (عمودي)
   container: false, // Fixed: Fluid width (مرن)

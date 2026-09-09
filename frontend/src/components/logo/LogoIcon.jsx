@@ -1,4 +1,5 @@
 // material-ui
+import { useState } from 'react';
 import Box from '@mui/material/Box';
 import Avatar from '@mui/material/Avatar';
 
@@ -18,9 +19,10 @@ import waadLogoFallback from 'assets/images/waad-logo.png';
  */
 export default function LogoIcon() {
   const { getLogoSrc, hasLogo, getInitials, primaryColor, companyName } = useCompanySettings();
+  const [fallbackLogo, setFallbackLogo] = useState(false);
 
   // Determine logo source
-  const logoSrc = hasLogo() ? getLogoSrc() : waadLogoFallback;
+  const logoSrc = fallbackLogo ? waadLogoFallback : (hasLogo() ? getLogoSrc() : waadLogoFallback);
 
   if (hasLogo() || waadLogoFallback) {
     return (
@@ -28,6 +30,7 @@ export default function LogoIcon() {
         component="img"
         src={logoSrc}
         alt={companyName || 'Waad TPA'}
+        onError={() => setFallbackLogo(true)}
         sx={{
           width: '2.5rem',
           height: '2.5rem',
