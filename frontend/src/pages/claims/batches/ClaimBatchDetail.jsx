@@ -299,10 +299,41 @@ export default function ClaimBatchDetail() {
     return (Number(claim.patientCoPay) || 0) + (Number(claim.beneficiaryPaidAmount) || 0);
   };
 
+  // Batch Code (Real or Fallback)
+  const batchCode = useMemo(() => {
+    if (realBatch) return realBatch.batchCode;
+    if (employer) return `${employer.code || 'EMP'}${String(year).substring(2)}-BATCH`;
+    return '...';
+  }, [realBatch, employer, year]);
+
   const getClaimPaperReference = (claim, fallbackSequence) => {
     const storedReference = String(claim?.claimNumber || '').trim();
     if (storedReference.includes('/') || storedReference.startsWith(batchCode)) return storedReference;
     return `${batchCode}/${String(fallbackSequence).padStart(4, '0')}`;
+  };
+
+  const normalizeArabicSearch = (value) =>
+    String(value || '')
+      .trim()
+      .toLowerCase()
+      .replace(/[أإآٱ]/g, 'ا')
+      .replace(/ؤ/g, 'و')
+      .replace(/ئ/g, 'ي')
+      .replace(/ى/g, 'ي')
+      .replace(/ة/g, 'ه')
+      .replace(/[\u064B-\u065F\u0670]/g, '')
+      .replace(/ـ/g, '');
+
+  const normalizeSearchToken = (value) =>
+    normalizeArabicSearch(value)
+      .replace(/[\\/_\-–—\s]+/g, '')
+      .replace(/[^\p{L}\p{N}]/gu, '');
+
+  const getReferenceParts = (reference) => {
+    const raw = String(reference || '').trim();
+    const lastPart = raw.includes('/') ? raw.split('/').pop() : raw;
+    const unpaddedLastPart = lastPart.replace(/^0+/, '') || lastPart;
+    return [raw, lastPart, unpaddedLastPart].filter(Boolean);
   };
 
   const hasProviderRefusalBalance = (claim) => getDisplayRefused(claim) > 0;
@@ -315,6 +346,21 @@ export default function ClaimBatchDetail() {
     if (claim.status === 'APPROVED' && hasProviderRefusalBalance(claim)) return 'REJECTED';
     return claim.status || 'APPROVED';
   };
+
+  const claimDisplayOrder = useMemo(() => {
+    const allBatchClaims = claimsResponse?.items || claimsResponse?.content || [];
+    return [...allBatchClaims]
+      .sort((a, b) => {
+        const aTime = new Date(a?.createdAt || a?.serviceDate || 0).getTime() || 0;
+        const bTime = new Date(b?.createdAt || b?.serviceDate || 0).getTime() || 0;
+        if (aTime !== bTime) return aTime - bTime;
+        return (Number(a?.id) || 0) - (Number(b?.id) || 0);
+      })
+      .reduce((map, claim, index) => {
+        map.set(claim.id, index + 1);
+        return map;
+      }, new Map());
+  }, [claimsResponse]);
 
   const claims = useMemo(() => {
     let items = claimsResponse?.items || claimsResponse?.content || [];
@@ -329,13 +375,35 @@ export default function ClaimBatchDetail() {
 
     // 1. Search Filter
     if (searchTerm) {
-      const lowerSearch = searchTerm.toLowerCase();
-      items = items.filter(
-        (c) =>
-          c.memberName?.toLowerCase().includes(lowerSearch) ||
-          c.memberCardNumber?.includes(searchTerm) ||
-          c.claimNumber?.includes(searchTerm)
-      );
+      const normalizedSearch = normalizeSearchToken(searchTerm);
+      const normalizedArabic = normalizeArabicSearch(searchTerm);
+      items = items.filter((c, idx) => {
+        const paperRef = getClaimPaperReference(c, claimDisplayOrder.get(c.id) || idx + 1);
+        const references = [
+          c.claimNumber,
+          c.externalClaimRef,
+          c.referenceNumber,
+          c.id ? `CLM-${c.id}` : '',
+          paperRef,
+          batchCode,
+          ...getReferenceParts(c.claimNumber),
+          ...getReferenceParts(c.externalClaimRef),
+          ...getReferenceParts(paperRef)
+        ];
+        const normalizedFields = [
+          c.memberName,
+          c.memberCardNumber,
+          c.employeeNumber,
+          c.beneficiaryNumber,
+          ...references
+        ].map(normalizeSearchToken);
+        const arabicFields = [c.memberName, c.memberCardNumber, c.employeeNumber, c.beneficiaryNumber].map(normalizeArabicSearch);
+
+        return (
+          normalizedFields.some((value) => value.includes(normalizedSearch)) ||
+          arabicFields.some((value) => value.includes(normalizedArabic))
+        );
+      });
     }
 
     // 2. Status Filter
@@ -348,7 +416,7 @@ export default function ClaimBatchDetail() {
     }
 
     return items;
-  }, [claimsResponse, searchTerm, statusFilter]);
+  }, [batchCode, claimDisplayOrder, claimsResponse, searchTerm, statusFilter]);
 
   const sortedClaims = useMemo(() => {
     const sorting = tableState.sorting?.[0];
@@ -360,7 +428,7 @@ export default function ClaimBatchDetail() {
     const getSortValue = (claim, idx) => {
       switch (sorting.id) {
         case 'patient':
-          return String(claim.memberName || '').toLowerCase();
+          return normalizeArabicSearch(claim.memberName);
         case 'serviceDate':
           return new Date(claim.serviceDate || 0).getTime() || 0;
         case 'status':
@@ -400,21 +468,6 @@ export default function ClaimBatchDetail() {
       .map((entry) => entry.claim);
   }, [claims, tableState.sorting]);
 
-  const claimDisplayOrder = useMemo(() => {
-    const allBatchClaims = claimsResponse?.items || claimsResponse?.content || [];
-    return [...allBatchClaims]
-      .sort((a, b) => {
-        const aTime = new Date(a?.createdAt || a?.serviceDate || 0).getTime() || 0;
-        const bTime = new Date(b?.createdAt || b?.serviceDate || 0).getTime() || 0;
-        if (aTime !== bTime) return aTime - bTime;
-        return (Number(a?.id) || 0) - (Number(b?.id) || 0);
-      })
-      .reduce((map, claim, index) => {
-        map.set(claim.id, index + 1);
-        return map;
-      }, new Map());
-  }, [claimsResponse]);
-
   // Paginated Data for the table
   const paginatedClaims = useMemo(() => {
     const start = tableState.page * tableState.pageSize;
@@ -422,13 +475,6 @@ export default function ClaimBatchDetail() {
   }, [sortedClaims, tableState.page, tableState.pageSize]);
 
   const tableRows = useMemo(() => paginatedClaims, [paginatedClaims]);
-
-  // Batch Code (Real or Fallback)
-  const batchCode = useMemo(() => {
-    if (realBatch) return realBatch.batchCode;
-    if (employer) return `${employer.code || 'EMP'}${String(year).substring(2)}-BATCH`;
-    return '...';
-  }, [realBatch, employer, year]);
 
   // -------------------------------------------------------------------------
   // EXPORT HANDLERS
@@ -564,7 +610,16 @@ export default function ClaimBatchDetail() {
       sortable: false
     },
     { id: 'ref', label: 'المرجع', minWidth: '8rem', align: 'center', sortable: false },
-    { id: 'patient', label: 'الاسم (المستفيد)', minWidth: '10rem', align: 'right', sortable: true },
+    {
+      id: 'patient',
+      label: 'الاسم (المستفيد)',
+      minWidth: '10rem',
+      align: 'right',
+      headerAlign: 'center',
+      headerSx: { textAlign: 'center' },
+      cellSx: { textAlign: 'right' },
+      sortable: true
+    },
     { id: 'serviceDate', label: 'تاريخ الخدمة', minWidth: '7rem', align: 'center', sortable: true },
     { id: 'status', label: 'الحالة', minWidth: '6rem', align: 'center', sortable: true },
     { id: 'amount', label: 'الإجمالي', minWidth: '5rem', align: 'center', sortable: true },

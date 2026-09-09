@@ -344,7 +344,8 @@ const UnifiedMedicalTable = ({
                       minWidth: column.minWidth || 80,
                       width: column.width,
                       whiteSpace: 'nowrap',
-                      borderBottom: `2px solid ${headerBorder}`
+                      borderBottom: `2px solid ${headerBorder}`,
+                      ...(column.headerSx || {})
                     }}
                   >
                     {isSortable ? (
@@ -463,7 +464,8 @@ const UnifiedMedicalTable = ({
                           align={column.align || 'left'}
                           sx={{
                             py: '0.75rem',
-                            borderBottom: `1px solid ${alpha(theme.palette.divider, 0.8)}`
+                            borderBottom: `1px solid ${alpha(theme.palette.divider, 0.8)}`,
+                            ...(column.cellSx || {})
                           }}
                         >
                           {column.renderCell
