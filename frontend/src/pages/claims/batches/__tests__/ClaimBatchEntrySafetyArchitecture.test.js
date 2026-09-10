@@ -316,6 +316,7 @@ describe('claim batch entry safety boundary', () => {
     expect(claimReportTemplate).toContain('margin: 0 auto 12mm auto');
     expect(claimReportTemplate).toContain('min-height: 219mm');
     expect(claimReportTemplate).toContain('margin-top: 0');
+    expect(claimReportTemplate).toMatch(/@media print[\s\S]*\.cover-page,\s*\.detail-section\s*\{[\s\S]*min-height:\s*auto;/);
     expect(claimReportTemplate).not.toContain('margin: 0 auto 30mm auto');
     expect(claimReportTemplate).not.toContain('margin-top: 18mm');
   });
