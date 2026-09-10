@@ -258,6 +258,13 @@ public class ClaimMapper {
                                                 ? catalogService.getPricingMode()
                                                 : PricingMode.CONTRACT_PRICE;
                         }
+                        PricingMode requestedPricingMode = parsePricingMode(lineDto.getPricingMode());
+                        if (requestedPricingMode == PricingMode.MANUAL_AMOUNT
+                                        && resolvedPricingItemId == null
+                                        && lineDto.getManualAmount() != null
+                                        && lineDto.getManualAmount().compareTo(BigDecimal.ZERO) > 0) {
+                                servicePricingMode = PricingMode.MANUAL_AMOUNT;
+                        }
 
                         // Pharmacy/optics-style services: the invoice amount is entered
                         // directly, there is no contract price list to look up at all.
@@ -846,5 +853,16 @@ public class ClaimMapper {
                 }
                 String trimmed = value.trim();
                 return !trimmed.isEmpty() && !"-".equals(trimmed);
+        }
+
+        private PricingMode parsePricingMode(String value) {
+                if (!hasBusinessValue(value)) {
+                        return null;
+                }
+                try {
+                        return PricingMode.valueOf(value.trim().toUpperCase(Locale.ROOT));
+                } catch (IllegalArgumentException ignored) {
+                        return null;
+                }
         }
 }

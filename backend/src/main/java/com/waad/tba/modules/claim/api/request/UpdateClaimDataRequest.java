@@ -87,6 +87,8 @@ public class UpdateClaimDataRequest {
         @Positive(message = "Pending service ID must be positive")
         private Long pendingServiceId;
 
+        private String pricingMode;
+
         @NotNull(message = "Quantity is required")
         @Min(value = 1, message = "Quantity must be at least 1")
         private Integer quantity;

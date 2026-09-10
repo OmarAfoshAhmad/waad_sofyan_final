@@ -132,11 +132,12 @@ const GENERATED_SERVICE_CODE_PATTERN = /^(PL-|SYS-)/i;
 
 const isGeneratedServiceCode = (code = '') => GENERATED_SERVICE_CODE_PATTERN.test(String(code).trim());
 
-const isClaimEntryOpenPriceService = (svc = {}) => {
+const isRepeatableClaimEntryService = (svc = {}) => {
   const pricingMode = svc?.pricingMode || svc?.service?.pricingMode;
   const code = svc?.serviceCode || svc?.code || svc?.medicalServiceCode || '';
 
   return (
+    pricingMode === 'MANUAL_AMOUNT' ||
     pricingMode === 'CLAIM_UNIT_PRICE' ||
     String(code).trim().toUpperCase().startsWith('SYS-CLAIM-') ||
     Boolean(svc?.claimEntryOpenPrice || svc?.openClaimUnitPrice) ||
@@ -1187,13 +1188,13 @@ export default function ClaimBatchEntry() {
 
       const code = svc?.serviceCode || svc?.code;
       const isGeneralService = code === 'GEN-MEDICATION' || code === 'GEN-MEDICAL-SERVICE';
-      const claimEntryOpenPriceService = isClaimEntryOpenPriceService(svc);
+      const repeatableClaimEntryService = isRepeatableClaimEntryService(svc);
 
       const currentLines = linesRef.current || lines;
 
       const isDuplicate =
         !isGeneralService &&
-        !claimEntryOpenPriceService &&
+        !repeatableClaimEntryService &&
         currentLines.some((l, i) => {
           if (i === idx) return false;
           const existingName = l.serviceName || l.service?.serviceName || l.service?.name;
@@ -1955,6 +1956,7 @@ export default function ClaimBatchEntry() {
               null,
             quantity: Number(l.quantity),
             unitPrice: parseFloat(l.unitPrice) || 0,
+            pricingMode,
             manualAmount: isManualAmountLine ? parseFloat(l.unitPrice) || 0 : null,
             appliedRuleId: l.appliedRuleId ?? null,
             rejected: isClaimRejected ? true : l.rejected || false,

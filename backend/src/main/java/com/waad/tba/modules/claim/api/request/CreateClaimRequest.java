@@ -212,6 +212,8 @@ public class CreateClaimRequest {
          */
         private String serviceCategoryName;
 
+        private String pricingMode;
+
         /**
          * Optional: Unit Price (REQUIRED for LEGACY_BACKLOG claims)
          * ARCHITECTURAL LAW: For regular claims, this is ignored and resolved from

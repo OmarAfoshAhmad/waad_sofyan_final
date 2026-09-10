@@ -242,6 +242,7 @@ describe('claim batch entry safety boundary', () => {
   it('submits the entered amount as manualAmount for a manual-amount line, not as a contract unitPrice', () => {
     expect(entrySource).toContain("const pricingMode = l.pricingMode || l.service?.pricingMode");
     expect(entrySource).toContain("const isManualAmountLine = pricingMode === 'MANUAL_AMOUNT' && !!medicalServiceId && !pricingItemId");
+    expect(entrySource).toContain('pricingMode,');
     expect(entrySource).toContain('manualAmount: isManualAmountLine ? parseFloat(l.unitPrice) || 0 : null');
     expect(entrySource).toContain('const medicalServiceId = l.medicalServiceId || l.service?.medicalServiceId || l.service?.serviceId || null');
     expect(entrySource).toContain('pricingItemId: isManualAmountLine ? null :');
@@ -256,11 +257,12 @@ describe('claim batch entry safety boundary', () => {
     expect(entrySource).toContain('refetchAllLinesCoverage(encounterType, nextLines, fullCoverage, claimContextCode)');
   });
 
-  it('allows repeating claim-entry open-price services while keeping duplicate guard for normal services', () => {
-    expect(entrySource).toContain('const isClaimEntryOpenPriceService = (svc = {}) =>');
+  it('allows repeating claim-entry open-price and standard professional services while keeping duplicate guard for normal services', () => {
+    expect(entrySource).toContain('const isRepeatableClaimEntryService = (svc = {}) =>');
+    expect(entrySource).toContain("pricingMode === 'MANUAL_AMOUNT'");
     expect(entrySource).toContain("pricingMode === 'CLAIM_UNIT_PRICE'");
     expect(entrySource).toContain("startsWith('SYS-CLAIM-')");
-    expect(entrySource).toContain('!claimEntryOpenPriceService &&');
+    expect(entrySource).toContain('!repeatableClaimEntryService &&');
     expect(entrySource).toContain('هذه الخدمة مضافة بالفعل في بند آخر');
   });
 

@@ -42,6 +42,13 @@ public class ClaimLineDto {
     private Long pendingServiceId;
 
     /**
+     * Client-selected pricing mode for claim-entry services. Used only to keep
+     * MANUAL_AMOUNT/CLAIM_UNIT_PRICE lines on their explicit path during data
+     * updates; contract-priced lines continue to be resolved server-side.
+     */
+    private String pricingMode;
+
+    /**
      * Invoice amount entered directly by the clerk, for a service whose
      * MedicalService.pricingMode is MANUAL_AMOUNT (e.g. a pharmacy or optics
      * invoice with no fixed contract price list). Rejected if the resolved
