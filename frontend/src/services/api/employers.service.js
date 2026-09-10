@@ -705,6 +705,23 @@ export const getEmployerSelectors = async () => {
   }
 };
 
+/**
+ * Employer selectors for monthly claim-batch entry.
+ * Only employers with an ACTIVE benefit policy overlapping the requested period
+ * are returned; DRAFT policies are intentionally excluded by the backend.
+ */
+export const getClaimEntryEmployerSelectors = async ({ periodStart, periodEnd } = {}) => {
+  try {
+    const response = await axiosClient.get(`${BASE_URL}/selectors/claim-entry`, {
+      params: { periodStart, periodEnd }
+    });
+    return unwrapArray(response);
+  } catch (error) {
+    console.error('[EmployerService] getClaimEntryEmployerSelectors failed:', error);
+    throw handleEmployerErrors(error);
+  }
+};
+
 // Module-level cache shared by every employer-picker component in the app
 // (EmployerFilterSelector, EmployerSelectField, ...) so the list is fetched
 // once regardless of how many pickers are mounted at once. Was previously
@@ -904,6 +921,7 @@ const employersService = {
 
   // Additional Operations
   getEmployerSelectors,
+  getClaimEntryEmployerSelectors,
   getEmployerSelectorsCached,
   getEmployerCount,
   exportEmployers,

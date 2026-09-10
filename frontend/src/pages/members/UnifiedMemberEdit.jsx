@@ -113,6 +113,7 @@ const UnifiedMemberEdit = () => {
   // Form State
   const [form, setForm] = useState({
     fullName: '',
+    cardNumber: '',
     nationalNumber: '',
     birthDate: null,
     gender: '',
@@ -160,6 +161,7 @@ const UnifiedMemberEdit = () => {
     if (index === 0) {
       return (
         (errors.fullName ? 1 : 0) +
+        (errors.cardNumber ? 1 : 0) +
         (errors.nationalNumber ? 1 : 0) +
         (errors.relationship ? 1 : 0)
       );
@@ -188,6 +190,7 @@ const UnifiedMemberEdit = () => {
 
       setForm({
         fullName: data.fullName || '',
+        cardNumber: data.cardNumber || '',
         nationalNumber: data.nationalNumber || '',
         birthDate: data.birthDate ? dayjs(data.birthDate) : null,
         gender: data.gender || '',
@@ -377,6 +380,7 @@ const UnifiedMemberEdit = () => {
   const validateForm = () => {
     const newErrors = {};
     if (!form.fullName?.trim()) newErrors.fullName = 'الاسم الكامل مطلوب';
+    if (!form.cardNumber?.trim()) newErrors.cardNumber = 'رقم البطاقة التأمينية مطلوب';
 
     // employerId and relationship are deliberately NOT validated here: both
     // fields are read-only in this form (moved to the dedicated employer-
@@ -395,7 +399,7 @@ const UnifiedMemberEdit = () => {
 
     setErrors(newErrors);
 
-    if (newErrors.fullName || newErrors.nationalNumber) {
+    if (newErrors.fullName || newErrors.cardNumber || newErrors.nationalNumber) {
       setTabValue(0);
     } else if (newErrors.phone || newErrors.email) {
       setTabValue(2);
@@ -414,6 +418,7 @@ const UnifiedMemberEdit = () => {
       setSaving(true);
       const payload = {
         fullName: form.fullName.trim(),
+        cardNumber: form.cardNumber.trim(),
         nationalNumber: form.nationalNumber?.trim() || null,
         birthDate: form.birthDate ? dayjs(form.birthDate).format('YYYY-MM-DD') : null,
         gender: form.gender || 'UNDEFINED',
@@ -590,7 +595,7 @@ const UnifiedMemberEdit = () => {
                   <Grid container spacing={2}>
                     <Grid size={{ xs: 12 }}>
                       <Alert severity="info" sx={{ mb: '1.0rem', '& .MuiAlert-message': { fontSize: '0.75rem' } }}>
-                        يتم تحديث رقم البطاقة والباركود آلياً عند الحفظ إذا لزم الأمر.
+                        رقم البطاقة يولد تلقائياً عند إنشاء المستفيد، ويمكن تصحيحه هنا عند الحاجة مع مزامنة الباركود.
                       </Alert>
                     </Grid>
 
@@ -603,6 +608,18 @@ const UnifiedMemberEdit = () => {
                         onChange={handleChange('fullName')}
                         error={!!errors.fullName}
                         helperText={errors.fullName}
+                        size="small"
+                      />
+                    </Grid>
+                    <Grid size={{ xs: 12, md: 6 }}>
+                      <TextField
+                        fullWidth
+                        required
+                        label="رقم البطاقة التأمينية"
+                        value={form.cardNumber}
+                        onChange={handleChange('cardNumber')}
+                        error={!!errors.cardNumber}
+                        helperText={errors.cardNumber || 'مولد تلقائياً ويمكن تعديله عند الحاجة'}
                         size="small"
                       />
                     </Grid>

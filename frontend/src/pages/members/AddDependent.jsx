@@ -37,6 +37,13 @@ import MemberAvatar from 'components/tba/MemberAvatar';
 import { getMember, addDependent, uploadPhoto, RELATIONSHIPS, GENDERS } from 'services/api/unified-members.service';
 import { openSnackbar } from 'api/snackbar';
 import { normalizeApiError } from 'utils/api-error';
+import {
+  RELATIONSHIP_AR,
+  buildDependentCardNumberPreview,
+  genderForRelationship,
+  inferLatestDependentDefaults,
+  relationshipsForGender
+} from './member.shared';
 
 /**
  * Add Dependent Component
@@ -53,10 +60,17 @@ const AddDependent = () => {
 
   // Principal Member Info
   const [principal, setPrincipal] = useState(null);
+  const genderExcludedRelationships = principal?.gender === 'MALE' ? ['HUSBAND'] : principal?.gender === 'FEMALE' ? ['WIFE'] : [];
+  const uniqueRelationships = principal?.gender === 'FEMALE' ? ['HUSBAND', 'FATHER', 'MOTHER'] : ['FATHER', 'MOTHER'];
+  const usedUniqueRelationships = (principal?.dependents || [])
+    .filter((dependent) => dependent.active !== false && dependent.status !== 'TERMINATED')
+    .map((dependent) => dependent.relationship)
+    .filter((relationship) => uniqueRelationships.includes(relationship));
 
   // Dependent Form
   const [form, setForm] = useState({
     fullName: '',
+    cardNumber: '',
     nationalNumber: '',
     birthDate: null,
     gender: '',
@@ -64,6 +78,7 @@ const AddDependent = () => {
     photoFile: null,
     photoPreview: null
   });
+  const [cardNumberManual, setCardNumberManual] = useState(false);
 
   // Fetch principal data
   useEffect(() => {
@@ -81,6 +96,25 @@ const AddDependent = () => {
       }
 
       setPrincipal(data);
+      const defaults = inferLatestDependentDefaults(data.dependents || []);
+      const uniqueForPrincipal = data.gender === 'FEMALE' ? ['HUSBAND', 'FATHER', 'MOTHER'] : ['FATHER', 'MOTHER'];
+      const usedUniqueForPrincipal = (data.dependents || [])
+        .filter((d) => d.active !== false && d.status !== 'TERMINATED')
+        .map((d) => d.relationship)
+        .filter((relationship) => uniqueForPrincipal.includes(relationship));
+      const defaultRelationship = usedUniqueForPrincipal.includes(defaults.relationship) ? '' : defaults.relationship;
+      setForm((prev) => ({
+        ...prev,
+        gender: defaults.gender,
+        relationship: defaultRelationship,
+        cardNumber: defaultRelationship
+          ? buildDependentCardNumberPreview(
+              data.cardNumber,
+              defaultRelationship,
+              (data.dependents || []).filter((d) => d.relationship === defaultRelationship && d.status !== 'TERMINATED').length
+            )
+          : ''
+      }));
     } catch (error) {
       console.error('Error fetching principal:', error);
       setFetchError(normalizeApiError(error).message || 'فشل في تحميل بيانات الموظف');
@@ -92,7 +126,33 @@ const AddDependent = () => {
   // Handle form field changes
   const handleFieldChange = (field) => (event) => {
     const value = event.target.value;
-    setForm((prev) => ({ ...prev, [field]: value }));
+    if (field === 'cardNumber') {
+      setCardNumberManual(true);
+    }
+
+    setForm((prev) => {
+      const next = { ...prev, [field]: value };
+      if (field === 'relationship') {
+        const inferredGender = genderForRelationship(value);
+        if (inferredGender) next.gender = inferredGender;
+      }
+      if (field === 'gender') {
+        const relationGender = genderForRelationship(prev.relationship);
+        if (prev.relationship && relationGender && relationGender !== value) {
+          next.relationship = '';
+        }
+      }
+
+      const relationshipForCard = field === 'relationship' ? value : next.relationship;
+      if (!cardNumberManual && relationshipForCard) {
+        next.cardNumber = buildDependentCardNumberPreview(
+          principal?.cardNumber,
+          relationshipForCard,
+          (principal?.dependents || []).filter((d) => d.relationship === relationshipForCard && d.status !== 'TERMINATED').length
+        );
+      }
+      return next;
+    });
 
     if (errors[field]) {
       setErrors((prev) => ({ ...prev, [field]: null }));
@@ -148,6 +208,7 @@ const AddDependent = () => {
 
       const payload = {
         fullName: form.fullName.trim(),
+        cardNumber: form.cardNumber?.trim() || null,
         nationalNumber: form.nationalNumber?.trim() || null,
         birthDate: form.birthDate ? dayjs(form.birthDate).format('YYYY-MM-DD') : null,
         gender: form.gender,
@@ -278,25 +339,12 @@ const AddDependent = () => {
               <FormControl fullWidth required error={!!errors.relationship} size="small" sx={{ minWidth: '9.375rem' }}>
                 <InputLabel>القرابة</InputLabel>
                 <Select value={form.relationship} onChange={handleFieldChange('relationship')} label="القرابة">
-                  {Object.entries(RELATIONSHIPS).map(([key, value]) => (
+                  {relationshipsForGender(RELATIONSHIPS, form.gender, {
+                    excluded: genderExcludedRelationships,
+                    usedUnique: usedUniqueRelationships
+                  }).map(([key, value]) => (
                     <MenuItem key={key} value={value}>
-                      {value === 'WIFE'
-                        ? 'زوجة'
-                        : value === 'HUSBAND'
-                          ? 'زوج'
-                          : value === 'SON'
-                            ? 'ابن'
-                            : value === 'DAUGHTER'
-                              ? 'ابنة'
-                              : value === 'FATHER'
-                                ? 'أب'
-                                : value === 'MOTHER'
-                                  ? 'أم'
-                                  : value === 'BROTHER'
-                                    ? 'أخ'
-                                    : value === 'SISTER'
-                                      ? 'أخت'
-                                      : value}
+                      {RELATIONSHIP_AR[value] || value}
                     </MenuItem>
                   ))}
                 </Select>
@@ -317,6 +365,20 @@ const AddDependent = () => {
                 </Select>
                 {errors.gender && <FormHelperText>{errors.gender}</FormHelperText>}
               </FormControl>
+            </Grid>
+
+            {/* Insurance Card Number */}
+            <Grid size={{ xs: 12, md: 2 }}>
+              <TextField
+                fullWidth
+                label="رقم البطاقة التأمينية"
+                value={form.cardNumber}
+                onChange={handleFieldChange('cardNumber')}
+                placeholder="يولد تلقائياً"
+                helperText={cardNumberManual ? 'تم تعديله يدوياً' : 'قابل للتعديل'}
+                size="small"
+                sx={{ minWidth: '10rem' }}
+              />
             </Grid>
 
             {/* Birth Date */}

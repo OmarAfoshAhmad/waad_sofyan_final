@@ -200,6 +200,28 @@ public class EmployerService {
     }
 
     /**
+     * Claim-entry employer selector: only employers with an ACTIVE benefit
+     * policy overlapping the requested batch period are eligible. Draft policies
+     * must not open a monthly claim-entry workflow.
+     */
+    public List<EmployerSelectorDto> getClaimEntrySelectors(LocalDate periodStart, LocalDate periodEnd) {
+        LocalDate safeStart = periodStart != null ? periodStart : LocalDate.now();
+        LocalDate safeEnd = periodEnd != null ? periodEnd : safeStart;
+        if (safeEnd.isBefore(safeStart)) {
+            LocalDate tmp = safeStart;
+            safeStart = safeEnd;
+            safeEnd = tmp;
+        }
+
+        java.util.Set<Long> employerIdsWithActivePolicy = new java.util.HashSet<>(
+                benefitPolicyRepository.findEmployerIdsWithActivePolicyOverlapping(safeStart, safeEnd));
+
+        return getSelectors().stream()
+                .filter(sel -> employerIdsWithActivePolicy.contains(sel.getId()))
+                .toList();
+    }
+
+    /**
      * Get employer by ID
      */
     public EmployerResponseDto getById(Long id) {

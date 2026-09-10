@@ -133,6 +133,15 @@ public interface BenefitPolicyRepository extends JpaRepository<BenefitPolicy, Lo
             @Param("employerOrgId") Long employerOrgId,
             @Param("date") LocalDate date);
 
+    @Query("SELECT DISTINCT bp.employer.id FROM BenefitPolicy bp " +
+           "WHERE bp.status = 'ACTIVE' " +
+           "AND bp.active = true " +
+           "AND bp.startDate <= :periodEnd " +
+           "AND bp.endDate >= :periodStart")
+    List<Long> findEmployerIdsWithActivePolicyOverlapping(
+            @Param("periodStart") LocalDate periodStart,
+            @Param("periodEnd") LocalDate periodEnd);
+
     /**
      * Check if there's an overlapping active policy for the employer
      */

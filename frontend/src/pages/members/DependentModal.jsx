@@ -41,10 +41,11 @@ import { Save as SaveIcon, Close as CloseIcon, CloudUpload as CloudUploadIcon } 
 import dayjs from 'dayjs';
 import { updateMember, addDependent, uploadPhoto, GENDERS, RELATIONSHIPS } from 'services/api/unified-members.service';
 import { openSnackbar } from 'api/snackbar';
+import { normalizeApiError } from 'utils/api-error';
 import MemberAvatar from '../../components/tba/MemberAvatar';
-import { RELATIONSHIP_AR } from './member.shared';
+import { RELATIONSHIP_AR, buildDependentCardNumberPreview, genderForRelationship, relationshipsForGender } from './member.shared';
 
-const DependentModal = ({ open, onClose, dependent, principalId, onSave, existingDependents = [], principalGender = '' }) => {
+const DependentModal = ({ open, onClose, dependent, principalId, principalCardNumber = '', onSave, existingDependents = [], principalGender = '' }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const isEditMode = Boolean(dependent);
@@ -70,6 +71,7 @@ const DependentModal = ({ open, onClose, dependent, principalId, onSave, existin
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     fullName: '',
+    cardNumber: '',
     nationalNumber: '',
     birthDate: null,
     gender: '',
@@ -80,6 +82,7 @@ const DependentModal = ({ open, onClose, dependent, principalId, onSave, existin
   const [photo, setPhoto] = useState(null);
   const [photoPreview, setPhotoPreview] = useState(null);
   const [errors, setErrors] = useState({});
+  const [cardNumberManual, setCardNumberManual] = useState(false);
 
   // Initialize/Reset Form
   useEffect(() => {
@@ -87,6 +90,7 @@ const DependentModal = ({ open, onClose, dependent, principalId, onSave, existin
       if (isEditMode && dependent) {
         setFormData({
           fullName: dependent.fullName || dependent.nameAr || dependent.nameEn || '',
+          cardNumber: dependent.cardNumber || '',
           nationalNumber: dependent.nationalNumber || '',
           birthDate: dependent.birthDate ? dayjs(dependent.birthDate) : null,
           gender: dependent.gender || '',
@@ -94,11 +98,13 @@ const DependentModal = ({ open, onClose, dependent, principalId, onSave, existin
           nationality: dependent.nationality || 'ليبي',
           active: dependent.status === 'ACTIVE'
         });
+        setCardNumberManual(false);
         setPhotoPreview(dependent.photoUrl || null);
       } else {
         // Reset for Add Mode
         setFormData({
           fullName: '',
+          cardNumber: '',
           nationalNumber: '',
           birthDate: null,
           gender: '',
@@ -106,6 +112,7 @@ const DependentModal = ({ open, onClose, dependent, principalId, onSave, existin
           nationality: 'ليبي',
           active: true
         });
+        setCardNumberManual(false);
         setPhotoPreview(null);
       }
       setPhoto(null);
@@ -119,7 +126,31 @@ const DependentModal = ({ open, onClose, dependent, principalId, onSave, existin
       // Prevent entering more than 12 digits or non-digits
       value = value.replace(/\D/g, '').slice(0, 12);
     }
-    setFormData({ ...formData, [prop]: value });
+    if (prop === 'cardNumber') {
+      setCardNumberManual(true);
+    }
+    setFormData((prev) => {
+      const next = { ...prev, [prop]: value };
+      if (!isEditMode && prop === 'relationship') {
+        const inferredGender = genderForRelationship(value);
+        if (inferredGender) next.gender = inferredGender;
+      }
+      if (!isEditMode && prop === 'gender') {
+        const relationGender = genderForRelationship(prev.relationship);
+        if (prev.relationship && relationGender && relationGender !== value) {
+          next.relationship = '';
+        }
+      }
+      const relationshipForCard = prop === 'relationship' ? value : next.relationship;
+      if (!isEditMode && !cardNumberManual && relationshipForCard) {
+        next.cardNumber = buildDependentCardNumberPreview(
+          principalCardNumber,
+          relationshipForCard,
+          existingDependents.filter((d) => d.relationship === relationshipForCard && d.status !== 'TERMINATED').length
+        );
+      }
+      return next;
+    });
     if (errors[prop]) setErrors({ ...errors, [prop]: null });
   };
 
@@ -143,6 +174,7 @@ const DependentModal = ({ open, onClose, dependent, principalId, onSave, existin
   const validate = () => {
     const newErrors = {};
     if (!formData.fullName) newErrors.fullName = 'الاسم مطلوب';
+    if (isEditMode && !formData.cardNumber?.trim()) newErrors.cardNumber = 'رقم البطاقة التأمينية مطلوب';
     if (!formData.relationship) newErrors.relationship = 'صلة القرابة مطلوبة';
     if (!formData.gender) newErrors.gender = 'الجنس مطلوب';
     if (!formData.birthDate) newErrors.birthDate = 'تاريخ الميلاد مطلوب';
@@ -162,6 +194,8 @@ const DependentModal = ({ open, onClose, dependent, principalId, onSave, existin
     try {
       const payload = {
         fullName: formData.fullName,
+        ...(isEditMode && { cardNumber: formData.cardNumber.trim() }),
+        ...(!isEditMode && { cardNumber: formData.cardNumber?.trim() || null }),
         nationalNumber: formData.nationalNumber || null,
         birthDate: formData.birthDate ? formData.birthDate.format('YYYY-MM-DD') : null,
         gender: formData.gender,
@@ -211,7 +245,7 @@ const DependentModal = ({ open, onClose, dependent, principalId, onSave, existin
       console.error('Error saving dependent:', error);
       openSnackbar({
         open: true,
-        message: isEditMode ? 'تعذر تحديث البيانات' : 'تعذر إضافة التابع',
+        message: normalizeApiError(error).message || (isEditMode ? 'تعذر تحديث البيانات' : 'تعذر إضافة التابع'),
         variant: 'alert',
         alert: { color: 'error' },
         close: false
@@ -317,12 +351,13 @@ const DependentModal = ({ open, onClose, dependent, principalId, onSave, existin
                   <FormControl fullWidth required error={!!errors.relationship}>
                     <InputLabel>القرابة</InputLabel>
                     <Select value={formData.relationship} onChange={handleChange('relationship')} label="القرابة" disabled={isEditMode}>
-                      {Object.keys(RELATIONSHIPS)
-                        .filter((key) => !GENDER_EXCLUDED_RELATIONSHIPS.includes(key))
-                        .filter((key) => !usedUniqueRelationships.includes(key) || key === formData.relationship)
-                        .map((key) => (
+                      {relationshipsForGender(RELATIONSHIPS, isEditMode ? '' : formData.gender, {
+                        excluded: GENDER_EXCLUDED_RELATIONSHIPS,
+                        usedUnique: usedUniqueRelationships,
+                        currentRelationship: formData.relationship
+                      }).map(([key, value]) => (
                           <MenuItem key={key} value={key}>
-                            {RELATIONSHIP_AR[key] || key}
+                            {RELATIONSHIP_AR[value] || value}
                           </MenuItem>
                         ))}
                     </Select>
@@ -345,6 +380,19 @@ const DependentModal = ({ open, onClose, dependent, principalId, onSave, existin
               </Grid>
 
               <Grid container spacing={2}>
+                {(isEditMode || formData.cardNumber) && (
+                  <Grid size={{ xs: 12 }}>
+                    <TextField
+                      label="رقم البطاقة التأمينية"
+                      fullWidth
+                      required={isEditMode}
+                      value={formData.cardNumber}
+                      onChange={handleChange('cardNumber')}
+                      error={!!errors.cardNumber}
+                      helperText={errors.cardNumber || (cardNumberManual ? 'تم تعديله يدوياً' : 'مولد تلقائياً ويمكن تعديله عند الحاجة')}
+                    />
+                  </Grid>
+                )}
                 <Grid size={{ xs: 6 }}>
                   <DatePicker
                     label="تاريخ الميلاد"

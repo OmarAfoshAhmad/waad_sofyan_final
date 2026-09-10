@@ -123,8 +123,8 @@ public class MemberUpdateDto {
     // ==================== FORBIDDEN FIELDS (ARCHITECTURAL HARDENING) ====================
     // 
     // ❌ NO parentId - cannot change parent after creation (immutable)
-    // ❌ NO barcode - immutable, generated at creation for principals only
-    // ❌ NO cardNumber - managed by system (for dependents: auto-generated from parent)
+    // ❌ NO barcode - synchronized from cardNumber by the service
+    // ✅ cardNumber may be corrected; creation still auto-generates it by default
     // ❌ NO dependents - use POST /api/members with parentId to add new dependents
     // ❌ NO familyMembers - deprecated, use unified member creation
     // ❌ NO attributes - handle separately if needed

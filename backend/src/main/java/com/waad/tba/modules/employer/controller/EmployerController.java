@@ -1,6 +1,7 @@
 package com.waad.tba.modules.employer.controller;
 
 import java.util.List;
+import java.time.LocalDate;
 import java.util.Set;
 
 import org.springframework.data.domain.Page;
@@ -74,6 +75,15 @@ public class EmployerController {
     @PreAuthorize("@permissionGuard.has('EMPLOYER_VIEW')")
     public ResponseEntity<ApiResponse<List<EmployerSelectorDto>>> selectorsWithMembers() {
         List<EmployerSelectorDto> selectors = service.getSelectorsWithMembers();
+        return ResponseEntity.ok(ApiResponse.success(selectors));
+    }
+
+    @GetMapping("selectors/claim-entry")
+    @PreAuthorize("@permissionGuard.has('EMPLOYER_VIEW')")
+    public ResponseEntity<ApiResponse<List<EmployerSelectorDto>>> selectorsForClaimEntry(
+            @RequestParam(name = "periodStart", required = false) LocalDate periodStart,
+            @RequestParam(name = "periodEnd", required = false) LocalDate periodEnd) {
+        List<EmployerSelectorDto> selectors = service.getClaimEntrySelectors(periodStart, periodEnd);
         return ResponseEntity.ok(ApiResponse.success(selectors));
     }
 

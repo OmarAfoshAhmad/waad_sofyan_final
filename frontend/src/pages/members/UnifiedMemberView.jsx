@@ -1501,6 +1501,7 @@ const UnifiedMemberView = () => {
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         principalId={member?.id}
+        principalCardNumber={member?.cardNumber}
         dependent={selectedDependent}
         existingDependents={dependents}
         principalGender={member?.gender}

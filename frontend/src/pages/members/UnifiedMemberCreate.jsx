@@ -59,7 +59,13 @@ import EmployerSelectField from 'components/tba/EmployerSelectField';
 import { createPrincipalMember, uploadPhoto, GENDERS } from 'services/api/unified-members.service';
 import { getEffectiveBenefitPolicy } from 'services/api/benefit-policies.service';
 import { openSnackbar } from 'api/snackbar';
-import { MEMBER_FORM_MENU_PROPS, sanitizeMemberFieldValue, validateNationalNumber, validateLibyanPhone } from './member.shared';
+import {
+  MEMBER_FORM_MENU_PROPS,
+  buildPrincipalCardNumberPreview,
+  sanitizeMemberFieldValue,
+  validateNationalNumber,
+  validateLibyanPhone
+} from './member.shared';
 import { normalizeApiError } from 'utils/api-error';
 
 /**
@@ -77,6 +83,7 @@ const UnifiedMemberCreate = () => {
   // Principal Member Form (aligned with MemberCreateDto)
   const [principalForm, setPrincipalForm] = useState({
     fullName: '',
+    cardNumber: '',
     nationalNumber: '', // Optional - Civil ID optional as per architecture
     birthDate: null,
     gender: '',
@@ -115,6 +122,8 @@ const UnifiedMemberCreate = () => {
 
   // Lookup Data
   const [benefitPolicies, setBenefitPolicies] = useState([]);
+  const [selectedEmployerOption, setSelectedEmployerOption] = useState(null);
+  const [cardNumberManual, setCardNumberManual] = useState(false);
 
   /**
    * Helper to identify tabs with validation errors
@@ -154,7 +163,7 @@ const UnifiedMemberCreate = () => {
   /**
    * Handle principal form change
    */
-  const handlePrincipalChange = (field) => (eventOrValue) => {
+  const handlePrincipalChange = (field) => (eventOrValue, option) => {
     // Handle both event objects (from inputs) and direct values (from DatePicker)
     let value;
     if (eventOrValue === null || eventOrValue === undefined) {
@@ -171,14 +180,21 @@ const UnifiedMemberCreate = () => {
     if (!sanitized.accepted) return;
     value = sanitized.value;
 
+    if (field === 'cardNumber') {
+      setCardNumberManual(true);
+    }
+
     if (field === 'employerOrganizationId') {
-      handleEmployerChange(value);
+      handleEmployerChange(value, option);
       return;
     }
 
     setPrincipalForm((prev) => ({
       ...prev,
-      [field]: value
+      [field]: value,
+      ...(!cardNumberManual && field === 'employeeNumber'
+        ? { cardNumber: buildPrincipalCardNumberPreview(selectedEmployerOption, value) }
+        : {})
     }));
     // Clear error for this field
     if (errors[field]) {
@@ -189,13 +205,15 @@ const UnifiedMemberCreate = () => {
   /**
    * Handle Employer Selection & Auto-Link Policy
    */
-  const handleEmployerChange = async (employerId) => {
+  const handleEmployerChange = async (employerId, employerOption = null) => {
     // Update employer ID
+    setSelectedEmployerOption(employerOption);
     setPrincipalForm((prev) => ({
       ...prev,
       employerOrganizationId: employerId,
       benefitPolicyId: null, // Reset first
-      benefitPolicyName: null
+      benefitPolicyName: null,
+      ...(!cardNumberManual ? { cardNumber: buildPrincipalCardNumberPreview(employerOption, prev.employeeNumber) } : {})
     }));
 
     if (errors.employerOrganizationId) {
@@ -290,6 +308,7 @@ const UnifiedMemberCreate = () => {
       // Prepare payload
       const payload = {
         fullName: principalForm.fullName.trim(),
+        cardNumber: principalForm.cardNumber?.trim() || null,
         nationalNumber: principalForm.nationalNumber?.trim() || null,
         birthDate: principalForm.birthDate
           ? dayjs(principalForm.birthDate).format('YYYY-MM-DD')
@@ -524,7 +543,7 @@ const UnifiedMemberCreate = () => {
                   <Grid container spacing={2}>
                     <Grid size={{ xs: 12 }}>
                       <Alert severity="info" sx={{ mb: '1.0rem', '& .MuiAlert-message': { fontSize: '0.75rem' } }}>
-                        يتم توليد رقم البطاقة والباركود تلقائياً عند الحفظ.
+                        يظهر رقم البطاقة المقترح هنا عند اختيار جهة العمل/رقم الموظف، ويمكن تعديله قبل الحفظ.
                       </Alert>
                     </Grid>
 
@@ -537,6 +556,17 @@ const UnifiedMemberCreate = () => {
                         onChange={handlePrincipalChange('fullName')}
                         error={!!errors.fullName}
                         helperText={errors.fullName}
+                        size="small"
+                      />
+                    </Grid>
+                    <Grid size={{ xs: 12, md: 6 }}>
+                      <TextField
+                        fullWidth
+                        label="رقم البطاقة التأمينية"
+                        value={principalForm.cardNumber}
+                        onChange={handlePrincipalChange('cardNumber')}
+                        placeholder="يولد تلقائياً عند الحفظ إذا تركته فارغاً"
+                        helperText={cardNumberManual ? 'تم تعديل الرقم يدوياً' : 'اتركه فارغاً للتوليد التلقائي الكامل'}
                         size="small"
                       />
                     </Grid>

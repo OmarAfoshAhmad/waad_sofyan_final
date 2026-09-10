@@ -10,6 +10,65 @@ export const RELATIONSHIP_AR = {
   SISTER: 'أخت'
 };
 
+export const RELATIONSHIP_GENDER = {
+  WIFE: 'FEMALE',
+  HUSBAND: 'MALE',
+  SON: 'MALE',
+  DAUGHTER: 'FEMALE',
+  FATHER: 'MALE',
+  MOTHER: 'FEMALE',
+  BROTHER: 'MALE',
+  SISTER: 'FEMALE'
+};
+
+export function genderForRelationship(relationship) {
+  return RELATIONSHIP_GENDER[relationship] || '';
+}
+
+export function relationshipsForGender(relationships, gender, { excluded = [], usedUnique = [], currentRelationship = '' } = {}) {
+  return Object.entries(relationships)
+    .filter(([, value]) => !excluded.includes(value))
+    .filter(([, value]) => !gender || RELATIONSHIP_GENDER[value] === gender)
+    .filter(([, value]) => !usedUnique.includes(value) || value === currentRelationship);
+}
+
+export function inferLatestDependentDefaults(dependents = []) {
+  const latest = [...dependents]
+    .filter((dependent) => dependent && dependent.status !== 'TERMINATED')
+    .sort((a, b) => {
+      const birthCompare = String(b.birthDate || '').localeCompare(String(a.birthDate || ''));
+      if (birthCompare !== 0) return birthCompare;
+      return Number(b.id || 0) - Number(a.id || 0);
+    })[0];
+
+  return {
+    gender: latest?.gender || '',
+    relationship: latest?.relationship || ''
+  };
+}
+
+export function buildPrincipalCardNumberPreview(employerOption, employeeNumber) {
+  const employerCode = employerOption?.code?.trim()?.toUpperCase();
+  const empNumber = String(employeeNumber || '').trim();
+  if (!employerCode || !empNumber) return '';
+  return `${employerCode}${empNumber}`;
+}
+
+export function buildDependentCardNumberPreview(principalCardNumber, relationship, sameRelationshipCount = 0) {
+  const cardCode = {
+    WIFE: 'W',
+    HUSBAND: 'H',
+    SON: 'S',
+    DAUGHTER: 'D',
+    FATHER: 'F',
+    MOTHER: 'M',
+    BROTHER: 'Bro',
+    SISTER: 'Sis'
+  }[relationship];
+  if (!principalCardNumber || !cardCode) return '';
+  return `${principalCardNumber}${cardCode}${Number(sameRelationshipCount || 0) + 1}`;
+}
+
 // MUI Select menu sizing, identical across every member form (Create/Edit).
 // Kept here so a future style tweak only needs one edit.
 export const MEMBER_FORM_MENU_PROPS = {

@@ -3,7 +3,7 @@
  * Main dashboard for selecting Employer -> Provider -> Monthly Batch
  */
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   Box,
   Grid,
@@ -379,12 +379,30 @@ export default function ClaimBatchManagement() {
   const [filterMonth, setFilterMonth] = useState(new Date().getMonth() + 1);
   const [filterYear, setFilterYear] = useState(new Date().getFullYear());
   const [showStats, setShowStats] = useState(false);
+  const batchPeriod = useMemo(() => {
+    const lastDay = new Date(filterYear, filterMonth, 0).getDate();
+    return {
+      periodStart: `${filterYear}-${String(filterMonth).padStart(2, '0')}-01`,
+      periodEnd: `${filterYear}-${String(filterMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+    };
+  }, [filterMonth, filterYear]);
 
-  // 1. Fetch Employers for Selector
+  // 1. Fetch Employers for claim-entry selector.
+  // DRAFT policies must not open a monthly claim-entry workflow, so this list
+  // is restricted server-side to employers with ACTIVE policy coverage
+  // overlapping the selected batch month.
   const { data: employers, isLoading: isLoadingEmployers } = useQuery({
-    queryKey: ['employers-selector'],
-    queryFn: () => employersService.getEmployerSelectors()
+    queryKey: ['claim-entry-employers-selector', batchPeriod.periodStart, batchPeriod.periodEnd],
+    queryFn: () => employersService.getClaimEntryEmployerSelectors(batchPeriod),
+    staleTime: 60 * 1000
   });
+
+  useEffect(() => {
+    if (!selectedEmployer || !Array.isArray(employers)) return;
+    if (!employers.some((employer) => employer.id === selectedEmployer.id)) {
+      setSelectedEmployer(null);
+    }
+  }, [employers, selectedEmployer]);
 
   // 2. Fetch Providers Allowed for Selected Employer (Standard-Isolation)
   const { data: allowedProviders, isLoading: isLoadingProviders } = useQuery({

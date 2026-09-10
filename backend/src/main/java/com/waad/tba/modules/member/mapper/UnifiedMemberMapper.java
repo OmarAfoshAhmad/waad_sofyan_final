@@ -179,11 +179,14 @@ public class UnifiedMemberMapper {
         if (dto.getNotes() != null) {
             entity.setNotes(dto.getNotes());
         }
-        // status/active/benefitPolicy/employer/relationship/cardNumber are not
+        // status/active/benefitPolicy/employer/relationship are not
         // copied here at all. They are no longer merely "ignored" either --
         // UnifiedMemberService.rejectSensitiveFieldChanges refuses the request
         // outright when one of them would CHANGE, so a caller can never be told
         // their save succeeded while the change was quietly dropped.
+        //
+        // cardNumber is handled explicitly in UnifiedMemberService so it can be
+        // corrected while keeping barcode synchronized and uniqueness checked.
     }
 
     /**

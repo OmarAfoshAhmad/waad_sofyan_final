@@ -21,7 +21,8 @@ import lombok.NoArgsConstructor;
  * Key Differences from Principal:
  * - NO barcode (inherited from parent)
  * - relationship is REQUIRED
- * - cardNumber is auto-generated as {parent_card}-{sequence}
+ * - cardNumber is auto-generated as {parent_card}{relationship_code}{sequence}
+ *   unless an explicit manual correction is supplied
  * - parentId is auto-assigned during creation
  */
 @Schema(description = "DTO for creating a dependent member (family member)")
@@ -42,6 +43,9 @@ public class DependentMemberDto {
 
     @Schema(description = "National Number (الرقم الوطني) - OPTIONAL", example = "289123456789")
     private String nationalNumber;
+
+    @Schema(description = "Card number - OPTIONAL; auto-generated when blank", example = "JFZ20253214D1")
+    private String cardNumber;
 
     @Schema(description = "Birth date - OPTIONAL", example = "2010-05-15")
     private LocalDate birthDate;
@@ -71,7 +75,7 @@ public class DependentMemberDto {
     // The following fields are NOT allowed for dependents:
     
     // ❌ NO barcode - dependents don't have barcodes
-    // ❌ NO cardNumber - auto-generated from parent
+    // ✅ cardNumber may be supplied manually; otherwise auto-generated from parent
     // ❌ NO parentId - set automatically during creation
     // ❌ NO employerId - inherited from principal
     // ❌ NO benefitPolicyId - inherited from principal
