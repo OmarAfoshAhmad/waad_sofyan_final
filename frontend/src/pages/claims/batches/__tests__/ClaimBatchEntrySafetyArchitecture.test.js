@@ -8,6 +8,7 @@ const headerSource = readFileSync('src/pages/claims/batches/components/ClaimHead
 const customServiceDialogSource = readFileSync('src/pages/claims/batches/components/CustomServiceDialog.jsx', 'utf8');
 const detailSource = readFileSync('src/pages/claims/batches/ClaimBatchDetail.jsx', 'utf8');
 const authSource = readFileSync('src/contexts/AuthContext.jsx', 'utf8');
+const claimReportTemplate = readFileSync('../backend/src/main/resources/templates/reports/claim-report.html', 'utf8');
 
 describe('claim batch entry safety boundary', () => {
   it('loads dated contract services with the selected member identity, never an undefined alias', () => {
@@ -307,5 +308,13 @@ describe('claim batch entry safety boundary', () => {
     expect(authSource).toContain('const TIMEOUT_MS = 24 * 60 * 60 * 1000');
     expect(authSource).toContain("key.startsWith('claim-draft:')");
     expect(authSource).toContain('clearClaimDraftStorage();');
+  });
+
+  it('does not force a blank cover page between the claim report letter and detail table', () => {
+    expect(claimReportTemplate).toContain('INTRO LETTER');
+    expect(claimReportTemplate).toContain('page-break-after: auto');
+    expect(claimReportTemplate).not.toContain('page-break-after: always');
+    expect(claimReportTemplate).not.toContain('min-height: 236mm');
+    expect(claimReportTemplate).not.toContain('margin-top: 18mm');
   });
 });
