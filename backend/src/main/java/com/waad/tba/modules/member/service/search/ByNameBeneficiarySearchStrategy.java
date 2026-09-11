@@ -1,5 +1,6 @@
 package com.waad.tba.modules.member.service.search;
 
+import com.waad.tba.common.search.SearchTextNormalizer;
 import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.modules.member.repository.MemberRepository;
 import jakarta.persistence.criteria.Predicate;
@@ -27,7 +28,7 @@ public class ByNameBeneficiarySearchStrategy implements BeneficiarySearchStrateg
 
     @Override
     public List<Member> search(String value, Long employerId, Member.MemberStatus status, int size) {
-        String normalized = value.trim().toLowerCase();
+        String normalized = SearchTextNormalizer.normalize(value);
         if (normalized.length() < MIN_TEXT_SEARCH_LENGTH) {
             return List.of();
         }
@@ -35,7 +36,8 @@ public class ByNameBeneficiarySearchStrategy implements BeneficiarySearchStrateg
         Specification<Member> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
 
-            predicates.add(cb.like(cb.lower(root.get("fullName")), "%" + normalized + "%"));
+            predicates.add(cb.like(cb.function("waad_search_normalize", String.class, root.get("fullName")),
+                    "%" + normalized + "%"));
             predicates.add(cb.or(cb.isNull(root.get("active")), cb.isTrue(root.get("active"))));
 
             if (employerId != null) {

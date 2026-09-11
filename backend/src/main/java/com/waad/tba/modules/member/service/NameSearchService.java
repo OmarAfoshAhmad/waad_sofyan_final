@@ -1,5 +1,6 @@
 package com.waad.tba.modules.member.service;
 
+import com.waad.tba.common.search.SearchTextNormalizer;
 import com.waad.tba.modules.member.dto.MemberAutocompleteDto;
 import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.modules.member.repository.MemberRepository;
@@ -50,8 +51,7 @@ public class NameSearchService {
         log.debug("Searching members by name: {}", trimmedQuery);
 
         try {
-            // Normalize Arabic text (remove diacritics, normalize characters)
-            String normalizedQuery = normalizeArabicText(trimmedQuery);
+            String normalizedQuery = SearchTextNormalizer.normalize(trimmedQuery);
     
             // Execute fuzzy search with pg_trgm similarity
             List<Object[]> results = memberRepository.searchByNameFuzzy(normalizedQuery);
@@ -68,44 +68,6 @@ public class NameSearchService {
             // Fallback to simple pattern search
             return searchMembersByNamePattern(trimmedQuery);
         }
-    }
-
-    /**
-     * Normalize Arabic text for better search results
-     * Handles common variations in Arabic writing
-     *
-     * @param text Original text
-     * @return Normalized text
-     */
-    private String normalizeArabicText(String text) {
-        if (text == null) {
-            return "";
-        }
-
-        String normalized = text;
-
-        // Normalize Alef variations (أ، إ، آ → ا)
-        normalized = normalized.replace('أ', 'ا');
-        normalized = normalized.replace('إ', 'ا');
-        normalized = normalized.replace('آ', 'ا');
-
-        // Normalize Taa Marbouta (ة → ه)
-        normalized = normalized.replace('ة', 'ه');
-
-        // Normalize Yaa variations (ى → ي)
-        normalized = normalized.replace('ى', 'ي');
-
-        // Remove diacritics (harakat)
-        // Arabic diacritics: ً ٌ ٍ َ ُ ِ ّ ْ
-        normalized = normalized.replaceAll("[\u064B-\u0652]", "");
-
-        // Trim whitespace
-        normalized = normalized.trim();
-
-        // Normalize multiple spaces to single space
-        normalized = normalized.replaceAll("\\s+", " ");
-
-        return normalized;
     }
 
     /**
@@ -141,7 +103,7 @@ public class NameSearchService {
             return new ArrayList<>();
         }
 
-        String pattern = "%" + query.trim() + "%";
+        String pattern = "%" + SearchTextNormalizer.normalize(query) + "%";
         List<Member> members = memberRepository.searchByNamePattern(pattern);
 
         return members.stream()

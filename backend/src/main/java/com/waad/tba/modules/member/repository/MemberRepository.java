@@ -482,9 +482,9 @@ public interface MemberRepository extends JpaRepository<Member, Long>, JpaSpecif
         * @return List of members ordered by similarity score (highest first)
         */
        @Query(value = "SELECT m.id, m.full_name, m.card_number, " +
-                     "similarity(m.full_name, :searchTerm) as sim " +
+                     "similarity(waad_search_normalize(m.full_name), :searchTerm) as sim " +
                      "FROM members m " +
-                     "WHERE similarity(m.full_name, :searchTerm) > 0.1 " +
+                     "WHERE similarity(waad_search_normalize(m.full_name), :searchTerm) > 0.1 " +
                      "ORDER BY sim DESC, m.full_name ASC " +
                      "LIMIT 10", nativeQuery = true)
        List<Object[]> searchByNameFuzzy(@Param("searchTerm") String searchTerm);
@@ -498,7 +498,7 @@ public interface MemberRepository extends JpaRepository<Member, Long>, JpaSpecif
         * @return List of members ordered by full name
         */
        @Query(value = "SELECT * FROM members m " +
-                     "WHERE LOWER(m.full_name) LIKE LOWER(:searchPattern) " +
+                     "WHERE waad_search_normalize(m.full_name) LIKE :searchPattern " +
                      "ORDER BY m.full_name ASC " +
                      "LIMIT 10", nativeQuery = true)
        List<Member> searchByNamePattern(@Param("searchPattern") String searchPattern);
