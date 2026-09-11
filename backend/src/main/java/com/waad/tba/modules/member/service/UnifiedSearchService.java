@@ -1,5 +1,6 @@
 package com.waad.tba.modules.member.service;
 
+import com.waad.tba.common.search.SearchTextNormalizer;
 import com.waad.tba.modules.member.dto.MemberAutocompleteDto;
 import com.waad.tba.modules.member.dto.MemberSearchDto;
 import com.waad.tba.modules.member.entity.Member;
@@ -205,14 +206,20 @@ public class UnifiedSearchService {
             return List.of();
         }
 
-        String pattern = "%" + name.trim().toLowerCase(java.util.Locale.ROOT) + "%";
+        String normalized = SearchTextNormalizer.normalize(name);
+        String legacyPattern = "%" + name.trim().toLowerCase(java.util.Locale.ROOT) + "%";
+        String canonicalPattern = "%" + normalized + "%";
         Specification<Member> specification = (root, query, builder) -> builder.and(
                 MemberScopeFilter.toPredicate(scope, root.get("employer").get("id"), builder),
                 builder.or(
-                        builder.like(builder.lower(root.get("fullName")), pattern),
-                        builder.like(builder.lower(root.get("nationalNumber")), pattern),
-                        builder.like(builder.lower(root.get("barcode")), pattern),
-                        builder.like(builder.lower(root.get("cardNumber")), pattern)));
+                        builder.like(builder.lower(root.get("fullName")), legacyPattern),
+                        builder.like(builder.lower(root.get("nationalNumber")), legacyPattern),
+                        builder.like(builder.lower(root.get("barcode")), legacyPattern),
+                        builder.like(builder.lower(root.get("cardNumber")), legacyPattern),
+                        builder.like(builder.function("waad_search_normalize", String.class, root.get("fullName")), canonicalPattern),
+                        builder.like(builder.function("waad_search_normalize", String.class, root.get("nationalNumber")), canonicalPattern),
+                        builder.like(builder.function("waad_search_normalize", String.class, root.get("barcode")), canonicalPattern),
+                        builder.like(builder.function("waad_search_normalize", String.class, root.get("cardNumber")), canonicalPattern)));
 
         // The repository's EntityGraph keeps employer/policy/parent in the same
         // bounded content query. Page adds one COUNT query, but avoids two lazy
