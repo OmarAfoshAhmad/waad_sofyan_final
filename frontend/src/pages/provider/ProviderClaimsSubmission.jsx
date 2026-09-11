@@ -52,6 +52,7 @@ import {
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { formatCurrency } from 'utils/currency-formatter';
+import { normalizeArabicSearchText } from 'utils/searchText';
 import {
   Send as SendIcon,
   Delete as DeleteIcon,
@@ -595,7 +596,7 @@ export default function ProviderClaimsSubmission() {
     return Number.isNaN(parsed) ? value : parsed;
   }, []);
 
-  const normalizeText = useCallback((value) => (value || '').toString().trim().toLowerCase(), []);
+  const normalizeText = useCallback((value) => normalizeArabicSearchText(value), []);
 
   useEffect(() => {
     try {
@@ -1930,11 +1931,11 @@ export default function ProviderClaimsSubmission() {
                                 return `${code}${option.name || ''}`;
                               }}
                               filterOptions={(options, { inputValue }) => {
-                                const search = inputValue.toLowerCase();
+                                const search = normalizeArabicSearchText(inputValue);
                                 return options.filter(
                                   (opt) =>
-                                    (opt.code && opt.code.toLowerCase().includes(search)) ||
-                                    (opt.name && opt.name.toLowerCase().includes(search))
+                                    normalizeArabicSearchText(opt.code).includes(search) ||
+                                    normalizeArabicSearchText(opt.name).includes(search)
                                 );
                               }}
                               value={

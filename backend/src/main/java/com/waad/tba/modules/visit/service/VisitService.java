@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.waad.tba.common.exception.ResourceNotFoundException;
+import com.waad.tba.common.search.SearchTextNormalizer;
 import com.waad.tba.modules.benefitpolicy.service.BenefitPolicyCoverageService;
 import com.waad.tba.modules.claim.entity.Claim;
 import com.waad.tba.modules.claim.repository.ClaimRepository;
@@ -295,6 +296,7 @@ public class VisitService {
         log.debug("Finding visits with pagination. employerId={}, search={}", employerId, search);
 
         User currentUser = authorizationService.requireCurrentUser();
+        String normalizedSearch = SearchTextNormalizer.normalize(search);
 
         // Enforce employer scope for EMPLOYER_ADMIN (ignore requested employerId)
         if (authorizationService.isEmployerAdmin(currentUser)) {
@@ -309,22 +311,22 @@ public class VisitService {
         if (authorizationService.isProvider(currentUser)) {
             providerContextGuard.validateProviderBinding(currentUser);
             Long providerId = currentUser.getProviderId();
-            if (search == null || search.isBlank()) {
+            if (normalizedSearch.isBlank()) {
                 visitsPage = repository.findByProviderId(providerId, pageable);
             } else {
-                visitsPage = repository.searchPagedByProviderId(search, providerId, pageable);
+                visitsPage = repository.searchPagedByProviderId(normalizedSearch, providerId, pageable);
             }
         } else if (employerId != null) {
-            if (search == null || search.isBlank()) {
+            if (normalizedSearch.isBlank()) {
                 visitsPage = repository.findByMemberEmployerId(employerId, pageable);
             } else {
-                visitsPage = repository.searchPagedByEmployerId(search, employerId, pageable);
+                visitsPage = repository.searchPagedByEmployerId(normalizedSearch, employerId, pageable);
             }
         } else {
-            if (search == null || search.isBlank()) {
+            if (normalizedSearch.isBlank()) {
                 visitsPage = repository.findAll(pageable);
             } else {
-                visitsPage = repository.searchPaged(search, pageable);
+                visitsPage = repository.searchPaged(normalizedSearch, pageable);
             }
         }
 

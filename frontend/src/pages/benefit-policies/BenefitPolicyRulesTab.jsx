@@ -33,6 +33,7 @@ import {
   FormControl,
   Checkbox
 } from '@mui/material';
+import { normalizeArabicSearchText } from 'utils/searchText';
 import {
   Add as AddIcon,
   Delete as DeleteIcon,
@@ -180,12 +181,12 @@ const RuleFormModal = ({
   });
 
   const exactNameMatch = useMemo(() => {
-    const term = (formData.serviceName || '').trim().toLowerCase();
+    const term = normalizeArabicSearchText(formData.serviceName);
     if (!term) return null;
     return (
       similarServices.find((s) => {
-        const ar = (s.nameAr || s.name || '').trim().toLowerCase();
-        const en = (s.nameEn || '').trim().toLowerCase();
+        const ar = normalizeArabicSearchText(s.nameAr || s.name);
+        const en = normalizeArabicSearchText(s.nameEn);
         return ar === term || en === term;
       }) || null
     );
@@ -1630,7 +1631,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
       const linkedDaysLimits = bucketLinks.map((link) => link.bucket?.daysLimit).filter((value) => value !== null && value !== undefined);
       const uniqueDaysLimits = [...new Set(linkedDaysLimits)];
       const daysLimitLabel = uniqueDaysLimits.length > 0 ? uniqueDaysLimits.map((value) => `${value} يوم`).join('، ') : null;
-      const searchable = `${code} ${nameAr} ${nameEn} ${typeLabel} ${parentNameAr} ${linkSearch}`.toLowerCase();
+      const searchable = normalizeArabicSearchText(`${code} ${nameAr} ${nameEn} ${typeLabel} ${parentNameAr} ${linkSearch}`);
 
       // Normalize active state defensively (backend may return boolean/string/number)
       const activeRaw = rule.active;
@@ -1714,7 +1715,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
           groupSource: true,
           groupMembers,
           bucket: primaryBucket,
-          searchable: `${group.code} ${group.nameAr} مجموعة منافع ${memberNames.join(' ')}`.toLowerCase(),
+          searchable: normalizeArabicSearchText(`${group.code} ${group.nameAr} مجموعة منافع ${memberNames.join(' ')}`),
           changedAt: group.updatedAt || null
         };
       });
@@ -1743,7 +1744,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
   }, [normalizedRules, gapRuleIds]);
 
   const filteredRules = useMemo(() => {
-    const query = ruleSearch.trim().toLowerCase();
+    const query = normalizeArabicSearchText(ruleSearch);
     let statusFiltered = normalizedRules.filter((rule) => {
       if (viewMode === 'DELETED') return rule.isDeleted || rule.isActive === false;
       return !rule.isDeleted && rule.isActive !== false;

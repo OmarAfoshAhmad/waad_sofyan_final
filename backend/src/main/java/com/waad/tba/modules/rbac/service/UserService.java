@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.waad.tba.common.exception.ResourceNotFoundException;
+import com.waad.tba.common.search.SearchTextNormalizer;
 import com.waad.tba.modules.provider.entity.Provider;
 import com.waad.tba.modules.provider.repository.ProviderRepository;
 import com.waad.tba.modules.employer.entity.Employer;
@@ -224,7 +225,7 @@ public class UserService {
     @Transactional(readOnly = true)
     public List<UserResponseDto> search(String query) {
         log.debug("Searching users with query: {}", query);
-        return mapUsersWithProviderNames(userRepository.searchUsers(query));
+        return mapUsersWithProviderNames(userRepository.searchUsers(SearchTextNormalizer.normalize(query)));
     }
     
     /**
@@ -258,10 +259,11 @@ public class UserService {
     @Transactional(readOnly = true)
     public Page<UserResponseDto> searchPaginated(String query, Pageable pageable) {
         log.debug("Searching users with pagination, query: {}", query);
-        if (query == null || query.isBlank()) {
+        String normalizedQuery = SearchTextNormalizer.normalize(query);
+        if (normalizedQuery.isBlank()) {
             return findAllPaginated(pageable);
         }
-        Page<User> users = userRepository.searchUsers(query.trim(), pageable);
+        Page<User> users = userRepository.searchUsers(normalizedQuery, pageable);
         Map<Long, String> providerNames = loadProviderNames(users.getContent());
         return users.map(user -> enrichProviderName(userMapper.toResponseDto(user), providerNames));
     }
@@ -269,7 +271,7 @@ public class UserService {
     @Transactional(readOnly = true)
     public Page<UserResponseDto> searchPaginated(String query, String role, Boolean active, String providerLink, Pageable pageable) {
         log.debug("Searching users with pagination, query: {}, role: {}, active: {}, providerLink: {}", query, role, active, providerLink);
-        String normalizedQuery = query == null ? "" : query.trim();
+        String normalizedQuery = SearchTextNormalizer.normalize(query);
         String normalizedRole = role == null ? "" : role.trim().toUpperCase(Locale.ROOT);
         String normalizedProviderLink = providerLink == null ? "" : providerLink.trim().toUpperCase(Locale.ROOT);
         Page<User> users = userRepository.searchUsersFiltered(normalizedQuery, normalizedRole, active, normalizedProviderLink, pageable);

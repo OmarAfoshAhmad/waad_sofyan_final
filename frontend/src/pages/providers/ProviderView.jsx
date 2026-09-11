@@ -47,6 +47,7 @@ import { useProviderDetails } from 'hooks/useProviders';
 import { providersService } from 'services/api';
 import axiosClient from 'utils/axios';
 import { formatDate } from 'utils/formatters';
+import { normalizeArabicSearchText } from 'utils/searchText';
 
 const fetchProviderServices = async (providerId) => {
   const res = await axiosClient.get(`/api/v1/providers/${providerId}/services`);
@@ -128,13 +129,13 @@ const ProviderView = () => {
 
   // Group services by category
   const servicesByCategory = useMemo(() => {
-    const q = serviceSearch.trim().toLowerCase();
+    const q = normalizeArabicSearchText(serviceSearch);
     const filtered = q
       ? providerServices.filter(
           (s) =>
-            s.service_code?.toLowerCase().includes(q) ||
-            s.service_name?.toLowerCase().includes(q) ||
-            s.category_name?.toLowerCase().includes(q)
+            normalizeArabicSearchText(s.service_code).includes(q) ||
+            normalizeArabicSearchText(s.service_name).includes(q) ||
+            normalizeArabicSearchText(s.category_name).includes(q)
         )
       : providerServices;
 
