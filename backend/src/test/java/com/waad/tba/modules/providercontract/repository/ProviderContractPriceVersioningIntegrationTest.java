@@ -95,7 +95,7 @@ class ProviderContractPriceVersioningIntegrationTest extends PostgresIntegration
                 LocalDate.of(2026, 1, 1), LocalDate.of(2027, 1, 1));
 
         var page = pricingRepository.searchEffectiveByContractId(
-                contract.getId(), LocalDate.of(2026, 5, 1), "اشعه", "اشعه",
+                contract.getId(), LocalDate.of(2026, 5, 1), "اشعه",
                 org.springframework.data.domain.PageRequest.of(0, 10));
 
         assertThat(page.getContent()).hasSize(1);

@@ -1,6 +1,7 @@
 package com.waad.tba.modules.providercontract.service;
 
 import com.waad.tba.common.exception.BusinessRuleException;
+import com.waad.tba.common.search.SearchTextNormalizer;
 import com.waad.tba.modules.medicaltaxonomy.entity.MedicalCategory;
 import com.waad.tba.modules.medicaltaxonomy.enums.PricingMode;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalCategoryRepository;
@@ -132,11 +133,13 @@ public class ProviderContractPricingItemService {
 
         verifyContractExists(contractId);
 
-        if ((query == null || query.isBlank()) && categoryId == null) {
+        String normalizedQuery = SearchTextNormalizer.normalize(query);
+
+        if (normalizedQuery.isBlank() && categoryId == null) {
             return findByContract(contractId, pageable);
         }
 
-        return pricingRepository.searchByServiceCodeOrNameAndCategory(contractId, query, categoryId, pageable)
+        return pricingRepository.searchByServiceCodeOrNameAndCategory(contractId, normalizedQuery, categoryId, pageable)
                 .map(ProviderContractPricingItemResponseDto::fromEntity);
     }
 
@@ -150,11 +153,11 @@ public class ProviderContractPricingItemService {
         if (serviceDate == null) {
             throw new BusinessRuleException("تاريخ الخدمة مطلوب لقراءة أسعار العقد");
         }
-        String normalizedQuery = query == null ? "" : query.trim();
+        String normalizedQuery = SearchTextNormalizer.normalize(query);
         var page = normalizedQuery.isEmpty()
                 ? pricingRepository.findEffectiveByContractId(contractId, serviceDate, pageable)
                 : pricingRepository.searchEffectiveByContractIdRanked(
-                        contractId, serviceDate, normalizedQuery, searchNormalizer.normalize(normalizedQuery),
+                        contractId, serviceDate, searchNormalizer.normalize(normalizedQuery),
                         PageRequest.of(pageable.getPageNumber(), pageable.getPageSize()));
         return page
                 .map(ProviderContractPricingItemResponseDto::fromEntity);

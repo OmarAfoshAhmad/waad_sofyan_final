@@ -127,7 +127,7 @@ public class ClaimEntryContextService {
         standardServices = standardServices.stream()
                 .filter(service -> normalizedQuery.isBlank()
                         || searchNormalizer.normalize(service.getName()).contains(normalizedQuery)
-                        || service.getCode().toLowerCase().contains(normalizedQuery))
+                        || searchNormalizer.normalize(service.getCode()).contains(normalizedQuery))
                 .sorted(java.util.Comparator.comparingInt(
                         service -> manualAmountSearchRank(service, normalizedQuery)))
                 .toList();
@@ -174,7 +174,7 @@ public class ClaimEntryContextService {
         }
 
         String normalizedName = searchNormalizer.normalize(service.getName());
-        String normalizedCode = service.getCode() == null ? "" : service.getCode().toLowerCase();
+        String normalizedCode = searchNormalizer.normalize(service.getCode());
 
         if (normalizedName.equals(normalizedQuery) || normalizedCode.equals(normalizedQuery)) {
             return 0;
