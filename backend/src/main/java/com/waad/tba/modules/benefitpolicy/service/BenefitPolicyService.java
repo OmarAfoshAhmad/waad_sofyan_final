@@ -2,6 +2,7 @@ package com.waad.tba.modules.benefitpolicy.service;
 
 import com.waad.tba.common.exception.BusinessRuleException;
 import com.waad.tba.common.guard.DeletionGuard;
+import com.waad.tba.common.search.SearchTextNormalizer;
 import com.waad.tba.modules.member.repository.MemberRepository;
 import com.waad.tba.modules.employer.entity.Employer;
 import com.waad.tba.modules.employer.repository.EmployerRepository;
@@ -208,7 +209,9 @@ public class BenefitPolicyService {
                                                               BenefitPolicyStatus status, String search,
                                                               Pageable pageable) {
         return benefitPolicyRepository.findManagementPage(active, employerId, status,
-                        search == null ? "" : search.trim(), pageable)
+                        search == null ? "" : search.trim(),
+                        SearchTextNormalizer.normalize(search),
+                        pageable)
                 .map(BenefitPolicyResponseDto::fromEntity);
     }
 
@@ -242,13 +245,20 @@ public class BenefitPolicyService {
     @Transactional(readOnly = true)
     public Page<BenefitPolicyResponseDto> search(String search, Pageable pageable) {
         log.debug("Searching benefit policies: {}", search);
-        return benefitPolicyRepository.searchByNameOrCode(search, pageable)
+        return benefitPolicyRepository.searchByNameOrCode(
+                        search == null ? "" : search.trim(),
+                        SearchTextNormalizer.normalize(search),
+                        pageable)
                 .map(BenefitPolicyResponseDto::fromEntity);
     }
 
     @Transactional(readOnly = true)
     public Page<BenefitPolicyResponseDto> searchForEmployer(String search, Long employerId, Pageable pageable) {
-        return benefitPolicyRepository.searchByEmployerAndNameOrCode(employerId, search, pageable)
+        return benefitPolicyRepository.searchByEmployerAndNameOrCode(
+                        employerId,
+                        search == null ? "" : search.trim(),
+                        SearchTextNormalizer.normalize(search),
+                        pageable)
                 .map(BenefitPolicyResponseDto::fromEntity);
     }
 

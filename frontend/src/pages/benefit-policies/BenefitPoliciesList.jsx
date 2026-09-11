@@ -43,6 +43,7 @@ import PermissionGuard from 'components/PermissionGuard';
 import { UnifiedMedicalTable } from 'components/common';
 import { ActionConfirmDialog, ModernPageHeader, SoftDeleteToggle } from 'components/tba';
 import axiosClient from 'utils/axios';
+import { prepareSearchQuery } from 'utils/searchText';
 import {
   deleteBenefitPolicy,
   getBenefitPolicies,
@@ -114,7 +115,7 @@ const BenefitPoliciesList = () => {
         size: rowsPerPage,
         sortBy,
         sortDir: sortDirection.toUpperCase(),
-        q: deferredSearchTerm.trim(),
+        q: prepareSearchQuery(deferredSearchTerm),
         ...(filters.employerId && { employerId: filters.employerId }),
         ...(filters.status && { status: filters.status })
       };
