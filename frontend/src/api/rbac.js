@@ -13,8 +13,7 @@ import { SystemRole, isProviderRole, getPrivilegeLevel, getAssignableRoles, canM
 
 const STORAGE_KEYS = {
   ROLES: 'userRoles',
-  USER: 'userData',
-  TOKEN: 'serviceToken'
+  USER: 'userData'
 };
 
 export const useRBACStore = create((set, get) => ({

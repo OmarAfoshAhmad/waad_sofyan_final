@@ -33,16 +33,15 @@ import org.springframework.context.annotation.Configuration;
                 )
         },
         security = {
-                @SecurityRequirement(name = "BearerAuth")
+                @SecurityRequirement(name = "SessionCookie")
         }
 )
 @SecurityScheme(
-        name = "BearerAuth",
-        description = "JWT Bearer Token Authentication",
-        type = SecuritySchemeType.HTTP,
-        scheme = "bearer",
-        bearerFormat = "JWT",
-        in = SecuritySchemeIn.HEADER
+        name = "SessionCookie",
+        description = "Authenticated web session cookie",
+        type = SecuritySchemeType.APIKEY,
+        paramName = "SESSION",
+        in = SecuritySchemeIn.COOKIE
 )
 public class OpenApiConfig {
 }
