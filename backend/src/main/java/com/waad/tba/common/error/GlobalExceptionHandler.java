@@ -11,6 +11,7 @@ import org.slf4j.MDC;
 import org.springframework.data.mapping.PropertyReferenceException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.lang.NonNull;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -798,16 +799,32 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
     }
 
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiError> handleMalformedJson(HttpMessageNotReadableException ex, HttpServletRequest request) {
+        String trackingId = generateTrackingId();
+        log.warn("Malformed request body - Path: {}, TrackingId: {}", request.getRequestURI(), trackingId, ex);
+
+        ApiError error = ApiError.of(
+                ErrorCode.VALIDATION_ERROR,
+                "Malformed request body.",
+                request.getRequestURI(),
+                null,
+                now(),
+                trackingId);
+        error.setMessageAr("صيغة بيانات الطلب غير صحيحة.");
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiError> handleGeneric(Exception ex, HttpServletRequest request) {
         String trackingId = generateTrackingId();
         // Log the exception with full stack trace — server-side only
         log.error("Unexpected error occurred - Path: {}, TrackingId: {}", request.getRequestURI(), trackingId, ex);
-        // Return generic user message and safe technical details — never expose stack
-        // trace
+        // Return only a support reference. Exception classes and messages often
+        // carry package names, SQL fragments, filesystem paths, or parser internals.
         Map<String, Object> details = new HashMap<>();
         details.put("reference", trackingId);
-        details.put("exception", ex.getClass().getSimpleName());
 
         // A consumption-ledger rule refused the write. Postgres raises those in
         // English, naming constraints, row ids and amounts held against other
@@ -825,10 +842,6 @@ public class GlobalExceptionHandler {
                     trackingId);
             error.setMessageAr(ledgerExplanation);
             return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(error);
-        }
-
-        if (ex.getMessage() != null && !ex.getMessage().isBlank()) {
-            details.put("reason", ex.getMessage());
         }
 
         return build(HttpStatus.INTERNAL_SERVER_ERROR, ErrorCode.INTERNAL_ERROR,

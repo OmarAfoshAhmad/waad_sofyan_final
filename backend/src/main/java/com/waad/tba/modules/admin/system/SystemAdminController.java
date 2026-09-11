@@ -23,7 +23,7 @@ import lombok.RequiredArgsConstructor;
 @RequestMapping("/api/v1/admin/system")
 @RequiredArgsConstructor
 @Tag(name = "System Administration", description = "Administrative endpoints for test data management and environment initialization")
-@SecurityRequirement(name = "BearerAuth")
+@SecurityRequirement(name = "SessionCookie")
 @PreAuthorize("isAuthenticated()")
 public class SystemAdminController {
 
