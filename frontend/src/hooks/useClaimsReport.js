@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import axiosClient from 'utils/axios';
+import { normalizeArabicSearchText } from 'utils/searchText';
 
 /**
  * Claim Status Constants
@@ -171,8 +172,8 @@ export const useClaimsReport = ({ employerId, providerId, filters = DEFAULT_FILT
 
     // Filter by member name (text search)
     if (filters.memberSearch && filters.memberSearch.trim()) {
-      const search = filters.memberSearch.trim().toLowerCase();
-      result = result.filter((claim) => claim.memberName.toLowerCase().includes(search));
+      const search = normalizeArabicSearchText(filters.memberSearch);
+      result = result.filter((claim) => normalizeArabicSearchText(claim.memberName).includes(search));
     }
 
     // Filter by date range (from)
