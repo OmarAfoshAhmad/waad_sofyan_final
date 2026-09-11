@@ -118,6 +118,33 @@ class BenefitStructureServiceTest {
     }
 
     @Test
+    void upsertIndividualLimit_reactivatesExistingInternalLimitWhenEdited() {
+        BenefitPolicyRule rule = BenefitPolicyRule.builder().id(101L).benefitPolicy(policy)
+                .encounterType(EncounterType.OUTPATIENT).build();
+        BenefitGroup group = BenefitGroup.builder().id(21L).policy(policy).code("AUTO-BEN-RULE-101")
+                .nameAr("أشعة وتحاليل ورسوم أطباء").contextType(EncounterType.OUTPATIENT)
+                .aggregationMode(AggregationMode.INDIVIDUAL).active(false).build();
+        BenefitLimitBucket bucket = BenefitLimitBucket.builder().id(31L).policy(policy).benefitGroup(group)
+                .code("AUTO-BEN-LIMIT-RULE-101").nameAr("أشعة وتحاليل ورسوم أطباء")
+                .contextType(EncounterType.OUTPATIENT).periodType(LimitPeriodType.POLICY_PERIOD)
+                .countingMethod(CountingMethod.EACH_UNIT).active(false).build();
+        BenefitRuleBucket link = BenefitRuleBucket.builder().rule(rule).bucket(bucket).consumptionOrder(1).build();
+
+        when(ruleRepository.findById(101L)).thenReturn(Optional.of(rule));
+        when(linkRepository.findByRuleIdOrderByConsumptionOrder(101L)).thenReturn(List.of(link));
+        when(groupRepository.save(any(BenefitGroup.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(bucketRepository.save(any(BenefitLimitBucket.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.upsertIndividualLimit(10L, 101L, new IndividualLimitRequest(
+                new BigDecimal("3000"), null, null, LimitPeriodType.POLICY_PERIOD, 1, null));
+
+        assertThat(group.isActive()).isTrue();
+        assertThat(bucket.isActive()).isTrue();
+        assertThat(bucket.getAmountLimit()).isEqualByComparingTo("3000");
+        verify(bucketRepository).save(bucket);
+    }
+
+    @Test
     void updateGroup_withSameMembers_updatesLinksWithoutDeleteAndReinsert() {
         BenefitGroup group = BenefitGroup.builder().id(20L).policy(policy).code("GRP-TEST")
                 .nameAr("مجموعة اختبار").contextType(EncounterType.OUTPATIENT)
