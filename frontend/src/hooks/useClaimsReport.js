@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import axiosClient from 'utils/axios';
+import { normalizeArabicSearchText } from 'utils/searchText';
 
 /**
  * Claim Status Constants
@@ -46,18 +47,6 @@ export const CLAIM_STATUS_LABELS = {
  * Helper to unwrap API response
  */
 const unwrap = (response) => response.data?.data ?? response.data;
-
-const normalizeArabicSearch = (value) =>
-  String(value || '')
-    .trim()
-    .toLowerCase()
-    .replace(/[أإآٱ]/g, 'ا')
-    .replace(/ؤ/g, 'و')
-    .replace(/ئ/g, 'ي')
-    .replace(/ى/g, 'ي')
-    .replace(/ة/g, 'ه')
-    .replace(/[\u064B-\u065F\u0670]/g, '')
-    .replace(/ـ/g, '');
 
 /**
  * Default filter state
@@ -185,7 +174,7 @@ export const useClaimsReport = ({ employerId, providerId, filters = DEFAULT_FILT
 
     // Filter by member name (text search)
     if (filters.memberSearch && filters.memberSearch.trim()) {
-      const search = normalizeArabicSearch(filters.memberSearch);
+      const search = normalizeArabicSearchText(filters.memberSearch);
       result = result.filter((claim) =>
         [
           claim.memberName,
@@ -196,7 +185,7 @@ export const useClaimsReport = ({ employerId, providerId, filters = DEFAULT_FILT
           claim._raw?.memberCardNumber,
           claim._raw?.employeeNumber
         ]
-          .map(normalizeArabicSearch)
+          .map(normalizeArabicSearchText)
           .some((value) => value.includes(search))
       );
     }

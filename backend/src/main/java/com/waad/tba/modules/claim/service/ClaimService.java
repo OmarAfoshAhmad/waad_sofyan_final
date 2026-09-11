@@ -21,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.waad.tba.common.exception.BusinessRuleException;
 import com.waad.tba.common.exception.ResourceNotFoundException;
+import com.waad.tba.common.search.SearchTextNormalizer;
 import com.waad.tba.common.service.ArchitecturalGuardService;
 import com.waad.tba.modules.benefitpolicy.service.BenefitPolicyCoverageService;
 import com.waad.tba.modules.claim.dto.ClaimApproveDto;
@@ -1030,6 +1031,7 @@ public class ClaimService {
         Sort.Direction direction = "asc".equalsIgnoreCase(sortDir) ? Sort.Direction.ASC : Sort.Direction.DESC;
         Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortBy));
         String keyword = (search != null && !search.trim().isEmpty()) ? search.trim() : "";
+        String normalizedKeyword = SearchTextNormalizer.normalize(keyword);
 
         // Claim entry date filter boundaries (inclusive from, inclusive-to-day via
         // next-day exclusive)
@@ -1055,14 +1057,14 @@ public class ClaimService {
                     currentUser.getId(), allowedProviderIds.size());
 
             claimsPage = claimRepository.searchPagedWithFiltersAndReviewerProviders(
-                    keyword, allowedProviderIds, providerId, employerId, claimBatchId, status, dateFrom, dateTo, createdAtFrom, createdAtTo,
+                    keyword, normalizedKeyword, allowedProviderIds, providerId, employerId, claimBatchId, status, dateFrom, dateTo, createdAtFrom, createdAtTo,
                     pageable);
         } else {
             // Admin/SuperAdmin - see all claims (bypass isolation)
             log.debug("✅ [BYPASS] User {} bypasses reviewer isolation", currentUser.getId());
 
             claimsPage = claimRepository.searchPagedWithFilters(
-                    keyword, employerId, providerId, claimBatchId, status, dateFrom, dateTo, createdAtFrom, createdAtTo, pageable);
+                    keyword, normalizedKeyword, employerId, providerId, claimBatchId, status, dateFrom, dateTo, createdAtFrom, createdAtTo, pageable);
         }
 
         return claimsPage.map(claimMapper::toViewDto);
@@ -1626,6 +1628,7 @@ public class ClaimService {
 
             return claimRepository.searchPagedWithFiltersAndReviewerProviders(
                     "",
+                    "",
                     allowedProviderIds,
                     effectiveProviderId, // Newly added providerId parameter
                     effectiveEmployerId,
@@ -1640,6 +1643,7 @@ public class ClaimService {
 
         // Non-reviewer users: use standard filterable query (still enforces provider/employer locks above)
         return claimRepository.searchPagedWithFilters(
+                "",
                 "",
                 effectiveEmployerId,
                 effectiveProviderId,
