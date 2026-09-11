@@ -38,11 +38,15 @@ public interface BenefitPolicyRepository extends JpaRepository<BenefitPolicy, Lo
            "AND (:status IS NULL OR bp.status = :status) " +
            "AND (:search = '' OR LOWER(bp.name) LIKE LOWER(CONCAT('%', :search, '%')) " +
            "OR LOWER(COALESCE(bp.policyCode, '')) LIKE LOWER(CONCAT('%', :search, '%')) " +
-           "OR LOWER(bp.employer.name) LIKE LOWER(CONCAT('%', :search, '%')))")
+           "OR LOWER(bp.employer.name) LIKE LOWER(CONCAT('%', :search, '%')) " +
+           "OR function('waad_search_normalize', bp.name) LIKE CONCAT('%', :normalizedSearch, '%') " +
+           "OR function('waad_search_normalize', COALESCE(bp.policyCode, '')) LIKE CONCAT('%', :normalizedSearch, '%') " +
+           "OR function('waad_search_normalize', bp.employer.name) LIKE CONCAT('%', :normalizedSearch, '%'))")
     Page<BenefitPolicy> findManagementPage(@Param("active") boolean active,
                                            @Param("employerId") Long employerId,
                                            @Param("status") BenefitPolicyStatus status,
                                            @Param("search") String search,
+                                           @Param("normalizedSearch") String normalizedSearch,
                                            Pageable pageable);
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -172,16 +176,23 @@ public interface BenefitPolicyRepository extends JpaRepository<BenefitPolicy, Lo
      */
     @Query("SELECT bp FROM BenefitPolicy bp " +
            "WHERE bp.active = true " +
-           "AND (LOWER(bp.name) LIKE LOWER(CONCAT('%', :search, '%')) " +
-           "     OR LOWER(bp.policyCode) LIKE LOWER(CONCAT('%', :search, '%')))")
-    Page<BenefitPolicy> searchByNameOrCode(@Param("search") String search, Pageable pageable);
+           "AND (:search = '' OR LOWER(bp.name) LIKE LOWER(CONCAT('%', :search, '%')) " +
+           "     OR LOWER(COALESCE(bp.policyCode, '')) LIKE LOWER(CONCAT('%', :search, '%')) " +
+           "     OR function('waad_search_normalize', bp.name) LIKE CONCAT('%', :normalizedSearch, '%') " +
+           "     OR function('waad_search_normalize', COALESCE(bp.policyCode, '')) LIKE CONCAT('%', :normalizedSearch, '%'))")
+    Page<BenefitPolicy> searchByNameOrCode(@Param("search") String search,
+                                           @Param("normalizedSearch") String normalizedSearch,
+                                           Pageable pageable);
 
     @Query("SELECT bp FROM BenefitPolicy bp " +
            "WHERE bp.active = true AND bp.employer.id = :employerId " +
-           "AND (LOWER(bp.name) LIKE LOWER(CONCAT('%', :search, '%')) " +
-           "     OR LOWER(bp.policyCode) LIKE LOWER(CONCAT('%', :search, '%')))")
+           "AND (:search = '' OR LOWER(bp.name) LIKE LOWER(CONCAT('%', :search, '%')) " +
+           "     OR LOWER(COALESCE(bp.policyCode, '')) LIKE LOWER(CONCAT('%', :search, '%')) " +
+           "     OR function('waad_search_normalize', bp.name) LIKE CONCAT('%', :normalizedSearch, '%') " +
+           "     OR function('waad_search_normalize', COALESCE(bp.policyCode, '')) LIKE CONCAT('%', :normalizedSearch, '%'))")
     Page<BenefitPolicy> searchByEmployerAndNameOrCode(@Param("employerId") Long employerId,
                                                        @Param("search") String search,
+                                                       @Param("normalizedSearch") String normalizedSearch,
                                                        Pageable pageable);
 
     /**
