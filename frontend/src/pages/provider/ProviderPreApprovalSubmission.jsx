@@ -47,6 +47,7 @@ import {
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { formatCurrency } from 'utils/currency-formatter';
+import { normalizeArabicSearchText } from 'utils/searchText';
 import {
   Send as SendIcon,
   Person as PersonIcon,
@@ -350,7 +351,7 @@ const ProviderPreApprovalSubmission = () => {
     return Number.isNaN(parsed) ? value : parsed;
   }, []);
 
-  const normalizeText = useCallback((value) => (value || '').toString().trim().toLowerCase(), []);
+  const normalizeText = useCallback((value) => normalizeArabicSearchText(value), []);
 
   const doesServiceMatchCategory = useCallback(
     (service, category) => {
@@ -1025,11 +1026,11 @@ const ProviderPreApprovalSubmission = () => {
                           return `${code}${option.serviceName || option.name || ''}`;
                         }}
                         filterOptions={(options, { inputValue }) => {
-                          const search = inputValue.toLowerCase();
+                          const search = normalizeArabicSearchText(inputValue);
                           return options.filter(
                             (opt) =>
-                              ((opt.serviceCode || opt.code) && (opt.serviceCode || opt.code).toLowerCase().includes(search)) ||
-                              ((opt.serviceName || opt.name) && (opt.serviceName || opt.name).toLowerCase().includes(search))
+                              normalizeArabicSearchText(opt.serviceCode || opt.code).includes(search) ||
+                              normalizeArabicSearchText(opt.serviceName || opt.name).includes(search)
                           );
                         }}
                         value={row.service ?? null}

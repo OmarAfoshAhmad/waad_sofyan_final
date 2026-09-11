@@ -113,6 +113,7 @@ import {
 import { getAllMedicalCategories, getMedicalServicesByCategory } from 'services/api/medical-categories.service';
 import PricingImportReviewDialog from './components/PricingImportReviewDialog';
 import { formatDate } from 'utils/formatters';
+import { normalizeArabicSearchText } from 'utils/searchText';
 
 // Snackbar
 import { useSnackbar } from 'notistack';
@@ -159,12 +160,12 @@ const getOptionalMedicalCategoryLabel = (item) =>
 const getMedicalCategoryOptionLabel = (option) => `${option?.code || ''} - ${option?.nameAr || option?.name || ''}`.trim();
 
 const filterMedicalCategoryOptions = (options, state) => {
-  const query = (state.inputValue || '').trim().toLowerCase();
+  const query = normalizeArabicSearchText(state.inputValue);
   if (!query) return options;
   return options.filter((option) =>
     [option.code, option.nameAr, option.name, option.nameEn]
       .filter(Boolean)
-      .some((value) => String(value).toLowerCase().includes(query))
+      .some((value) => normalizeArabicSearchText(value).includes(query))
   );
 };
 

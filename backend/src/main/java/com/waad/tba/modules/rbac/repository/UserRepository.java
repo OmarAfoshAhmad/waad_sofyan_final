@@ -39,15 +39,15 @@ public interface UserRepository extends JpaRepository<User, Long> {
     List<User> findByUserTypeAndActiveTrueOrderByIdAsc(String userType);
     
     @Query("SELECT u FROM User u WHERE " +
-           "LOWER(u.username) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
-           "LOWER(u.fullName) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
-           "LOWER(u.email) LIKE LOWER(CONCAT('%', :query, '%'))")
+           "function('waad_search_normalize', u.username) LIKE CONCAT('%', :query, '%') OR " +
+           "function('waad_search_normalize', u.fullName) LIKE CONCAT('%', :query, '%') OR " +
+           "function('waad_search_normalize', u.email) LIKE CONCAT('%', :query, '%')")
     List<User> searchUsers(String query);
 
     @Query("SELECT u FROM User u WHERE " +
-           "LOWER(u.username) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
-           "LOWER(u.fullName) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
-           "LOWER(u.email) LIKE LOWER(CONCAT('%', :query, '%'))")
+           "function('waad_search_normalize', u.username) LIKE CONCAT('%', :query, '%') OR " +
+           "function('waad_search_normalize', u.fullName) LIKE CONCAT('%', :query, '%') OR " +
+           "function('waad_search_normalize', u.email) LIKE CONCAT('%', :query, '%')")
     Page<User> searchUsers(String query, Pageable pageable);
 
     @Query("SELECT u FROM User u WHERE " +
@@ -57,9 +57,9 @@ public interface UserRepository extends JpaRepository<User, Long> {
            "(:providerLink = 'LINKED' AND u.providerId IS NOT NULL) OR " +
            "(:providerLink = 'UNLINKED' AND u.providerId IS NULL)) AND (" +
            ":query IS NULL OR :query = '' OR " +
-           "LOWER(u.username) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
-           "LOWER(u.fullName) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
-           "LOWER(u.email) LIKE LOWER(CONCAT('%', :query, '%')))")
+           "function('waad_search_normalize', u.username) LIKE CONCAT('%', :query, '%') OR " +
+           "function('waad_search_normalize', u.fullName) LIKE CONCAT('%', :query, '%') OR " +
+           "function('waad_search_normalize', u.email) LIKE CONCAT('%', :query, '%')))")
     Page<User> searchUsersFiltered(@Param("query") String query,
                                    @Param("role") String role,
                                    @Param("active") Boolean active,

@@ -189,12 +189,12 @@ const RuleFormModal = ({
   });
 
   const exactNameMatch = useMemo(() => {
-    const term = (formData.serviceName || '').trim().toLowerCase();
+    const term = normalizeArabicSearchText(formData.serviceName);
     if (!term) return null;
     return (
       similarServices.find((s) => {
-        const ar = (s.nameAr || s.name || '').trim().toLowerCase();
-        const en = (s.nameEn || '').trim().toLowerCase();
+        const ar = normalizeArabicSearchText(s.nameAr || s.name);
+        const en = normalizeArabicSearchText(s.nameEn);
         return ar === term || en === term;
       }) || null
     );

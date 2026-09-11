@@ -58,6 +58,7 @@ import claimsService from 'services/api/claims.service';
 import claimBatchesService from 'services/api/claim-batches.service';
 import useAuth from 'hooks/useAuth';
 import { formatCurrency } from 'utils/currency-formatter';
+import { normalizeArabicSearchText } from 'utils/searchText';
 
 // ===========================================
 // CONSTANTS
@@ -515,9 +516,12 @@ export default function ClaimBatchManagement() {
       list = list.filter((p) => p.id === userProviderId);
     }
 
-    if (searchTerm) {
+    const normalizedSearchTerm = normalizeArabicSearchText(searchTerm);
+    if (normalizedSearchTerm) {
       return list.filter(
-        (p) => p.name?.toLowerCase().includes(searchTerm.toLowerCase()) || String(p.code)?.toLowerCase().includes(searchTerm.toLowerCase())
+        (p) =>
+          normalizeArabicSearchText(p.name).includes(normalizedSearchTerm) ||
+          normalizeArabicSearchText(p.code).includes(normalizedSearchTerm)
       );
     }
 
