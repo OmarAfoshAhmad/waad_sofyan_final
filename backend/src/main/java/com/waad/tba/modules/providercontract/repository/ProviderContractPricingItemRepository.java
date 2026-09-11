@@ -79,8 +79,8 @@ public interface ProviderContractPricingItemRepository extends JpaRepository<Pro
                      "WHERE p.contract.id = :contractId AND p.active = true " +
                      "AND (p.effectiveFrom IS NULL OR p.effectiveFrom <= :date) " +
                      "AND (p.effectiveTo IS NULL OR :date < p.effectiveTo) " +
-                     "AND (LOWER(p.serviceCode) LIKE LOWER(CONCAT('%', :query, '%')) " +
-                     "OR LOWER(p.serviceName) LIKE LOWER(CONCAT('%', :query, '%')))")
+                     "AND (function('waad_search_normalize', p.serviceCode) LIKE CONCAT('%', :query, '%') " +
+                     "OR function('waad_search_normalize', p.serviceName) LIKE CONCAT('%', :query, '%'))")
        Page<ProviderContractPricingItem> searchEffectiveByContractId(
                      @Param("contractId") Long contractId,
                      @Param("date") LocalDate date,
@@ -335,9 +335,9 @@ public interface ProviderContractPricingItemRepository extends JpaRepository<Pro
                      "WHERE p.contract.id = :contractId " +
                      "AND p.active = true " +
                      "AND (:q IS NULL OR :q = '' " +
-                     "     OR LOWER(p.serviceCode) LIKE LOWER(CONCAT('%', :q, '%')) " +
-                     "     OR LOWER(p.serviceName) LIKE LOWER(CONCAT('%', :q, '%')) " +
-                     "     OR LOWER(p.categoryName) LIKE LOWER(CONCAT('%', :q, '%'))) " +
+                     "     OR function('waad_search_normalize', p.serviceCode) LIKE CONCAT('%', :q, '%') " +
+                     "     OR function('waad_search_normalize', p.serviceName) LIKE CONCAT('%', :q, '%') " +
+                     "     OR function('waad_search_normalize', p.categoryName) LIKE CONCAT('%', :q, '%')) " +
                      "AND (:categoryId IS NULL OR mc.id = :categoryId)")
        Page<ProviderContractPricingItem> searchByServiceCodeOrNameAndCategory(
                      @Param("contractId") Long contractId,

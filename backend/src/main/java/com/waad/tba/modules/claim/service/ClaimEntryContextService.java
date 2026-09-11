@@ -27,6 +27,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
+import com.waad.tba.common.search.SearchTextNormalizer;
 import lombok.RequiredArgsConstructor;
 
 /**
@@ -129,13 +130,13 @@ public class ClaimEntryContextService {
             return List.of();
         }
 
-        String normalizedQuery = query == null ? "" : query.trim().toLowerCase();
+        String normalizedQuery = SearchTextNormalizer.normalize(query);
         List<MedicalService> standardServices = medicalServiceRepository
                 .findByPricingModeAndActiveTrue(PricingMode.MANUAL_AMOUNT).stream()
                 .filter(service -> providerServiceCodes.contains(service.getCode()))
                 .filter(service -> normalizedQuery.isBlank()
-                        || service.getName().toLowerCase().contains(normalizedQuery)
-                        || service.getCode().toLowerCase().contains(normalizedQuery))
+                        || SearchTextNormalizer.normalize(service.getName()).contains(normalizedQuery)
+                        || SearchTextNormalizer.normalize(service.getCode()).contains(normalizedQuery))
                 .toList();
         if (standardServices.isEmpty()) {
             return List.of();
