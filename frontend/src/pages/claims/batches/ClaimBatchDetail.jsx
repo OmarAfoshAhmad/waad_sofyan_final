@@ -291,7 +291,9 @@ export default function ClaimBatchDetail() {
     const paidAmount = Number(claim.beneficiaryPaidAmount) || 0;
     const providerBalance = Number(claim.providerRefusalBalance);
     const paidTowardRefusal = paidAmount > 0 ? Math.min(paidAmount, rawRefused) : Number(claim.beneficiaryPaidTowardRefusal) || 0;
-    if (paidAmount <= 0 && Number.isFinite(providerBalance)) return Math.max(0, providerBalance);
+    // Server-owned and signed: negative means the provider is owed more than
+    // was refused. Clamping it hid overspend behind the same 0 as "settled".
+    if (paidAmount <= 0 && Number.isFinite(providerBalance)) return providerBalance;
     return Math.max(0, rawRefused - paidTowardRefusal);
   };
 

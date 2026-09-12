@@ -1137,10 +1137,10 @@ export default function PriceListClassifierPage() {
                   1. رفع قائمة الأسعار
                 </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                  ارفع ملف Excel خام. سيتم استخراج أسماء الخدمات والأسعار محلياً ثم إرسال النصوص فقط للتصنيف.
+                  ارفع ملف Excel خام بصيغة .xlsx (صيغة .xls القديمة غير مدعومة). سيتم استخراج أسماء الخدمات والأسعار محلياً ثم إرسال النصوص فقط للتصنيف.
                 </Typography>
                 <Button component="label" variant="contained" startIcon={<CloudUploadIcon />} fullWidth>
-                  اختيار ملف Excel
+                  اختيار ملف Excel (.xlsx)
                   <input hidden type="file" accept=".xlsx" onChange={handleFile} />
                 </Button>
                 <Button

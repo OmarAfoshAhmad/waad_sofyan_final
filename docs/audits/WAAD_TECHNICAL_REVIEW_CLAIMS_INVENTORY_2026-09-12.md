@@ -145,10 +145,11 @@ rg -n "unpkg|setInterval|ROLE_RESOURCE_ACCESS|setStatus\(dto.getStatus\(\)\)|con
 - البند 19 (يتيمة): **213** وحدة ≈ 29,300 سطر — لم يُحذف منها شيء في P0 عدا ثلاثة ملفات مرتبطة مباشرة (`pdfWorker.js`, `classification.utils.js`, `exportToExcel.js`).
 - البند 20: شريحة `*SecurityTest,*AccessGuardTest,*PermissionWiring*` = **137** اختباراً، صفر أخطاء.
 
-### مشكلة موجودة مسبقاً تحتاج انتباهاً فورياً
+### قرار: مصنّف قوائم الأسعار يقبل `.xlsx` فقط
 
-ثلاثة اختبارات واجهة **تفشل على HEAD النظيف** (`de39dafb`) قبل أي تغيير من هذه المرحلة، وستُحمّر خطوة `npm test` في الـCI:
+قرار منتج نهائي (2026-09-12): صيغة `.xls` القديمة غير مدعومة ولن تُدعم. القارئ الوحيد في الواجهة هو ExcelJS، والشاشة تعلن ذلك في نص الرفع وفي `accept=".xlsx"`. لا يُضاف تحويل على الخادم ولا تُعاد `xlsx` (SheetJS) لأجلها.
 
-- `balanceIsNotClampedInTheClient` ← ‏`Math.max(0, …)` في `ClaimBatchDetail.jsx`, `ClaimBatchEntry.jsx`, `BatchHistorySidebar.jsx`
-- `UnifiedCoverageModalClaimContextArchitecture`
-- `ClaimBatchEntrySafetyArchitecture`
+### اختبارات واجهة كانت فاشلة على HEAD (`de39dafb`)
+
+- `balanceIsNotClampedInTheClient` — **أُصلح**: أُزيل `Math.max(0, …)` عن `providerRefusalBalance` القادم موقَّعاً من الخادم في `ClaimBatchDetail.jsx` و`BatchHistorySidebar.jsx`؛ وفي `ClaimBatchEntry.jsx` كان القصّ زائداً رياضياً (`appliedToRefused ≤ refused`) فحُذف دون تغيير في القيمة.
+- `UnifiedCoverageModalClaimContextArchitecture` و`ClaimBatchEntrySafetyArchitecture` — **ما زالا فاشلين**؛ خارج نطاق هذا الطلب.

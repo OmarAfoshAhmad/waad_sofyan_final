@@ -1517,7 +1517,8 @@ export default function ClaimBatchEntry() {
     const appliedToBaseShare = 0;
     const appliedToRefused = Math.min(paid, refused);
     const remainingBeneficiaryShare = 0;
-    const providerRefusedBalance = Math.max(0, refused - appliedToRefused);
+    // appliedToRefused <= refused by construction, so this is already >= 0.
+    const providerRefusedBalance = refused - appliedToRefused;
     const excessPayment = Math.max(0, paid - appliedToRefused);
     const finalBeneficiaryShare = baseBeneficiaryShare + paid;
 

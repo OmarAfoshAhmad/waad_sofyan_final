@@ -22,7 +22,8 @@ export const BatchHistorySidebar = ({
 }) => {
   const getProviderRefusalBalance = (claim) => {
     const providerBalance = Number(claim?.providerRefusalBalance);
-    if (Number.isFinite(providerBalance)) return Math.max(0, providerBalance);
+    // Server-owned and signed; displayed as sent, never clamped.
+    if (Number.isFinite(providerBalance)) return providerBalance;
     return Math.max(0, Number(claim?.refusedAmount || 0) - Number(claim?.beneficiaryPaidTowardRefusal || 0));
   };
 
