@@ -32,16 +32,16 @@ public interface VisitRepository extends JpaRepository<Visit, Long>, JpaSpecific
     @Query(value = "SELECT v FROM Visit v " +
            "LEFT JOIN FETCH v.member m " +
            "WHERE v.member.employer.id = :employerId AND (" +
-           "function('waad_search_normalize', v.doctorName) LIKE CONCAT('%', :q, '%') OR " +
-           "function('waad_search_normalize', v.specialty) LIKE CONCAT('%', :q, '%') OR " +
-           "function('waad_search_normalize', v.diagnosis) LIKE CONCAT('%', :q, '%') OR " +
-           "function('waad_search_normalize', m.fullName) LIKE CONCAT('%', :q, '%'))",
+           "waad_search_normalize(v.doctorName) LIKE CONCAT('%', :q, '%') OR " +
+           "waad_search_normalize(v.specialty) LIKE CONCAT('%', :q, '%') OR " +
+           "waad_search_normalize(v.diagnosis) LIKE CONCAT('%', :q, '%') OR " +
+           "waad_search_normalize(m.fullName) LIKE CONCAT('%', :q, '%'))",
            countQuery = "SELECT COUNT(v) FROM Visit v LEFT JOIN v.member m " +
            "WHERE v.member.employer.id = :employerId AND (" +
-           "function('waad_search_normalize', v.doctorName) LIKE CONCAT('%', :q, '%') OR " +
-           "function('waad_search_normalize', v.specialty) LIKE CONCAT('%', :q, '%') OR " +
-           "function('waad_search_normalize', v.diagnosis) LIKE CONCAT('%', :q, '%') OR " +
-           "function('waad_search_normalize', m.fullName) LIKE CONCAT('%', :q, '%'))")
+           "waad_search_normalize(v.doctorName) LIKE CONCAT('%', :q, '%') OR " +
+           "waad_search_normalize(v.specialty) LIKE CONCAT('%', :q, '%') OR " +
+           "waad_search_normalize(v.diagnosis) LIKE CONCAT('%', :q, '%') OR " +
+           "waad_search_normalize(m.fullName) LIKE CONCAT('%', :q, '%'))")
     Page<Visit> searchPagedByEmployerId(@Param("q") String q, @Param("employerId") Long employerId, Pageable pageable);
     
     // Count by employer
@@ -49,24 +49,24 @@ public interface VisitRepository extends JpaRepository<Visit, Long>, JpaSpecific
     long countByMemberEmployerId(@Param("employerId") Long employerId);
     
     @Query("SELECT v FROM Visit v LEFT JOIN v.member m WHERE " +
-           "function('waad_search_normalize', v.doctorName) LIKE CONCAT('%', :query, '%') OR " +
-           "function('waad_search_normalize', v.specialty) LIKE CONCAT('%', :query, '%') OR " +
-           "function('waad_search_normalize', v.diagnosis) LIKE CONCAT('%', :query, '%') OR " +
-           "function('waad_search_normalize', m.fullName) LIKE CONCAT('%', :query, '%')")
+           "waad_search_normalize(v.doctorName) LIKE CONCAT('%', :query, '%') OR " +
+           "waad_search_normalize(v.specialty) LIKE CONCAT('%', :query, '%') OR " +
+           "waad_search_normalize(v.diagnosis) LIKE CONCAT('%', :query, '%') OR " +
+           "waad_search_normalize(m.fullName) LIKE CONCAT('%', :query, '%')")
     List<Visit> search(@Param("query") String query);
 
     // PHASE 5.B: Search paginated with FETCH JOIN for member
     @Query(value = "SELECT v FROM Visit v " +
            "LEFT JOIN FETCH v.member m " +
-           "WHERE function('waad_search_normalize', v.doctorName) LIKE CONCAT('%', :q, '%') OR " +
-           "function('waad_search_normalize', v.specialty) LIKE CONCAT('%', :q, '%') OR " +
-           "function('waad_search_normalize', v.diagnosis) LIKE CONCAT('%', :q, '%') OR " +
-           "function('waad_search_normalize', m.fullName) LIKE CONCAT('%', :q, '%')",
+           "WHERE waad_search_normalize(v.doctorName) LIKE CONCAT('%', :q, '%') OR " +
+           "waad_search_normalize(v.specialty) LIKE CONCAT('%', :q, '%') OR " +
+           "waad_search_normalize(v.diagnosis) LIKE CONCAT('%', :q, '%') OR " +
+           "waad_search_normalize(m.fullName) LIKE CONCAT('%', :q, '%')",
            countQuery = "SELECT COUNT(v) FROM Visit v LEFT JOIN v.member m " +
-           "WHERE function('waad_search_normalize', v.doctorName) LIKE CONCAT('%', :q, '%') OR " +
-           "function('waad_search_normalize', v.specialty) LIKE CONCAT('%', :q, '%') OR " +
-           "function('waad_search_normalize', v.diagnosis) LIKE CONCAT('%', :q, '%') OR " +
-           "function('waad_search_normalize', m.fullName) LIKE CONCAT('%', :q, '%')")
+           "WHERE waad_search_normalize(v.doctorName) LIKE CONCAT('%', :q, '%') OR " +
+           "waad_search_normalize(v.specialty) LIKE CONCAT('%', :q, '%') OR " +
+           "waad_search_normalize(v.diagnosis) LIKE CONCAT('%', :q, '%') OR " +
+           "waad_search_normalize(m.fullName) LIKE CONCAT('%', :q, '%')")
     Page<Visit> searchPaged(@Param("q") String q, Pageable pageable);
 
     // PROVIDER filtering - visits by provider ID (providerId is Long field, not relation)
@@ -82,16 +82,16 @@ public interface VisitRepository extends JpaRepository<Visit, Long>, JpaSpecific
     @Query(value = "SELECT v FROM Visit v " +
            "LEFT JOIN FETCH v.member m " +
            "WHERE v.providerId = :providerId AND (" +
-           "function('waad_search_normalize', v.doctorName) LIKE CONCAT('%', :q, '%') OR " +
-           "function('waad_search_normalize', v.specialty) LIKE CONCAT('%', :q, '%') OR " +
-           "function('waad_search_normalize', v.diagnosis) LIKE CONCAT('%', :q, '%') OR " +
-           "function('waad_search_normalize', m.fullName) LIKE CONCAT('%', :q, '%'))",
+           "waad_search_normalize(v.doctorName) LIKE CONCAT('%', :q, '%') OR " +
+           "waad_search_normalize(v.specialty) LIKE CONCAT('%', :q, '%') OR " +
+           "waad_search_normalize(v.diagnosis) LIKE CONCAT('%', :q, '%') OR " +
+           "waad_search_normalize(m.fullName) LIKE CONCAT('%', :q, '%'))",
            countQuery = "SELECT COUNT(v) FROM Visit v LEFT JOIN v.member m " +
            "WHERE v.providerId = :providerId AND (" +
-           "function('waad_search_normalize', v.doctorName) LIKE CONCAT('%', :q, '%') OR " +
-           "function('waad_search_normalize', v.specialty) LIKE CONCAT('%', :q, '%') OR " +
-           "function('waad_search_normalize', v.diagnosis) LIKE CONCAT('%', :q, '%') OR " +
-           "function('waad_search_normalize', m.fullName) LIKE CONCAT('%', :q, '%'))")
+           "waad_search_normalize(v.doctorName) LIKE CONCAT('%', :q, '%') OR " +
+           "waad_search_normalize(v.specialty) LIKE CONCAT('%', :q, '%') OR " +
+           "waad_search_normalize(v.diagnosis) LIKE CONCAT('%', :q, '%') OR " +
+           "waad_search_normalize(m.fullName) LIKE CONCAT('%', :q, '%'))")
     Page<Visit> searchPagedByProviderId(@Param("q") String q, @Param("providerId") Long providerId, Pageable pageable);
 
     /**

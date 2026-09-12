@@ -1,7 +1,26 @@
 import psycopg2
+import os
 from decimal import Decimal
+
+
+def db_dsn():
+    database_url = os.getenv("DATABASE_URL")
+    if database_url:
+        return database_url
+
+    password = os.getenv("DB_PASSWORD")
+    if not password:
+        raise RuntimeError("Set DATABASE_URL or DB_PASSWORD before running this script.")
+
+    host = os.getenv("DB_HOST", "localhost")
+    port = os.getenv("DB_PORT", "5432")
+    name = os.getenv("DB_NAME", "tba_waad_system")
+    user = os.getenv("DB_USER", "postgres")
+    return f"postgresql://{user}:{password}@{host}:{port}/{name}"
+
+
 def check_db():
-    conn = psycopg2.connect("postgresql://postgres:12345@localhost:5432/tba_waad_system")
+    conn = psycopg2.connect(db_dsn())
     cur = conn.cursor()
     
     print("====== Member =====")

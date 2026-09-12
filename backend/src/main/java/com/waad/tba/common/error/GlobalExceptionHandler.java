@@ -513,8 +513,7 @@ public class GlobalExceptionHandler {
         String trackingId = generateTrackingId();
         log.warn("Authentication failed - Path: {}, User-Agent: {}, TrackingId: {}",
                 request.getRequestURI(), request.getHeader("User-Agent"), trackingId);
-        return build(HttpStatus.UNAUTHORIZED, ErrorCode.INVALID_CREDENTIALS, "Invalid username or password", request,
-                null);
+        return uniformLoginFailure(request, trackingId);
     }
 
     /**
@@ -528,8 +527,7 @@ public class GlobalExceptionHandler {
         String trackingId = generateTrackingId();
         log.warn("Internal authentication error (bad credentials) - Path: {}, TrackingId: {}",
                 request.getRequestURI(), trackingId);
-        return build(HttpStatus.UNAUTHORIZED, ErrorCode.INVALID_CREDENTIALS, "Invalid username or password", request,
-                null);
+        return uniformLoginFailure(request, trackingId);
     }
 
     /**
@@ -541,7 +539,7 @@ public class GlobalExceptionHandler {
         String trackingId = generateTrackingId();
         log.warn("Disabled account login attempt - Path: {}, TrackingId: {}",
                 request.getRequestURI(), trackingId);
-        return build(HttpStatus.UNAUTHORIZED, ErrorCode.INVALID_CREDENTIALS, "Account is disabled", request, null);
+        return uniformLoginFailure(request, trackingId);
     }
 
     /**
@@ -553,7 +551,7 @@ public class GlobalExceptionHandler {
         String trackingId = generateTrackingId();
         log.warn("Authentication failed - Path: {}, Message: {}, TrackingId: {}",
                 request.getRequestURI(), ex.getMessage(), trackingId);
-        return build(HttpStatus.UNAUTHORIZED, ErrorCode.INVALID_CREDENTIALS, "Authentication failed", request, null);
+        return uniformLoginFailure(request, trackingId);
     }
 
     @ExceptionHandler(AccessDeniedException.class)
@@ -602,19 +600,13 @@ public class GlobalExceptionHandler {
     // Password) ==========
 
     /**
-     * Handle AccountLockedException - returns 423 Locked.
-     * 
-     * Account is locked due to multiple failed login attempts. Returns unlock time.
-     * 
-     * EXAMPLE RESPONSE:
-     * {
-     * "code": "ACCOUNT_LOCKED",
-     * "message": "Account locked due to multiple failed login attempts. Try again
-     * after 2025-01-15T10:30:00",
-     * "messageAr": "تم قفل الحساب بسبب محاولات تسجيل دخول فاشلة متعددة. حاول مرة
-     * أخرى بعد 2025-01-15T10:30:00",
-     * "details": { "lockedUntil": "2025-01-15T10:30:00" }
-     * }
+     * Handle AccountLockedException as the same public response shape used for all
+     * login failures.
+     *
+     * The lock status and unlock time remain in server logs/audit records only. A
+     * distinct 423 response with lockedUntil acts as an account-enumeration oracle
+     * and lets an attacker verify both that an account exists and that a deliberate
+     * lockout succeeded.
      */
     @ExceptionHandler(AccountLockedException.class)
     public ResponseEntity<ApiError> handleAccountLocked(AccountLockedException ex, HttpServletRequest request) {
@@ -622,19 +614,19 @@ public class GlobalExceptionHandler {
         log.warn("Account locked - Path: {}, Username: {}, LockedUntil: {}, TrackingId: {}",
                 request.getRequestURI(), ex.getUsername(), ex.getLockedUntil(), trackingId);
 
-        Map<String, Object> details = new HashMap<>();
-        details.put("lockedUntil", ex.getLockedUntil().toString());
+        return uniformLoginFailure(request, trackingId);
+    }
 
+    private ResponseEntity<ApiError> uniformLoginFailure(HttpServletRequest request, String trackingId) {
         ApiError error = ApiError.of(
-                ErrorCode.ACCOUNT_LOCKED,
-                ex.getMessage(),
+                ErrorCode.INVALID_CREDENTIALS,
+                "Invalid username or password",
                 request.getRequestURI(),
-                details,
+                null,
                 now(),
                 trackingId);
-        error.setMessageAr(ex.getMessageAr());
-
-        return ResponseEntity.status(HttpStatus.LOCKED).body(error);
+        error.setMessageAr("اسم المستخدم أو كلمة المرور غير صحيحة");
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(error);
     }
 
     /**

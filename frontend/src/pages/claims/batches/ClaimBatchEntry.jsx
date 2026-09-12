@@ -407,6 +407,7 @@ export default function ClaimBatchEntry() {
   const editHydrationContextRef = useRef(null);
   const editCoverageRefreshClaimRef = useRef(null);
   const isSavingRef = useRef(false);
+  const justSavedClaimRef = useRef(null);
 
   const lineFinancialSignature = useCallback(
     (line) =>
@@ -1326,12 +1327,20 @@ export default function ClaimBatchEntry() {
           beforeSignatures.length !== afterSignatures.length ||
           beforeSignatures.some((signature, index) => signature !== afterSignatures[index]);
         if (changed) {
+          const isPostSaveRefresh = String(justSavedClaimRef.current || '') === String(editingClaimId || '');
           setLines(updated);
-          setIsDirty(true);
-          enqueueSnackbar('تم تحديث حساب المطالبة حسب قواعد الوثيقة الحالية. راجع القيم ثم احفظ.', {
-            variant: 'info',
-            autoHideDuration: 7000
-          });
+          if (isPostSaveRefresh) {
+            // The save endpoint already recalculates the canonical financial
+            // snapshot. The subsequent edit hydration should refresh the UI
+            // silently, not mark the form dirty or ask the user to save again.
+            justSavedClaimRef.current = null;
+          } else {
+            setIsDirty(true);
+            enqueueSnackbar('تم تحديث حساب المطالبة حسب قواعد الوثيقة الحالية. راجع القيم ثم احفظ.', {
+              variant: 'info',
+              autoHideDuration: 7000
+            });
+          }
         }
       })
       .finally(() => {
@@ -1727,9 +1736,11 @@ export default function ClaimBatchEntry() {
         return;
       }
       triggerConfirm('تأكيد رفض المطالبة', 'أنت على وشك رفض هذه المطالبة بالكامل. سيتم تصفير جميع حصص الشركة. هل تريد الاستمرار؟', () => {
+        const reason = rejectionInput.trim();
         setIsClaimRejected(true);
         setIsDirty(true);
         setRejectDialogOpen(false);
+        handleSave(true, 'submit', { forceClaimRejected: true, rejectionReason: reason });
       });
       return; // Don't close dialog yet
     } else {
@@ -1786,8 +1797,11 @@ export default function ClaimBatchEntry() {
     }, 1600);
   };
 
-  const handleSave = async (resetAfter = false, saveMode = 'submit') => {
+  const handleSave = async (resetAfter = false, saveMode = 'submit', options = {}) => {
     if (isSavingRef.current) return;
+
+    const forceClaimRejected = Boolean(options.forceClaimRejected);
+    const savingClaimRejected = forceClaimRejected || isClaimRejected;
 
     if (entryContextBlockReason) {
       enqueueSnackbar(entryContextBlockReason, { variant: entryContextError ? 'error' : 'warning', autoHideDuration: 6500 });
@@ -1832,7 +1846,7 @@ export default function ClaimBatchEntry() {
       return;
     }
 
-    if (!isClaimRejected && coveragePending) {
+    if (!savingClaimRejected && coveragePending) {
       enqueueSnackbar('لا يمكن الحفظ أثناء انتظار قرار محرك التغطية. انتظر اكتمال تحديث جميع البنود.', {
         variant: 'warning',
         autoHideDuration: 5000
@@ -1843,7 +1857,7 @@ export default function ClaimBatchEntry() {
     const uncoveredLineIndex = lines.findIndex(
       (line) => (line.service || line.serviceName) && !line.rejected && (line.notCovered || (Number(line.coveragePercent) || 0) <= 0)
     );
-    if (saveMode !== 'draft' && !isClaimRejected && uncoveredLineIndex !== -1) {
+    if (saveMode !== 'draft' && !savingClaimRejected && uncoveredLineIndex !== -1) {
       enqueueSnackbar('لا يمكن اعتماد مطالبة تحتوي خدمات غير مغطاة. غيّر سياق المطالبة أو ارفض البند/المطالبة بسبب واضح.', {
         variant: 'error',
         autoHideDuration: 7000
@@ -1855,7 +1869,7 @@ export default function ClaimBatchEntry() {
     setShowValidationErrors(false);
 
     // تحققات إضافية لأسعار الخدمات
-    if (!isClaimRejected && lines.some((l) => (l.service || l.serviceName) && !l.rejected && (parseFloat(l.unitPrice) || 0) <= 0)) {
+    if (!savingClaimRejected && lines.some((l) => (l.service || l.serviceName) && !l.rejected && (parseFloat(l.unitPrice) || 0) <= 0)) {
       enqueueSnackbar('يجب أن يكون سعر الوحدة أكبر من صفر لكل بند غير مرفوض', { variant: 'error' });
       return;
     }
@@ -1891,11 +1905,11 @@ export default function ClaimBatchEntry() {
       const activeLines = lines.filter((l) => l.service || l.serviceName);
       const allLinesManuallyRejected = activeLines.length > 0 && activeLines.every((l) => l.rejected);
 
-      const effectivelyRejected = isClaimRejected || allLinesManuallyRejected;
+      const effectivelyRejected = savingClaimRejected || allLinesManuallyRejected;
 
       // إذا كانت المطالبة مرفوضة كلياً — يجب إدخال سبب رفض
-      let effectiveRejectionReason = rejectionInput?.trim() || null;
-      if (isClaimRejected && !effectiveRejectionReason) {
+      let effectiveRejectionReason = options.rejectionReason?.trim() || rejectionInput?.trim() || null;
+      if (savingClaimRejected && !effectiveRejectionReason) {
         enqueueSnackbar('يجب إدخال سبب رفض المطالبة قبل الحفظ', { variant: 'error' });
         setSaving(false);
         isSavingRef.current = false;
@@ -1959,15 +1973,15 @@ export default function ClaimBatchEntry() {
             pricingMode,
             manualAmount: isManualAmountLine ? parseFloat(l.unitPrice) || 0 : null,
             appliedRuleId: l.appliedRuleId ?? null,
-            rejected: isClaimRejected ? true : l.rejected || false,
-            rejectionReason: isClaimRejected ? effectiveRejectionReason : l.rejectionReason || null,
+            rejected: savingClaimRejected ? true : l.rejected || false,
+            rejectionReason: savingClaimRejected ? effectiveRejectionReason : l.rejectionReason || null,
             // refusedAmount on the rendered line includes price/benefit-limit
             // refusals calculated by the server. Sending that aggregate back as
             // a manual refusal makes the financial engine subtract the same
             // ceiling excess twice (and can exceed the insurer gross share).
             // Only the user's explicit refusal is command input; the backend
             // must recalculate every automatic refusal at save time.
-            manualRefusedAmount: isClaimRejected ? 0 : parseFloat(l.manualRefusedAmount) || 0
+            manualRefusedAmount: savingClaimRejected ? 0 : parseFloat(l.manualRefusedAmount) || 0
           };
         })
       };
@@ -2043,6 +2057,7 @@ export default function ClaimBatchEntry() {
         resetForm();
         setEditingClaimId(null);
       } else {
+        justSavedClaimRef.current = resultClaimId;
         setEditingClaimId(resultClaimId);
         // Keep isDirty as false after save
         setIsDirty(false);

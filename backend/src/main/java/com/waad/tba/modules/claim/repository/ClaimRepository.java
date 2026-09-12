@@ -400,14 +400,14 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
                         "OR LOWER(c.member.fullName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) " +
                         "OR LOWER(c.member.civilId) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) " +
                         "OR CAST(c.id AS string) LIKE CONCAT('%', CAST(:keyword AS string), '%') " +
-                        "OR function('waad_search_normalize', c.providerName) LIKE CONCAT('%', CAST(:normalizedKeyword AS string), '%') " +
-                        "OR function('waad_search_normalize', c.claimNumber) LIKE CONCAT('%', CAST(:normalizedKeyword AS string), '%') " +
-                        "OR function('waad_search_normalize', c.paperReference) LIKE CONCAT('%', CAST(:normalizedKeyword AS string), '%') " +
-                        "OR function('waad_search_normalize', c.diagnosisDescription) LIKE CONCAT('%', CAST(:normalizedKeyword AS string), '%') " +
-                        "OR function('waad_search_normalize', c.member.fullName) LIKE CONCAT('%', CAST(:normalizedKeyword AS string), '%') " +
-                        "OR function('waad_search_normalize', c.member.civilId) LIKE CONCAT('%', CAST(:normalizedKeyword AS string), '%') " +
-                        "OR function('waad_search_normalize', cb.batchCode) LIKE CONCAT('%', CAST(:normalizedKeyword AS string), '%'))",
-                        countQuery = "SELECT COUNT(c) FROM Claim c LEFT JOIN c.claimBatch cb WHERE c.active = true AND (:employerId IS NULL OR c.member.employer.id = :employerId) AND (:providerId IS NULL OR c.providerId = :providerId) AND (:claimBatchId IS NULL OR c.claimBatch.id = :claimBatchId) AND (:status IS NULL OR c.status = :status) AND (CAST(:dateFrom AS date) IS NULL OR c.serviceDate >= :dateFrom) AND (CAST(:dateTo AS date) IS NULL OR c.serviceDate <= :dateTo) AND (CAST(:createdAtFrom AS timestamp) IS NULL OR c.createdAt >= :createdAtFrom) AND (CAST(:createdAtTo AS timestamp) IS NULL OR c.createdAt < :createdAtTo) AND (LOWER(c.providerName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) OR LOWER(c.claimNumber) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) OR LOWER(c.paperReference) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) OR LOWER(cb.batchCode) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) OR LOWER(c.diagnosisDescription) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) OR LOWER(c.member.fullName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) OR LOWER(c.member.civilId) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) OR CAST(c.id AS string) LIKE CONCAT('%', CAST(:keyword AS string), '%') OR function('waad_search_normalize', c.providerName) LIKE CONCAT('%', CAST(:normalizedKeyword AS string), '%') OR function('waad_search_normalize', c.claimNumber) LIKE CONCAT('%', CAST(:normalizedKeyword AS string), '%') OR function('waad_search_normalize', c.paperReference) LIKE CONCAT('%', CAST(:normalizedKeyword AS string), '%') OR function('waad_search_normalize', c.diagnosisDescription) LIKE CONCAT('%', CAST(:normalizedKeyword AS string), '%') OR function('waad_search_normalize', c.member.fullName) LIKE CONCAT('%', CAST(:normalizedKeyword AS string), '%') OR function('waad_search_normalize', c.member.civilId) LIKE CONCAT('%', CAST(:normalizedKeyword AS string), '%') OR function('waad_search_normalize', cb.batchCode) LIKE CONCAT('%', CAST(:normalizedKeyword AS string), '%'))")
+                        "OR waad_search_normalize(c.providerName) LIKE CONCAT('%', CAST(:normalizedKeyword AS string), '%') " +
+                        "OR waad_search_normalize(c.claimNumber) LIKE CONCAT('%', CAST(:normalizedKeyword AS string), '%') " +
+                        "OR waad_search_normalize(c.paperReference) LIKE CONCAT('%', CAST(:normalizedKeyword AS string), '%') " +
+                        "OR waad_search_normalize(c.diagnosisDescription) LIKE CONCAT('%', CAST(:normalizedKeyword AS string), '%') " +
+                        "OR waad_search_normalize(c.member.fullName) LIKE CONCAT('%', CAST(:normalizedKeyword AS string), '%') " +
+                        "OR waad_search_normalize(c.member.civilId) LIKE CONCAT('%', CAST(:normalizedKeyword AS string), '%') " +
+                        "OR waad_search_normalize(cb.batchCode) LIKE CONCAT('%', CAST(:normalizedKeyword AS string), '%'))",
+                        countQuery = "SELECT COUNT(c) FROM Claim c LEFT JOIN c.claimBatch cb WHERE c.active = true AND (:employerId IS NULL OR c.member.employer.id = :employerId) AND (:providerId IS NULL OR c.providerId = :providerId) AND (:claimBatchId IS NULL OR c.claimBatch.id = :claimBatchId) AND (:status IS NULL OR c.status = :status) AND (CAST(:dateFrom AS date) IS NULL OR c.serviceDate >= :dateFrom) AND (CAST(:dateTo AS date) IS NULL OR c.serviceDate <= :dateTo) AND (CAST(:createdAtFrom AS timestamp) IS NULL OR c.createdAt >= :createdAtFrom) AND (CAST(:createdAtTo AS timestamp) IS NULL OR c.createdAt < :createdAtTo) AND (LOWER(c.providerName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) OR LOWER(c.claimNumber) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) OR LOWER(c.paperReference) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) OR LOWER(cb.batchCode) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) OR LOWER(c.diagnosisDescription) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) OR LOWER(c.member.fullName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) OR LOWER(c.member.civilId) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) OR CAST(c.id AS string) LIKE CONCAT('%', CAST(:keyword AS string), '%') OR waad_search_normalize(c.providerName) LIKE CONCAT('%', CAST(:normalizedKeyword AS string), '%') OR waad_search_normalize(c.claimNumber) LIKE CONCAT('%', CAST(:normalizedKeyword AS string), '%') OR waad_search_normalize(c.paperReference) LIKE CONCAT('%', CAST(:normalizedKeyword AS string), '%') OR waad_search_normalize(c.diagnosisDescription) LIKE CONCAT('%', CAST(:normalizedKeyword AS string), '%') OR waad_search_normalize(c.member.fullName) LIKE CONCAT('%', CAST(:normalizedKeyword AS string), '%') OR waad_search_normalize(c.member.civilId) LIKE CONCAT('%', CAST(:normalizedKeyword AS string), '%') OR waad_search_normalize(cb.batchCode) LIKE CONCAT('%', CAST(:normalizedKeyword AS string), '%'))")
         Page<Claim> searchPagedWithFilters(
                         @Param("keyword") String keyword,
                         @Param("normalizedKeyword") String normalizedKeyword,
@@ -1635,7 +1635,6 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
                         " " +
                         "LEFT JOIN c.claimBatch cb " +
                         "LEFT JOIN FETCH c.preAuthorization pa " +
-                        "LEFT JOIN c.claimBatch cb " +
                         "WHERE c.active = true " +
                         "AND c.providerId IN :providerIds " +
                         "AND (:providerId IS NULL OR c.providerId = :providerId) " +
@@ -1654,13 +1653,13 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
                         "OR LOWER(m.fullName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) " +
                         "OR LOWER(m.civilId) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) " +
                         "OR CAST(c.id AS string) LIKE CONCAT('%', CAST(:keyword AS string), '%') " +
-                        "OR function('waad_search_normalize', c.providerName) LIKE CONCAT('%', CAST(:normalizedKeyword AS string), '%') " +
-                        "OR function('waad_search_normalize', c.claimNumber) LIKE CONCAT('%', CAST(:normalizedKeyword AS string), '%') " +
-                        "OR function('waad_search_normalize', c.paperReference) LIKE CONCAT('%', CAST(:normalizedKeyword AS string), '%') " +
-                        "OR function('waad_search_normalize', c.diagnosisDescription) LIKE CONCAT('%', CAST(:normalizedKeyword AS string), '%') " +
-                        "OR function('waad_search_normalize', m.fullName) LIKE CONCAT('%', CAST(:normalizedKeyword AS string), '%') " +
-                        "OR function('waad_search_normalize', m.civilId) LIKE CONCAT('%', CAST(:normalizedKeyword AS string), '%') " +
-                        "OR function('waad_search_normalize', cb.batchCode) LIKE CONCAT('%', CAST(:normalizedKeyword AS string), '%'))", countQuery = "SELECT COUNT(c) FROM Claim c LEFT JOIN c.member m LEFT JOIN c.claimBatch cb "
+                        "OR waad_search_normalize(c.providerName) LIKE CONCAT('%', CAST(:normalizedKeyword AS string), '%') " +
+                        "OR waad_search_normalize(c.claimNumber) LIKE CONCAT('%', CAST(:normalizedKeyword AS string), '%') " +
+                        "OR waad_search_normalize(c.paperReference) LIKE CONCAT('%', CAST(:normalizedKeyword AS string), '%') " +
+                        "OR waad_search_normalize(c.diagnosisDescription) LIKE CONCAT('%', CAST(:normalizedKeyword AS string), '%') " +
+                        "OR waad_search_normalize(m.fullName) LIKE CONCAT('%', CAST(:normalizedKeyword AS string), '%') " +
+                        "OR waad_search_normalize(m.civilId) LIKE CONCAT('%', CAST(:normalizedKeyword AS string), '%') " +
+                        "OR waad_search_normalize(cb.batchCode) LIKE CONCAT('%', CAST(:normalizedKeyword AS string), '%'))", countQuery = "SELECT COUNT(c) FROM Claim c LEFT JOIN c.member m LEFT JOIN c.claimBatch cb "
                                         +
                                         "WHERE c.active = true AND c.providerId IN :providerIds " +
                                         "AND (:providerId IS NULL OR c.providerId = :providerId) " +
@@ -1685,13 +1684,13 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
                                         "OR LOWER(m.fullName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) " +
                                         "OR LOWER(m.civilId) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) " +
                                         "OR CAST(c.id AS string) LIKE CONCAT('%', CAST(:keyword AS string), '%') " +
-                                        "OR function('waad_search_normalize', c.providerName) LIKE CONCAT('%', CAST(:normalizedKeyword AS string), '%') " +
-                                        "OR function('waad_search_normalize', c.claimNumber) LIKE CONCAT('%', CAST(:normalizedKeyword AS string), '%') " +
-                                        "OR function('waad_search_normalize', c.paperReference) LIKE CONCAT('%', CAST(:normalizedKeyword AS string), '%') " +
-                                        "OR function('waad_search_normalize', c.diagnosisDescription) LIKE CONCAT('%', CAST(:normalizedKeyword AS string), '%') " +
-                                        "OR function('waad_search_normalize', m.fullName) LIKE CONCAT('%', CAST(:normalizedKeyword AS string), '%') " +
-                                        "OR function('waad_search_normalize', m.civilId) LIKE CONCAT('%', CAST(:normalizedKeyword AS string), '%') " +
-                                        "OR function('waad_search_normalize', cb.batchCode) LIKE CONCAT('%', CAST(:normalizedKeyword AS string), '%'))")
+                                        "OR waad_search_normalize(c.providerName) LIKE CONCAT('%', CAST(:normalizedKeyword AS string), '%') " +
+                                        "OR waad_search_normalize(c.claimNumber) LIKE CONCAT('%', CAST(:normalizedKeyword AS string), '%') " +
+                                        "OR waad_search_normalize(c.paperReference) LIKE CONCAT('%', CAST(:normalizedKeyword AS string), '%') " +
+                                        "OR waad_search_normalize(c.diagnosisDescription) LIKE CONCAT('%', CAST(:normalizedKeyword AS string), '%') " +
+                                        "OR waad_search_normalize(m.fullName) LIKE CONCAT('%', CAST(:normalizedKeyword AS string), '%') " +
+                                        "OR waad_search_normalize(m.civilId) LIKE CONCAT('%', CAST(:normalizedKeyword AS string), '%') " +
+                                        "OR waad_search_normalize(cb.batchCode) LIKE CONCAT('%', CAST(:normalizedKeyword AS string), '%'))")
         Page<Claim> searchPagedWithFiltersAndReviewerProviders(
                         @Param("keyword") String keyword,
                         @Param("normalizedKeyword") String normalizedKeyword,

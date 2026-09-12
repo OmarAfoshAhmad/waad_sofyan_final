@@ -12,6 +12,7 @@ import java.util.stream.Collectors;
 
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -1032,6 +1033,13 @@ public class ClaimService {
         Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortBy));
         String keyword = (search != null && !search.trim().isEmpty()) ? search.trim() : "";
         String normalizedKeyword = SearchTextNormalizer.normalize(keyword);
+        List<String> normalizedKeywordTokens = normalizedSearchTokens(keyword);
+        boolean batchTokenSearch = claimBatchId != null && normalizedKeywordTokens.size() > 1;
+        String repositoryKeyword = batchTokenSearch ? normalizedKeywordTokens.get(0) : keyword;
+        String repositoryNormalizedKeyword = batchTokenSearch ? normalizedKeywordTokens.get(0) : normalizedKeyword;
+        Pageable repositoryPageable = batchTokenSearch
+                ? PageRequest.of(0, Math.max(1000, (page + 1) * size), Sort.by(direction, sortBy))
+                : pageable;
 
         // Claim entry date filter boundaries (inclusive from, inclusive-to-day via
         // next-day exclusive)
@@ -1057,17 +1065,53 @@ public class ClaimService {
                     currentUser.getId(), allowedProviderIds.size());
 
             claimsPage = claimRepository.searchPagedWithFiltersAndReviewerProviders(
-                    keyword, normalizedKeyword, allowedProviderIds, providerId, employerId, claimBatchId, status, dateFrom, dateTo, createdAtFrom, createdAtTo,
-                    pageable);
+                    repositoryKeyword, repositoryNormalizedKeyword, allowedProviderIds, providerId, employerId, claimBatchId, status, dateFrom, dateTo, createdAtFrom, createdAtTo,
+                    repositoryPageable);
         } else {
             // Admin/SuperAdmin - see all claims (bypass isolation)
             log.debug("✅ [BYPASS] User {} bypasses reviewer isolation", currentUser.getId());
 
             claimsPage = claimRepository.searchPagedWithFilters(
-                    keyword, normalizedKeyword, employerId, providerId, claimBatchId, status, dateFrom, dateTo, createdAtFrom, createdAtTo, pageable);
+                    repositoryKeyword, repositoryNormalizedKeyword, employerId, providerId, claimBatchId, status, dateFrom, dateTo, createdAtFrom, createdAtTo, repositoryPageable);
+        }
+
+        if (batchTokenSearch) {
+            List<Claim> filteredClaims = claimsPage.getContent().stream()
+                    .filter(claim -> claimMatchesAllNormalizedTokens(claim, normalizedKeywordTokens))
+                    .toList();
+            int fromIndex = Math.min((int) pageable.getOffset(), filteredClaims.size());
+            int toIndex = Math.min(fromIndex + pageable.getPageSize(), filteredClaims.size());
+            claimsPage = new PageImpl<>(filteredClaims.subList(fromIndex, toIndex), pageable, filteredClaims.size());
         }
 
         return claimsPage.map(claimMapper::toViewDto);
+    }
+
+    private List<String> normalizedSearchTokens(String search) {
+        String normalized = SearchTextNormalizer.normalize(search);
+        if (normalized.isBlank()) {
+            return Collections.emptyList();
+        }
+        return java.util.Arrays.stream(normalized.split("\\s+"))
+                .filter(token -> !token.isBlank())
+                .distinct()
+                .toList();
+    }
+
+    private boolean claimMatchesAllNormalizedTokens(Claim claim, List<String> normalizedTokens) {
+        if (normalizedTokens.isEmpty()) {
+            return true;
+        }
+        String haystack = SearchTextNormalizer.normalize(String.join(" ",
+                Objects.toString(claim.getProviderName(), ""),
+                Objects.toString(claim.getClaimNumber(), ""),
+                Objects.toString(claim.getPaperReference(), ""),
+                Objects.toString(claim.getDiagnosisDescription(), ""),
+                claim.getId() != null ? claim.getId().toString() : "",
+                claim.getMember() != null ? Objects.toString(claim.getMember().getFullName(), "") : "",
+                claim.getMember() != null ? Objects.toString(claim.getMember().getCivilId(), "") : "",
+                claim.getClaimBatch() != null ? Objects.toString(claim.getClaimBatch().getBatchCode(), "") : ""));
+        return normalizedTokens.stream().allMatch(haystack::contains);
     }
 
     @Transactional(readOnly = true)
