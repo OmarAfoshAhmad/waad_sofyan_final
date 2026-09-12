@@ -184,18 +184,45 @@ class MemberUpdateSensitiveFieldGuardIntegrationTest extends PostgresIntegration
         assertThat(reloaded.getActive()).isTrue();
     }
 
+    /**
+     * Card number is the one identity field this path may correct (decision of
+     * 2026-09-10: operations need to fix legacy/manual numbers). The route is
+     * MEMBER_EDIT_IDENTITY, the number must stay unique, and the barcode must
+     * follow it -- the entity enforces barcode == cardNumber on save.
+     */
     @Test
     @WithMockUser(username = "admin")
-    void changingTheCardNumberThroughTheGenericPathIsRefused() {
+    void correctingTheCardNumberThroughTheGenericPathIsAppliedAndKeepsBarcodeInStep() {
         ensureAdmin();
-        Fixture f = newMember(suffix());
+        String s = suffix();
+        Fixture f = newMember(s);
+        String corrected = "CORR" + s;
 
         MemberUpdateDto dto = new MemberUpdateDto();
-        dto.setCardNumber("HIJACKED" + suffix());
+        dto.setCardNumber(corrected);
+        memberService.updateMember(f.member().getId(), dto);
 
-        assertThatThrownBy(() -> memberService.updateMember(f.member().getId(), dto))
+        Member reloaded = memberRepository.findById(f.member().getId()).orElseThrow();
+        assertThat(reloaded.getCardNumber()).isEqualTo(corrected);
+        assertThat(reloaded.getBarcode()).isEqualTo(corrected);
+    }
+
+    @Test
+    @WithMockUser(username = "admin")
+    void correctingTheCardNumberToAnotherMembersNumberIsRefused() {
+        ensureAdmin();
+        Fixture a = newMember(suffix());
+        Fixture b = newMember(suffix());
+
+        MemberUpdateDto dto = new MemberUpdateDto();
+        dto.setCardNumber(b.member().getCardNumber());
+
+        assertThatThrownBy(() -> memberService.updateMember(a.member().getId(), dto))
                 .isInstanceOf(BusinessRuleException.class)
-                .hasMessageContaining("رقم البطاقة");
+                .hasMessageContaining("رقم البطاقة مستخدم");
+
+        Member reloaded = memberRepository.findById(a.member().getId()).orElseThrow();
+        assertThat(reloaded.getCardNumber()).isEqualTo(a.member().getCardNumber());
     }
 
     /** Every offending field is named in one response, not just the first. */
@@ -211,13 +238,13 @@ class MemberUpdateSensitiveFieldGuardIntegrationTest extends PostgresIntegration
         MemberUpdateDto dto = new MemberUpdateDto();
         dto.setStatus(Member.MemberStatus.SUSPENDED);
         dto.setEmployerId(other.getId());
-        dto.setCardNumber("X" + s);
+        dto.setRelationship(Member.Relationship.SON);
 
         assertThatThrownBy(() -> memberService.updateMember(f.member().getId(), dto))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessageContaining("حالة العضوية")
                 .hasMessageContaining("جهة العمل")
-                .hasMessageContaining("رقم البطاقة");
+                .hasMessageContaining("صلة القرابة");
     }
 
     /**

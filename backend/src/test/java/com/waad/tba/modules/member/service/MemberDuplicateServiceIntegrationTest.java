@@ -71,8 +71,25 @@ class MemberDuplicateServiceIntegrationTest extends PostgresIntegrationTestBase 
                 .licenseNumber("LIC-" + UUID.randomUUID()).providerType(ProviderType.CLINIC).active(true).build());
         Visit historicalVisit = visits.saveAndFlush(Visit.builder().member(duplicate).employer(f.employer())
                 .providerId(provider.getId()).visitDate(LocalDate.now().minusDays(2)).build());
+        // Since V219 every application-created claim is RESOLVED and must name
+        // the policy and the two dated assignments it was priced under; the
+        // check constraint refuses a bare row. Give the historical claim the
+        // context the duplicate actually had.
+        LocalDate assignmentStart = historicalVisit.getVisitDate().minusDays(1);
+        long employerAssignmentId = jdbc.queryForObject(
+                "INSERT INTO member_employer_assignments "
+                        + "(member_id, employer_id, assignment_start_date, assignment_reason, assignment_source) "
+                        + "VALUES (?, ?, ?, 'duplicate-merge fixture', 'SYSTEM') RETURNING id",
+                Long.class, duplicate.getId(), f.employer().getId(), assignmentStart);
+        long policyAssignmentId = jdbc.queryForObject(
+                "INSERT INTO member_policy_assignments "
+                        + "(member_id, policy_id, assignment_start_date, assignment_reason, assignment_source) "
+                        + "VALUES (?, ?, ?, 'duplicate-merge fixture', 'SYSTEM') RETURNING id",
+                Long.class, duplicate.getId(), duplicate.getBenefitPolicy().getId(), assignmentStart);
         Claim historicalClaim = Claim.builder().member(duplicate).visit(historicalVisit)
                 .providerId(provider.getId()).serviceDate(historicalVisit.getVisitDate())
+                .policyId(duplicate.getBenefitPolicy().getId())
+                .policyAssignmentId(policyAssignmentId).employerAssignmentId(employerAssignmentId)
                 .requestedAmount(new BigDecimal("10.00")).approvedAmount(new BigDecimal("10.00"))
                 .status(ClaimStatus.DRAFT).build();
         historicalClaim.addLine(ClaimLine.builder().serviceCode("HIST").serviceName("Historical")

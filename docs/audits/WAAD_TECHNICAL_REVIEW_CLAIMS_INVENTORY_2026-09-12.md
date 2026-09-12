@@ -185,3 +185,16 @@ rg -n "unpkg|setInterval|ROLE_RESOURCE_ACCESS|setStatus\(dto.getStatus\(\)\)|con
 الجرد الكامل والإغلاق في `docs/security/ACTION_GUARD_DERIVATION.md` (commits `f7359114`, `2741d4b5`, `871aed5b`, `51091aed`, وهذا). كل زر حساس مثبَت في الجرد صار خلف `PermissionGuard` بالصلاحية التي يفحصها الخادم على endpoint الزر، من `user.permissions` فقط؛ الصلاحيات المركبة AND. أُزيلت 3 أغلفة وهمية وقائمتا أدوار (إحداهما بدور غير موجود). الأولويتان 3 و4 كانتا محروستين أصلاً عدا `post-to-contract`.
 
 **خارج P1.2 بقرار:** `SystemSettingsPage`/أعلام الميزات (خادم دوري)، تصدير التقارير (لا endpoint مستقل)، حرّاس المسارات، والاختباران الموروثان (`UnifiedCoverageModalClaimContextArchitecture`، `ClaimBatchEntrySafetyArchitecture`).
+
+---
+
+## الاختبارات الموروثة — التشخيص
+
+| الاختبار | سبب الفشل | اختبار خاطئ أم كود خاطئ | القرار |
+|---|---|---|---|
+| FE `UnifiedCoverageModalClaimContextArchitecture` › «loads the complete active category list…» | يفحص نصياً `queryFn: getAllMedicalCategories`؛ ‏`de39dafb` بدّلها عمداً إلى `getCanonicalCoverageCategories` (القاموس الفعّال القانوني فقط؛ تعليق الشيفرة يشرح السبب). الدالة الجديدة تستدعي `getAllMedicalCategories()` نفسها ثم ترشّح — غير مقسّمة صفحياً، ومفتاح الكاش المعزول باقٍ | **اختبار قديم** — الثابت المحمي (قائمة كاملة غير مقسّمة، مفتاح معزول) ما زال قائماً | تحديث النص المفحوص، والإبقاء على `not.toContain('size: 500')` |
+| FE `ClaimBatchEntrySafetyArchitecture` › «submits only an explicit manual refusal…» | يفحص نصياً `manualRefusedAmount: isClaimRejected ? 0 : …`؛ ‏`742f07d0` أعاد تسمية الشرط إلى `savingClaimRejected = forceClaimRejected \|\| isClaimRejected` لدعم الرفض القسري. الحمولة ما زالت تُرسل `manualRefusedAmount` فقط ولا تعيد `refusedAmount` المحسوب | **اختبار قديم** — الثابت المالي سليم | تحديث النص، مع الإبقاء على النفي |
+| BE `MemberUpdateSensitiveFieldGuardIntegrationTest` › `changingTheCardNumberThroughTheGenericPathIsRefused` و`allOffendingFieldsAreReportedTogether` | في 2026-08-13 (`aa5dbb82`) مُنع تغيير رقم البطاقة عبر `PUT /{id}`؛ في 2026-09-10 (`02e085e3` «Improve member card editing») أُضيف عمداً `applyCardNumberCorrection`: تصحيح الأرقام القديمة/اليدوية عبر نفس المسار، مع فحص التفرد وإبقاء الباركود = رقم البطاقة. المسار محروس بـ`MEMBER_EDIT_IDENTITY` ورقم البطاقة حقل هوية | **اختبار قديم** أمام قرار منتج لاحق. لا اختبار يغطي السلوك الجديد إطلاقاً | استبدال اختبار الرفض باختبار السلوك الجديد (يُطبَّق + باركود متطابق + يُرفض المكرر)، وإزالة «رقم البطاقة» من قائمة المخالِفات المجمّعة |
+| BE `MemberDuplicateServiceIntegrationTest` › `mergeRetires…` | يُدرج مطالبة تاريخية بـ`Claim.builder()` عارية؛ منذ V219 (`5b437718`، 2026-09-04) كل مطالبة ينشئها التطبيق `RESOLVED` ويجب أن تحمل `policy_id` + `policy_assignment_id` + `employer_assignment_id`. الثابت صحيح ومقصود (تثبيت السياق التاريخي عند الإنشاء) | **fixture قديم** — موضوع الاختبار هو دمج المستفيدين لا إنشاء المطالبات | إعطاء المطالبة التاريخية سياقها من الـfixture (إدراج صفَّي تعيين كما تفعل `DirectClaimEntryRollbackIntegrationTest`)، بلا مسّ للكود |
+
+**الخلاصة:** الخمسة كلها اختبارات/fixtures تأخرت عن ثلاثة تغييرات مقصودة (`742f07d0`, `de39dafb`, `02e085e3`) وهجرة واحدة (V219). لا يوجد كود إنتاجي خاطئ يُصلَح. الجديد الوحيد: اختبار يغطي تصحيح رقم البطاقة لأنه لم يكن مغطى.
