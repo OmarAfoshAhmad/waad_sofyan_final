@@ -4,6 +4,13 @@ import { ThemeProvider, createTheme } from '@mui/material/styles';
 
 import { ClaimTotalsFooter } from '../ClaimTotalsFooter';
 
+// The footer's write actions are gated on CLAIM_CREATE (the permission the
+// server checks on direct-entry/draft/submit). These tests are about the
+// financial-read gating of an already-permitted user, so grant it.
+vi.mock('hooks/useAuth', () => ({
+  default: () => ({ user: { role: 'DATA_ENTRY', permissions: ['CLAIM_CREATE'] }, authStatus: 'AUTHENTICATED' })
+}));
+
 const theme = createTheme({ cssVariables: true });
 
 function renderFooter(financialDataUnavailable) {
