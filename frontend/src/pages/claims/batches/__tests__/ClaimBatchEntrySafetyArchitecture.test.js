@@ -77,7 +77,9 @@ describe('claim batch entry safety boundary', () => {
   });
 
   it('submits only an explicit manual refusal and never reposts the calculated aggregate refusal', () => {
-    expect(entrySource).toContain('manualRefusedAmount: isClaimRejected ? 0 : parseFloat(l.manualRefusedAmount) || 0');
+    // savingClaimRejected = forceClaimRejected || isClaimRejected: a forced
+    // whole-claim rejection also zeroes the manual refusal.
+    expect(entrySource).toContain('manualRefusedAmount: savingClaimRejected ? 0 : parseFloat(l.manualRefusedAmount) || 0');
     expect(entrySource).not.toContain('refusedAmount: parseFloat(l.refusedAmount)');
   });
 

@@ -28,7 +28,10 @@ describe('unified coverage modal claim-context boundary', () => {
   });
 
   it('loads the complete active category list with an isolated selector cache key', () => {
-    expect(tabSource).toContain('queryFn: getAllMedicalCategories');
+    // getCanonicalCoverageCategories fetches the unpaginated list and filters
+    // to the canonical active dictionary; a partial page must never be cached
+    // under the selector key.
+    expect(tabSource).toContain('queryFn: getCanonicalCoverageCategories');
     expect(tabSource).toContain("queryKey: ['medical-categories-active-coverage-selector']");
     expect(tabSource).not.toContain('size: 500');
   });
