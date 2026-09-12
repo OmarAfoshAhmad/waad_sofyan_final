@@ -1,22 +1,21 @@
 package com.waad.tba.modules.member.exception;
 
+import com.waad.tba.common.exception.ResourceNotFoundException;
+
 /**
- * Exception thrown when member is not found during eligibility check
+ * No member matches the eligibility lookup. A ResourceNotFoundException so
+ * GlobalExceptionHandler maps it to 404 / MEMBER_NOT_FOUND; the message does
+ * not echo the identifier that was searched for.
  */
-public class MemberNotFoundException extends RuntimeException {
-    
-    private static final String ERROR_CODE = "MEMBER_NOT_FOUND";
-    private static final String DEFAULT_MESSAGE = "Member not found";
-    
+public class MemberNotFoundException extends ResourceNotFoundException {
+
+    private static final String DEFAULT_MESSAGE = "المستفيد غير موجود.";
+
     public MemberNotFoundException() {
-        super(DEFAULT_MESSAGE);
+        this(DEFAULT_MESSAGE);
     }
-    
+
     public MemberNotFoundException(String message) {
         super(message != null ? message : DEFAULT_MESSAGE);
-    }
-    
-    public String getErrorCode() {
-        return ERROR_CODE;
     }
 }

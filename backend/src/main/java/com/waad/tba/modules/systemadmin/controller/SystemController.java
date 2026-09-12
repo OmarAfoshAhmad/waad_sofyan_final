@@ -61,35 +61,23 @@ public class SystemController {
     public ResponseEntity<ApiResponse<EmployerResponseDto>> getSystemEmployer() {
         log.info("REST request to get system default employer");
 
-        try {
-            List<EmployerResponseDto> employers = employerService.getActiveEmployers();
-            
-            if (employers.isEmpty()) {
-                log.error("No employers found in database");
-                return ResponseEntity.status(500)
-                    .body(ApiResponse.error("System configuration error: No employers configured"));
-            }
+        List<EmployerResponseDto> employers = employerService.getActiveEmployers();
 
-            // Return the first employer (or the one marked as default)
-            EmployerResponseDto defaultEmployer = employers.stream()
-                .filter(e -> e.isDefault())
-                .findFirst()
-                .orElse(employers.get(0));
-
-            log.debug("System employer retrieved: {} (ID: {})", 
-                defaultEmployer.getName(), defaultEmployer.getId());
-
-            return ResponseEntity.ok(
-                ApiResponse.success("System employer retrieved successfully", defaultEmployer));
-                
-        } catch (SystemConfigurationException e) {
-            log.error("System configuration error: No employers found in database", e);
-            return ResponseEntity.status(500)
-                .body(ApiResponse.error("System configuration error: " + e.getMessage()));
-        } catch (Exception e) {
-            log.error("Unexpected error retrieving system company", e);
-            return ResponseEntity.status(500)
-                .body(ApiResponse.error("Error retrieving system company: " + e.getMessage()));
+        if (employers.isEmpty()) {
+            // Mapped by GlobalExceptionHandler to a safe 500 with a tracking id.
+            throw new SystemConfigurationException("No active employers configured");
         }
+
+        // Return the first employer (or the one marked as default)
+        EmployerResponseDto defaultEmployer = employers.stream()
+            .filter(e -> e.isDefault())
+            .findFirst()
+            .orElse(employers.get(0));
+
+        log.debug("System employer retrieved: {} (ID: {})",
+            defaultEmployer.getName(), defaultEmployer.getId());
+
+        return ResponseEntity.ok(
+            ApiResponse.success("System employer retrieved successfully", defaultEmployer));
     }
 }

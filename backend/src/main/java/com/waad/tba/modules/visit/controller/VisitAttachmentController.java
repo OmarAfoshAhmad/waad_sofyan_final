@@ -134,15 +134,8 @@ public class VisitAttachmentController {
         
         log.info("Delete attachment: visitId={}, attachmentId={}", visitId, attachmentId);
         
-        try {
-            attachmentService.deleteAttachment(visitId, attachmentId);
-            return ResponseEntity.ok("Attachment deleted successfully");
-            
-        } catch (RuntimeException e) {
-            log.error("Failed to delete attachment {}: {}", attachmentId, e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body("Failed to delete attachment: " + e.getMessage());
-        }
+        attachmentService.deleteAttachment(visitId, attachmentId);
+        return ResponseEntity.ok("Attachment deleted successfully");
     }
     
     /**

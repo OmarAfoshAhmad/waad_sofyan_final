@@ -32,7 +32,7 @@ public class MemberImportPreviewTicketService {
 
     @Transactional
     public String issue(MultipartFile file, Long employerId, Long policyId, Integer headerRow,
-            Boolean clearOldMembers, Map<String, String> mappings, Set<Long> resolvedEmployers) throws Exception {
+            Boolean clearOldMembers, Map<String, String> mappings, Set<Long> resolvedEmployers) throws java.io.IOException {
         User user = authorizationService.requireCurrentUser();
         UUID token = UUID.randomUUID();
         Long[] employers = resolvedEmployers.stream().sorted().toArray(Long[]::new);
@@ -58,7 +58,7 @@ public class MemberImportPreviewTicketService {
 
     @Transactional
     public void consume(String tokenText, MultipartFile file, Long employerId, Long policyId, Integer headerRow,
-            Boolean clearOldMembers, Map<String, String> mappings, Set<Long> resolvedEmployers) throws Exception {
+            Boolean clearOldMembers, Map<String, String> mappings, Set<Long> resolvedEmployers) throws java.io.IOException {
         if (tokenText == null || tokenText.isBlank()) throw new BusinessRuleException("يجب تنفيذ معاينة صالحة أولاً");
         UUID token;
         try { token = UUID.fromString(tokenText); }
@@ -87,11 +87,18 @@ public class MemberImportPreviewTicketService {
         jdbc.update("update member_import_preview_tickets set consumed_at=current_timestamp where token=?", token);
     }
 
-    private String mappingsHash(Map<String, String> mappings) throws Exception {
+    private String mappingsHash(Map<String, String> mappings) throws java.io.IOException {
         return hash(objectMapper.writeValueAsBytes(new TreeMap<>(mappings == null ? Map.of() : mappings)));
     }
-    private static String hash(byte[] bytes) throws Exception {
-        return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
+    private static String hash(byte[] bytes) {
+        try {
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
+        } catch (java.security.NoSuchAlgorithmException e) {
+            // SHA-256 is mandatory in every conforming JVM; declaring it as a
+            // checked failure forced `throws Exception` all the way up to the
+            // controller, and that is what let raw messages reach responses.
+            throw new IllegalStateException("SHA-256 unavailable", e);
+        }
     }
     private static Set<Long> arrayToSet(Array array) throws java.sql.SQLException {
         if (array == null) return Set.of();

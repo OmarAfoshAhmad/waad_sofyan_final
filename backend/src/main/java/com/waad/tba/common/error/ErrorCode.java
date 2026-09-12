@@ -86,6 +86,8 @@ public enum ErrorCode {
 
     // === General Errors ===
     VALIDATION_ERROR,
+    /** A stored file could not be written, read or removed; details are in the server log only. */
+    FILE_OPERATION_FAILED,
     INTERNAL_ERROR
 }
 

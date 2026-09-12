@@ -90,19 +90,19 @@ public class MemberExcelImportService {
     private final MemberImportPreviewTicketService previewTicketService;
 
 
-    public MemberImportPreviewDto parseAndPreview(MultipartFile file) throws Exception {
+    public MemberImportPreviewDto parseAndPreview(MultipartFile file) throws java.io.IOException {
         return parseAndPreview(file, null, null, null);
     }
 
     public MemberImportPreviewDto parseAndPreview(MultipartFile file, Map<String, String> customMappings)
-            throws Exception {
+            throws java.io.IOException {
         return parseAndPreview(file, customMappings, null, null);
     }
 
     public MemberImportPreviewDto parseAndPreview(
             MultipartFile file,
             Map<String, String> customMappings,
-            Integer headerRowNumber) throws Exception {
+            Integer headerRowNumber) throws java.io.IOException {
         return parseAndPreview(file, customMappings, headerRowNumber, null);
     }
 
@@ -110,7 +110,7 @@ public class MemberExcelImportService {
             MultipartFile file,
             Map<String, String> customMappings,
             Integer headerRowNumber,
-            Long defaultEmployerId) throws Exception {
+            Long defaultEmployerId) throws java.io.IOException {
         
         log.info("📊 Parsing Excel file for preview: {} (custom mappings: {})",
                 file.getOriginalFilename(), customMappings != null ? "yes" : "auto");
@@ -228,11 +228,11 @@ public class MemberExcelImportService {
         }
     }
 
-    public MemberImportResultDto executeImport(MultipartFile file, String batchId, Long employerId, Long benefitPolicyId) throws Exception {
+    public MemberImportResultDto executeImport(MultipartFile file, String batchId, Long employerId, Long benefitPolicyId) throws java.io.IOException {
         return executeImport(file, batchId, employerId, benefitPolicyId, null, false);
     }
 
-    public MemberImportResultDto executeImport(MultipartFile file, String batchId, Long employerId, Long benefitPolicyId, Integer headerRowNumber) throws Exception {
+    public MemberImportResultDto executeImport(MultipartFile file, String batchId, Long employerId, Long benefitPolicyId, Integer headerRowNumber) throws java.io.IOException {
         return executeImport(file, batchId, employerId, benefitPolicyId, headerRowNumber, false);
     }
 
@@ -267,7 +267,7 @@ public class MemberExcelImportService {
     @org.springframework.transaction.annotation.Transactional
     public MemberImportResultDto executeConfirmedImport(MultipartFile file, String previewToken, Long employerId,
             Long benefitPolicyId, Integer headerRowNumber, Boolean clearOldMembers,
-            Map<String, String> customMappings) throws Exception {
+            Map<String, String> customMappings) throws java.io.IOException {
         MemberImportPreviewDto guard = parseAndPreview(file, customMappings, headerRowNumber, employerId);
         previewTicketService.consume(previewToken, file, employerId, benefitPolicyId,
                 guard.getResolvedHeaderRowNumber(),
@@ -278,13 +278,13 @@ public class MemberExcelImportService {
     }
 
     @org.springframework.transaction.annotation.Transactional
-    public MemberImportResultDto executeImport(MultipartFile file, String batchId, Long employerId, Long benefitPolicyId, Integer headerRowNumber, Boolean clearOldMembers) throws Exception {
+    public MemberImportResultDto executeImport(MultipartFile file, String batchId, Long employerId, Long benefitPolicyId, Integer headerRowNumber, Boolean clearOldMembers) throws java.io.IOException {
         return executeImport(file, batchId, employerId, benefitPolicyId, headerRowNumber, clearOldMembers, null);
     }
 
     private MemberImportResultDto executeImport(MultipartFile file, String batchId, Long employerId,
             Long benefitPolicyId, Integer headerRowNumber, Boolean clearOldMembers,
-            Map<String, String> customMappings) throws Exception {
+            Map<String, String> customMappings) throws java.io.IOException {
         log.info("📥 Executing member import: batchId={}, file={}, employer={}, policy={}, clearOldMembers={}", batchId, file.getOriginalFilename(), employerId, benefitPolicyId, clearOldMembers);
 
         // clearOldMembers is deliberately NOT run here, before the

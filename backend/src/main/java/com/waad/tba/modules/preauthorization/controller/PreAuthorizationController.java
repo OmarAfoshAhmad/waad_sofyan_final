@@ -703,14 +703,8 @@ public class PreAuthorizationController {
         
         log.info("[API] Deleting attachment {} from pre-authorization {}", attachmentId, id);
         
-        try {
-            attachmentService.deleteAttachment(id, attachmentId);
-            return ResponseEntity.ok(ApiResponse.<Void>success("تم حذف المرفق بنجاح", null));
-        } catch (RuntimeException e) {
-            log.error("Failed to delete attachment {}: {}", attachmentId, e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(ApiResponse.error("فشل في حذف المرفق: " + e.getMessage()));
-        }
+        attachmentService.deleteAttachment(id, attachmentId);
+        return ResponseEntity.ok(ApiResponse.<Void>success("تم حذف المرفق بنجاح", null));
     }
 
     // ==================== SEARCH ====================

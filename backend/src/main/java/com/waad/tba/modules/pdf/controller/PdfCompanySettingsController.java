@@ -113,18 +113,14 @@ public class PdfCompanySettingsController {
                 "contentType", file.getContentType(),
                 "settings", updated
             ));
-        } catch (IllegalArgumentException e) {
-            log.warn("[PdfSettingsController] Invalid logo file: {}", e.getMessage());
-            return ResponseEntity.badRequest().body(Map.of(
-                "error", "Invalid file",
-                "message", e.getMessage()
-            ));
         } catch (IOException e) {
-            log.error("[PdfSettingsController] Failed to upload logo", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
-                "error", "Upload failed",
-                "message", e.getMessage()
-            ));
+            // Validation refusals are BusinessRuleExceptions and reach
+            // GlobalExceptionHandler on their own. Only the I/O failure is
+            // caught, logged with its stack, and answered without its text.
+            log.error("[PdfSettingsController] Failed to store logo", e);
+            throw new com.waad.tba.common.exception.BusinessRuleException(
+                com.waad.tba.common.error.ErrorCode.VALIDATION_ERROR,
+                "تعذر حفظ الشعار. حاول مرة أخرى.");
         }
     }
     

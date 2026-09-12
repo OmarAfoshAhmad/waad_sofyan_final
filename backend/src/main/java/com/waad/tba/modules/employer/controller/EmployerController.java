@@ -97,14 +97,10 @@ public class EmployerController {
     @PostMapping
     @PreAuthorize("@permissionGuard.has('EMPLOYER_MANAGE')")
     public ResponseEntity<ApiResponse<EmployerResponseDto>> create(@Valid @RequestBody EmployerCreateDto dto) {
-        try {
-            EmployerResponseDto created = service.create(dto);
-            return ResponseEntity.status(HttpStatus.CREATED)
-                    .body(ApiResponse.success("Employer created successfully", created));
-        } catch (IllegalStateException ex) {
-            return ResponseEntity.status(HttpStatus.CONFLICT)
-                    .body(ApiResponse.error(ex.getMessage()));
-        }
+        // IllegalStateException -> 409 via GlobalExceptionHandler, with a tracking id.
+        EmployerResponseDto created = service.create(dto);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success("Employer created successfully", created));
     }
 
     @PutMapping("/{id:\\d+}")

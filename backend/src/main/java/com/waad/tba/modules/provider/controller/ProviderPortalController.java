@@ -1276,7 +1276,6 @@ public class ProviderPortalController {
         
         log.info("[PROVIDER-PORTAL] POST /api/v1/provider/my-contract/pricing, providerId={}", providerId);
         
-        try {
             com.waad.tba.modules.providercontract.dto.ProviderContractResponseDto activeContract = 
                 modernContractService.findActiveByProvider(providerId);
             
@@ -1341,13 +1340,7 @@ public class ProviderPortalController {
                 .build();
             
             return ResponseEntity.ok(ApiResponse.success("Pricing item added successfully", mappedDto));
-        } catch (com.waad.tba.common.exception.BusinessRuleException e) {
-            log.warn("[PROVIDER-PORTAL] Contract pricing rejected: {}", e.getMessage());
-            return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
-        } catch (Exception e) {
-            log.error("[PROVIDER-PORTAL] Error adding contract pricing", e);
-            return ResponseEntity.badRequest().body(ApiResponse.error("تعذر إضافة بند التسعير"));
-        }
+
     }
     
     // ═══════════════════════════════════════════════════════════════════════════

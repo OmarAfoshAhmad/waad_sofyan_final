@@ -3,8 +3,6 @@ package com.waad.tba.modules.member.controller;
 import com.waad.tba.common.dto.ApiResponse;
 import com.waad.tba.modules.member.dto.EligibilityResultDto;
 import com.waad.tba.modules.member.dto.MemberFinancialSummaryDto;
-import com.waad.tba.modules.member.exception.InvalidEligibilityInputException;
-import com.waad.tba.modules.member.exception.MemberNotFoundException;
 import com.waad.tba.modules.member.service.MemberFinancialSummaryService;
 import com.waad.tba.modules.member.service.UnifiedEligibilityService;
 import com.waad.tba.modules.member.security.MemberOperation;
@@ -16,7 +14,6 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -130,16 +127,10 @@ public class UnifiedEligibilityController {
         
         log.info("📊 Retrieving service coverage limits: memberId={}, serviceCode={}", memberId, serviceCode);
         
-        try {
-            com.waad.tba.modules.member.dto.CoverageLimitsDto limits = financialSummaryService.getServiceCoverageLimits(memberId, serviceCode);
-            return ResponseEntity.ok(ApiResponse.success(limits));
-        } catch (com.waad.tba.common.exception.BusinessRuleException e) {
-            log.warn("⚠️ Failed to get service coverage limits: memberId={}, serviceCode={}, msg={}", memberId, serviceCode, e.getMessage());
-            return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
-        } catch (Exception e) {
-            log.error("💥 Error retrieving service coverage limits", e);
-            return ResponseEntity.internalServerError().body(ApiResponse.error("Internal Server Error"));
-        }
+        // Failures propagate to GlobalExceptionHandler: business rules answer
+        // 422 with their Arabic reason and a tracking id, anything else a safe 500.
+        com.waad.tba.modules.member.dto.CoverageLimitsDto limits = financialSummaryService.getServiceCoverageLimits(memberId, serviceCode);
+        return ResponseEntity.ok(ApiResponse.success(limits));
     }
 
     // ==================== ELIGIBILITY CHECK ====================
@@ -191,52 +182,14 @@ public class UnifiedEligibilityController {
         // Security: Don't log query content (may contain sensitive data)
         log.info("📥 [ELIGIBILITY-REQUEST] Received");
 
-        try {
-            // Perform eligibility check with auto-detection
-            EligibilityResultDto result = eligibilityService.checkEligibility(
-                    request == null ? null : request.query(),
-                    request == null ? null : request.serviceDate());
-
-            // Strategic logging: Result already logged in service layer
-            return ResponseEntity.ok(ApiResponse.success(result));
-
-        } catch (InvalidEligibilityInputException e) {
-            log.warn("⚠️ [INVALID-INPUT] {}", e.getErrorCode());
-            return ResponseEntity
-                .badRequest()
-                .body(ApiResponse.error(e.getMessage()));
-
-        } catch (MemberNotFoundException e) {
-            log.warn("⚠️ [NOT-FOUND] {}", e.getErrorCode());
-            return ResponseEntity
-                .status(HttpStatus.NOT_FOUND)
-                .body(ApiResponse.error(e.getMessage()));
-
-        } catch (Exception e) {
-            log.error("💥 [UNEXPECTED-ERROR] Eligibility check failed", e);
-            return ResponseEntity
-                .internalServerError()
-                .body(ApiResponse.error("Internal server error during eligibility check"));
-        }
+        // InvalidEligibilityInputException (422) and MemberNotFoundException
+        // (404) are mapped by GlobalExceptionHandler; this controller used to
+        // carry its own copies of that mapping.
+        EligibilityResultDto result = eligibilityService.checkEligibility(
+                request == null ? null : request.query(),
+                request == null ? null : request.serviceDate());
+        return ResponseEntity.ok(ApiResponse.success(result));
     }
 
     public record EligibilityEvaluationRequest(String query, java.time.LocalDate serviceDate) {}
-
-    /**
-     * Global exception handler for this controller
-     */
-    @ExceptionHandler(InvalidEligibilityInputException.class)
-    public ResponseEntity<ApiResponse<Void>> handleInvalidInput(InvalidEligibilityInputException e) {
-        return ResponseEntity
-            .badRequest()
-            .body(ApiResponse.error(e.getMessage()));
-    }
-
-    @ExceptionHandler(MemberNotFoundException.class)
-    public ResponseEntity<ApiResponse<Void>> handleMemberNotFound(MemberNotFoundException e) {
-        return ResponseEntity
-            .status(HttpStatus.NOT_FOUND)
-            .body(ApiResponse.error(e.getMessage()));
-    }
 }
-

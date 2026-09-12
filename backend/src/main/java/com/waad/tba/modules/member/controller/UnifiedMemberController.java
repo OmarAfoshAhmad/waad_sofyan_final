@@ -1070,15 +1070,11 @@ public class UnifiedMemberController {
 
                 log.info("Terminating membership: id={}", id);
 
-                try {
-                        unifiedMemberService.terminateMembership(id, reason);
-                        log.info("Membership terminated successfully: id={}", id);
-                        return ResponseEntity.ok(ApiResponse.success("تم إنهاء العضوية بنجاح", null));
-                } catch (BusinessRuleException | IllegalStateException e) {
-                        log.warn("Termination blocked for member id={}: {}", id, e.getMessage());
-                        return ResponseEntity.status(org.springframework.http.HttpStatus.CONFLICT)
-                                        .body(ApiResponse.error(e.getMessage()));
-                }
+                // BusinessRuleException (422) / IllegalStateException (409) are
+                // mapped centrally with a stable code and tracking id.
+                unifiedMemberService.terminateMembership(id, reason);
+                log.info("Membership terminated successfully: id={}", id);
+                return ResponseEntity.ok(ApiResponse.success("تم إنهاء العضوية بنجاح", null));
         }
 
         /**
@@ -1444,7 +1440,6 @@ public class UnifiedMemberController {
                 log.info("📸 Photo upload request: memberId={}, filename={}, size={}",
                                 id, file.getOriginalFilename(), file.getSize());
 
-                try {
                         // Authorize before writing to storage to avoid orphan files on denial.
                         unifiedMemberService.assertCanAccessMemberPhoto(id);
 
@@ -1481,17 +1476,6 @@ public class UnifiedMemberController {
 
                         return ResponseEntity.ok(ApiResponse.success("تم رفع الصورة بنجاح", updated));
 
-                } catch (AccessDeniedException | com.waad.tba.modules.member.security.MemberAccessDeniedException e) {
-                        throw e;
-                } catch (RuntimeException e) {
-                        // Access refusal and business limits must retain their 403/422
-                        // semantics in GlobalExceptionHandler, never become a false 500.
-                        throw e;
-                } catch (Exception e) {
-                        log.error("❌ Photo upload failed: memberId={}, error={}", id, e.getMessage(), e);
-                        return ResponseEntity.internalServerError()
-                                        .body(ApiResponse.error("فشل رفع الصورة: " + e.getMessage()));
-                }
         }
 
         /**
@@ -1552,7 +1536,6 @@ public class UnifiedMemberController {
         public ResponseEntity<ApiResponse<Void>> deletePhoto(@PathVariable("id") Long id) {
                 log.info("🗑️ Photo delete request: memberId={}", id);
 
-                try {
                         String photoPath = unifiedMemberService.getMemberPhotoPath(id);
 
                         if (photoPath != null && !photoPath.isBlank()) {
@@ -1565,13 +1548,6 @@ public class UnifiedMemberController {
 
                         return ResponseEntity.ok(ApiResponse.success("تم حذف الصورة بنجاح", null));
 
-                } catch (AccessDeniedException e) {
-                        throw e;
-                } catch (Exception e) {
-                        log.error("❌ Photo deletion failed: memberId={}, error={}", id, e.getMessage(), e);
-                        return ResponseEntity.internalServerError()
-                                        .body(ApiResponse.error("فشل حذف الصورة: " + e.getMessage()));
-                }
         }
 
         // ==================== RESTORE & HARD DELETE ====================

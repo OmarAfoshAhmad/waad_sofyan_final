@@ -1,5 +1,7 @@
 package com.waad.tba.modules.pdf.service;
 
+import com.waad.tba.common.error.ErrorCode;
+import com.waad.tba.common.exception.BusinessRuleException;
 import com.waad.tba.modules.pdf.entity.PdfCompanySettings;
 import com.waad.tba.modules.pdf.repository.PdfCompanySettingsRepository;
 import lombok.RequiredArgsConstructor;
@@ -262,21 +264,18 @@ public class PdfCompanySettingsService {
     
     private void validateLogoFile(MultipartFile file) {
         if (file == null || file.isEmpty()) {
-            throw new IllegalArgumentException("Logo file is empty");
+            throw new BusinessRuleException(ErrorCode.VALIDATION_ERROR, "ملف الشعار فارغ.");
         }
         
         if (file.getSize() > MAX_LOGO_SIZE) {
-            throw new IllegalArgumentException(
-                String.format("Logo file too large: %d bytes (max: %d bytes)", 
-                    file.getSize(), MAX_LOGO_SIZE)
-            );
+            throw new BusinessRuleException(ErrorCode.VALIDATION_ERROR,
+                "حجم الشعار كبير. الحد الأقصى " + (MAX_LOGO_SIZE / (1024 * 1024)) + " ميجابايت.");
         }
         
         String contentType = file.getContentType();
         if (!ALLOWED_IMAGE_TYPES.contains(contentType)) {
-            throw new IllegalArgumentException(
-                "Invalid image type: " + contentType + ". Allowed: " + ALLOWED_IMAGE_TYPES
-            );
+            throw new BusinessRuleException(ErrorCode.VALIDATION_ERROR,
+                "نوع الصورة غير مدعوم. المسموح: PNG أو JPEG أو SVG.");
         }
     }
     

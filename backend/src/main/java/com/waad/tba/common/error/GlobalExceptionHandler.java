@@ -224,6 +224,42 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Storage failed under a valid request. Its messages name folders, file
+     * keys and the underlying I/O cause -- useful in the log, not in a
+     * response. Several controllers used to concatenate them into the body.
+     */
+    @ExceptionHandler(com.waad.tba.common.file.FileStorageException.class)
+    public ResponseEntity<ApiError> handleFileStorage(
+            com.waad.tba.common.file.FileStorageException ex, HttpServletRequest request) {
+        String trackingId = generateTrackingId();
+        log.error("File storage failure - Path: {}, TrackingId: {}", request.getRequestURI(), trackingId, ex);
+        Map<String, Object> details = new HashMap<>();
+        details.put("reference", trackingId);
+        ApiError error = ApiError.of(ErrorCode.FILE_OPERATION_FAILED, "The file could not be processed.",
+                request.getRequestURI(), details, now(), trackingId);
+        error.setMessageAr("تعذر معالجة الملف. حاول مرة أخرى.");
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(error);
+    }
+
+    /**
+     * The system is missing configuration it needs to answer at all. A server
+     * fault, so a 500 -- but a named one, and without the message, which
+     * describes what is missing in operator terms.
+     */
+    @ExceptionHandler(com.waad.tba.common.exception.SystemConfigurationException.class)
+    public ResponseEntity<ApiError> handleSystemConfiguration(
+            com.waad.tba.common.exception.SystemConfigurationException ex, HttpServletRequest request) {
+        String trackingId = generateTrackingId();
+        log.error("System configuration error - Path: {}, TrackingId: {}", request.getRequestURI(), trackingId, ex);
+        Map<String, Object> details = new HashMap<>();
+        details.put("reference", trackingId);
+        ApiError error = ApiError.of(ErrorCode.INTERNAL_ERROR, "The system is not fully configured.",
+                request.getRequestURI(), details, now(), trackingId);
+        error.setMessageAr("النظام غير مهيأ بالكامل. تواصل مع مدير النظام.");
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+    }
+
+    /**
      * A path that matches no handler. Spring 6.1 raises this instead of
      * writing a bare 404, and without a mapping it fell through to the
      * generic handler: every probe of a non-existent POST path became a 500,

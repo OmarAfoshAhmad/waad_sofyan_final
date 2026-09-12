@@ -64,7 +64,7 @@ public class UnifiedEligibilityService {
 
     public EligibilityResultDto checkEligibility(String query, java.time.LocalDate serviceDate) {
         if (query == null || query.trim().isEmpty()) {
-            throw new InvalidEligibilityInputException("Query cannot be empty");
+            throw new InvalidEligibilityInputException("أدخل رقم البطاقة أو الباركود.");
         }
 
         String trimmedQuery = query.trim();
@@ -82,8 +82,7 @@ public class UnifiedEligibilityService {
         else {
             log.warn("⚠️ [INVALID-FORMAT] Query does not match Card Number or Barcode pattern");
             throw new InvalidEligibilityInputException(
-                "Invalid input format. Expected: Card Number (digits) or Barcode (WAD-YYYY-NNNNNNNN)"
-            );
+                "صيغة الإدخال غير صحيحة: رقم بطاقة (أرقام) أو باركود بصيغة WAD-YYYY-NNNNNNNN.");
         }
     }
 
@@ -96,7 +95,7 @@ public class UnifiedEligibilityService {
         Member member = memberRepository.findByBarcode(barcode)
                 .orElseThrow(() -> {
                     log.warn("⚠️ [NOT-FOUND] No member with barcode: {}", barcode);
-                    return new MemberNotFoundException("Member not found with barcode: " + barcode);
+                    return new MemberNotFoundException();
                 });
         log.info("✅ [FOUND] Member ID: {}, Name: {}", member.getId(), member.getFullName());
 
@@ -112,7 +111,7 @@ public class UnifiedEligibilityService {
         Member member = memberRepository.findByCardNumber(cardNumber)
                 .orElseThrow(() -> {
                     log.warn("⚠️ [NOT-FOUND] No member with card number: {}", cardNumber);
-                    return new MemberNotFoundException("Member not found with card number: " + cardNumber);
+                    return new MemberNotFoundException();
                 });
         log.info("✅ [FOUND] Member ID: {}, Name: {}", member.getId(), member.getFullName());
 
@@ -124,7 +123,7 @@ public class UnifiedEligibilityService {
      */
     private EligibilityResultDto buildEligibilityResult(Member member, java.time.LocalDate serviceDate) {
         if (serviceDate == null) {
-            throw new InvalidEligibilityInputException("Service date is required");
+            throw new InvalidEligibilityInputException("تاريخ الخدمة مطلوب.");
         }
         var engineResult = eligibilityEngineService.checkEligibility(
                 EligibilityCheckRequest.of(member.getId(), serviceDate));

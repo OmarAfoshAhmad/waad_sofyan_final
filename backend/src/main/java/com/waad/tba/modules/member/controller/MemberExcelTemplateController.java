@@ -25,6 +25,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.waad.tba.common.exception.BusinessRuleException;
 import com.waad.tba.common.dto.ApiResponse;
 import com.waad.tba.modules.member.dto.ExcelColumnDetectionDto;
 import com.waad.tba.modules.member.dto.MemberImportLogSummaryDto;
@@ -160,10 +161,8 @@ public class MemberExcelTemplateController {
             
             return ResponseEntity.ok(ApiResponse.success("تم تحليل الملف واكتشاف الأعمدة بنجاح", detection));
             
-        } catch (Exception e) {
-            log.error("❌ [Column Detection] Error: {}", e.getMessage(), e);
-            return ResponseEntity.internalServerError()
-                    .body(ApiResponse.error("خطأ في تحليل الملف: " + e.getMessage()));
+        } catch (java.io.IOException e) {
+            throw unreadableExcel(e);
         }
     }
 
@@ -218,10 +217,8 @@ public class MemberExcelTemplateController {
                     ? "تم تحليل الملف بنجاح"
                     : "تم تحليل الملف: لا توجد صفوف صالحة حاليًا، يمكن اختيار جهة عمل موحدة ثم التنفيذ";
             return ResponseEntity.ok(ApiResponse.success(message, preview));
-        } catch (Exception e) {
-            log.error("❌ Preview failed: {}", e.getMessage(), e);
-            return ResponseEntity.badRequest()
-                    .body(ApiResponse.error("فشل تحليل الملف: " + e.getMessage()));
+        } catch (java.io.IOException e) {
+            throw unreadableExcel(e);
         }
     }
 
@@ -287,10 +284,8 @@ public class MemberExcelTemplateController {
                         .body(ApiResponse.error("فشل الاستيراد: " + result.getMessage(), result));
             }
             
-        } catch (Exception e) {
-            log.error("❌ Import failed: {}", e.getMessage(), e);
-            return ResponseEntity.badRequest()
-                    .body(ApiResponse.error("فشل الاستيراد: " + e.getMessage()));
+        } catch (java.io.IOException e) {
+            throw unreadableExcel(e);
         }
     }
 
@@ -445,5 +440,18 @@ public class MemberExcelTemplateController {
                     "تنسيق مطابقة أعمدة الاستيراد غير صالح");
         }
     }
-}
 
+    /**
+     * The workbook could not be read. Only IOException is caught at this
+     * layer: business refusals, access denials and POI's own
+     * IllegalArgumentException subclasses already reach GlobalExceptionHandler
+     * with a stable code. The raw message is logged with its stack and never
+     * shown -- it used to be concatenated into the response, which handed
+     * parser internals to the user as "فشل تحليل الملف: ...".
+     */
+    private BusinessRuleException unreadableExcel(java.io.IOException e) {
+        log.error("Excel upload could not be read", e);
+        return new BusinessRuleException(com.waad.tba.common.error.ErrorCode.VALIDATION_ERROR,
+                "تعذر قراءة ملف Excel. تأكد أن الملف صالح وغير تالف.");
+    }
+}

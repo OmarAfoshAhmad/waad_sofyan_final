@@ -58,22 +58,18 @@ public class ClaimAttachmentController {
         log.info("Upload attachment request: claimId={}, type={}, filename={}", 
                  claimId, attachmentType, file.getOriginalFilename());
         
-        try {
-            ClaimAttachment attachment = attachmentService.uploadAttachment(claimId, file, attachmentType);
-            ClaimAttachmentDto dto = ClaimAttachmentDto.builder()
-                .id(attachment.getId())
-                .fileName(attachment.getOriginalFileName())
-                .fileUrl("/api/v1/claims/" + claimId + "/attachments/" + attachment.getId())
-                .fileType(attachment.getFileType())
-                .createdAt(attachment.getCreatedAt())
-                .build();
-            return ResponseEntity.ok(ApiResponse.success("Attachment uploaded successfully", dto));
-            
-        } catch (RuntimeException e) {
-            log.error("Failed to upload attachment for claim {}: {}", claimId, e.getMessage());
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(ApiResponse.error("Failed to upload attachment: " + e.getMessage()));
-        }
+        // Storage and validation failures are mapped by GlobalExceptionHandler.
+        // Concatenating e.getMessage() here used to hand file-system paths and
+        // storage internals to the caller.
+        ClaimAttachment attachment = attachmentService.uploadAttachment(claimId, file, attachmentType);
+        ClaimAttachmentDto dto = ClaimAttachmentDto.builder()
+            .id(attachment.getId())
+            .fileName(attachment.getOriginalFileName())
+            .fileUrl("/api/v1/claims/" + claimId + "/attachments/" + attachment.getId())
+            .fileType(attachment.getFileType())
+            .createdAt(attachment.getCreatedAt())
+            .build();
+        return ResponseEntity.ok(ApiResponse.success("Attachment uploaded successfully", dto));
     }
     
     /**
@@ -178,15 +174,8 @@ public class ClaimAttachmentController {
         
         log.info("Delete attachment: claimId={}, attachmentId={}", claimId, attachmentId);
         
-        try {
-            attachmentService.deleteAttachment(claimId, attachmentId);
-            return ResponseEntity.ok("Attachment deleted successfully");
-            
-        } catch (RuntimeException e) {
-            log.error("Failed to delete attachment {}: {}", attachmentId, e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body("Failed to delete attachment: " + e.getMessage());
-        }
+        attachmentService.deleteAttachment(claimId, attachmentId);
+        return ResponseEntity.ok("Attachment deleted successfully");
     }
     
     /**
