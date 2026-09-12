@@ -1,6 +1,21 @@
 import PropTypes from 'prop-types';
 import { useState, useMemo } from 'react';
-import { Typography, Box, Stack, Chip, Table, TableHead, TableBody, TableRow, TableCell } from '@mui/material';
+import {
+  Typography,
+  Box,
+  Stack,
+  Chip,
+  Table,
+  TableHead,
+  TableBody,
+  TableRow,
+  TableCell,
+  alpha,
+  Drawer,
+  IconButton,
+  Divider,
+  Button
+} from '@mui/material';
 import DescriptionIcon from '@mui/icons-material/Description';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import PersonIcon from '@mui/icons-material/Person';
@@ -9,6 +24,8 @@ import LocalHospitalIcon from '@mui/icons-material/LocalHospital';
 import EventIcon from '@mui/icons-material/Event';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import UpdateIcon from '@mui/icons-material/Update';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import CloseIcon from '@mui/icons-material/Close';
 
 import ClaimStatusChip from './ClaimStatusChip';
 import { UnifiedMedicalTable } from 'components/common';
@@ -50,15 +67,28 @@ const safeString = (value) => {
   return String(value);
 };
 
+const amountColor = (amount, fallback = 'text.primary') => {
+  const value = Number(amount) || 0;
+  if (value === 0) return 'text.secondary';
+  return fallback;
+};
+
 /**
  * Table columns configuration
  * All columns are null-safe with fallback rendering
  */
 const COLUMNS = [
   {
+    id: 'details',
+    label: 'تفاصيل',
+    minWidth: '4.5rem',
+    align: 'center',
+    sortable: false
+  },
+  {
     id: 'claimNumber',
     label: 'رقم المطالبة',
-    minWidth: '7.5rem',
+    minWidth: '9rem',
     align: 'center',
     format: safeString,
     sortable: true,
@@ -67,7 +97,7 @@ const COLUMNS = [
   {
     id: 'memberName',
     label: 'اسم المؤمن عليه',
-    minWidth: '11.25rem',
+    minWidth: '13rem',
     format: safeString,
     sortable: true,
     icon: <PersonIcon fontSize="small" />
@@ -92,7 +122,7 @@ const COLUMNS = [
   {
     id: 'requestedAmount',
     label: 'المبلغ المطلوب',
-    minWidth: '8.75rem',
+    minWidth: '8.5rem',
     align: 'right',
     format: formatCurrency,
     sortable: true,
@@ -101,7 +131,7 @@ const COLUMNS = [
   {
     id: 'approvedAmount',
     label: 'المبلغ المعتمد',
-    minWidth: '8.75rem',
+    minWidth: '8.5rem',
     align: 'right',
     format: formatCurrency,
     sortable: true,
@@ -144,6 +174,7 @@ const ClaimsTable = ({ claims, loading, totalCount, page, rowsPerPage, onPageCha
   // Sorting state
   const [orderBy, setOrderBy] = useState('id');
   const [order, setOrder] = useState('desc');
+  const [selectedClaim, setSelectedClaim] = useState(null);
 
   const handleSort = (property) => {
     const isAsc = orderBy === property && order === 'asc';
@@ -166,18 +197,71 @@ const ClaimsTable = ({ claims, loading, totalCount, page, rowsPerPage, onPageCha
     return String(bVal).localeCompare(String(aVal), 'ar');
   };
 
-  const getComparator = (orderKey, orderDirection) => {
-    return orderDirection === 'desc' ? (a, b) => descendingComparator(a, b, orderKey) : (a, b) => -descendingComparator(a, b, orderKey);
-  };
-
   const sortedClaims = useMemo(() => {
-    return [...claims].sort(getComparator(orderBy, order));
+    const comparator = order === 'desc' ? (a, b) => descendingComparator(a, b, orderBy) : (a, b) => -descendingComparator(a, b, orderBy);
+    return [...claims].sort(comparator);
   }, [claims, orderBy, order]);
 
   const renderCellValue = (claim, column) => {
     const value = claim[column.id];
+    if (column.id === 'details') {
+      return (
+        <IconButton size="small" color="primary" onClick={() => setSelectedClaim(claim)} aria-label="عرض تفاصيل المطالبة">
+          <VisibilityIcon fontSize="small" />
+        </IconButton>
+      );
+    }
+    if (column.id === 'claimNumber') {
+      return (
+        <Stack spacing={0.35} alignItems="center">
+          <Typography variant="body2" sx={{ fontWeight: 900, color: 'primary.dark', direction: 'ltr' }}>
+            {safeString(value)}
+          </Typography>
+          {claim._raw?.claimBatchCode && (
+            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, direction: 'ltr' }}>
+              {claim._raw.claimBatchCode}
+            </Typography>
+          )}
+        </Stack>
+      );
+    }
+    if (column.id === 'memberName') {
+      return (
+        <Stack spacing={0.35} alignItems="flex-start">
+          <Typography variant="body2" sx={{ fontWeight: 800 }}>
+            {safeString(value)}
+          </Typography>
+          {(claim._raw?.memberCardNumber || claim._raw?.memberNationalNumber) && (
+            <Typography variant="caption" color="text.secondary" sx={{ direction: 'ltr', fontWeight: 700 }}>
+              {claim._raw?.memberCardNumber || claim._raw?.memberNationalNumber}
+            </Typography>
+          )}
+        </Stack>
+      );
+    }
     if (column.id === 'status') {
       return <ClaimStatusChip status={value} />;
+    }
+    if (column.id === 'requestedAmount') {
+      return (
+        <Typography variant="body2" sx={{ fontWeight: 900, color: amountColor(value, 'text.primary'), direction: 'ltr' }}>
+          {formatCurrency(value)}
+        </Typography>
+      );
+    }
+    if (column.id === 'approvedAmount') {
+      return (
+        <Typography
+          variant="body2"
+          sx={{
+            fontWeight: 900,
+            color: amountColor(value, claim.status === 'REJECTED' ? 'error.main' : 'success.dark'),
+            direction: 'ltr'
+          }}
+        >
+          {formatCurrency(value)}
+        </Typography>
+      );
     }
     if (column.format) {
       return column.format(value);
@@ -329,28 +413,109 @@ const ClaimsTable = ({ claims, loading, totalCount, page, rowsPerPage, onPageCha
   const paginatedClaims = sortedClaims.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
 
   return (
-    <UnifiedMedicalTable
-      columns={COLUMNS}
-      rows={paginatedClaims}
-      loading={loading}
-      totalCount={totalCount}
-      page={page}
-      rowsPerPage={rowsPerPage}
-      onPageChange={onPageChange}
-      onRowsPerPageChange={onRowsPerPageChange}
-      rowsPerPageOptions={[10, 25, 50, 100]}
-      sortBy={orderBy}
-      sortDirection={order}
-      onSort={handleSort}
-      renderCell={renderCellValue}
-      renderExpandedRow={renderExpandedRow}
-      isRowExpandable={(row) => row._raw?.lines?.length > 0}
-      getRowKey={(claim) => claim.id}
-      emptyMessage="لا توجد مطالبات مطابقة للفلاتر المحددة"
-      emptyIcon={DescriptionIcon}
-      loadingMessage="جارِ تحميل المطالبات..."
-      size="small"
-    />
+    <>
+      <UnifiedMedicalTable
+        columns={COLUMNS}
+        rows={paginatedClaims}
+        loading={loading}
+        totalCount={totalCount}
+        page={page}
+        rowsPerPage={rowsPerPage}
+        onPageChange={onPageChange}
+        onRowsPerPageChange={onRowsPerPageChange}
+        rowsPerPageOptions={[10, 25, 50, 100]}
+        sortBy={orderBy}
+        sortDirection={order}
+        onSort={handleSort}
+        renderCell={renderCellValue}
+        renderExpandedRow={renderExpandedRow}
+        isRowExpandable={(row) => row._raw?.lines?.length > 0}
+        getRowSx={(row) =>
+          row.status === 'REJECTED'
+            ? {
+                bgcolor: `${alpha('#dc2626', 0.035)} !important`,
+                '&:hover': { bgcolor: `${alpha('#dc2626', 0.07)} !important` }
+              }
+            : row.approvedAmount === 0 && row.requestedAmount > 0
+              ? {
+                  bgcolor: `${alpha('#f59e0b', 0.035)} !important`
+                }
+              : {}
+        }
+        getRowKey={(claim) => claim.id}
+        emptyMessage="لا توجد مطالبات مطابقة للفلاتر الحالية"
+        emptyIcon={DescriptionIcon}
+        loadingMessage="جارِ تحميل المطالبات..."
+        size="small"
+      />
+
+      <Drawer
+        anchor="left"
+        open={Boolean(selectedClaim)}
+        onClose={() => setSelectedClaim(null)}
+        PaperProps={{ sx: { width: { xs: '100%', md: 720 } } }}
+      >
+        {selectedClaim && (
+          <Box sx={{ p: 2.25, direction: 'rtl' }}>
+            <Stack direction="row" alignItems="center" justifyContent="space-between" gap={1.5} sx={{ mb: 1.5 }}>
+              <Box sx={{ minWidth: 0 }}>
+                <Typography variant="h5" sx={{ fontWeight: 900 }}>
+                  تفاصيل المطالبة
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ direction: 'ltr', textAlign: 'right', fontWeight: 800 }}>
+                  {safeString(selectedClaim.claimNumber)}
+                </Typography>
+              </Box>
+              <IconButton onClick={() => setSelectedClaim(null)}>
+                <CloseIcon />
+              </IconButton>
+            </Stack>
+
+            <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mb: 2 }}>
+              <ClaimStatusChip status={selectedClaim.status} />
+              <Chip size="small" variant="outlined" label={`الخدمة: ${formatDate(selectedClaim.serviceDate)}`} />
+              <Chip size="small" variant="outlined" label={`آخر تحديث: ${formatDate(selectedClaim.updatedAt)}`} />
+            </Stack>
+
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
+                gap: 1,
+                mb: 2
+              }}
+            >
+              {[
+                ['المؤمن عليه', selectedClaim.memberName],
+                ['الشريك', selectedClaim.employerName],
+                ['مقدم الخدمة', selectedClaim.providerName],
+                ['رقم البطاقة', selectedClaim._raw?.memberCardNumber || '—'],
+                ['المبلغ المطلوب', formatCurrency(selectedClaim.requestedAmount)],
+                ['المبلغ المعتمد', formatCurrency(selectedClaim.approvedAmount)]
+              ].map(([label, detail]) => (
+                <Box key={label} sx={{ p: 1.25, borderRadius: 1.5, bgcolor: 'grey.50', border: '1px solid', borderColor: 'divider' }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 800 }}>
+                    {label}
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 900, mt: 0.25 }}>
+                    {detail}
+                  </Typography>
+                </Box>
+              ))}
+            </Box>
+
+            <Divider sx={{ my: 1.5 }} />
+            {renderExpandedRow(selectedClaim)}
+
+            <Stack direction="row" justifyContent="flex-end" sx={{ mt: 2 }}>
+              <Button variant="outlined" onClick={() => setSelectedClaim(null)}>
+                إغلاق
+              </Button>
+            </Stack>
+          </Box>
+        )}
+      </Drawer>
+    </>
   );
 };
 

@@ -14,10 +14,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -514,10 +516,15 @@ public class ProviderController {
     @GetMapping("/by-employer/{employerId}")
     @PreAuthorize("@permissionGuard.has('PROVIDER_VIEW')")
     public ResponseEntity<ApiResponse<List<ProviderViewDto>>> getProvidersByEmployer(
-            @PathVariable("employerId") Long employerId) {
+            @PathVariable("employerId") Long employerId,
+            @RequestParam(value = "periodStart", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate periodStart,
+            @RequestParam(value = "periodEnd", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate periodEnd) {
         Long scopedEmployerId = authorizationService.resolveEmployerScope(authorizationService.getCurrentUser(), employerId);
-        log.info("[PROVIDER] GET /api/v1/providers/by-employer/{}", scopedEmployerId);
-        List<ProviderViewDto> providers = providerService.getProvidersByEmployer(scopedEmployerId);
+        log.info("[PROVIDER] GET /api/v1/providers/by-employer/{} periodStart={} periodEnd={}",
+                scopedEmployerId, periodStart, periodEnd);
+        List<ProviderViewDto> providers = providerService.getProvidersByEmployer(scopedEmployerId, periodStart, periodEnd);
 
         // ═══════════════════════════════════════════════════════════════════════════
         // MEDICAL REVIEWER ISOLATION (Phase 11)

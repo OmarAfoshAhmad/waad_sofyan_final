@@ -3,8 +3,7 @@ import { Box, Grid, TextField, FormControl, InputLabel, Select, MenuItem, InputA
 import SearchIcon from '@mui/icons-material/Search';
 import ClearIcon from '@mui/icons-material/Clear';
 import FilterListIcon from '@mui/icons-material/FilterList';
-import BusinessIcon from '@mui/icons-material/Business';
-import LocalHospitalIcon from '@mui/icons-material/LocalHospital';
+import { EmployerSelectField, ProviderSelectField } from 'components/tba';
 
 import { DEFAULT_FILTERS } from 'hooks/useVisitsReport';
 
@@ -92,57 +91,27 @@ const VisitsFilters = ({
         {/* Employer Selector (Admin Only) */}
         {canSelectEmployer && (
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <FormControl fullWidth size="small">
-              <InputLabel id="employer-filter-label">الشريك</InputLabel>
-              <Select
-                labelId="employer-filter-label"
-                value={selectedEmployerId ?? ''}
-                label="الشريك"
-                onChange={(e) => onEmployerChange(e.target.value || null)}
-                startAdornment={
-                  <InputAdornment position="start">
-                    <BusinessIcon fontSize="small" />
-                  </InputAdornment>
-                }
-              >
-                <MenuItem value="">
-                  <em>جميع الشركاء</em>
-                </MenuItem>
-                {employers.map((employer) => (
-                  <MenuItem key={employer.id} value={employer.id}>
-                    {employer.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <EmployerSelectField
+              value={selectedEmployerId ?? ''}
+              onChange={(employerId) => onEmployerChange(employerId || null)}
+              options={employers}
+              label="الشريك"
+              placeholder="ابحث باسم أو رمز الشريك..."
+              allLabel="جميع الشركاء"
+            />
           </Grid>
         )}
 
         {/* Provider Selector */}
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <FormControl fullWidth size="small">
-            <InputLabel id="provider-filter-label">مقدم الخدمة</InputLabel>
-            <Select
-              labelId="provider-filter-label"
-              value={selectedProviderId ?? ''}
-              label="مقدم الخدمة"
-              onChange={(e) => onProviderChange(e.target.value || null)}
-              startAdornment={
-                <InputAdornment position="start">
-                  <LocalHospitalIcon fontSize="small" />
-                </InputAdornment>
-              }
-            >
-              <MenuItem value="">
-                <em>جميع مقدمي الخدمة</em>
-              </MenuItem>
-              {providers.map((provider) => (
-                <MenuItem key={provider.id} value={provider.id}>
-                  {provider.name}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+          <ProviderSelectField
+            value={selectedProviderId ?? ''}
+            onChange={(providerId) => onProviderChange(providerId || null)}
+            options={providers}
+            label="مقدم الخدمة"
+            placeholder="ابحث باسم أو كود مقدم الخدمة..."
+            allLabel="جميع مقدمي الخدمة"
+          />
         </Grid>
 
         {/* Provider Search */}

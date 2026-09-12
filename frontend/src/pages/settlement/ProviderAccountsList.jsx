@@ -50,22 +50,39 @@ import { formatCurrency as formatCurrencyGlobal } from 'utils/currency-formatter
 
 const STATUS_OPTIONS = [
   { value: 'ALL', label: 'الكل' },
+  { value: 'DRAFT', label: 'مسودة' },
+  { value: 'SUBMITTED', label: 'مقدمة' },
+  { value: 'UNDER_REVIEW', label: 'قيد المراجعة' },
+  { value: 'NEEDS_CORRECTION', label: 'بحاجة لتصحيح' },
   { value: 'APPROVED', label: 'موافق عليها' },
-  { value: 'REJECTED', label: 'مرفوضة' }
+  { value: 'REJECTED', label: 'مرفوضة' },
+  { value: 'BATCHED', label: 'مدرجة في دفعة' },
+  { value: 'SETTLED', label: 'تمت التسوية' },
+  { value: 'CANCELLED', label: 'ملغاة' }
 ];
 
 const STATUS_LABELS = {
+  DRAFT: 'مسودة',
+  SUBMITTED: 'مقدمة',
+  UNDER_REVIEW: 'قيد المراجعة',
+  NEEDS_CORRECTION: 'بحاجة لتصحيح',
   APPROVED: 'موافق عليها',
   REJECTED: 'مرفوضة',
   BATCHED: 'مدرجة في دفعة',
-  SETTLED: 'تمت التسوية'
+  SETTLED: 'تمت التسوية',
+  CANCELLED: 'ملغاة'
 };
 
 const STATUS_COLORS = {
+  DRAFT: 'default',
+  SUBMITTED: 'info',
+  UNDER_REVIEW: 'warning',
+  NEEDS_CORRECTION: 'warning',
   APPROVED: 'success',
   REJECTED: 'error',
   BATCHED: 'info',
-  SETTLED: 'primary'
+  SETTLED: 'primary',
+  CANCELLED: 'default'
 };
 
 const formatCurrency = (value) => {
@@ -122,9 +139,7 @@ const getFacilityShareAmount = (row) => {
 // لأن المرفوض مطروح مسبقاً من المعتمد في الحالة الثانية.
 const getPayableAmount = (row) => {
   const approvedBeforeDiscount = getCompanyDiscountAmount(row) + getFacilityShareAmount(row);
-  return row?.discountBeforeRejection === true
-    ? approvedBeforeDiscount + getRefusedAmount(row)
-    : approvedBeforeDiscount;
+  return row?.discountBeforeRejection === true ? approvedBeforeDiscount + getRefusedAmount(row) : approvedBeforeDiscount;
 };
 
 const sortFieldMap = {

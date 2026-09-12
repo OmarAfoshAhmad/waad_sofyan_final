@@ -21,12 +21,13 @@ public final class ClaimFinancialTotals {
         BigDecimal refused = sum(lines, ClaimLine::getRefusedAmount);
         BigDecimal patient = sum(lines, ClaimLine::getPatientShare);
         BigDecimal approved = sum(lines, ClaimLine::getCompanyShare);
-        BigDecimal discount = sum(lines, ClaimLine::getProviderContractDiscount);
+        BigDecimal discount = calculateProviderAccountingDiscount(claim, approved, refused);
+        BigDecimal netProvider = money(approved.subtract(discount).max(BigDecimal.ZERO));
 
         claim.setRequestedAmount(requested);
         claim.setRefusedAmount(refused);
         claim.setApprovedAmount(approved);
-        claim.setNetProviderAmount(approved);
+        claim.setNetProviderAmount(netProvider);
         claim.setPatientCoPay(patient);
         claim.setCompanyDiscountAmount(discount);
         claim.setDifferenceAmount(money(requested.subtract(approved)));
@@ -63,6 +64,18 @@ public final class ClaimFinancialTotals {
 
     private static BigDecimal money(BigDecimal value) {
         return zero(value).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private static BigDecimal calculateProviderAccountingDiscount(
+            Claim claim, BigDecimal approved, BigDecimal refused) {
+        BigDecimal percent = zero(claim.getAppliedDiscountPercent());
+        if (percent.signum() <= 0) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+        BigDecimal base = Boolean.TRUE.equals(claim.getDiscountBeforeRejection())
+                ? approved.add(refused)
+                : approved;
+        return money(base.multiply(percent).divide(new BigDecimal("100.00"), 2, RoundingMode.HALF_UP));
     }
 
     public static void applyBeneficiaryDirectPaymentSettlement(Claim claim) {

@@ -114,15 +114,13 @@ axiosServices.interceptors.response.use(
     }
 
     // ==========================================
-    // 400 - Validation / Bad Request
+    // 400/404/409/422 - Expected business/validation errors
     // ==========================================
-    if (status === 400) {
-      // Prefer Arabic message from backend, fall back to English
-      const backendMsg = errorData?.messageAr || errorData?.message || errorData?.error;
-      error.userMessage = backendMsg || 'البيانات المدخلة غير صحيحة. الرجاء التحقق والمحاولة مرة أخرى.';
+    if ([400, 404, 409, 422].includes(status)) {
+      const normalized = normalizeApiError(error);
+      error.userMessage = normalized.message || 'تعذر تنفيذ العملية. راجع البيانات ثم حاول مرة أخرى.';
       error.errorType = classification.type;
     }
-
     // ==========================================
     // 403 - Forbidden
     // ==========================================

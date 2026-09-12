@@ -34,7 +34,8 @@
 
 import { useEffect, useState } from 'react';
 import PropTypes from 'prop-types';
-import { Autocomplete, TextField } from '@mui/material';
+import BusinessIcon from '@mui/icons-material/Business';
+import EntityAutocompleteSelect from './EntityAutocompleteSelect';
 import { getEmployerSelectorsCached } from 'services/api/employers.service';
 
 const EmployerSelectField = ({
@@ -48,12 +49,19 @@ const EmployerSelectField = ({
   disabled = false,
   size = 'small',
   fullWidth = true,
-  sx = {}
+  sx = {},
+  options,
+  allLabel
 }) => {
   const [employers, setEmployers] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!options);
 
   useEffect(() => {
+    if (options) {
+      setEmployers(Array.isArray(options) ? options : []);
+      setLoading(false);
+      return undefined;
+    }
     let cancelled = false;
     (async () => {
       try {
@@ -69,25 +77,25 @@ const EmployerSelectField = ({
     return () => {
       cancelled = true;
     };
-  }, []);
-
-  const selected = employers.find((emp) => emp.id === value) || null;
+  }, [options]);
 
   return (
-    <Autocomplete
-      value={selected}
-      onChange={(event, newValue) => onChange(newValue?.id ?? null, newValue ?? null)}
+    <EntityAutocompleteSelect
+      value={value}
+      onChange={onChange}
       options={employers}
-      getOptionLabel={(option) => option?.label || option?.name || ''}
-      isOptionEqualToValue={(option, val) => option?.id === val?.id}
+      label={label}
+      placeholder={placeholder}
+      allLabel={allLabel}
       loading={loading}
       disabled={disabled}
+      required={required}
+      error={error}
+      helperText={helperText}
       size={size}
       fullWidth={fullWidth}
       sx={sx}
-      renderInput={(params) => (
-        <TextField {...params} label={label} placeholder={placeholder} required={required} error={error} helperText={helperText} />
-      )}
+      icon={<BusinessIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} />}
     />
   );
 };
@@ -103,7 +111,9 @@ EmployerSelectField.propTypes = {
   disabled: PropTypes.bool,
   size: PropTypes.oneOf(['small', 'medium']),
   fullWidth: PropTypes.bool,
-  sx: PropTypes.object
+  sx: PropTypes.object,
+  options: PropTypes.array,
+  allLabel: PropTypes.string
 };
 
 export default EmployerSelectField;

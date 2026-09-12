@@ -9,7 +9,10 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDate;
 import java.util.List;
+import com.waad.tba.modules.providercontract.entity.ProviderContract.ContractStatus;
+import com.waad.tba.modules.providercontract.entity.ProviderContract.PricingScope;
 
 @Repository
 public interface ProviderRepository extends JpaRepository<Provider, Long>, JpaSpecificationExecutor<Provider> {
@@ -155,4 +158,35 @@ public interface ProviderRepository extends JpaRepository<Provider, Long>, JpaSp
                      "WHERE p.active = true " +
                      "AND (p.allowAllEmployers = true OR (pae.employer.id = :employerId AND pae.active = true))")
        List<Provider> findByAllowedEmployer(@Param("employerId") Long employerId);
+
+       /**
+        * Find active providers allowed for an employer and backed by an ACTIVE
+        * contract that overlaps the requested claim-batch period.
+        *
+        * The provider allow-list answers "may this provider serve this employer?";
+        * the contract check answers "can we safely open claim entry for this
+        * provider in this month?". Both are required for the batch cards.
+        */
+       @Query("SELECT DISTINCT p FROM Provider p " +
+                     "LEFT JOIN p.allowedEmployers pae " +
+                     "WHERE p.active = true " +
+                     "AND (p.allowAllEmployers = true OR (pae.employer.id = :employerId AND pae.active = true)) " +
+                     "AND EXISTS (" +
+                     "  SELECT 1 FROM ModernProviderContract c " +
+                     "  WHERE c.provider = p " +
+                     "  AND c.active = true " +
+                     "  AND c.status = :activeStatus " +
+                     "  AND c.startDate <= :periodEnd " +
+                     "  AND (c.endDate IS NULL OR c.endDate >= :periodStart) " +
+                     "  AND (c.pricingScope = :globalScope " +
+                     "       OR (c.pricingScope = :employerSpecificScope " +
+                     "           AND c.employer.id = :employerId))" +
+                     ")")
+       List<Provider> findByAllowedEmployerWithActiveContract(
+                     @Param("employerId") Long employerId,
+                     @Param("periodStart") LocalDate periodStart,
+                     @Param("periodEnd") LocalDate periodEnd,
+                     @Param("activeStatus") ContractStatus activeStatus,
+                     @Param("globalScope") PricingScope globalScope,
+                     @Param("employerSpecificScope") PricingScope employerSpecificScope);
 }

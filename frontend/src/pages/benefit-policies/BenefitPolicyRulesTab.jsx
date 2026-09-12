@@ -57,6 +57,7 @@ import MainCard from 'components/MainCard';
 import UnifiedCoverageModal from './components/UnifiedCoverageModal';
 import { UnifiedMedicalTable } from 'components/common';
 import { formatDate } from 'utils/formatters';
+import { normalizeArabicSearchText } from 'utils/searchText';
 
 import {
   getPolicyRules,
@@ -79,17 +80,6 @@ import { getCanonicalCoverageCategories } from 'services/api/medical-categories.
 import { lookupMedicalServices } from 'services/api/medical-services.service';
 import { getBenefitPoliciesSelector, checkPolicyEditability, getBenefitPolicyGapReport } from 'services/api/benefit-policies.service';
 import { getActiveClaimContexts } from 'services/api/claim-contexts.service';
-
-const normalizeArabicSearch = (value = '') =>
-  String(value)
-    .normalize('NFKD')
-    .replace(/[\u064B-\u065F\u0670]/g, '')
-    .replace(/[أإآٱ]/g, 'ا')
-    .replace(/ؤ/g, 'و')
-    .replace(/ئ/g, 'ي')
-    .replace(/ى/g, 'ي')
-    .replace(/ة/g, 'ه')
-    .toLowerCase();
 
 // ═══════════════════════════════════════════════════════════════════════════
 // RULE FORM COMPONENT
@@ -1670,7 +1660,7 @@ const BenefitPolicyRulesTab = ({
       const linkedDaysLimits = bucketLinks.map((link) => link.bucket?.daysLimit).filter((value) => value !== null && value !== undefined);
       const uniqueDaysLimits = [...new Set(linkedDaysLimits)];
       const daysLimitLabel = uniqueDaysLimits.length > 0 ? uniqueDaysLimits.map((value) => `${value} يوم`).join('، ') : null;
-      const searchable = normalizeArabicSearch(`${code} ${nameAr} ${nameEn} ${typeLabel} ${parentNameAr} ${linkSearch}`);
+      const searchable = normalizeArabicSearchText(`${code} ${nameAr} ${nameEn} ${typeLabel} ${parentNameAr} ${linkSearch}`);
 
       // Normalize active state defensively (backend may return boolean/string/number)
       const activeRaw = rule.active;
@@ -1758,7 +1748,7 @@ const BenefitPolicyRulesTab = ({
           groupSource: true,
           groupMembers,
           bucket: primaryBucket,
-          searchable: normalizeArabicSearch(`${group.code} ${group.nameAr} مجموعة منافع ${memberNames.join(' ')}`),
+          searchable: normalizeArabicSearchText(`${group.code} ${group.nameAr} مجموعة منافع ${memberNames.join(' ')}`),
           changedAt: group.updatedAt || null
         };
       });
@@ -1794,7 +1784,7 @@ const BenefitPolicyRulesTab = ({
   }, [normalizedRules]);
 
   const filteredRules = useMemo(() => {
-    const query = normalizeArabicSearch(ruleSearch.trim());
+    const query = normalizeArabicSearchText(ruleSearch.trim());
     const queryTokens = query.split(/\s+/).filter(Boolean);
     let statusFiltered = normalizedRules.filter((rule) => {
       if (viewMode === 'DELETED') return rule.isDeleted || rule.isActive === false;

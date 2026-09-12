@@ -27,6 +27,8 @@ public enum ErrorCode {
     EMPLOYER_NOT_FOUND,
     MEMBER_NOT_FOUND,
     POLICY_NOT_FOUND,
+    /** The request path matches no endpoint at all (as opposed to an entity that does not exist). */
+    ENDPOINT_NOT_FOUND,
     
     // === Member Errors ===
     MEMBER_ALREADY_EXISTS,

@@ -22,7 +22,11 @@ export default function GlobalApiErrorToaster() {
       const detail = event?.detail || {};
       if (detail.status === 401 || detail.statusCode === 401) return;
 
-      const message = detail.message || 'حدث خطأ غير متوقع';
+      const detailMessage =
+        typeof detail.details === 'string'
+          ? detail.details
+          : detail.details?.messageAr || detail.details?.message || detail.details?.error || detail.details?.reason;
+      const message = detail.message || detailMessage || 'تعذر تنفيذ العملية. راجع البيانات ثم حاول مرة أخرى.';
       const shortId = detail.trackingId ? String(detail.trackingId).split('-')[0] : null;
 
       enqueueSnackbar(shortId ? `${message} (مرجع: ${shortId})` : message, {

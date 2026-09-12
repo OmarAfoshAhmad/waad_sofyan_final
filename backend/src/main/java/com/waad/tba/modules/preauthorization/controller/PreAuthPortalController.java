@@ -1,31 +1,22 @@
 package com.waad.tba.modules.preauthorization.controller;
 
-import com.waad.tba.modules.preauthorization.entity.PreAuthorization;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
-
-import java.util.List;
-
+import com.waad.tba.common.exception.BusinessRuleException;
+import com.waad.tba.common.guard.FeatureGuard;
 import com.waad.tba.modules.preauthorization.entity.PreAuthorization;
 import com.waad.tba.modules.preauthorization.repository.PreAuthorizationRepository;
+import com.waad.tba.modules.preauthorization.security.PreAuthAccessScope;
+import com.waad.tba.modules.preauthorization.security.PreAuthAccessScopeResolver;
+import com.waad.tba.security.AuthorizationService;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
-import jakarta.transaction.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-
-import com.waad.tba.common.exception.BusinessRuleException;
-import com.waad.tba.common.guard.FeatureGuard;
-import com.waad.tba.security.AuthorizationService;
-import com.waad.tba.modules.preauthorization.security.PreAuthAccessScope;
-import com.waad.tba.modules.preauthorization.security.PreAuthAccessScopeResolver;
-import org.springframework.security.access.AccessDeniedException;
-import org.springframework.security.access.prepost.PreAuthorize;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -33,8 +24,14 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Provider-facing API for the Pre-Authorization Portal.
- * Handles draft creation, submission, and attachment uploads.
+ * Provider-facing bulk intake for pre-authorizations.
+ *
+ * One endpoint remains. The draft/read/attachment endpoints that used to sit
+ * beside it returned "(Mock)" strings and empty entities: no frontend called
+ * them, but they were registered routes that answered 200 to anyone holding
+ * PREAUTH_VIEW/PREAUTH_CREATE. A stub that looks like an API is worse than no
+ * API -- a client built against it would have silently lost every upload.
+ * The canonical read/write surface is /api/v1/pre-authorizations.
  *
  * S-02. This controller carried no @PreAuthorize, no FeatureGuard and no
  * access scope of any kind, while /bulk persists real pre-authorizations
@@ -46,12 +43,12 @@ import java.util.UUID;
  * Not deleted despite having no frontend caller: PreAuthPortalIdentityFailsClosedTest
  * exercises it directly and was written to stop this endpoint inventing member,
  * provider and category identity, so the team treats it as a live surface.
- * Denied first, per the hardening plan; rebuilding it properly is S-03/S-04.
  *
- * Still outstanding here: providerId and memberId arrive in the request body
- * rather than from the authenticated principal, so a caller holding
- * PREAUTH_CREATE can still name another provider. That is S-03, and it needs
- * the scope resolver from S-04 to fix without guessing.
+ * S-03 is closed below: providerId comes from the authenticated principal's
+ * scope, and a wider caller naming a provider is checked against that scope.
+ * What remains open is that /bulk still builds entities here instead of going
+ * through PreAuthorizationService -- that is the routing work, not a security
+ * gap, and it is tracked separately.
  */
 @RestController
 @RequestMapping("/api/v1/provider/preauths")
@@ -63,35 +60,6 @@ public class PreAuthPortalController {
     private final FeatureGuard featureGuard;
     private final PreAuthAccessScopeResolver scopeResolver;
     private final AuthorizationService authorizationService;
-
-    @PostMapping
-    @PreAuthorize("@permissionGuard.has('PREAUTH_CREATE')")
-    public ResponseEntity<String> createDraft() {
-        // Create DRAFT pre-authorization
-        return ResponseEntity.ok("Draft Created (Mock)");
-    }
-
-    @GetMapping
-    @PreAuthorize("@permissionGuard.has('PREAUTH_VIEW')")
-    public ResponseEntity<List<PreAuthorization>> getProviderPreAuths() {
-        // Fetch all pre-auths for the logged in provider
-        return ResponseEntity.ok(List.of());
-    }
-
-    @GetMapping("/{id}")
-    @PreAuthorize("@permissionGuard.has('PREAUTH_VIEW')")
-    public ResponseEntity<PreAuthorization> getPreAuth(@PathVariable Long id) {
-        // Fetch details
-        return ResponseEntity.ok(new PreAuthorization());
-    }
-
-    @PutMapping("/{id}/draft")
-    @PreAuthorize("@permissionGuard.has('PREAUTH_CREATE')")
-    public ResponseEntity<String> updateDraft(@PathVariable Long id, @RequestBody Object updateDto) {
-        // Update clinical data and lines
-        // Calls PreAuthPricingValidator for each line to determine status
-        return ResponseEntity.ok("Draft Updated (Mock)");
-    }
 
     @PostMapping("/bulk")
     @PreAuthorize("@permissionGuard.has('PREAUTH_CREATE')")
@@ -231,17 +199,6 @@ public class PreAuthPortalController {
             log.error("[PORTAL] Error saving bulk pre-auth: ", e);
             throw e;
         }
-    }
-
-    @PostMapping("/{id}/attachments")
-    @PreAuthorize("@permissionGuard.has('PREAUTH_CREATE')")
-    public ResponseEntity<String> uploadAttachment(
-            @PathVariable Long id,
-            @RequestParam("file") MultipartFile file,
-            @RequestParam("type") String attachmentType,
-            @RequestParam(value = "lineId", required = false) Long lineId) {
-        // Save file to disk/S3 and create PreAuthorizationAttachment entity
-        return ResponseEntity.ok("Attachment Uploaded (Mock)");
     }
 
     /**

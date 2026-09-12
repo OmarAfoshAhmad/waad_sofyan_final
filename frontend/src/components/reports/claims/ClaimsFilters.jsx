@@ -7,7 +7,6 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  Chip,
   OutlinedInput,
   InputAdornment,
   IconButton,
@@ -16,10 +15,8 @@ import {
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import ClearIcon from '@mui/icons-material/Clear';
-import FilterListIcon from '@mui/icons-material/FilterList';
-import BusinessIcon from '@mui/icons-material/Business';
-import LocalHospitalIcon from '@mui/icons-material/LocalHospital';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
+import { EmployerSelectField, ProviderSelectField } from 'components/tba';
 
 import { ALL_CLAIM_STATUSES, CLAIM_STATUS_LABELS, DEFAULT_FILTERS } from 'hooks/useClaimsReport';
 
@@ -76,79 +73,71 @@ const ClaimsFilters = ({
   /**
    * Check if any filter is active
    */
-  const hasActiveFilters = filters.statuses.length > 0 || filters.memberSearch.trim() !== '' || filters.dateFrom || filters.dateTo;
+  const hasActiveFilters =
+    filters.statuses.length > 0 ||
+    filters.memberSearch.trim() !== '' ||
+    filters.dateFrom ||
+    filters.dateTo ||
+    filters.minAmount !== '' ||
+    filters.maxAmount !== '' ||
+    filters.financialStatus !== 'ALL';
 
   return (
-    <Paper sx={{ p: '1.0rem', mb: '1.0rem' }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: '1.0rem' }}>
-        <FilterListIcon sx={{ mr: 1, color: 'text.secondary' }} />
-        <Box component="span" sx={{ fontWeight: 600, color: 'text.primary' }}>
-          فلاتر البحث
+    <Paper
+      variant="outlined"
+      sx={{
+        p: 1.25,
+        mb: 1,
+        borderRadius: 1.5,
+        borderColor: 'divider',
+        bgcolor: '#fff'
+      }}
+    >
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, mb: 1 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Box>
+            <Box component="span" sx={{ fontWeight: 900, color: 'text.primary', fontSize: '0.9rem' }}>
+              فلاتر البحث
+            </Box>
+            <Box component="div" sx={{ fontSize: '0.72rem', color: 'text.secondary', mt: 0.15 }}>
+              نطاق البحث ينعكس مباشرة على الجدول والملخص
+            </Box>
+          </Box>
         </Box>
-        {hasActiveFilters && (
-          <Tooltip title="مسح الفلاتر">
-            <IconButton size="small" onClick={handleClearFilters} sx={{ ml: 'auto' }}>
+        <Tooltip title={hasActiveFilters ? 'إعادة ضبط الفلاتر' : 'لا توجد فلاتر مفعلة'}>
+          <span>
+            <IconButton size="small" onClick={handleClearFilters} disabled={!hasActiveFilters}>
               <ClearIcon fontSize="small" />
             </IconButton>
-          </Tooltip>
-        )}
+          </span>
+        </Tooltip>
       </Box>
 
-      <Grid container spacing={2}>
+      <Grid container spacing={1.25} alignItems="center">
         {/* Employer Selector (Admin Only) */}
         {canSelectEmployer && (
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <FormControl fullWidth size="small">
-              <InputLabel id="employer-filter-label">الشريك</InputLabel>
-              <Select
-                labelId="employer-filter-label"
-                value={selectedEmployerId ?? ''}
-                label="الشريك"
-                onChange={(e) => onEmployerChange(e.target.value || null)}
-                startAdornment={
-                  <InputAdornment position="start">
-                    <BusinessIcon fontSize="small" />
-                  </InputAdornment>
-                }
-              >
-                <MenuItem value="">
-                  <em>جميع الشركاء</em>
-                </MenuItem>
-                {employers.map((employer) => (
-                  <MenuItem key={employer.id} value={employer.id}>
-                    {employer.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <EmployerSelectField
+              value={selectedEmployerId ?? ''}
+              onChange={(employerId) => onEmployerChange(employerId || null)}
+              options={employers}
+              label="الشريك"
+              placeholder="ابحث باسم أو رمز الشريك..."
+              allLabel="جميع الشركاء"
+            />
           </Grid>
         )}
 
         {/* Provider Selector */}
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <FormControl fullWidth size="small">
-            <InputLabel id="provider-filter-label">مقدم الخدمة</InputLabel>
-            <Select
-              labelId="provider-filter-label"
-              value={selectedProviderId ?? ''}
-              label="مقدم الخدمة"
-              onChange={(e) => onProviderChange(e.target.value || null)}
-              startAdornment={
-                <InputAdornment position="start">
-                  <LocalHospitalIcon fontSize="small" />
-                </InputAdornment>
-              }
-            >
-              <MenuItem value="">
-                <em>جميع مقدمي الخدمة</em>
-              </MenuItem>
-              {providers.map((provider) => (
-                <MenuItem key={provider.id} value={provider.id}>
-                  {provider.name}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+          <ProviderSelectField
+            value={selectedProviderId ?? ''}
+            onChange={(providerId) => onProviderChange(providerId || null)}
+            options={providers}
+            label="مقدم الخدمة"
+            placeholder="ابحث باسم أو كود مقدم الخدمة..."
+            allLabel="جميع مقدمي الخدمة"
+          />
         </Grid>
 
         {/* Status Multi-Select */}
@@ -161,24 +150,7 @@ const ClaimsFilters = ({
               value={filters.statuses}
               onChange={handleChange('statuses')}
               input={<OutlinedInput label="الحالة" />}
-              renderValue={(selected) => (
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                  {selected.map((status) => (
-                    <Chip
-                      key={status}
-                      label={CLAIM_STATUS_LABELS[status]}
-                      size="small"
-                      onDelete={() => {
-                        onFilterChange({
-                          ...filters,
-                          statuses: filters.statuses.filter((s) => s !== status)
-                        });
-                      }}
-                      onMouseDown={(e) => e.stopPropagation()}
-                    />
-                  ))}
-                </Box>
-              )}
+              renderValue={(selected) => (selected.length === 1 ? CLAIM_STATUS_LABELS[selected[0]] : `${selected.length} حالات مختارة`)}
             >
               {ALL_CLAIM_STATUSES.map((status) => (
                 <MenuItem key={status} value={status}>
@@ -194,10 +166,10 @@ const ClaimsFilters = ({
           <TextField
             fullWidth
             size="small"
-            label="بحث بالعضو"
+            label="بحث موحد"
             value={filters.memberSearch}
             onChange={handleChange('memberSearch')}
-            placeholder="اسم العضو..."
+            placeholder="اسم المؤمن، رقم المطالبة، البطاقة..."
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
@@ -254,6 +226,46 @@ const ClaimsFilters = ({
             }}
           />
         </Grid>
+
+        <Grid size={{ xs: 12, sm: 6, md: 2 }}>
+          <TextField
+            fullWidth
+            size="small"
+            type="number"
+            label="الحد الأدنى للمطلوب"
+            value={filters.minAmount ?? ''}
+            onChange={handleChange('minAmount')}
+            inputProps={{ min: 0, step: '0.01' }}
+          />
+        </Grid>
+
+        <Grid size={{ xs: 12, sm: 6, md: 2 }}>
+          <TextField
+            fullWidth
+            size="small"
+            type="number"
+            label="الحد الأعلى للمطلوب"
+            value={filters.maxAmount ?? ''}
+            onChange={handleChange('maxAmount')}
+            inputProps={{ min: 0, step: '0.01' }}
+          />
+        </Grid>
+
+        <Grid size={{ xs: 12, sm: 6, md: 2 }}>
+          <FormControl fullWidth size="small">
+            <InputLabel id="financial-status-filter-label">النتيجة المالية</InputLabel>
+            <Select
+              labelId="financial-status-filter-label"
+              value={filters.financialStatus ?? 'ALL'}
+              label="النتيجة المالية"
+              onChange={handleChange('financialStatus')}
+            >
+              <MenuItem value="ALL">الكل</MenuItem>
+              <MenuItem value="HAS_REJECTION">بها رفض أو فرق</MenuItem>
+              <MenuItem value="FULLY_APPROVED">معتمدة بالكامل</MenuItem>
+            </Select>
+          </FormControl>
+        </Grid>
       </Grid>
     </Paper>
   );
@@ -264,7 +276,10 @@ ClaimsFilters.propTypes = {
     statuses: PropTypes.array,
     memberSearch: PropTypes.string,
     dateFrom: PropTypes.string,
-    dateTo: PropTypes.string
+    dateTo: PropTypes.string,
+    minAmount: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    maxAmount: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    financialStatus: PropTypes.string
   }).isRequired,
   onFilterChange: PropTypes.func.isRequired,
   employers: PropTypes.array,

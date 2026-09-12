@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
-  Box,
   Button,
   TextField,
   Grid,
@@ -19,6 +18,7 @@ import { Save as SaveIcon, Cancel as CancelIcon, LocalHospital as LocalHospitalI
 
 import MainCard from 'components/MainCard';
 import ModernPageHeader from 'components/tba/ModernPageHeader';
+import ProviderSelectField from 'components/tba/ProviderSelectField';
 import visitsService, { VISIT_TYPES } from 'services/api/visits.service';
 import { useVisitDetails } from 'hooks/useVisits';
 import { useAllMembers } from 'hooks/useMembers';
@@ -264,17 +264,15 @@ const VisitEdit = () => {
 
             {/* Provider - Optional */}
             <Grid size={{ xs: 12, md: 6 }}>
-              <FormControl fullWidth>
-                <InputLabel>مقدم الخدمة</InputLabel>
-                <Select value={form.providerId} onChange={handleChange('providerId')} label="مقدم الخدمة" disabled={providersLoading}>
-                  <MenuItem value="">-- بدون مقدم خدمة --</MenuItem>
-                  {providers?.map((provider) => (
-                    <MenuItem key={provider.id} value={provider.id}>
-                      {provider.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+              <ProviderSelectField
+                value={form.providerId}
+                onChange={(providerId) => setForm((prev) => ({ ...prev, providerId: providerId || '' }))}
+                options={providers || []}
+                label="مقدم الخدمة"
+                placeholder="ابحث باسم أو كود مقدم الخدمة..."
+                allLabel="بدون مقدم خدمة"
+                disabled={providersLoading}
+              />
             </Grid>
 
             {/* Visit Type - Optional with default */}

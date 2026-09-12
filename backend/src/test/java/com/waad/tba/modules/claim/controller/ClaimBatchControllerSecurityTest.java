@@ -87,7 +87,7 @@ class ClaimBatchControllerSecurityTest {
         ArgumentCaptor<Long> providerCaptor = ArgumentCaptor.forClass(Long.class);
         when(authorizationService.resolveProviderScope(providerStaffUser, null)).thenReturn(251L);
         when(authorizationService.resolveEmployerScope(providerStaffUser, null)).thenReturn(null);
-        when(claimBatchService.findBatches(providerCaptor.capture(), org.mockito.ArgumentMatchers.isNull(), anyInt(), anyInt()))
+        when(claimBatchService.findBatchResponses(providerCaptor.capture(), org.mockito.ArgumentMatchers.isNull(), anyInt(), anyInt()))
                 .thenReturn(java.util.List.of());
 
         controller.getBatches(null, null, 2026, 7);

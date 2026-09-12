@@ -1,4 +1,5 @@
 import { Fragment } from 'react';
+import { normalizeArabicSearchText } from 'utils/searchText';
 import {
   TableRow,
   TableCell,
@@ -14,22 +15,13 @@ import {
   Box
 } from '@mui/material';
 
-const normalizeArabicSearch = (value = '') =>
-  String(value)
-    .normalize('NFKD')
-    .replace(/[\u064B-\u065F\u0670]/g, '')
-    .replace(/[أإآٱ]/g, 'ا')
-    .replace(/ؤ/g, 'و')
-    .replace(/ئ/g, 'ي')
-    .replace(/ى/g, 'ي')
-    .replace(/ة/g, 'ه')
-    .toLowerCase();
-
 const serviceFilter = (options, state) => {
-  const query = normalizeArabicSearch(state.inputValue || '');
+  const query = normalizeArabicSearchText(state.inputValue || '');
   if (!query) return options;
   return options.filter((opt) =>
-    normalizeArabicSearch(`${opt.serviceCode || opt.code || ''} ${opt.serviceName || opt.name || ''} ${opt.label || ''}`).includes(query)
+    normalizeArabicSearchText(`${opt.serviceCode || opt.code || ''} ${opt.serviceName || opt.name || ''} ${opt.label || ''}`).includes(
+      query
+    )
   );
 };
 import {
@@ -155,6 +147,14 @@ export const ClaimLineRow = ({
                 if (reason === 'input' || reason === 'clear') onServiceSearchChange?.(value);
               }}
               filterOptions={serviceFilter}
+              getOptionKey={(o) =>
+                [
+                  o.pricingItemId ?? 'no-price',
+                  o.medicalServiceId ?? o.serviceId ?? 'no-service',
+                  o.serviceCode ?? o.medicalServiceCode ?? 'no-code',
+                  o.categoryId ?? o.medicalCategoryId ?? 'no-category'
+                ].join(':')
+              }
               getOptionLabel={(o) => {
                 const name = o.label || o.serviceName || '';
                 if (o.contractPrice != null && o.maxContractPrice != null && o.maxContractPrice > o.contractPrice) {
@@ -162,10 +162,18 @@ export const ClaimLineRow = ({
                 }
                 return name;
               }}
-              isOptionEqualToValue={(opt, val) =>
-                (opt?.pricingItemId != null && opt.pricingItemId === val?.pricingItemId) ||
-                (opt?.serviceCode != null && (opt.serviceCode === val?.serviceCode || opt.serviceCode === val?.medicalServiceCode))
-              }
+              isOptionEqualToValue={(opt, val) => {
+                if (!opt || !val) return false;
+                if (opt.pricingItemId != null || val.pricingItemId != null) {
+                  return String(opt.pricingItemId ?? '') === String(val.pricingItemId ?? '');
+                }
+                const optServiceId = opt.medicalServiceId ?? opt.serviceId;
+                const valServiceId = val.medicalServiceId ?? val.serviceId;
+                if (optServiceId != null || valServiceId != null) {
+                  return String(optServiceId ?? '') === String(valServiceId ?? '');
+                }
+                return String(opt.serviceCode ?? opt.medicalServiceCode ?? '') === String(val.serviceCode ?? val.medicalServiceCode ?? '');
+              }}
               renderInput={(params) => (
                 <TextField
                   {...params}

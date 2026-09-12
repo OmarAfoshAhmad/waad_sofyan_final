@@ -10,6 +10,9 @@ export { default as ModernStatCard } from './ModernStatCard';
 export { default as ModernQuickActions } from './ModernQuickActions';
 export { default as SoftDeleteToggle } from './SoftDeleteToggle';
 export { default as ActionConfirmDialog } from './ActionConfirmDialog';
+export { default as EntityAutocompleteSelect } from './EntityAutocompleteSelect';
+export { default as EmployerSelectField } from './EmployerSelectField';
+export { default as ProviderSelectField } from './ProviderSelectField';
 
 // Member Components
 export { default as MemberAvatar } from './MemberAvatar';

@@ -3,7 +3,9 @@ package com.waad.tba.modules.preauthorization.controller;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.util.UUID;
@@ -114,6 +116,29 @@ class PreAuthPortalRequiresAuthorizationTest extends PostgresIntegrationTestBase
                 .andExpect(status().is4xxClientError());
         mockMvc.perform(get("/api/v1/provider/preauths/1"))
                 .andExpect(status().is4xxClientError());
+    }
+
+    /**
+     * The portal used to register five stub routes that answered 200 with
+     * "(Mock)" strings or an empty entity. They are gone, not gated: even the
+     * widest account must find no route there, otherwise a client built
+     * against them would silently lose every draft and upload it sent.
+     */
+    @Test
+    @WithMockUser(username = "admin", roles = "SUPER_ADMIN")
+    void mockPortalRoutesNoLongerExist() throws Exception {
+        mockMvc.perform(get("/api/v1/provider/preauths"))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(get("/api/v1/provider/preauths/1"))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(post("/api/v1/provider/preauths").with(csrf()))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(put("/api/v1/provider/preauths/1/draft").with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(multipart("/api/v1/provider/preauths/1/attachments")
+                        .file("file", "x".getBytes()).param("type", "REPORT").with(csrf()))
+                .andExpect(status().isNotFound());
     }
 
     /**

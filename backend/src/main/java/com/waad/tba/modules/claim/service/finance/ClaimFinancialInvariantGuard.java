@@ -43,7 +43,8 @@ public class ClaimFinancialInvariantGuard {
         BigDecimal sumRefusedAmount = sum(lines, ClaimLine::getRefusedAmount);
 
         check(claim.getId(), "approvedAmount", claim.getApprovedAmount(), sumCompanyShare);
-        check(claim.getId(), "netProviderAmount", claim.getNetProviderAmount(), sumCompanyShare);
+        BigDecimal expectedNetProvider = value(sumCompanyShare.subtract(value(claim.getCompanyDiscountAmount())));
+        check(claim.getId(), "netProviderAmount", claim.getNetProviderAmount(), expectedNetProvider);
         check(claim.getId(), "patientCoPay", claim.getPatientCoPay(), sumPatientShare);
         check(claim.getId(), "refusedAmount", claim.getRefusedAmount(), sumRefusedAmount);
     }

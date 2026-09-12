@@ -178,8 +178,10 @@ export const unifiedSearch = async (query, employerId = null) => {
       const trimmedQuery = query.trim();
       const criteria = {};
 
-      // If it looks like a number, search specifically by card number (partial)
-      if (/^\d+$/.test(trimmedQuery)) {
+      // Insurance card numbers are often alphanumeric (e.g. LCC2025002513),
+      // while names contain Arabic/Latin word separators. Treat compact
+      // alphanumeric identifiers as card-number searches instead of names.
+      if (/^[\p{L}\p{N}-]+$/u.test(trimmedQuery) && /\d/.test(trimmedQuery)) {
         criteria.cardNumber = trimmedQuery;
       } else {
         // Otherwise search by full name (partial)
@@ -222,7 +224,6 @@ export const unifiedSearch = async (query, employerId = null) => {
     throw error;
   }
 };
-
 
 /**
  * Check family eligibility by Principal's Barcode
@@ -311,7 +312,6 @@ export const bulkDeleteMembers = async (ids, reason) => {
     throw error;
   }
 };
-
 
 /**
  * Toggle active/inactive status for a member.
@@ -438,7 +438,10 @@ export const previewEmployerTransfer = async (principalId, newEmployerId) => {
  * member's current version. Pass noPolicy:true instead of newPolicyId only
  * to explicitly confirm the family should carry no policy for now.
  */
-export const transferEmployerFamily = async (principalId, { newEmployerId, newPolicyId, noPolicy, effectiveDate, reason, expectedVersions }) => {
+export const transferEmployerFamily = async (
+  principalId,
+  { newEmployerId, newPolicyId, noPolicy, effectiveDate, reason, expectedVersions }
+) => {
   const response = await api.post(`${UNIFIED_MEMBERS_BASE_URL}/${principalId}/employer-transfer`, {
     newEmployerId,
     newPolicyId: noPolicy ? null : newPolicyId,
@@ -486,8 +489,6 @@ export const hardDeleteMember = async (id, reason) => {
     throw error;
   }
 };
-
-
 
 /**
  * Detect Excel columns and suggest mappings

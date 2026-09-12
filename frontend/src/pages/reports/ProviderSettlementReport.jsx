@@ -48,7 +48,7 @@ import {
 } from '@mui/icons-material';
 import { formatCurrency as formatCurrencyGlobal } from 'utils/currency-formatter';
 import MainCard from 'components/MainCard';
-import { ModernPageHeader } from 'components/tba';
+import { ModernPageHeader, ProviderSelectField } from 'components/tba';
 import { useCompanySettings } from 'contexts/CompanySettingsContext';
 import { reportsService } from 'services/api';
 import { exportToExcel } from 'utils/exportUtils';
@@ -623,21 +623,15 @@ const ProviderSettlementReport = () => {
           <Grid container spacing={2} alignItems="center">
             {/* Provider Selector - only for admin */}
             <Grid size={{ xs: 12, md: 3 }}>
-              <FormControl fullWidth size="small">
-                <InputLabel>مقدم الخدمة *</InputLabel>
-                <Select
-                  value={selectedProviderId}
-                  onChange={(e) => setSelectedProviderId(e.target.value)}
-                  input={<OutlinedInput label="مقدم الخدمة *" />}
-                  disabled={!isAdmin && providers.length === 1}
-                >
-                  {providers.map((provider) => (
-                    <MenuItem key={provider.id} value={provider.id}>
-                      {provider.name || provider.label}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+              <ProviderSelectField
+                value={selectedProviderId}
+                onChange={(providerId) => setSelectedProviderId(providerId || '')}
+                options={providers}
+                label="مقدم الخدمة *"
+                placeholder="ابحث باسم أو كود مقدم الخدمة..."
+                disabled={providersLoading || (!isAdmin && providers.length === 1)}
+                required
+              />
             </Grid>
 
             {/* Date From */}

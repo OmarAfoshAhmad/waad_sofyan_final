@@ -19,7 +19,7 @@ import {
   CircularProgress
 } from '@mui/material';
 import { Download as DownloadIcon, Refresh as RefreshIcon } from '@mui/icons-material';
-import { ModernPageHeader } from 'components/tba';
+import { EmployerSelectField, ModernPageHeader } from 'components/tba';
 import { reportsService } from 'services/api';
 import employersService from 'services/api/employers.service';
 import { formatCurrency } from 'utils/currency-formatter';
@@ -105,14 +105,15 @@ const AccountantProfitReport = () => {
           <Grid container spacing={2} alignItems="stretch">
             {/* الصف الأول: الفلاتر */}
             <Grid size={{ xs: 12, md: 4 }}>
-              <TextField select fullWidth label="الشركة" value={selectedEmployer} onChange={(e) => setSelectedEmployer(e.target.value)}>
-                <MenuItem value="">كل الشركات</MenuItem>
-                {employers.map((emp) => (
-                  <MenuItem key={emp.id} value={emp.id}>
-                    {emp.name}
-                  </MenuItem>
-                ))}
-              </TextField>
+              <EmployerSelectField
+                value={selectedEmployer}
+                onChange={(employerId) => setSelectedEmployer(employerId || '')}
+                options={employers}
+                label="الشركة"
+                placeholder="ابحث باسم أو رمز الشركة..."
+                allLabel="كل الشركات"
+                size="medium"
+              />
             </Grid>
             <Grid size={{ xs: 12, md: 2 }}>
               <TextField type="number" fullWidth label="السنة" value={selectedYear} onChange={(e) => setSelectedYear(e.target.value)} />

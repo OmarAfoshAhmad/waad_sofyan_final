@@ -67,6 +67,7 @@ import claimBatchesService from 'services/api/claim-batches.service';
 import medicalDictionaryService from 'services/api/medical-dictionary.service';
 import { claimRejectionReasonsService } from 'services/api/claim-rejection-reasons.service';
 import { normalizeApiError, runWithRetry } from 'utils/api-error';
+import { normalizeArabicSearchText } from 'utils/searchText';
 import axiosClient from 'utils/axios';
 
 import { useCalculationLogic } from './hooks/useCalculationLogic';
@@ -117,17 +118,6 @@ const newLine = () => ({
 
 const newDirectEntryKey = () => globalThis.crypto?.randomUUID?.() || `claim-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
-const normalizeArabicSearch = (value = '') =>
-  String(value)
-    .normalize('NFKD')
-    .replace(/[\u064B-\u065F\u0670]/g, '')
-    .replace(/[أإآٱ]/g, 'ا')
-    .replace(/ؤ/g, 'و')
-    .replace(/ئ/g, 'ي')
-    .replace(/ى/g, 'ي')
-    .replace(/ة/g, 'ه')
-    .toLowerCase();
-
 const GENERATED_SERVICE_CODE_PATTERN = /^(PL-|SYS-)/i;
 
 const isGeneratedServiceCode = (code = '') => GENERATED_SERVICE_CODE_PATTERN.test(String(code).trim());
@@ -150,7 +140,7 @@ const buildServiceDisplayLabel = ({ code = '', name = '' } = {}) => {
   const cleanName = String(name || '').trim();
 
   if (!cleanCode || isGeneratedServiceCode(cleanCode)) return cleanName;
-  if (cleanName && normalizeArabicSearch(cleanName).includes(normalizeArabicSearch(cleanCode))) return cleanName;
+  if (cleanName && normalizeArabicSearchText(cleanName).includes(normalizeArabicSearchText(cleanCode))) return cleanName;
   return cleanName ? `${cleanCode} — ${cleanName}` : cleanCode;
 };
 
@@ -842,7 +832,8 @@ export default function ClaimBatchEntry() {
           const savedCompanyShare = parseFloat(l.companyShare) || 0;
           const savedPatientShare = parseFloat(l.patientShare) || 0;
           const savedRefusedAmount = parseFloat(l.refusedAmount) || 0;
-          const hasSavedEngineDecision = l.coveragePercent != null && (l.companyShare != null || l.patientShare != null || l.refusedAmount != null);
+          const hasSavedEngineDecision =
+            l.coveragePercent != null && (l.companyShare != null || l.patientShare != null || l.refusedAmount != null);
 
           const serviceObj = svc || {
             pricingItemId: l.pricingItemId || null,
@@ -881,7 +872,8 @@ export default function ClaimBatchEntry() {
             // appliedCategoryId is the policy rule chosen by the coverage
             // resolver (for example generic inpatient under maternity), not
             // the service classification to feed back into the next resolve.
-            serviceCategoryId: l.originalServiceCategoryId ?? l.serviceCategoryId ?? serviceObj.serviceCategoryId ?? l.appliedCategoryId ?? null,
+            serviceCategoryId:
+              l.originalServiceCategoryId ?? l.serviceCategoryId ?? serviceObj.serviceCategoryId ?? l.appliedCategoryId ?? null,
             serviceCategoryName:
               l.originalServiceCategoryName ?? l.serviceCategoryName ?? serviceObj.serviceCategoryName ?? l.appliedCategoryName ?? null,
             quantity: l.quantity ?? l.requestedQuantity ?? l.approvedQuantity ?? 1,
@@ -921,8 +913,7 @@ export default function ClaimBatchEntry() {
       setPreAuthId(editingClaim.preAuthorizationId || '');
       const hydratedEncounterType = editingClaim.encounterType || 'OUTPATIENT';
       const hydratedFullCoverage = !!editingClaim.fullCoverage;
-      const hydratedClaimContextCode =
-        editingClaim.claimContextCode || (hydratedFullCoverage ? 'FULL_COVERAGE' : hydratedEncounterType);
+      const hydratedClaimContextCode = editingClaim.claimContextCode || (hydratedFullCoverage ? 'FULL_COVERAGE' : hydratedEncounterType);
       editHydrationContextRef.current = {
         encounterType: hydratedEncounterType,
         fullCoverage: hydratedFullCoverage,
@@ -2102,7 +2093,9 @@ export default function ClaimBatchEntry() {
               <Chip
                 size="small"
                 variant="filled"
-                label={editingClaimId ? `تعديل مطالبة #${editingClaimId}` : isDirty ? t('claimEntry.statusDraft') : t('claimEntry.statusNew')}
+                label={
+                  editingClaimId ? `تعديل مطالبة #${editingClaimId}` : isDirty ? t('claimEntry.statusDraft') : t('claimEntry.statusNew')
+                }
                 color={editingClaimId ? 'info' : isDirty ? 'warning' : 'primary'}
                 sx={{ fontWeight: 600, fontSize: '0.85rem' }}
               />
@@ -2589,18 +2582,13 @@ export default function ClaimBatchEntry() {
                   financialDataUnavailable={
                     Boolean(member?.id) && (!serviceDate || loadingEntryContext || entryContextError || !entryContext)
                   }
-                  hasUncoveredLines={lines.some(
-                    (line) => {
-                      const hasService = line.service || line.serviceName;
-                      const hasAmountForCoverage = Number(line.unitPrice || 0) > 0 && Number(line.quantity || 0) > 0;
-                      return (
-                        hasService &&
-                        hasAmountForCoverage &&
-                        !line.rejected &&
-                        (line.notCovered || (Number(line.coveragePercent) || 0) <= 0)
-                      );
-                    }
-                  )}
+                  hasUncoveredLines={lines.some((line) => {
+                    const hasService = line.service || line.serviceName;
+                    const hasAmountForCoverage = Number(line.unitPrice || 0) > 0 && Number(line.quantity || 0) > 0;
+                    return (
+                      hasService && hasAmountForCoverage && !line.rejected && (line.notCovered || (Number(line.coveragePercent) || 0) <= 0)
+                    );
+                  })}
                   setIsClaimRejected={setIsClaimRejected}
                   setIsDirty={setIsDirty}
                   setRejectionInput={setRejectionInput}
@@ -2682,12 +2670,12 @@ export default function ClaimBatchEntry() {
               }
               isOptionEqualToValue={(option, value) => String(option.id) === String(value.id)}
               filterOptions={(options, state) => {
-                const query = normalizeArabicSearch(state.inputValue.trim());
+                const query = normalizeArabicSearchText(state.inputValue.trim());
                 if (!query) return options;
                 return options.filter((category) =>
                   [category.code, category.name, category.nameAr, category.nameEn]
                     .filter(Boolean)
-                    .some((value) => normalizeArabicSearch(value).includes(query))
+                    .some((value) => normalizeArabicSearchText(value).includes(query))
                 );
               }}
               renderInput={(params) => (

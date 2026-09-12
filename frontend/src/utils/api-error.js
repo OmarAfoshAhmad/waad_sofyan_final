@@ -1,3 +1,36 @@
+const FALLBACK_MESSAGE = 'حدث خطأ غير متوقع';
+
+const firstText = (...values) => {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) return value.trim();
+  }
+  return null;
+};
+
+const detailsMessage = (details) => {
+  if (!details) return null;
+  if (typeof details === 'string') return details;
+  if (Array.isArray(details)) return details.map(detailsMessage).filter(Boolean).join('، ') || null;
+  if (typeof details !== 'object') return null;
+
+  const direct = firstText(details.messageAr, details.message, details.error, details.reason, details.detail);
+  if (direct) return direct;
+
+  const errors = details.errors || details.fieldErrors || details.validationErrors;
+  if (errors && typeof errors === 'object') {
+    if (Array.isArray(errors)) return errors.map(detailsMessage).filter(Boolean).join('، ') || null;
+    const values = Object.entries(errors)
+      .map(([field, value]) => {
+        const msg = detailsMessage(value) || (typeof value === 'string' ? value : null);
+        return msg ? `${field}: ${msg}` : null;
+      })
+      .filter(Boolean);
+    if (values.length) return values.join('، ');
+  }
+
+  return null;
+};
+
 /**
  * @returns {{code: string, category: string, message: string, details: object,
  *            trackingId: (string|null)}}
@@ -12,14 +45,26 @@
  */
 export const normalizeApiError = (error) => {
   const payload = error?.response?.data || {};
+  const isTextPayload = typeof payload === 'string';
+  const body = isTextPayload ? {} : payload;
 
-  const code = payload.code || payload.errorCode || 'UNKNOWN_ERROR';
-  const category = payload.category || 'SYSTEM';
-  const message = payload.messageAr || payload.message || error?.userMessage || 'حدث خطأ غير متوقع';
-  const details = payload.details || {
+  const details = body.details || {
     reason: error?.message || 'Unknown error'
   };
-  const trackingId = payload.trackingId || null;
+
+  const code = body.code || body.errorCode || body.error || error?.code || 'UNKNOWN_ERROR';
+  const category = body.category || 'SYSTEM';
+  const message =
+    firstText(
+      body.messageAr,
+      body.message,
+      body.errorDescription,
+      body.title,
+      isTextPayload ? payload : null,
+      error?.userMessage,
+      detailsMessage(details)
+    ) || FALLBACK_MESSAGE;
+  const trackingId = body.trackingId || body.traceId || body.reference || null;
 
   return { code, category, message, details, trackingId };
 };

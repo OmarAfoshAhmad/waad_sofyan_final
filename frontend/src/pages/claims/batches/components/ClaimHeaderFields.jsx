@@ -37,8 +37,7 @@ const selectSx = {
   '& .MuiSelect-select': { display: 'flex', alignItems: 'center', py: 0, minHeight: 0 }
 };
 
-const memberIdOf = (memberOption) =>
-  memberOption?.id ?? memberOption?.memberId ?? memberOption?.M_ID ?? memberOption?.m_id ?? null;
+const memberIdOf = (memberOption) => memberOption?.id ?? memberOption?.memberId ?? memberOption?.M_ID ?? memberOption?.m_id ?? null;
 
 const memberNameOf = (memberOption) =>
   memberOption?.fullName || memberOption?.name || memberOption?.memberName || memberOption?.M_NAME || memberOption?.m_name || '';
@@ -102,8 +101,7 @@ export const ClaimHeaderFields = ({
   // Null, not zero, whenever there is no ceiling to report -- unlimited, not
   // configured, or a failed read. The badges below are hidden in that case
   // rather than showing a fabricated 0 د.ل to someone entering a claim.
-  const hasCeiling =
-    financialSummary?.reservableAvailable !== null && financialSummary?.reservableAvailable !== undefined;
+  const hasCeiling = financialSummary?.reservableAvailable !== null && financialSummary?.reservableAvailable !== undefined;
   const persistedAvailable = hasCeiling ? Number(financialSummary.reservableAvailable) : 0;
   // The persisted summary includes an existing claim being edited, while the
   // coverage engine excludes that claim before recalculation. Add its old
@@ -172,7 +170,11 @@ export const ClaimHeaderFields = ({
               onRefetchAll(encounterType, fullCoverage);
             }
           }}
-          onInputChange={(_, v) => setMemberInput(v)}
+          onInputChange={(_, v, reason) => {
+            if (reason === 'input' || reason === 'clear') {
+              setMemberInput(v);
+            }
+          }}
           filterOptions={(x) => x}
           getOptionLabel={memberOptionLabel}
           isOptionEqualToValue={(o, v) => String(memberIdOf(o) ?? '') === String(memberIdOf(v) ?? '')}
@@ -284,7 +286,9 @@ export const ClaimHeaderFields = ({
           sx={selectSx}
         >
           {claimContexts.map((context) => (
-            <MenuItem key={context.code} value={context.code}>{context.nameAr}</MenuItem>
+            <MenuItem key={context.code} value={context.code}>
+              {context.nameAr}
+            </MenuItem>
           ))}
         </Select>
       </Box>
@@ -313,8 +317,11 @@ export const ClaimHeaderFields = ({
               sx={{
                 height: 28,
                 '& .MuiChip-label': {
-                  px: 1, fontSize: '0.82rem', fontWeight: 600,
-                  fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap'
+                  px: 1,
+                  fontSize: '0.82rem',
+                  fontWeight: 600,
+                  fontVariantNumeric: 'tabular-nums',
+                  whiteSpace: 'nowrap'
                 }
               }}
             />
@@ -326,8 +333,11 @@ export const ClaimHeaderFields = ({
               sx={{
                 height: 28,
                 '& .MuiChip-label': {
-                  px: 1, fontSize: '0.82rem', fontWeight: 700,
-                  fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap'
+                  px: 1,
+                  fontSize: '0.82rem',
+                  fontWeight: 700,
+                  fontVariantNumeric: 'tabular-nums',
+                  whiteSpace: 'nowrap'
                 }
               }}
             />
@@ -337,4 +347,3 @@ export const ClaimHeaderFields = ({
     </Box>
   );
 };
-

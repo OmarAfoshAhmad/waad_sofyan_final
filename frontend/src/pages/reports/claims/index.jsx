@@ -7,7 +7,7 @@ import { exportToExcel } from 'utils/exportUtils';
 import { useCompanySettings } from 'contexts/CompanySettingsContext';
 
 // MUI Components
-import { Box, Stack, Typography, IconButton, Tooltip, Alert, Chip, Button } from '@mui/material';
+import { Box, Stack, Typography, IconButton, Tooltip, Alert, Chip, Button, Paper, Divider } from '@mui/material';
 
 // MUI Icons
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -67,6 +67,24 @@ const ClaimsReport = () => {
   const totalCount = claims.length;
   const hasPartialData = pagination.totalElements > totalFetched;
 
+  const reportSummary = useMemo(() => {
+    const requested = claims.reduce((sum, claim) => sum + (Number(claim.requestedAmount) || 0), 0);
+    const approved = claims.reduce((sum, claim) => sum + (Number(claim.approvedAmount) || 0), 0);
+    const rejected = Math.max(requested - approved, 0);
+    const approvedClaims = claims.filter((claim) => ['APPROVED', 'BATCHED', 'SETTLED'].includes(claim.status)).length;
+    const rejectedClaims = claims.filter((claim) => claim.status === 'REJECTED').length;
+    const approvalRate = requested > 0 ? (approved / requested) * 100 : 0;
+
+    return {
+      requested,
+      approved,
+      rejected,
+      approvedClaims,
+      rejectedClaims,
+      approvalRate
+    };
+  }, [claims]);
+
   const handleEmployerChange = (employerId) => {
     if (canSelectEmployer) {
       setSelectedEmployerId(employerId);
@@ -111,15 +129,15 @@ const ClaimsReport = () => {
   };
 
   return (
-    <MainCard>
+    <MainCard sx={{ '& .MuiCardContent-root': { p: { xs: 1.5, md: 2.25 } } }}>
       <ModernPageHeader
-        titleKey="تقرير المطالبات التشغيلي"
+        titleKey="تقرير المطالبات"
         titleIcon={<AssignmentIcon color="primary" />}
-        subtitleKey="قائمة شاملة بجميع المطالبات المعالجة"
+        subtitleKey="ملخص تشغيلي ومالي للمطالبات مع فلاتر وتحليل سريع"
         actions={
           <Stack direction="row" spacing={2} alignItems="center">
             <Chip label={`${totalCount} مطالبة`} size="small" color="primary" variant="outlined" />
-            <Tooltip title="تصدير Excel">
+            <Tooltip title="تصدير النتائج المحملة حاليًا إلى Excel">
               <Button
                 variant="outlined"
                 size="small"
@@ -139,6 +157,37 @@ const ClaimsReport = () => {
           </Stack>
         }
       />
+
+      <Paper
+        variant="outlined"
+        sx={{
+          mt: 1,
+          mb: 1.25,
+          px: 1.5,
+          py: 1,
+          borderRadius: 1.5,
+          bgcolor: '#fff',
+          borderColor: 'divider'
+        }}
+      >
+        <Stack
+          direction={{ xs: 'column', md: 'row' }}
+          justifyContent="space-between"
+          alignItems={{ xs: 'flex-start', md: 'center' }}
+          gap={1}
+        >
+          <Typography variant="body2" sx={{ fontWeight: 900, color: 'text.primary' }}>
+            ملخص النتائج الحالية
+          </Typography>
+          <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap">
+            <Chip size="small" variant="outlined" label={`${formatNumber(totalCount)} مطالبة`} />
+            <Chip size="small" variant="outlined" color="info" label={`المطلوب ${formatNumber(reportSummary.requested)} د.ل`} />
+            <Chip size="small" variant="outlined" color="success" label={`المعتمد ${formatNumber(reportSummary.approved)} د.ل`} />
+            <Chip size="small" variant="outlined" color="error" label={`الفرق ${formatNumber(reportSummary.rejected)} د.ل`} />
+            <Chip size="small" variant="outlined" color="secondary" label={`اعتماد ${reportSummary.approvalRate.toFixed(1)}%`} />
+          </Stack>
+        </Stack>
+      </Paper>
 
       {error && (
         <Alert severity="error" icon={<WarningIcon />} sx={{ mb: '1.0rem' }}>
@@ -169,11 +218,33 @@ const ClaimsReport = () => {
       </Box>
 
       {!loading && totalFetched > 0 && (
-        <Box sx={{ mb: '1.0rem' }}>
-          <Typography variant="body2" color="text.secondary">
-            إجمالي السجلات: <strong>{totalFetched}</strong>
-          </Typography>
-        </Box>
+        <Paper
+          variant="outlined"
+          sx={{
+            mb: 0,
+            px: 1.5,
+            py: 0.8,
+            borderRadius: '6px 6px 0 0',
+            bgcolor: '#F8FBFA',
+            borderColor: 'divider',
+            borderBottom: 0
+          }}
+        >
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            justifyContent="space-between"
+            alignItems={{ xs: 'stretch', sm: 'center' }}
+            gap={1}
+          >
+            <Typography variant="body2" color="text.secondary">
+              إجمالي السجلات: <strong>{totalFetched}</strong>
+            </Typography>
+            <Divider flexItem orientation="vertical" sx={{ display: { xs: 'none', sm: 'block' } }} />
+            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
+              التفاصيل من أيقونة العين أو من سهم الصف.
+            </Typography>
+          </Stack>
+        </Paper>
       )}
 
       <ClaimsTable

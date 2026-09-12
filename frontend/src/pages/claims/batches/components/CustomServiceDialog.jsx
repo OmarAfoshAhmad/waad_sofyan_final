@@ -12,6 +12,7 @@ import {
   TextField,
   Typography
 } from '@mui/material';
+import { normalizeArabicSearchText } from 'utils/searchText';
 import { MedicalServices as MedicalServicesIcon } from '@mui/icons-material';
 
 const CLAIM_CONTEXT_LABELS = {
@@ -25,18 +26,6 @@ const CLAIM_CONTEXT_LABELS = {
 };
 
 const claimContextLabel = (code) => CLAIM_CONTEXT_LABELS[String(code || '').toUpperCase()] || 'سياق المطالبة الحالي';
-
-const normalizeArabicSearch = (value = '') =>
-  String(value || '')
-    .toLowerCase()
-    .replace(/[أإآٱ]/g, 'ا')
-    .replace(/ى/g, 'ي')
-    .replace(/ة/g, 'ه')
-    .replace(/ؤ/g, 'و')
-    .replace(/ئ/g, 'ي')
-    .replace(/[\u064B-\u065F\u0670]/g, '')
-    .replace(/[^\p{L}\p{N}]+/gu, ' ')
-    .trim();
 
 /**
  * Lets staff add a brand-new provider-contract service directly from claim
@@ -76,12 +65,12 @@ export function CustomServiceDialog({
             onChange={(event, newValue) => onFieldChange('categoryId', newValue?.id || '')}
             getOptionLabel={(option) => `${option.nameAr || option.name || ''}${option.code ? ` (${option.code})` : ''}`}
             filterOptions={(options, state) => {
-              const query = normalizeArabicSearch(state.inputValue);
+              const query = normalizeArabicSearchText(state.inputValue);
               if (!query) return options;
               return options.filter((option) =>
                 [option.nameAr, option.name, option.nameEn, option.code]
                   .filter(Boolean)
-                  .some((value) => normalizeArabicSearch(value).includes(query))
+                  .some((value) => normalizeArabicSearchText(value).includes(query))
               );
             }}
             isOptionEqualToValue={(option, value) => String(option.id) === String(value.id)}

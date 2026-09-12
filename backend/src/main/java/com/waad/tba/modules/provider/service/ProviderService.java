@@ -583,4 +583,20 @@ public class ProviderService {
                 .map(providerMapper::toViewDto)
                 .collect(Collectors.toList());
     }
+
+    @Transactional(readOnly = true)
+    public List<ProviderViewDto> getProvidersByEmployer(Long employerId, java.time.LocalDate periodStart, java.time.LocalDate periodEnd) {
+        if (periodStart == null || periodEnd == null) {
+            return getProvidersByEmployer(employerId);
+        }
+        log.debug("[PROVIDER] Fetching providers for employer {} with active contracts overlapping {} → {}",
+                employerId, periodStart, periodEnd);
+        return providerRepository.findByAllowedEmployerWithActiveContract(employerId, periodStart, periodEnd,
+                        com.waad.tba.modules.providercontract.entity.ProviderContract.ContractStatus.ACTIVE,
+                        com.waad.tba.modules.providercontract.entity.ProviderContract.PricingScope.GLOBAL,
+                        com.waad.tba.modules.providercontract.entity.ProviderContract.PricingScope.EMPLOYER_SPECIFIC)
+                .stream()
+                .map(providerMapper::toViewDto)
+                .collect(Collectors.toList());
+    }
 }

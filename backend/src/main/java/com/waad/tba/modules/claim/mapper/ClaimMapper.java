@@ -185,15 +185,17 @@ public class ClaimMapper {
                                 : null;
                 var resolvedContract = effectiveContractResolver.resolve(
                                 claim.getProviderId(), claimEmployerId, claim.getServiceDate());
-                claim.setProviderContractId(resolvedContract.contract().getId());
-                claim.setContractTermsId(resolvedContract.terms().getId());
-                // Claim entry/review adjudicates medical eligibility only. The
-                // provider contract discount is an accounting settlement matter,
-                // not a reviewer-facing reduction in the insurer commitment.
-                // Keep the contract/terms ids for audit and later settlement,
-                // but do not discount companyShare while saving a claim.
-                claim.setAppliedDiscountPercent(ZERO);
-                claim.setDiscountBeforeRejection(false);
+                if (!hasContractFinancialSnapshot(claim)) {
+                        claim.setProviderContractId(resolvedContract.contract().getId());
+                        claim.setContractTermsId(resolvedContract.terms().getId());
+                        BigDecimal contractDiscountPercent = resolvedContract.terms().getDiscountPercent() != null
+                                        ? scale2(resolvedContract.terms().getDiscountPercent())
+                                        : ZERO;
+                        boolean contractDiscountBeforeRejection = Boolean.TRUE.equals(
+                                        resolvedContract.terms().getDiscountBeforeRejection());
+                        claim.setAppliedDiscountPercent(contractDiscountPercent);
+                        claim.setDiscountBeforeRejection(contractDiscountBeforeRejection);
+                }
                 claim.setFinancialCalculatedAt(LocalDateTime.now());
 
                 for (ClaimLineDto lineDto : lineDtos) {
@@ -611,6 +613,14 @@ public class ClaimMapper {
 
         private BigDecimal scale2(BigDecimal value) {
                 return (value == null ? BigDecimal.ZERO : value).setScale(2, RoundingMode.HALF_UP);
+        }
+
+        private boolean hasContractFinancialSnapshot(Claim claim) {
+                return claim != null
+                                && claim.getId() != null
+                                && claim.getContractTermsId() != null
+                                && claim.getAppliedDiscountPercent() != null
+                                && claim.getDiscountBeforeRejection() != null;
         }
 
         private BigDecimal maxZero(BigDecimal value) {

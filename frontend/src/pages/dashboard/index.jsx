@@ -63,10 +63,12 @@ const GradientKPICard = ({ title, value, subtitle, icon: Icon, gradient, loading
     <Card
       sx={{
         height: '100%',
+        minHeight: '7.75rem',
+        minWidth: 0,
         background: gradient,
         color: '#fff',
         borderRadius: '0.25rem',
-        overflow: 'hidden',
+        overflow: 'visible',
         position: 'relative',
         boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
         transition: 'transform 0.2s ease',
@@ -75,11 +77,20 @@ const GradientKPICard = ({ title, value, subtitle, icon: Icon, gradient, loading
     >
       <CardContent sx={{ p: '0.75rem', '&:last-child': { pb: '0.75rem' }, position: 'relative', zIndex: 1 }}>
         <Stack spacing={1}>
-          <Stack direction="row" justifyContent="space-between" alignItems="center">
-            <Typography variant="caption" sx={{ opacity: 0.9, fontWeight: 700, textTransform: 'uppercase' }}>
+          <Stack direction="row" justifyContent="space-between" alignItems="flex-start" gap={1}>
+            <Typography
+              variant="caption"
+              sx={{
+                opacity: 0.95,
+                fontWeight: 800,
+                lineHeight: 1.4,
+                minWidth: 0,
+                overflowWrap: 'anywhere'
+              }}
+            >
               {title}
             </Typography>
-            <Box sx={{ p: 0.5, borderRadius: 1, bgcolor: 'rgba(255,255,255,0.2)', display: 'flex' }}>
+            <Box sx={{ p: 0.5, borderRadius: 1, bgcolor: 'rgba(255,255,255,0.2)', display: 'flex', flexShrink: 0 }}>
               <Icon sx={{ fontSize: '1.125rem' }} />
             </Box>
           </Stack>
@@ -87,13 +98,34 @@ const GradientKPICard = ({ title, value, subtitle, icon: Icon, gradient, loading
           {loading ? (
             <Skeleton variant="text" width="50%" height={24} sx={{ bgcolor: 'rgba(255,255,255,0.3)' }} />
           ) : (
-            <Typography variant="h5" fontWeight={800} sx={{ fontFamily: "'Roboto', sans-serif" }}>
+            <Typography
+              variant="h5"
+              fontWeight={800}
+              sx={{
+                fontFamily: "'Roboto', sans-serif",
+                lineHeight: 1.25,
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis'
+              }}
+            >
               {typeof value === 'number' ? value.toLocaleString('en-US') : value}
             </Typography>
           )}
 
           {subtitle && (
-            <Typography variant="caption" sx={{ opacity: 0.8, fontSize: '0.75rem', display: 'block', noWrap: true }}>
+            <Typography
+              variant="caption"
+              sx={{
+                opacity: 0.85,
+                fontSize: '0.75rem',
+                display: 'block',
+                lineHeight: 1.5,
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis'
+              }}
+            >
               {subtitle}
             </Typography>
           )}
@@ -573,48 +605,56 @@ export default function Dashboard() {
         </Card>
 
         {/* Row 1: KPIs */}
-        <Grid container spacing={2.5}>
+        <Grid container spacing={2.5} sx={{ direction: 'ltr' }}>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <GradientKPICard
-              title="المستفيدين"
-              value={activeMembers}
-              subtitle={`إجمالي: ${totalMembers}`}
-              icon={PeopleIcon}
-              gradient="linear-gradient(135deg, #059669 0%, #10b981 100%)"
-              loading={summaryLoading}
-            />
+            <Box sx={{ direction: 'rtl', height: '100%' }}>
+              <GradientKPICard
+                title="المستفيدين"
+                value={activeMembers}
+                subtitle={`إجمالي المسجلين: ${totalMembers}`}
+                icon={PeopleIcon}
+                gradient="linear-gradient(135deg, #059669 0%, #10b981 100%)"
+                loading={summaryLoading}
+              />
+            </Box>
           </Grid>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <GradientKPICard
-              title="مقدمي الخدمات"
-              value={activeProviders}
-              subtitle={`إجمالي: ${totalProviders}`}
-              icon={LocalHospitalIcon}
-              gradient="linear-gradient(135deg, #0ea5e9 0%, #38bdf8 100%)"
-              loading={summaryLoading}
-            />
+            <Box sx={{ direction: 'rtl', height: '100%' }}>
+              <GradientKPICard
+                title="مقدمي الخدمات"
+                value={activeProviders}
+                subtitle={`إجمالي مقدمي الخدمة: ${totalProviders}`}
+                icon={LocalHospitalIcon}
+                gradient="linear-gradient(135deg, #0ea5e9 0%, #38bdf8 100%)"
+                loading={summaryLoading}
+              />
+            </Box>
           </Grid>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <GradientKPICard
-              title="إجمالي المطالبات"
-              value={totalClaims}
-              subtitle={formatLYD(totalMedicalCost)}
-              icon={ReceiptLongIcon}
-              gradient="linear-gradient(135deg, #0d9488 0%, #14b8a6 100%)"
-              loading={summaryLoading}
-            />
+            <Box sx={{ direction: 'rtl', height: '100%' }}>
+              <GradientKPICard
+                title="إجمالي المطالبات"
+                value={totalClaims}
+                subtitle={formatLYD(totalMedicalCost)}
+                icon={ReceiptLongIcon}
+                gradient="linear-gradient(135deg, #0d9488 0%, #14b8a6 100%)"
+                loading={summaryLoading}
+              />
+            </Box>
           </Grid>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <GradientKPICard
-              title="قيد المراجعة"
-              value={openClaims}
-              subtitle={openClaims > 0 ? 'بحاجة لتدخل' : 'مكتمل'}
-              icon={PendingIcon}
-              gradient={
-                openClaims > 0 ? 'linear-gradient(135deg, #e11d48 0%, #fb7185 100%)' : 'linear-gradient(135deg, #475569 0%, #64748b 100%)'
-              }
-              loading={summaryLoading}
-            />
+            <Box sx={{ direction: 'rtl', height: '100%' }}>
+              <GradientKPICard
+                title="مطالبات تحتاج مراجعة"
+                value={openClaims}
+                subtitle={openClaims > 0 ? 'بانتظار إجراء من فريق المراجعة' : 'لا توجد مطالبات معلقة'}
+                icon={PendingIcon}
+                gradient={
+                  openClaims > 0 ? 'linear-gradient(135deg, #e11d48 0%, #fb7185 100%)' : 'linear-gradient(135deg, #475569 0%, #64748b 100%)'
+                }
+                loading={summaryLoading}
+              />
+            </Box>
           </Grid>
         </Grid>
 
@@ -706,19 +746,12 @@ export default function Dashboard() {
         }}
       >
         <Stack direction="row" alignItems="center" spacing={2}>
-          <Box sx={{ width: '0.375rem', height: '0.375rem', borderRadius: '50%', bgcolor: '#10b981', animation: 'pulse 2s infinite' }} />
+          <Box sx={{ width: '0.375rem', height: '0.375rem', borderRadius: '50%', bgcolor: '#10b981' }} />
           <Typography sx={{ fontSize: '0.8rem', fontWeight: 700, color: '#065f46', opacity: 0.9 }}>
-            اتصال النظام مستقر - تعمل جميع الخدمات بكفاءة عالية
+            تم تحميل بيانات لوحة المعلومات من الخادم
           </Typography>
         </Stack>
       </Box>
-
-      <style>{`
-        @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.4; }
-        }
-      `}</style>
     </Box>
   );
 }

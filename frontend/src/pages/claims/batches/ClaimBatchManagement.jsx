@@ -113,10 +113,7 @@ const generateBatchCode = (employer, provider, month, year) => {
  *   rather than render 0.00, which on a money screen is indistinguishable from a
  *   provider that genuinely has no claims.
  */
-const ProviderBatchCard = ({
-  provider, selectedEmployer, onSelectBatch, filterMonth, filterYear,
-  summaryData, summaryFailed
-}) => {
+const ProviderBatchCard = ({ provider, selectedEmployer, onSelectBatch, filterMonth, filterYear, summaryData, summaryFailed }) => {
   const batchCode = useMemo(() => {
     if (provider.realBatch) return provider.realBatch.batchCode;
     return generateBatchCode(selectedEmployer, provider, filterMonth, filterYear);
@@ -133,7 +130,10 @@ const ProviderBatchCard = ({
     amount: safeAmount,
     covered: safeCovered,
     refused: safeRefused,
-    patientShare: effectiveSummary?.totalPatientShare != null ? Number(effectiveSummary.totalPatientShare) : Math.max(0, safeAmount - safeCovered - safeRefused)
+    patientShare:
+      effectiveSummary?.totalPatientShare != null
+        ? Number(effectiveSummary.totalPatientShare)
+        : Math.max(0, safeAmount - safeCovered - safeRefused)
   };
 
   return (
@@ -211,10 +211,7 @@ const ProviderBatchCard = ({
         >
           <Stack direction="row" spacing={2} alignItems="center" sx={{ whiteSpace: 'nowrap' }}>
             <ViewListIcon sx={{ color: summaryFailed ? '#b26a00' : '#7cb983', fontSize: '1.6rem' }} />
-            <Typography
-              variant="h6"
-              sx={{ color: summaryFailed ? '#b26a00' : '#7cb983', fontWeight: 400, fontSize: '1.1rem' }}
-            >
+            <Typography variant="h6" sx={{ color: summaryFailed ? '#b26a00' : '#7cb983', fontWeight: 400, fontSize: '1.1rem' }}>
               {/* Never render 0 for a failed read: on a money card that is
                   indistinguishable from a provider with no claims. */}
               {summaryFailed ? 'تعذّر تحميل الأرقام' : `${stats.requestsCount} مطالبة`}
@@ -407,8 +404,8 @@ export default function ClaimBatchManagement() {
 
   // 2. Fetch Providers Allowed for Selected Employer (Standard-Isolation)
   const { data: allowedProviders, isLoading: isLoadingProviders } = useQuery({
-    queryKey: ['providers-by-employer', selectedEmployer?.id],
-    queryFn: () => providersService.getByEmployer(selectedEmployer.id),
+    queryKey: ['providers-by-employer', selectedEmployer?.id, batchPeriod.periodStart, batchPeriod.periodEnd],
+    queryFn: () => providersService.getByEmployer(selectedEmployer.id, batchPeriod),
     enabled: !!selectedEmployer
   });
 
@@ -437,10 +434,7 @@ export default function ClaimBatchManagement() {
   // a screen people leave open, and refetching the whole set on every remount
   // is what made the burst so easy to trigger. Mutations that change claims
   // invalidate ['batch-stats-by-provider'] explicitly.
-  const {
-    data: summaryByProvider,
-    isError: summaryFailed
-  } = useQuery({
+  const { data: summaryByProvider, isError: summaryFailed } = useQuery({
     queryKey: ['batch-stats-by-provider', selectedEmployer?.id, filterMonth, filterYear],
     queryFn: () => {
       const lastDay = new Date(filterYear, filterMonth, 0).getDate();

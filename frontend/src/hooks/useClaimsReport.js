@@ -55,7 +55,10 @@ export const DEFAULT_FILTERS = {
   statuses: FINAL_CLAIM_STATUSES, // Default = finalized statuses only
   memberSearch: '', // Text search on member name
   dateFrom: null, // Start date filter
-  dateTo: null // End date filter
+  dateTo: null, // End date filter
+  minAmount: '',
+  maxAmount: '',
+  financialStatus: 'ALL'
 };
 
 /**
@@ -212,8 +215,32 @@ export const useClaimsReport = ({ employerId, providerId, filters = DEFAULT_FILT
       });
     }
 
+    const minAmount = Number(filters.minAmount);
+    if (filters.minAmount !== '' && Number.isFinite(minAmount)) {
+      result = result.filter((claim) => Number(claim.requestedAmount) >= minAmount);
+    }
+
+    const maxAmount = Number(filters.maxAmount);
+    if (filters.maxAmount !== '' && Number.isFinite(maxAmount)) {
+      result = result.filter((claim) => Number(claim.requestedAmount) <= maxAmount);
+    }
+
+    if (filters.financialStatus === 'HAS_REJECTION') {
+      result = result.filter((claim) => {
+        const requested = Number(claim.requestedAmount) || 0;
+        const approved = Number(claim.approvedAmount) || 0;
+        return claim.status === CLAIM_STATUS.REJECTED || requested > approved;
+      });
+    } else if (filters.financialStatus === 'FULLY_APPROVED') {
+      result = result.filter((claim) => {
+        const requested = Number(claim.requestedAmount) || 0;
+        const approved = Number(claim.approvedAmount) || 0;
+        return requested > 0 && approved >= requested;
+      });
+    }
+
     return result;
-  }, [claims, filters, providerId]);
+  }, [claims, filters]);
 
   return {
     // Data

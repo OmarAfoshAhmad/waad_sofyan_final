@@ -440,9 +440,12 @@ export const providersService = {
    * Get providers by employer ID
    * GET /api/v1/providers/by-employer/{employerId}
    */
-  getByEmployer: async (employerId) => {
+  getByEmployer: async (employerId, period = {}) => {
     try {
-      const response = await axiosClient.get(`${BASE_URL}/by-employer/${employerId}`);
+      const params = {};
+      if (period.periodStart) params.periodStart = period.periodStart;
+      if (period.periodEnd) params.periodEnd = period.periodEnd;
+      const response = await axiosClient.get(`${BASE_URL}/by-employer/${employerId}`, { params });
       return unwrap(response);
     } catch (error) {
       throw handleProviderErrors(error);
@@ -516,5 +519,25 @@ export const createProvider = providersService.create;
 export const updateProvider = providersService.update;
 export const deleteProvider = providersService.delete;
 export const getProviderSelector = providersService.getSelector;
+
+let _cachedProviderSelectors = null;
+let _providerSelectorsPromise = null;
+
+export const getProviderSelectorsCached = async () => {
+  if (_cachedProviderSelectors) return _cachedProviderSelectors;
+  if (_providerSelectorsPromise) return _providerSelectorsPromise;
+  _providerSelectorsPromise = providersService
+    .getSelector()
+    .then((data) => {
+      _cachedProviderSelectors = data;
+      _providerSelectorsPromise = null;
+      return data;
+    })
+    .catch((err) => {
+      _providerSelectorsPromise = null;
+      throw err;
+    });
+  return _providerSelectorsPromise;
+};
 
 export default providersService;

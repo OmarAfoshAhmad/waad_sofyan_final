@@ -223,6 +223,24 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.NOT_FOUND, ErrorCode.INTERNAL_ERROR, ex.getMessage(), request, null);
     }
 
+    /**
+     * A path that matches no handler. Spring 6.1 raises this instead of
+     * writing a bare 404, and without a mapping it fell through to the
+     * generic handler: every probe of a non-existent POST path became a 500,
+     * an ERROR log line and a tracking id -- noise indistinguishable from a
+     * real fault. It is a 404, logged at debug, and the message names nothing
+     * about the routing table.
+     */
+    @ExceptionHandler(org.springframework.web.servlet.resource.NoResourceFoundException.class)
+    public ResponseEntity<ApiError> handleNoRoute(
+            org.springframework.web.servlet.resource.NoResourceFoundException ex, HttpServletRequest request) {
+        log.debug("No route - {} {}", request.getMethod(), request.getRequestURI());
+        ApiError error = ApiError.of(ErrorCode.ENDPOINT_NOT_FOUND, "Not found.",
+                request.getRequestURI(), null, now(), generateTrackingId());
+        error.setMessageAr("المسار المطلوب غير موجود.");
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
+    }
+
     @ExceptionHandler(org.springframework.orm.ObjectOptimisticLockingFailureException.class)
     public ResponseEntity<ApiError> handleOptimisticLock(
             org.springframework.orm.ObjectOptimisticLockingFailureException ex, HttpServletRequest request) {

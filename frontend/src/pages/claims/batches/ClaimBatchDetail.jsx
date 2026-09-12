@@ -56,6 +56,7 @@ import MainCard from 'components/MainCard';
 import { ModernPageHeader, SoftDeleteToggle } from 'components/tba';
 import { UnifiedMedicalTable } from 'components/common';
 import useTableState from 'hooks/useTableState';
+import { normalizeArabicSearchText } from 'utils/searchText';
 import claimsService from 'services/api/claims.service';
 import employersService from 'services/api/employers.service';
 import providersService from 'services/api/providers.service';
@@ -314,20 +315,8 @@ export default function ClaimBatchDetail() {
     return claim?.id ? `CLM-${claim.id}` : '';
   };
 
-  const normalizeArabicSearch = (value) =>
-    String(value || '')
-      .trim()
-      .toLowerCase()
-      .replace(/[أإآٱ]/g, 'ا')
-      .replace(/ؤ/g, 'و')
-      .replace(/ئ/g, 'ي')
-      .replace(/ى/g, 'ي')
-      .replace(/ة/g, 'ه')
-      .replace(/[\u064B-\u065F\u0670]/g, '')
-      .replace(/ـ/g, '');
-
   const normalizeSearchToken = (value) =>
-    normalizeArabicSearch(value)
+    normalizeArabicSearchText(value)
       .replace(/[\\/_\-–—\s]+/g, '')
       .replace(/[^\p{L}\p{N}]/gu, '');
 
@@ -375,7 +364,7 @@ export default function ClaimBatchDetail() {
     // 1. Search Filter
     if (searchTerm) {
       const normalizedSearch = normalizeSearchToken(searchTerm);
-      const normalizedArabic = normalizeArabicSearch(searchTerm);
+      const normalizedArabic = normalizeArabicSearchText(searchTerm);
       const searchVariants = getArabicSearchVariants(searchTerm);
       items = items.filter((c) => {
         const paperRef = getClaimPaperReference(c);
@@ -392,13 +381,9 @@ export default function ClaimBatchDetail() {
           ...getReferenceParts(c.externalClaimRef),
           ...getReferenceParts(paperRef)
         ];
-        const normalizedFields = [
-          c.memberName,
-          c.memberCardNumber,
-          c.employeeNumber,
-          c.beneficiaryNumber,
-          ...references
-        ].map(normalizeSearchToken);
+        const normalizedFields = [c.memberName, c.memberCardNumber, c.employeeNumber, c.beneficiaryNumber, ...references].map(
+          normalizeSearchToken
+        );
         const arabicFields = [c.memberName, c.memberCardNumber, c.employeeNumber, c.beneficiaryNumber].map(normalizeArabicSearch);
 
         return (
@@ -431,7 +416,7 @@ export default function ClaimBatchDetail() {
     const getSortValue = (claim, idx) => {
       switch (sorting.id) {
         case 'patient':
-          return normalizeArabicSearch(claim.memberName);
+          return normalizeArabicSearchText(claim.memberName);
         case 'serviceDate':
           return new Date(claim.serviceDate || 0).getTime() || 0;
         case 'status':
@@ -751,7 +736,11 @@ export default function ClaimBatchDetail() {
         );
       case 'covered':
         if (claim.status === 'NEEDS_CORRECTION') {
-          return <Typography variant="body2" color="text.secondary">—</Typography>;
+          return (
+            <Typography variant="body2" color="text.secondary">
+              —
+            </Typography>
+          );
         }
         return (
           <Typography variant="body2" color="success.dark" fontWeight={500}>
@@ -799,14 +788,15 @@ export default function ClaimBatchDetail() {
         );
       case 'beneficiaryPaid':
         if (claim.status === 'NEEDS_CORRECTION') {
-          return <Typography variant="body2" color="text.secondary">—</Typography>;
+          return (
+            <Typography variant="body2" color="text.secondary">
+              —
+            </Typography>
+          );
         }
         const paidAmount = Number(claim.beneficiaryPaidAmount) || 0;
         const paidTowardRefusal = Math.min(paidAmount, Number(claim.refusedAmount) || 0);
-        const paidTooltip =
-          paidAmount > 0
-            ? `مدفوع خارج التأمين ويخصم من المرفوض: ${paidTowardRefusal.toFixed(2)} د.ل`
-            : '';
+        const paidTooltip = paidAmount > 0 ? `مدفوع خارج التأمين ويخصم من المرفوض: ${paidTowardRefusal.toFixed(2)} د.ل` : '';
         return (
           <Tooltip title={paidTooltip} arrow placement="top">
             <Typography
@@ -827,7 +817,11 @@ export default function ClaimBatchDetail() {
         );
       case 'paid':
         if (claim.status === 'NEEDS_CORRECTION') {
-          return <Typography variant="body2" color="text.secondary">—</Typography>;
+          return (
+            <Typography variant="body2" color="text.secondary">
+              —
+            </Typography>
+          );
         }
         // For providers, paid is netProviderAmount (approved - patient share)
         return (

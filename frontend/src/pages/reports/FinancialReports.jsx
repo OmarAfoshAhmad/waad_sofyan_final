@@ -18,7 +18,6 @@ import {
   Alert,
   IconButton,
   Tooltip,
-  InputAdornment,
   Skeleton,
   Table,
   TableHead,
@@ -40,7 +39,6 @@ import {
   Refresh as RefreshIcon,
   Print as PrintIcon,
   Preview as PreviewIcon,
-  LocalHospital as ProviderIcon,
   FilterList as FilterIcon,
   ClearAll as ClearAllIcon,
   ErrorOutline as ErrorOutlineIcon,
@@ -48,7 +46,7 @@ import {
 } from '@mui/icons-material';
 import { formatCurrency } from 'utils/currency-formatter';
 import MainCard from 'components/MainCard';
-import { ModernPageHeader } from 'components/tba';
+import { ModernPageHeader, ProviderSelectField } from 'components/tba';
 import { useCompanySettings } from 'contexts/CompanySettingsContext';
 import { claimsService, providersService } from 'services/api';
 import { exportToExcel } from 'utils/exportUtils';
@@ -629,28 +627,14 @@ const FinancialReports = () => {
             <Grid container spacing={2} alignItems="center">
               {canFilterByProvider && (
                 <Grid size={{ xs: 12, md: 6 }}>
-                  <TextField
-                    select
-                    fullWidth
-                    label="مقدم الخدمة"
+                  <ProviderSelectField
                     value={selectedProviderId}
-                    onChange={(e) => setSelectedProviderId(e.target.value)}
-                    size="small"
-                    InputProps={{
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <ProviderIcon color="action" fontSize="small" />
-                        </InputAdornment>
-                      )
-                    }}
-                  >
-                    <MenuItem value="">جميع مقدمي الخدمة</MenuItem>
-                    {providers.map((provider) => (
-                      <MenuItem key={provider.id} value={provider.id}>
-                        {provider.name || provider.label}
-                      </MenuItem>
-                    ))}
-                  </TextField>
+                    onChange={(providerId) => setSelectedProviderId(providerId || '')}
+                    options={providers}
+                    label="مقدم الخدمة"
+                    placeholder="ابحث باسم أو كود مقدم الخدمة..."
+                    allLabel="جميع مقدمي الخدمة"
+                  />
                 </Grid>
               )}
 
