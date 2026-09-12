@@ -46,6 +46,7 @@ import { useSnackbar } from 'notistack';
 import { useReviewer } from 'contexts/ReviewerContext';
 import { formatCurrency } from 'utils/currency-formatter';
 import { DocumentPreviewDrawer } from 'components/tba/documents';
+import PermissionGuard from 'components/PermissionGuard';
 
 const REJECTION_REASONS = [
   { value: 'NOT_COVERED', label: 'غير مغطى ضمن الوثيقة' },
@@ -454,7 +455,11 @@ const PreAuthReviewPage = () => {
           { label: 'المعتمد المتوقع', value: financialSummary.approved, color: 'success.main' },
           { label: 'حصة الشركة', value: financialSummary.companyShare, color: 'primary.main' },
           { label: 'حصة المستفيد', value: financialSummary.patientShare, color: 'warning.main' },
-          { label: 'المرفوض/الفارق', value: financialSummary.rejected, color: financialSummary.rejected > 0 ? 'error.main' : 'text.secondary' }
+          {
+            label: 'المرفوض/الفارق',
+            value: financialSummary.rejected,
+            color: financialSummary.rejected > 0 ? 'error.main' : 'text.secondary'
+          }
         ].map((item) => (
           <Grid item xs={12} sm={6} md={2.4} key={item.label}>
             <Card sx={{ height: '100%', borderTop: '3px solid', borderColor: item.color }}>
@@ -659,46 +664,48 @@ const PreAuthReviewPage = () => {
                           </TableCell>
                           {isPending && (
                             <TableCell align="center">
-                              {lineStatus === 'PENDING' ? (
-                                <Stack direction="row" spacing={0.5} justifyContent="center">
-                                  <Tooltip title="موافقة كلية">
-                                    <IconButton
-                                      size="small"
-                                      color="success"
-                                      disabled={actionLoading || canStartReview}
-                                      onClick={() =>
-                                        inlineEditing ? handleInlineAction(line, 'APPROVED') : openLineDecisionModal(line, 'APPROVED')
-                                      }
-                                    >
-                                      <CheckCircleIcon fontSize="small" />
-                                    </IconButton>
-                                  </Tooltip>
-                                  <Tooltip title="موافقة جزئية (تعديل السعر)">
-                                    <IconButton
-                                      size="small"
-                                      color="info"
-                                      disabled={actionLoading || canStartReview}
-                                      onClick={() => openLineDecisionModal(line, 'PARTIALLY_APPROVED')}
-                                    >
-                                      <BalanceIcon fontSize="small" />
-                                    </IconButton>
-                                  </Tooltip>
-                                  <Tooltip title="رفض الخدمة">
-                                    <IconButton
-                                      size="small"
-                                      color="error"
-                                      disabled={actionLoading || canStartReview}
-                                      onClick={() => openLineDecisionModal(line, 'REJECTED')}
-                                    >
-                                      <CancelIcon fontSize="small" />
-                                    </IconButton>
-                                  </Tooltip>
-                                </Stack>
-                              ) : (
-                                <Button size="small" disabled={actionLoading} onClick={() => openLineDecisionModal(line, lineStatus)}>
-                                  تعديل القرار
-                                </Button>
-                              )}
+                              <PermissionGuard requiredPermission="PREAUTH_REVIEW">
+                                {lineStatus === 'PENDING' ? (
+                                  <Stack direction="row" spacing={0.5} justifyContent="center">
+                                    <Tooltip title="موافقة كلية">
+                                      <IconButton
+                                        size="small"
+                                        color="success"
+                                        disabled={actionLoading || canStartReview}
+                                        onClick={() =>
+                                          inlineEditing ? handleInlineAction(line, 'APPROVED') : openLineDecisionModal(line, 'APPROVED')
+                                        }
+                                      >
+                                        <CheckCircleIcon fontSize="small" />
+                                      </IconButton>
+                                    </Tooltip>
+                                    <Tooltip title="موافقة جزئية (تعديل السعر)">
+                                      <IconButton
+                                        size="small"
+                                        color="info"
+                                        disabled={actionLoading || canStartReview}
+                                        onClick={() => openLineDecisionModal(line, 'PARTIALLY_APPROVED')}
+                                      >
+                                        <BalanceIcon fontSize="small" />
+                                      </IconButton>
+                                    </Tooltip>
+                                    <Tooltip title="رفض الخدمة">
+                                      <IconButton
+                                        size="small"
+                                        color="error"
+                                        disabled={actionLoading || canStartReview}
+                                        onClick={() => openLineDecisionModal(line, 'REJECTED')}
+                                      >
+                                        <CancelIcon fontSize="small" />
+                                      </IconButton>
+                                    </Tooltip>
+                                  </Stack>
+                                ) : (
+                                  <Button size="small" disabled={actionLoading} onClick={() => openLineDecisionModal(line, lineStatus)}>
+                                    تعديل القرار
+                                  </Button>
+                                )}
+                              </PermissionGuard>
                             </TableCell>
                           )}
                         </TableRow>
@@ -753,7 +760,13 @@ const PreAuthReviewPage = () => {
                               {attachment.documentTitle || 'مرفق موافقة'}
                             </Typography>
                           </Box>
-                          <Button size="small" onClick={(event) => { event.stopPropagation(); handleDownloadAttachment(attachment); }}>
+                          <Button
+                            size="small"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handleDownloadAttachment(attachment);
+                            }}
+                          >
                             تحميل
                           </Button>
                         </Stack>
@@ -780,16 +793,18 @@ const PreAuthReviewPage = () => {
                       <Alert severity="info" variant="outlined">
                         يجب بدء المراجعة لتفعيل أزرار اتخاذ القرار.
                       </Alert>
-                      <Button
-                        fullWidth
-                        variant="contained"
-                        color="info"
-                        onClick={handleStartReview}
-                        disabled={actionLoading}
-                        startIcon={<AssignmentTurnedInIcon />}
-                      >
-                        بدء المراجعة
-                      </Button>
+                      <PermissionGuard requiredPermission="PREAUTH_REVIEW">
+                        <Button
+                          fullWidth
+                          variant="contained"
+                          color="info"
+                          onClick={handleStartReview}
+                          disabled={actionLoading}
+                          startIcon={<AssignmentTurnedInIcon />}
+                        >
+                          بدء المراجعة
+                        </Button>
+                      </PermissionGuard>
                     </>
                   ) : (
                     <>
@@ -798,45 +813,51 @@ const PreAuthReviewPage = () => {
                           ? 'تم تدقيق جميع الخدمات. يمكنك الآن إنهاء المراجعة.'
                           : 'يرجى اتخاذ قرار لكل خدمة في الجدول على اليمين.'}
                       </Alert>
-                      <Button
-                        fullWidth
-                        variant="contained"
-                        color="success"
-                        size="large"
-                        onClick={() => setDialogType('finalize_confirm')}
-                        disabled={actionLoading || !allLinesDecided}
-                        startIcon={<CheckCircleIcon />}
-                      >
-                        مراجعة الملخص ثم الإرسال
-                      </Button>
-                      <Divider />
-                      <Button
-                        fullWidth
-                        variant="outlined"
-                        color="error"
-                        onClick={() => {
-                          setRejectionReason('');
-                          setDialogType('reject_all');
-                        }}
-                        startIcon={<CancelIcon />}
-                        disabled={actionLoading}
-                      >
-                        رفض كلي للطلب
-                      </Button>
-                      <Button
-                        fullWidth
-                        variant="outlined"
-                        color="warning"
-                        onClick={() => {
-                          setNotes('');
-                          setDialogType('request_info');
-                        }}
-                        startIcon={<EditIcon />}
-                        disabled={actionLoading}
-                        sx={{ mt: 1 }}
-                      >
-                        إعادة للمزود للتعديل
-                      </Button>
+                      {/* finalize and reject-all are PreAuthAccessGuard.canApprove on the
+                          server (PREAUTH_APPROVE); request-info is canReview (PREAUTH_REVIEW). */}
+                      <PermissionGuard requiredPermission="PREAUTH_APPROVE">
+                        <Button
+                          fullWidth
+                          variant="contained"
+                          color="success"
+                          size="large"
+                          onClick={() => setDialogType('finalize_confirm')}
+                          disabled={actionLoading || !allLinesDecided}
+                          startIcon={<CheckCircleIcon />}
+                        >
+                          مراجعة الملخص ثم الإرسال
+                        </Button>
+                        <Divider />
+                        <Button
+                          fullWidth
+                          variant="outlined"
+                          color="error"
+                          onClick={() => {
+                            setRejectionReason('');
+                            setDialogType('reject_all');
+                          }}
+                          startIcon={<CancelIcon />}
+                          disabled={actionLoading}
+                        >
+                          رفض كلي للطلب
+                        </Button>
+                      </PermissionGuard>
+                      <PermissionGuard requiredPermission="PREAUTH_REVIEW">
+                        <Button
+                          fullWidth
+                          variant="outlined"
+                          color="warning"
+                          onClick={() => {
+                            setNotes('');
+                            setDialogType('request_info');
+                          }}
+                          startIcon={<EditIcon />}
+                          disabled={actionLoading}
+                          sx={{ mt: 1 }}
+                        >
+                          إعادة للمزود للتعديل
+                        </Button>
+                      </PermissionGuard>
                     </>
                   )}
                 </Stack>

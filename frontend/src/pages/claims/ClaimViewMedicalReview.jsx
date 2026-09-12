@@ -76,6 +76,8 @@ import { getClaimAttachments, downloadClaimAttachment } from 'services/api/files
 
 // Utils
 import { formatCurrency, formatDate } from 'utils/formatters';
+import PermissionGuard from 'components/PermissionGuard';
+import useAuth from 'hooks/useAuth';
 
 // ============================================================================
 // HELPER COMPONENTS
@@ -224,8 +226,12 @@ const ClaimViewMedicalReview = () => {
 
   const currentUserName = currentUser?.fullName || currentUser?.name || currentUser?.username || 'المراجع الطبي';
   const currentUserRole = currentUser?.role || (Array.isArray(currentUser?.roles) ? currentUser.roles[0] : null) || 'MEDICAL_REVIEWER';
-  const normalizedCurrentUserRole = `${currentUserRole}`.replace(/^ROLE_/, '');
-  const canFinalizeApproval = ['SUPER_ADMIN', 'INSURANCE_MANAGER', 'MEDICAL_REVIEW_HEAD'].includes(normalizedCurrentUserRole);
+  // The server decides POST /claims/{id}/approve by CLAIM_APPROVE (ClaimAccessGuard.canApprove),
+  // which role defaults give the review head and the insurance manager -- and which an
+  // administrator can grant or revoke per user. Reading the role name here ignored that.
+  const { user: sessionUser } = useAuth();
+  const effectivePermissions = useMemo(() => new Set(sessionUser?.permissions || []), [sessionUser]);
+  const canFinalizeApproval = effectivePermissions.has('CLAIM_APPROVE');
 
   const mapAttachment = useCallback(async (attachment) => {
     const directUrl = attachment.fileUrl || attachment.url || attachment.downloadUrl || '';
@@ -598,8 +604,7 @@ const ClaimViewMedicalReview = () => {
 
         const lineDecisions = (normalizedClaim?.services || []).map((service) => ({
           lineId: service.id,
-          decision:
-            serviceDecisions[service.serviceKey]?.decision === SERVICE_DECISION.REJECT ? 'REJECT' : 'APPROVE',
+          decision: serviceDecisions[service.serviceKey]?.decision === SERVICE_DECISION.REJECT ? 'REJECT' : 'APPROVE',
           reason: serviceDecisions[service.serviceKey]?.reason || null
         }));
 
@@ -1326,15 +1331,17 @@ const ClaimViewMedicalReview = () => {
                   variant="outlined"
                 />
                 {normalizedClaim?.reviewPaused && (
-                  <Button
-                    variant="contained"
-                    color="warning"
-                    startIcon={<ResumeIcon />}
-                    onClick={handleResumeReview}
-                    disabled={submitting}
-                  >
-                    استئناف المراجعة
-                  </Button>
+                  <PermissionGuard requiredPermission="CLAIM_REVIEW">
+                    <Button
+                      variant="contained"
+                      color="warning"
+                      startIcon={<ResumeIcon />}
+                      onClick={handleResumeReview}
+                      disabled={submitting}
+                    >
+                      استئناف المراجعة
+                    </Button>
+                  </PermissionGuard>
                 )}
               </Stack>
             ) : (
@@ -1351,35 +1358,31 @@ const ClaimViewMedicalReview = () => {
                     موافقة
                   </Button>
                 )}
-                <Button
-                  variant="contained"
-                  color="error"
-                  startIcon={<RejectIcon />}
-                  onClick={() => handleReject(medicalNotes)}
-                  disabled={submitting}
-                  sx={{ boxShadow: 2 }}
-                >
-                  رفض
-                </Button>
-                <Button
-                  variant="contained"
-                  color="info"
-                  startIcon={<ClarifyIcon />}
-                  onClick={() => handleRequestInfo(medicalNotes)}
-                  disabled={submitting}
-                  sx={{ boxShadow: 2 }}
-                >
-                  طلب معلومات
-                </Button>
-                <Button
-                  variant="outlined"
-                  color="warning"
-                  startIcon={<PauseIcon />}
-                  onClick={handlePauseReview}
-                  disabled={submitting}
-                >
-                  تعليق داخلي
-                </Button>
+                <PermissionGuard requiredPermission="CLAIM_REVIEW">
+                  <Button
+                    variant="contained"
+                    color="error"
+                    startIcon={<RejectIcon />}
+                    onClick={() => handleReject(medicalNotes)}
+                    disabled={submitting}
+                    sx={{ boxShadow: 2 }}
+                  >
+                    رفض
+                  </Button>
+                  <Button
+                    variant="contained"
+                    color="info"
+                    startIcon={<ClarifyIcon />}
+                    onClick={() => handleRequestInfo(medicalNotes)}
+                    disabled={submitting}
+                    sx={{ boxShadow: 2 }}
+                  >
+                    طلب معلومات
+                  </Button>
+                  <Button variant="outlined" color="warning" startIcon={<PauseIcon />} onClick={handlePauseReview} disabled={submitting}>
+                    تعليق داخلي
+                  </Button>
+                </PermissionGuard>
               </Stack>
             )}
           </Stack>

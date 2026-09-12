@@ -48,6 +48,7 @@ import {
 } from '@mui/icons-material';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import useAuth from 'hooks/useAuth';
 import { useSnackbar } from 'notistack';
 import ExcelJS from 'exceljs';
 
@@ -118,27 +119,16 @@ export default function ClaimBatchDetail() {
   const { enqueueSnackbar } = useSnackbar();
   const queryClient = useQueryClient();
 
-  // Detect superadmin / reviewer role from session storage
-  const currentUserRole = (() => {
-    try {
-      const rolesStr = localStorage.getItem('userRoles');
-      if (rolesStr) {
-        const roles = JSON.parse(rolesStr);
-        return Array.isArray(roles) ? roles[0] : '';
-      }
-    } catch {
-      /* ignore */
-    }
-    return '';
-  })();
-  const canSuspend = currentUserRole === 'SUPER_ADMIN' || currentUserRole === 'MEDICAL_REVIEWER' || currentUserRole === 'ACCOUNTANT';
-  const canDelete =
-    currentUserRole === 'SUPER_ADMIN' ||
-    currentUserRole === 'INSURANCE_ADMIN' ||
-    currentUserRole === 'DATA_ENTRY' ||
-    currentUserRole === 'MEDICAL_REVIEWER' ||
-    currentUserRole === 'PROVIDER_STAFF';
-  const canHardDelete = currentUserRole === 'SUPER_ADMIN';
+  // Action visibility follows the permission the server checks on each
+  // endpoint (docs/security/ACTION_GUARD_DERIVATION.md), read from the
+  // effective set in /session/me. The role-name list this replaced named a
+  // role that does not exist and could not see per-user overrides.
+  const { user: sessionUser } = useAuth();
+  const effectivePermissions = useMemo(() => new Set(sessionUser?.permissions || []), [sessionUser]);
+  const canSuspend = effectivePermissions.has('CLAIM_REVERSE'); // POST /claims/{id}/request-correction
+  const canDelete = effectivePermissions.has('CLAIM_CREATE'); // DELETE /claims/{id}
+  const canRestore = effectivePermissions.has('CLAIM_REVIEW'); // PUT /claims/{id}/restore
+  const canHardDelete = effectivePermissions.has('DANGER_ZONE_EXECUTE'); // DELETE /claims/{id}/hard
 
   const softDeleteMutation = useMutation({
     mutationFn: ({ claimId, reason }) => claimsService.softDelete(claimId, reason),
@@ -1165,19 +1155,21 @@ export default function ClaimBatchDetail() {
                               </td>
                               <td style={{ padding: '8px 14px', textAlign: 'center' }}>
                                 <Stack direction="row" spacing={0.5} justifyContent="center">
-                                  <Tooltip title="استعادة المطالبة">
-                                    <IconButton
-                                      color="success"
-                                      size="small"
-                                      onClick={() => {
-                                        setRestoringClaim(c);
-                                        setRestoreDialogOpen(true);
-                                      }}
-                                      disabled={restoreMutation.isPending}
-                                    >
-                                      <RestoreIcon fontSize="small" />
-                                    </IconButton>
-                                  </Tooltip>
+                                  {canRestore && (
+                                    <Tooltip title="استعادة المطالبة">
+                                      <IconButton
+                                        color="success"
+                                        size="small"
+                                        onClick={() => {
+                                          setRestoringClaim(c);
+                                          setRestoreDialogOpen(true);
+                                        }}
+                                        disabled={restoreMutation.isPending}
+                                      >
+                                        <RestoreIcon fontSize="small" />
+                                      </IconButton>
+                                    </Tooltip>
+                                  )}
                                   {canHardDelete && (
                                     <Tooltip title="حذف نهائي">
                                       <IconButton

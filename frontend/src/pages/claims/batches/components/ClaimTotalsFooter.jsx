@@ -1,5 +1,6 @@
 import { Box, Button, Typography, alpha, Tooltip, TextField, Stack } from '@mui/material';
 import RejectIcon from '@mui/icons-material/Block';
+import PermissionGuard from 'components/PermissionGuard';
 import WarnIcon from '@mui/icons-material/WarningAmber';
 
 export const ClaimTotalsFooter = ({
@@ -76,64 +77,74 @@ export const ClaimTotalsFooter = ({
         bgcolor: showRejected ? alpha(theme.palette.error.main, 0.04) : alpha(theme.palette.primary.main, 0.02)
       }}
     >
-      <Tooltip title={blockingDisabled ? blockingDisabledTitle : ''} arrow disableHoverListener={!blockingDisabled}>
-        <span>
-          {showRejected || requiresClaimRejection ? (
-            <Button
-              variant="contained"
-              color="error"
-              onClick={() => {
-                if (requiresClaimRejection) {
-                  openRejectDialog('claim');
-                  return;
-                }
-                handleSave(true, 'submit');
-              }}
-              disabled={submitDisabled}
-              sx={{ px: '2.0rem', fontWeight: 600 }}
-            >
-              {saving ? t('claimEntry.saving') : requiresClaimRejection ? 'رفض وحفظ المطالبة' : 'حفظ الرفض'}
-            </Button>
-          ) : (
-            <Stack direction="row" spacing={1}>
-              <Tooltip title={draftDisabled ? draftDisabledTitle : ''} arrow disableHoverListener={!draftDisabled}>
-                <span>
-                  <Button variant="outlined" onClick={() => handleSave(false, 'draft')} disabled={draftDisabled} sx={{ fontWeight: 700 }}>
-                    حفظ كمسودة
-                  </Button>
-                </span>
-              </Tooltip>
-              <Button variant="contained" color="primary" onClick={() => handleSave(true, 'submit')} disabled={submitDisabled} sx={{ px: '1.8rem', fontWeight: 700 }}>
-                {saving ? t('claimEntry.saving') : 'إرسال'}
+      {/* Every action here writes through CLAIM_CREATE endpoints (direct-entry, draft,
+          submit). A reader without it still sees the totals, not the buttons. */}
+      <PermissionGuard requiredPermission="CLAIM_CREATE">
+        <Tooltip title={blockingDisabled ? blockingDisabledTitle : ''} arrow disableHoverListener={!blockingDisabled}>
+          <span>
+            {showRejected || requiresClaimRejection ? (
+              <Button
+                variant="contained"
+                color="error"
+                onClick={() => {
+                  if (requiresClaimRejection) {
+                    openRejectDialog('claim');
+                    return;
+                  }
+                  handleSave(true, 'submit');
+                }}
+                disabled={submitDisabled}
+                sx={{ px: '2.0rem', fontWeight: 600 }}
+              >
+                {saving ? t('claimEntry.saving') : requiresClaimRejection ? 'رفض وحفظ المطالبة' : 'حفظ الرفض'}
               </Button>
-            </Stack>
-          )}
-        </span>
-      </Tooltip>
+            ) : (
+              <Stack direction="row" spacing={1}>
+                <Tooltip title={draftDisabled ? draftDisabledTitle : ''} arrow disableHoverListener={!draftDisabled}>
+                  <span>
+                    <Button variant="outlined" onClick={() => handleSave(false, 'draft')} disabled={draftDisabled} sx={{ fontWeight: 700 }}>
+                      حفظ كمسودة
+                    </Button>
+                  </span>
+                </Tooltip>
+                <Button
+                  variant="contained"
+                  color="primary"
+                  onClick={() => handleSave(true, 'submit')}
+                  disabled={submitDisabled}
+                  sx={{ px: '1.8rem', fontWeight: 700 }}
+                >
+                  {saving ? t('claimEntry.saving') : 'إرسال'}
+                </Button>
+              </Stack>
+            )}
+          </span>
+        </Tooltip>
 
-      {!isClaimRejected && !allLinesRejected ? (
-        <Button
-          variant="outlined"
-          color="error"
-          startIcon={<RejectIcon />}
-          onClick={() => openRejectDialog('claim')}
-          sx={{ fontWeight: 500 }}
-        >
-          رفض المطالبة
-        </Button>
-      ) : isClaimRejected ? (
-        <Button
-          variant="text"
-          onClick={() => {
-            setIsClaimRejected(false);
-            setIsDirty?.(true);
-            if (typeof setRejectionInput === 'function') setRejectionInput('');
-          }}
-          sx={{ fontWeight: 500 }}
-        >
-          تغيير للقبول
-        </Button>
-      ) : null}
+        {!isClaimRejected && !allLinesRejected ? (
+          <Button
+            variant="outlined"
+            color="error"
+            startIcon={<RejectIcon />}
+            onClick={() => openRejectDialog('claim')}
+            sx={{ fontWeight: 500 }}
+          >
+            رفض المطالبة
+          </Button>
+        ) : isClaimRejected ? (
+          <Button
+            variant="text"
+            onClick={() => {
+              setIsClaimRejected(false);
+              setIsDirty?.(true);
+              if (typeof setRejectionInput === 'function') setRejectionInput('');
+            }}
+            sx={{ fontWeight: 500 }}
+          >
+            تغيير للقبول
+          </Button>
+        ) : null}
+      </PermissionGuard>
 
       {/* تحذير عند رفض جميع البنود تلقائياً */}
       {allLinesRejected && !isClaimRejected && (
@@ -254,10 +265,10 @@ export const ClaimTotalsFooter = ({
                 {beneficiaryDisplayLabel}
               </Typography>
               <Typography variant="subtitle2" fontWeight={800} color="warning.dark" sx={{ fontSize: '1.15rem' }}>
-              {beneficiaryDisplayAmount.toFixed(2)}
-            </Typography>
-          </Box>
-        </Tooltip>
+                {beneficiaryDisplayAmount.toFixed(2)}
+              </Typography>
+            </Box>
+          </Tooltip>
         )}
         {showSettlementDetails && (
           <Box sx={{ textAlign: 'center' }}>

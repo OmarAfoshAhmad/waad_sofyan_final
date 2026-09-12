@@ -31,6 +31,7 @@ import { ModernPageHeader } from 'components/tba';
 import { DataGrid } from '@mui/x-data-grid';
 import { reviewerPreAuthService } from 'services/api';
 import { useReviewer } from 'contexts/ReviewerContext';
+import PermissionGuard from 'components/PermissionGuard';
 
 /**
  * Pre-Approvals Inbox - صندوق الموافقات المسبقة
@@ -287,18 +288,20 @@ const PreApprovalsInbox = () => {
               CANONICAL 2026-01-26: PreAuth workflow starts at PENDING, not SUBMITTED
               PENDING means newly created and awaiting initial review */}
           {['PENDING', 'SUBMITTED', 'RESUBMITTED'].includes(params.row.status) && (
-            <Tooltip title="بدء المراجعة">
-              <span>
-                <IconButton size="small" color="info" onClick={() => handleStartReview(params.row)} disabled={actionLoading}>
-                  <StartReviewIcon fontSize="small" />
-                </IconButton>
-              </span>
-            </Tooltip>
+            <PermissionGuard requiredPermission="PREAUTH_REVIEW">
+              <Tooltip title="بدء المراجعة">
+                <span>
+                  <IconButton size="small" color="info" onClick={() => handleStartReview(params.row)} disabled={actionLoading}>
+                    <StartReviewIcon fontSize="small" />
+                  </IconButton>
+                </span>
+              </Tooltip>
+            </PermissionGuard>
           )}
 
           {/* PENDING/UNDER_REVIEW → Reject (Approve is now line-level only) */}
           {['PENDING', 'SUBMITTED', 'RESUBMITTED', 'UNDER_REVIEW'].includes(params.row.status) && (
-            <>
+            <PermissionGuard requiredPermission="PREAUTH_APPROVE">
               <Tooltip title="رفض كلي">
                 <span>
                   <IconButton size="small" color="error" onClick={() => handleOpenReject(params.row)} disabled={actionLoading}>
@@ -306,7 +309,7 @@ const PreApprovalsInbox = () => {
                   </IconButton>
                 </span>
               </Tooltip>
-            </>
+            </PermissionGuard>
           )}
         </Stack>
       )
