@@ -153,3 +153,21 @@ rg -n "unpkg|setInterval|ROLE_RESOURCE_ACCESS|setStatus\(dto.getStatus\(\)\)|con
 
 - `balanceIsNotClampedInTheClient` — **أُصلح**: أُزيل `Math.max(0, …)` عن `providerRefusalBalance` القادم موقَّعاً من الخادم في `ClaimBatchDetail.jsx` و`BatchHistorySidebar.jsx`؛ وفي `ClaimBatchEntry.jsx` كان القصّ زائداً رياضياً (`appliedToRefused ≤ refused`) فحُذف دون تغيير في القيمة.
 - `UnifiedCoverageModalClaimContextArchitecture` و`ClaimBatchEntrySafetyArchitecture` — **ما زالا فاشلين**؛ خارج نطاق هذا الطلب.
+
+---
+
+## المرحلة الثانية (P1)
+
+### P1.3 — مُغلق في `8e6d4f96`
+
+22 موضعاً في 10 controllers كانت تدمج `e.getMessage()` في الرد. الآن كل فشل يمرّ عبر `GlobalExceptionHandler`: رمز ثابت، trackingId، رسالة عربية، ولا نص من الاستثناء. الدليل: `ControllersDoNotLeakExceptionTextTest` (3 اختبارات: نهاية-إلى-نهاية ×2 + مسح مصدر يمنع عودة النمط).
+
+**فشل موجود مسبقاً على HEAD (`de39dafb`) وليس من P1.3** — ثبت بتشغيلها مع إخفاء التغييرات:
+- `MemberUpdateSensitiveFieldGuardIntegrationTest` ×2: `updateMember` لا يرمي عند تغيير رقم البطاقة عبر المسار العام («Expecting code to raise a throwable»).
+- `MemberDuplicateServiceIntegrationTest.mergeRetires…`: إدراج مطالبة يخرق `chk_claims_historical_context_consistency`.
+
+كلاهما في منطقة مطالبات/مستفيدين لُمست في `de39dafb`؛ يُتابعان مع اختباري الواجهة الفاشلين (`UnifiedCoverageModalClaimContextArchitecture`، `ClaimBatchEntrySafetyArchitecture`).
+
+### الخطوة 2 — `/session/me`
+
+يرجع `permissions` = `effectivePermissionService.resolve(user)` (الدور ± التجاوزات). لا تغيير API. الواجهة تستقبلها وتمرّرها إلى `filterMenuItemsByRole` لكن الدالة تستعملها لـ4 عناصر من 47.
