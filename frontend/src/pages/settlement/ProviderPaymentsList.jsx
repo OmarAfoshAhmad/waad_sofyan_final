@@ -33,6 +33,7 @@ import { openSnackbar } from 'api/snackbar';
 // Utils
 import { exportAccountsListToExcel } from 'utils/settlementExcelExport';
 import { formatCurrency as formatCurrencyGlobal } from 'utils/currency-formatter';
+import PermissionGuard from 'components/PermissionGuard';
 
 const formatCurrency = (value) => {
   if (value === null || value === undefined || isNaN(value)) return formatCurrencyGlobal(0);
@@ -410,23 +411,25 @@ export default function ProviderPaymentsList() {
               >
                 الدفعات
               </Button>
-              <Tooltip title="إصلاح رصيد هذا المزود (حذف القيود اليتيمة)">
-                <span>
-                  <IconButton
-                    size="small"
-                    color="warning"
-                    onClick={() => handleRepairRow(row)}
-                    disabled={repairRowId === (row.providerId || row.id)}
-                    sx={{ border: '1px solid', borderColor: 'warning.main', borderRadius: '0.25rem' }}
-                  >
-                    {repairRowId === (row.providerId || row.id) ? (
-                      <CircularProgress size={14} color="warning" />
-                    ) : (
-                      <BuildIcon fontSize="small" />
-                    )}
-                  </IconButton>
-                </span>
-              </Tooltip>
+              <PermissionGuard requiredPermissions={['SETTLEMENT_MANAGE', 'DANGER_ZONE_EXECUTE']}>
+                <Tooltip title="إصلاح رصيد هذا المزود (حذف القيود اليتيمة)">
+                  <span>
+                    <IconButton
+                      size="small"
+                      color="warning"
+                      onClick={() => handleRepairRow(row)}
+                      disabled={repairRowId === (row.providerId || row.id)}
+                      sx={{ border: '1px solid', borderColor: 'warning.main', borderRadius: '0.25rem' }}
+                    >
+                      {repairRowId === (row.providerId || row.id) ? (
+                        <CircularProgress size={14} color="warning" />
+                      ) : (
+                        <BuildIcon fontSize="small" />
+                      )}
+                    </IconButton>
+                  </span>
+                </Tooltip>
+              </PermissionGuard>
             </Stack>
           )
       }
@@ -606,20 +609,23 @@ export default function ProviderPaymentsList() {
                 طباعة
               </Button>
 
-              <Tooltip title="إصلاح جميع أرصدة مقدمي الخدمة بحذف القيود اليتيمة للمطالبات المحذوفة">
-                <span>
-                  <Button
-                    variant="outlined"
-                    color="warning"
-                    startIcon={repairAllLoading ? <CircularProgress size={14} color="warning" /> : <BuildIcon />}
-                    onClick={handleRepairAll}
-                    disabled={repairAllLoading}
-                    sx={{ height: '2.5rem', minHeight: '2.5rem', whiteSpace: 'nowrap', px: '0.75rem', borderRadius: 1 }}
-                  >
-                    إصلاح الأرصدة
-                  </Button>
-                </span>
-              </Tooltip>
+              {/* POST /provider-accounts/recalculate-all-balances -> SETTLEMENT_MANAGE and DANGER_ZONE_EXECUTE */}
+              <PermissionGuard requiredPermissions={['SETTLEMENT_MANAGE', 'DANGER_ZONE_EXECUTE']}>
+                <Tooltip title="إصلاح جميع أرصدة مقدمي الخدمة بحذف القيود اليتيمة للمطالبات المحذوفة">
+                  <span>
+                    <Button
+                      variant="outlined"
+                      color="warning"
+                      startIcon={repairAllLoading ? <CircularProgress size={14} color="warning" /> : <BuildIcon />}
+                      onClick={handleRepairAll}
+                      disabled={repairAllLoading}
+                      sx={{ height: '2.5rem', minHeight: '2.5rem', whiteSpace: 'nowrap', px: '0.75rem', borderRadius: 1 }}
+                    >
+                      إصلاح الأرصدة
+                    </Button>
+                  </span>
+                </Tooltip>
+              </PermissionGuard>
 
               <Button
                 variant="outlined"

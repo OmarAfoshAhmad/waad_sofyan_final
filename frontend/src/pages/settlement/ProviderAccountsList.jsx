@@ -32,7 +32,6 @@ import {
 
 // Project Components
 import MainCard from 'components/MainCard';
-import PermissionGuard from 'components/PermissionGuard';
 import GenericDataTable from 'components/GenericDataTable';
 import { ModernPageHeader } from 'components/tba';
 
@@ -565,7 +564,7 @@ export default function ProviderAccountsList() {
   );
 
   return (
-    <PermissionGuard requiredRole={['SUPER_ADMIN', 'FINANCE_MANAGER', 'INSURANCE_ADMIN', 'ACCOUNTANT']}>
+    <>
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
         <ModernPageHeader
           title="مطالبات مقدمي الخدمة"
@@ -819,6 +818,6 @@ export default function ProviderAccountsList() {
           />
         </MainCard>
       </Box>
-    </PermissionGuard>
+    </>
   );
 }

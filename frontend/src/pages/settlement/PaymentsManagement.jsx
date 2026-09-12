@@ -15,7 +15,6 @@ import {
 } from '@mui/icons-material';
 
 import MainCard from 'components/MainCard';
-import PermissionGuard from 'components/PermissionGuard';
 import GenericDataTable from 'components/GenericDataTable';
 import { ModernPageHeader } from 'components/tba';
 import useTableState from 'hooks/useTableState';
@@ -273,7 +272,7 @@ export default function PaymentsManagement() {
   );
 
   return (
-    <PermissionGuard requiredRole={['SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER']}>
+    <>
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
         <ModernPageHeader
           title="إدارة الدفعات والتسديدات"
@@ -417,6 +416,6 @@ export default function PaymentsManagement() {
           onPaymentChanged={refetch}
         />
       )}
-    </PermissionGuard>
+    </>
   );
 }

@@ -40,6 +40,7 @@ import useSystemConfig from 'hooks/useSystemConfig';
 import { providerPaymentsV2Service, reconciliationService, providerAccountsService } from 'services/api/settlement.service';
 
 import NewProviderPaymentDialog from './NewProviderPaymentDialog';
+import useAuth from 'hooks/useAuth';
 
 const STATUS_LABELS = { DRAFT: 'مسودة', POSTED: 'مرحّلة', REVERSED: 'معكوسة' };
 const STATUS_COLORS = { DRAFT: 'default', POSTED: 'success', REVERSED: 'warning' };
@@ -222,7 +223,12 @@ function PaymentRow({ payment, accountVersion, writeEnabled, onChanged }) {
 
 export default function ProviderPaymentDetailDrawer({ providerId, open, onClose, onChanged }) {
   const { flags } = useSystemConfig();
-  const writeEnabled = Boolean(flags?.PROVIDER_PAYMENT_POSTING_ENABLED);
+  const { user } = useAuth();
+  // Both are server conditions on POST /provider-payments/{id}/post|reverse and
+  // .../reconciliation/.../adjust: FeatureGuard for the flag, @permissionGuard
+  // for SETTLEMENT_MANAGE. A button shown when either is missing is a refusal
+  // waiting to happen.
+  const writeEnabled = Boolean(flags?.PROVIDER_PAYMENT_POSTING_ENABLED) && (user?.permissions || []).includes('SETTLEMENT_MANAGE');
   const queryClient = useQueryClient();
 
   const [newPaymentOpen, setNewPaymentOpen] = useState(false);

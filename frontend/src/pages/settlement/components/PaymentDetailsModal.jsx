@@ -26,6 +26,7 @@ import { formatCurrency } from 'utils/currency-formatter';
 import paymentsService from 'services/api/payments.service';
 import PaymentFormModal from './PaymentFormModal';
 import PaymentAuditModal from './PaymentAuditModal';
+import PermissionGuard from 'components/PermissionGuard';
 
 const PaymentDetailsModal = ({ open, onClose, summary, onPaymentChanged }) => {
   const [formOpen, setFormOpen] = useState(false);
@@ -109,9 +110,12 @@ const PaymentDetailsModal = ({ open, onClose, summary, onPaymentChanged }) => {
                 {formatCurrency(summary?.remainingAmount)}
               </Typography>
             </Box>
-            <Button variant="contained" startIcon={<AddIcon />} onClick={handleAdd} size="small">
-              إضافة دفعة جديدة
-            </Button>
+            {/* POST|PUT|DELETE /payments -> SETTLEMENT_MANAGE */}
+            <PermissionGuard requiredPermission="SETTLEMENT_MANAGE">
+              <Button variant="contained" startIcon={<AddIcon />} onClick={handleAdd} size="small">
+                إضافة دفعة جديدة
+              </Button>
+            </PermissionGuard>
           </Box>
 
           {isLoading ? (
@@ -147,21 +151,25 @@ const PaymentDetailsModal = ({ open, onClose, summary, onPaymentChanged }) => {
                         <TableCell>{row.referenceNumber || '-'}</TableCell>
                         <TableCell>{row.notes || '-'}</TableCell>
                         <TableCell align="center">
-                          <Tooltip title="تعديل">
-                            <IconButton size="small" color="primary" onClick={() => handleEdit(row)}>
-                              <EditIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
+                          <PermissionGuard requiredPermission="SETTLEMENT_MANAGE">
+                            <Tooltip title="تعديل">
+                              <IconButton size="small" color="primary" onClick={() => handleEdit(row)}>
+                                <EditIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          </PermissionGuard>
                           <Tooltip title="سجل التعديلات">
                             <IconButton size="small" color="info" onClick={() => handleViewAudit(row)}>
                               <HistoryIcon fontSize="small" />
                             </IconButton>
                           </Tooltip>
-                          <Tooltip title="إلغاء">
-                            <IconButton size="small" color="error" onClick={() => handleDelete(row)}>
-                              <DeleteIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
+                          <PermissionGuard requiredPermission="SETTLEMENT_MANAGE">
+                            <Tooltip title="إلغاء">
+                              <IconButton size="small" color="error" onClick={() => handleDelete(row)}>
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          </PermissionGuard>
                         </TableCell>
                       </TableRow>
                     ))

@@ -870,27 +870,33 @@ const ProviderAccountView = () => {
 
   const pageActions = (
     <Stack direction="row" spacing={1}>
-      <Tooltip title="دفع دفعة مالية">
-        <Button
-          variant="contained"
-          color="success"
-          startIcon={<PaymentIcon />}
-          onClick={() => setIsPaymentModalOpen(true)}
-          disabled={!accountData || Number(accountData.runningBalance) <= 0}
-        >
-          دفع دفعة للرصيد المستحق
-        </Button>
-      </Tooltip>
+      {/* POST /provider-payments -> SETTLEMENT_MANAGE */}
+      <PermissionGuard requiredPermission="SETTLEMENT_MANAGE">
+        <Tooltip title="دفع دفعة مالية">
+          <Button
+            variant="contained"
+            color="success"
+            startIcon={<PaymentIcon />}
+            onClick={() => setIsPaymentModalOpen(true)}
+            disabled={!accountData || Number(accountData.runningBalance) <= 0}
+          >
+            دفع دفعة للرصيد المستحق
+          </Button>
+        </Tooltip>
+      </PermissionGuard>
       <Tooltip title="التحقق من الرصيد">
         <Button variant="outlined" color="info" startIcon={<VerifiedIcon />} onClick={handleVerifyBalance} disabled={!accountData}>
           التحقق من الرصيد
         </Button>
       </Tooltip>
-      <Tooltip title="إعادة حساب الرصيد من سجل المعاملات (لإصلاح الأرصدة القديمة)">
-        <Button variant="outlined" color="warning" startIcon={<RefreshIcon />} onClick={handleRecalculateBalance} disabled={!accountData}>
-          إعادة الحساب
-        </Button>
-      </Tooltip>
+      {/* POST .../recalculate-balance -> SETTLEMENT_MANAGE and DANGER_ZONE_EXECUTE (both) */}
+      <PermissionGuard requiredPermissions={['SETTLEMENT_MANAGE', 'DANGER_ZONE_EXECUTE']}>
+        <Tooltip title="إعادة حساب الرصيد من سجل المعاملات (لإصلاح الأرصدة القديمة)">
+          <Button variant="outlined" color="warning" startIcon={<RefreshIcon />} onClick={handleRecalculateBalance} disabled={!accountData}>
+            إعادة الحساب
+          </Button>
+        </Tooltip>
+      </PermissionGuard>
       <Tooltip title="تصدير Excel">
         <IconButton onClick={handleExportExcel} color="success">
           <TableChartIcon />
@@ -937,138 +943,136 @@ const ProviderAccountView = () => {
   }
 
   return (
-    <PermissionGuard resource="provider_accounts" action="view" fallback={<Alert severity="error">ليس لديك صلاحية لعرض هذه الصفحة</Alert>}>
-      <Box>
-        {/* Page Header */}
-        <UnifiedPageHeader
-          title="تفاصيل حساب مقدم الخدمة"
-          subtitle={String(getProviderName(accountData))}
-          breadcrumbs={breadcrumbs}
-          icon={AccountBalanceWalletIcon}
-          actions={pageActions}
-        />
+    <Box>
+      {/* Page Header */}
+      <UnifiedPageHeader
+        title="تفاصيل حساب مقدم الخدمة"
+        subtitle={String(getProviderName(accountData))}
+        breadcrumbs={breadcrumbs}
+        icon={AccountBalanceWalletIcon}
+        actions={pageActions}
+      />
 
-        {/* Persistent balance mismatch warning (server-detected) */}
-        {accountData && accountData.balanceVerified === false && (
-          <Alert severity="error" icon={<ErrorIcon />} sx={{ mb: '1.0rem' }}>
-            ⚠️ <strong>تحذير:</strong> الرصيد المحسوب لا يتطابق مع مجموع حركات الحساب. يرجى التحقق من الحركات المالية أو التواصل مع الدعم
-            الفني.
-          </Alert>
-        )}
+      {/* Persistent balance mismatch warning (server-detected) */}
+      {accountData && accountData.balanceVerified === false && (
+        <Alert severity="error" icon={<ErrorIcon />} sx={{ mb: '1.0rem' }}>
+          ⚠️ <strong>تحذير:</strong> الرصيد المحسوب لا يتطابق مع مجموع حركات الحساب. يرجى التحقق من الحركات المالية أو التواصل مع الدعم
+          الفني.
+        </Alert>
+      )}
 
-        {/* Verification Result */}
-        {verificationResult &&
-          (() => {
-            const isValid = verificationResult.balanceVerified ?? verificationResult.isValid;
-            return (
-              <Alert
-                severity={isValid ? 'success' : 'warning'}
-                icon={isValid ? <CheckCircleIcon /> : <ErrorIcon />}
-                sx={{ mb: '1.0rem' }}
-                onClose={() => setVerificationResult(null)}
-              >
-                {isValid ? 'الرصيد متطابق مع مجموع الحركات' : 'يوجد عدم تطابق في الرصيد، يرجى مراجعة الحركات المالية.'}
-              </Alert>
-            );
-          })()}
+      {/* Verification Result */}
+      {verificationResult &&
+        (() => {
+          const isValid = verificationResult.balanceVerified ?? verificationResult.isValid;
+          return (
+            <Alert
+              severity={isValid ? 'success' : 'warning'}
+              icon={isValid ? <CheckCircleIcon /> : <ErrorIcon />}
+              sx={{ mb: '1.0rem' }}
+              onClose={() => setVerificationResult(null)}
+            >
+              {isValid ? 'الرصيد متطابق مع مجموع الحركات' : 'يوجد عدم تطابق في الرصيد، يرجى مراجعة الحركات المالية.'}
+            </Alert>
+          );
+        })()}
 
-        {/* Account Summary */}
-        <AccountSummaryCard account={accountData} isLoading={isLoadingAccount} />
+      {/* Account Summary */}
+      <AccountSummaryCard account={accountData} isLoading={isLoadingAccount} />
 
-        {/* Tabs */}
-        <MainCard>
-          <Tabs value={activeTab} onChange={handleTabChange} sx={{ borderBottom: 1, borderColor: 'divider' }}>
-            <Tab label="آخر الحركات" icon={<HistoryIcon />} iconPosition="start" />
-            <Tab label="كل الحركات" icon={<AccountBalanceWalletIcon />} iconPosition="start" />
-          </Tabs>
+      {/* Tabs */}
+      <MainCard>
+        <Tabs value={activeTab} onChange={handleTabChange} sx={{ borderBottom: 1, borderColor: 'divider' }}>
+          <Tab label="آخر الحركات" icon={<HistoryIcon />} iconPosition="start" />
+          <Tab label="كل الحركات" icon={<AccountBalanceWalletIcon />} iconPosition="start" />
+        </Tabs>
 
-          {/* Recent Transactions Tab */}
-          <TabPanel value={activeTab} index={0}>
-            <UnifiedMedicalTable
-              columns={transactionColumns}
-              data={recentRowsWithTotals}
-              loading={isLoadingRecent}
-              renderCell={renderTransactionCell}
-              totalItems={recentTransactions.length}
-              page={0}
-              rowsPerPage={Math.max(recentTransactions.length, 10)}
-              rowsPerPageOptions={PAGE_SIZE_OPTIONS}
-              emptyStateConfig={{
-                icon: HistoryIcon,
-                title: 'لا توجد حركات مالية',
-                description: 'لا توجد حركات مالية حديثة'
-              }}
+        {/* Recent Transactions Tab */}
+        <TabPanel value={activeTab} index={0}>
+          <UnifiedMedicalTable
+            columns={transactionColumns}
+            data={recentRowsWithTotals}
+            loading={isLoadingRecent}
+            renderCell={renderTransactionCell}
+            totalItems={recentTransactions.length}
+            page={0}
+            rowsPerPage={Math.max(recentTransactions.length, 10)}
+            rowsPerPageOptions={PAGE_SIZE_OPTIONS}
+            emptyStateConfig={{
+              icon: HistoryIcon,
+              title: 'لا توجد حركات مالية',
+              description: 'لا توجد حركات مالية حديثة'
+            }}
+          />
+        </TabPanel>
+
+        {/* All Transactions Tab */}
+        <TabPanel value={activeTab} index={1}>
+          <UnifiedMedicalTable
+            columns={transactionColumns}
+            data={allRowsWithTotals}
+            loading={isLoadingTransactions}
+            renderCell={renderTransactionCell}
+            totalItems={totalTransactions}
+            page={paginationModel.page}
+            rowsPerPage={paginationModel.pageSize}
+            onPageChange={(newPage) => setPaginationModel((prev) => ({ ...prev, page: newPage }))}
+            onRowsPerPageChange={(newSize) => setPaginationModel({ page: 0, pageSize: newSize })}
+            rowsPerPageOptions={PAGE_SIZE_OPTIONS}
+            emptyStateConfig={{
+              icon: AccountBalanceWalletIcon,
+              title: 'لا توجد حركات مالية',
+              description: 'لا توجد حركات مالية لعرضها'
+            }}
+          />
+        </TabPanel>
+      </MainCard>
+
+      {/* Modal for Payment Submission */}
+      <Dialog open={isPaymentModalOpen} onClose={() => setIsPaymentModalOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>تسجيل دفعة لمقدم الخدمة</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: '1.0rem' }}>
+            <Typography variant="body2" color="text.secondary">
+              الرصيد المستحق: <strong>{formatCurrency(accountData?.runningBalance)}</strong>
+            </Typography>
+            <TextField
+              label="المبلغ"
+              type="number"
+              fullWidth
+              required
+              value={paymentForm.amount}
+              onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })}
+              error={Number(paymentForm.amount) > Number(accountData?.runningBalance)}
+              helperText={Number(paymentForm.amount) > Number(accountData?.runningBalance) ? 'المبلغ أكبر من الرصيد المستحق' : ''}
             />
-          </TabPanel>
-
-          {/* All Transactions Tab */}
-          <TabPanel value={activeTab} index={1}>
-            <UnifiedMedicalTable
-              columns={transactionColumns}
-              data={allRowsWithTotals}
-              loading={isLoadingTransactions}
-              renderCell={renderTransactionCell}
-              totalItems={totalTransactions}
-              page={paginationModel.page}
-              rowsPerPage={paginationModel.pageSize}
-              onPageChange={(newPage) => setPaginationModel((prev) => ({ ...prev, page: newPage }))}
-              onRowsPerPageChange={(newSize) => setPaginationModel({ page: 0, pageSize: newSize })}
-              rowsPerPageOptions={PAGE_SIZE_OPTIONS}
-              emptyStateConfig={{
-                icon: AccountBalanceWalletIcon,
-                title: 'لا توجد حركات مالية',
-                description: 'لا توجد حركات مالية لعرضها'
-              }}
+            <TextField
+              label="المرجع (إيصال، حوالة...)"
+              fullWidth
+              required
+              value={paymentForm.paymentReference}
+              onChange={(e) => setPaymentForm({ ...paymentForm, paymentReference: e.target.value })}
             />
-          </TabPanel>
-        </MainCard>
-
-        {/* Modal for Payment Submission */}
-        <Dialog open={isPaymentModalOpen} onClose={() => setIsPaymentModalOpen(false)} maxWidth="sm" fullWidth>
-          <DialogTitle>تسجيل دفعة لمقدم الخدمة</DialogTitle>
-          <DialogContent>
-            <Stack spacing={2} sx={{ mt: '1.0rem' }}>
-              <Typography variant="body2" color="text.secondary">
-                الرصيد المستحق: <strong>{formatCurrency(accountData?.runningBalance)}</strong>
-              </Typography>
-              <TextField
-                label="المبلغ"
-                type="number"
-                fullWidth
-                required
-                value={paymentForm.amount}
-                onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })}
-                error={Number(paymentForm.amount) > Number(accountData?.runningBalance)}
-                helperText={Number(paymentForm.amount) > Number(accountData?.runningBalance) ? 'المبلغ أكبر من الرصيد المستحق' : ''}
-              />
-              <TextField
-                label="المرجع (إيصال، حوالة...)"
-                fullWidth
-                required
-                value={paymentForm.paymentReference}
-                onChange={(e) => setPaymentForm({ ...paymentForm, paymentReference: e.target.value })}
-              />
-              <TextField
-                label="ملاحظات"
-                fullWidth
-                multiline
-                rows={3}
-                value={paymentForm.notes}
-                onChange={(e) => setPaymentForm({ ...paymentForm, notes: e.target.value })}
-              />
-            </Stack>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setIsPaymentModalOpen(false)} color="inherit" disabled={isSubmittingPayment}>
-              إلغاء
-            </Button>
-            <Button onClick={handlePaymentSubmit} variant="contained" color="primary" disabled={isSubmittingPayment}>
-              {isSubmittingPayment ? 'جاري التسجيل...' : 'تسجيل الدفعة'}
-            </Button>
-          </DialogActions>
-        </Dialog>
-      </Box>
-    </PermissionGuard>
+            <TextField
+              label="ملاحظات"
+              fullWidth
+              multiline
+              rows={3}
+              value={paymentForm.notes}
+              onChange={(e) => setPaymentForm({ ...paymentForm, notes: e.target.value })}
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setIsPaymentModalOpen(false)} color="inherit" disabled={isSubmittingPayment}>
+            إلغاء
+          </Button>
+          <Button onClick={handlePaymentSubmit} variant="contained" color="primary" disabled={isSubmittingPayment}>
+            {isSubmittingPayment ? 'جاري التسجيل...' : 'تسجيل الدفعة'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </Box>
   );
 };
 
