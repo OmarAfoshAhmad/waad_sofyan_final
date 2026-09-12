@@ -159,10 +159,14 @@ const extractConservativeFallback = (sheetRows, sheetName) => {
   return rows;
 };
 
-export const extractRowsFromWorkbook = (workbook, XLSX) => {
+/**
+ * @param {Array<{name: string, rows: any[][]}>} sheets  plain rows per sheet,
+ *   as produced by utils/excelWorkbook#readWorkbookSheets. Kept library-free
+ *   so the detection heuristics can be tested with literal arrays.
+ */
+export const extractRowsFromWorkbook = (sheets) => {
   const rows = [];
-  workbook.SheetNames.forEach((sheetName) => {
-    const sheetRows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: '' });
+  sheets.forEach(({ name: sheetName, rows: sheetRows }) => {
     const columns = detectColumns(sheetRows);
     if (columns && columns.sourceClassificationCol < 0) {
       columns.sourceClassificationCol = inferClassificationColumn(sheetRows, columns.headerRow);

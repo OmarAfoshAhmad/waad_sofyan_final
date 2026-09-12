@@ -6,6 +6,9 @@ import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
+import com.waad.tba.common.error.ErrorCode;
+import com.waad.tba.common.exception.BusinessRuleException;
+import com.waad.tba.modules.preauthorization.domain.PreAuthStateMachine;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -512,97 +515,44 @@ public class PreAuthorization {
     }
 
     /**
-     * Check if can be approved
-     * Allows approval from PENDING, UNDER_REVIEW, or APPROVAL_IN_PROGRESS status
+     * Availability flags for the API response. Derived from the state
+     * machine so the buttons a client draws agree with what the server will
+     * accept; the three used to carry their own status lists, and the cancel
+     * one disagreed with the ledger (which also cancels PARTIALLY_APPROVED and
+     * ACKNOWLEDGED holds).
      */
     public boolean canBeApproved() {
-        return active && (status == PreAuthStatus.PENDING ||
-                status == PreAuthStatus.UNDER_REVIEW ||
-                status == PreAuthStatus.APPROVAL_IN_PROGRESS);
+        return Boolean.TRUE.equals(active) && PreAuthStateMachine.canTransition(status, PreAuthStatus.APPROVAL_IN_PROGRESS);
     }
 
-    /**
-     * Check if can be rejected
-     * Allows rejection from PENDING, UNDER_REVIEW, or APPROVAL_IN_PROGRESS status
-     */
     public boolean canBeRejected() {
-        return active && (status == PreAuthStatus.PENDING ||
-                status == PreAuthStatus.UNDER_REVIEW ||
-                status == PreAuthStatus.APPROVAL_IN_PROGRESS);
+        return Boolean.TRUE.equals(active) && PreAuthStateMachine.canTransition(status, PreAuthStatus.REJECTED);
     }
 
-    /**
-     * Check if can be cancelled
-     */
     public boolean canBeCancelled() {
-        return active && (status == PreAuthStatus.PENDING || status == PreAuthStatus.APPROVED);
-    }
-
-    /**
-     * Approve the pre-authorization
-     * 
-     * ARCHITECTURAL RULE:
-     * - Sets reservedAmount = insuranceCoveredAmount for limit tracking
-     * - This does NOT deduct from the annual limit
-     * - Only Claim Approval actually deducts from the limit
-     */
-    public void approve(BigDecimal approvedAmount, BigDecimal copayAmount, String approvedBy) {
-        if (!canBeApproved()) {
-            throw new IllegalStateException("PreAuthorization cannot be approved in current status: " + status);
-        }
-        this.status = PreAuthStatus.APPROVED;
-        this.approvedAmount = approvedAmount;
-        this.copayAmount = copayAmount;
-        this.insuranceCoveredAmount = approvedAmount.subtract(copayAmount);
-
-        // ARCHITECTURAL: Set reserved amount for limit tracking (not deduction)
-        this.reservedAmount = this.insuranceCoveredAmount;
-
-        this.approvedAt = LocalDateTime.now();
-        this.approvedBy = approvedBy;
+        return Boolean.TRUE.equals(active) && PreAuthStateMachine.canTransition(status, PreAuthStatus.CANCELLED);
     }
 
     /**
      * Reject the pre-authorization
      */
     public void reject(String rejectionReason, String rejectedBy) {
-        if (!canBeRejected()) {
-            throw new IllegalStateException("PreAuthorization cannot be rejected in current status: " + status);
+        if (!Boolean.TRUE.equals(active)) {
+            throw new BusinessRuleException(ErrorCode.INVALID_PREAUTH_TRANSITION, "الموافقة المسبقة غير نشطة.");
         }
-        this.status = PreAuthStatus.REJECTED;
+        PreAuthStateMachine.transition(this, PreAuthStatus.REJECTED);
         this.rejectionReason = rejectionReason;
         this.reservedAmount = BigDecimal.ZERO; // Clear any reserved amount
         this.updatedBy = rejectedBy;
     }
 
-    /**
-     * Cancel the pre-authorization
-     */
-    public void cancel(String cancelReason, String cancelledBy) {
-        if (!canBeCancelled()) {
-            throw new IllegalStateException("PreAuthorization cannot be cancelled in current status: " + status);
-        }
-        this.status = PreAuthStatus.CANCELLED;
-        this.reservedAmount = BigDecimal.ZERO; // Clear any reserved amount
-        this.notes = (notes != null ? notes + "\n" : "") + "Cancelled: " + cancelReason;
-        this.updatedBy = cancelledBy;
-    }
-
-    // markAsUsed(String) deliberately absent. USED means "this approval's hold
-    // was handed back because its claim posted consumption", and only
-    // PreAuthReservationLedgerService.releaseOnConversion can make that true.
-    // A setter here could move the status without moving the ledger, leaving a
-    // live hold behind a status that says it is gone -- and the claim would
-    // then post on top of it, charging the member twice for one service.
-
-    /**
-     * Mark as expired
-     */
-    public void markAsExpired() {
-        if (isExpired() && status == PreAuthStatus.APPROVED) {
-            this.status = PreAuthStatus.EXPIRED;
-        }
-    }
+    // approve(...), cancel(...) and markAsExpired() deliberately absent.
+    // APPROVED / PARTIALLY_APPROVED, CANCELLED, EXPIRED and USED are written
+    // only by PreAuthReservationLedgerService, because each of them moves
+    // reservation rows as well as a status. An entity method that set the
+    // status alone left a live hold behind a status that said it was gone --
+    // and the claim would then post on top of it, charging the member twice
+    // for one service.
 
     /**
      * Calculate copay amount based on percentage

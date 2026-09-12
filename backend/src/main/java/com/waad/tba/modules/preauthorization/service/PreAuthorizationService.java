@@ -24,6 +24,8 @@ import com.waad.tba.security.AuthorizationService;
 import com.waad.tba.security.ProviderContextGuard;
 import com.waad.tba.common.exception.ResourceNotFoundException;
 import com.waad.tba.common.exception.BusinessRuleException;
+import com.waad.tba.common.error.ErrorCode;
+import com.waad.tba.modules.preauthorization.domain.PreAuthStateMachine;
 import com.waad.tba.common.service.ArchitecturalGuardService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -54,6 +56,10 @@ import java.util.List;
 @RequiredArgsConstructor
 @Slf4j
 public class PreAuthorizationService {
+
+    /** What PUT /{id}/review may decide. Granting is the ledger's alone. */
+    private static final java.util.Set<PreAuthStatus> REVIEW_DECISIONS =
+            java.util.EnumSet.of(PreAuthStatus.REJECTED, PreAuthStatus.NEEDS_CORRECTION);
 
     private final PreAuthorizationRepository preAuthorizationRepository;
     private final com.waad.tba.modules.member.service.MemberPolicyResolver memberPolicyResolver;
@@ -428,61 +434,45 @@ public class PreAuthorizationService {
 
         PreAuthStatus previousStatus = preAuth.getStatus();
 
-        // Validate status transition
+        // This endpoint sends a request back or refuses it. It does not grant:
+        // granting places a hold on the member's ceiling, and only the
+        // reservation ledger may do that (POST /{id}/approve or the
+        // line-review /finalize). Accepting APPROVED here used to produce an
+        // approved authorization backed by nothing.
+        if (!REVIEW_DECISIONS.contains(dto.getStatus())) {
+            throw new BusinessRuleException(ErrorCode.INVALID_PREAUTH_TRANSITION,
+                    "الاعتماد لا يتم من شاشة المراجعة؛ استخدم مسار الاعتماد الذي يحجز السقف. "
+                            + "هذه الخدمة تقبل الرفض أو الإعادة للتصحيح فقط.");
+        }
+
         if (dto.getStatus() != previousStatus) {
-            // Validation for specific statuses
-            if (dto.getStatus() == PreAuthStatus.REJECTED || dto.getStatus() == PreAuthStatus.NEEDS_CORRECTION) {
-                if (dto.getReviewerComment() == null || dto.getReviewerComment().isBlank()) {
-                    throw new BusinessRuleException(
-                            dto.getStatus() + " status requires a reviewer comment");
-                }
+            if (dto.getReviewerComment() == null || dto.getReviewerComment().isBlank()) {
+                throw new BusinessRuleException(
+                        dto.getStatus() + " status requires a reviewer comment");
             }
 
-            if (dto.getStatus() == PreAuthStatus.APPROVED) {
-                // Pre-authorizations no longer have strict financial matters
-                // Default to contract price if not provided, or zero
-                BigDecimal approvedAmt = dto.getApprovedAmount() != null ? dto.getApprovedAmount()
-                        : preAuth.getContractPrice();
-                preAuth.setApprovedAmount(approvedAmt != null ? approvedAmt : BigDecimal.ZERO);
-
-                if (dto.getCopayPercentage() != null) {
-                    preAuth.setCopayPercentage(dto.getCopayPercentage());
-                }
+            if (dto.getStatus() == PreAuthStatus.REJECTED) {
+                preAuth.setRejectionReason(dto.getReviewerComment());
+            } else {
+                // NEEDS_CORRECTION keeps the reviewer's note where the provider reads it
+                preAuth.setNotes(dto.getReviewerComment());
             }
 
-            // Set rejection reason (using existing field)
-            if (dto.getReviewerComment() != null) {
-                if (dto.getStatus() == PreAuthStatus.REJECTED) {
-                    preAuth.setRejectionReason(dto.getReviewerComment());
-                } else if (dto.getStatus() == PreAuthStatus.NEEDS_CORRECTION) {
-                    // Store in notes for NEEDS_CORRECTION
-                    preAuth.setNotes(dto.getReviewerComment());
-                }
-            }
-
-            // Perform status transition
-            preAuth.setStatus(dto.getStatus());
+            // Source-state check lives in one place; an approved or already
+            // decided authorization is refused here, not silently overwritten.
+            PreAuthStateMachine.transition(preAuth, dto.getStatus());
         }
 
         preAuth.setUpdatedBy(reviewedBy);
-        if (dto.getStatus() == PreAuthStatus.APPROVED) {
-            preAuth.setApprovedBy(reviewedBy);
-            preAuth.setApprovedAt(LocalDateTime.now());
-        }
         preAuth = preAuthorizationRepository.save(preAuth);
 
         // Audit trail
-        if (dto.getStatus() == PreAuthStatus.APPROVED) {
-            auditService.logApprove(id, preAuth.getReferenceNumber(), reviewedBy,
-                    dto.getReviewerComment() != null ? dto.getReviewerComment() : "Approved");
-        } else if (dto.getStatus() == PreAuthStatus.REJECTED) {
-            auditService.logReject(id, preAuth.getReferenceNumber(), reviewedBy,
-                    dto.getReviewerComment() != null ? dto.getReviewerComment() : "Rejected");
+        String comment = dto.getReviewerComment() != null ? dto.getReviewerComment() : "Status changed";
+        if (dto.getStatus() == PreAuthStatus.REJECTED) {
+            auditService.logReject(id, preAuth.getReferenceNumber(), reviewedBy, comment);
         } else {
-            // For NEEDS_CORRECTION and other status changes
             auditService.logUpdate(id, preAuth.getReferenceNumber(), reviewedBy,
-                    previousStatus.name(), dto.getStatus().name(),
-                    dto.getReviewerComment() != null ? dto.getReviewerComment() : "Status changed");
+                    previousStatus.name(), dto.getStatus().name(), comment);
         }
 
         log.info("✅ [PRE-AUTH] Reviewed: id={}, status={}", id, preAuth.getStatus());
@@ -524,8 +514,7 @@ public class PreAuthorizationService {
 
         PreAuthStatus previousStatus = preAuth.getStatus();
 
-        // Transition to UNDER_REVIEW
-        preAuth.setStatus(PreAuthStatus.UNDER_REVIEW);
+        PreAuthStateMachine.transition(preAuth, PreAuthStatus.UNDER_REVIEW);
         preAuth.setUpdatedBy(submittedBy);
         preAuth = preAuthorizationRepository.save(preAuth);
 
@@ -567,65 +556,11 @@ public class PreAuthorizationService {
     }
 
     // ==================== APPROVE ====================
-
-    /**
-     * Approve pre-authorization with copay calculation
-     */
-    @Transactional
-    public PreAuthorizationResponseDto approvePreAuthorization(Long id, PreAuthorizationApproveDto dto,
-            String approvedBy) {
-        log.info("[PRE-AUTH] Approving pre-authorization {}", id);
-
-        PreAuthorization preAuth = preAuthorizationRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("PreAuthorization not found with ID: " + id));
-
-        if (!preAuth.canBeApproved()) {
-            throw new IllegalStateException(
-                    "PreAuthorization cannot be approved in current status: " + preAuth.getStatus());
-        }
-
-        BigDecimal approvedAmount = resolveApprovedAmount(preAuth, dto);
-        BigDecimal copayPercentage = resolveCopayPercentage(preAuth, dto);
-
-        // Validate approved amount against contract price
-        if (preAuth.getContractPrice() != null && approvedAmount.compareTo(preAuth.getContractPrice()) > 0) {
-            log.warn("[PRE-AUTH] Approved amount {} exceeds contract price {}",
-                    approvedAmount, preAuth.getContractPrice());
-        }
-
-        // Calculate copay
-        BigDecimal copayAmount = preAuth.calculateCopay(approvedAmount, copayPercentage);
-
-        // Approve
-        preAuth.approve(approvedAmount, copayAmount, approvedBy);
-        preAuth.setCopayPercentage(copayPercentage);
-
-        if (dto.getApprovalNotes() != null) {
-            preAuth.setNotes((preAuth.getNotes() != null ? preAuth.getNotes() + "\n" : "") +
-                    "Approval Notes: " + dto.getApprovalNotes());
-        }
-
-        preAuth = preAuthorizationRepository.save(preAuth);
-        log.info("[PRE-AUTH] Approved pre-authorization {} with amount {} and copay {}",
-                id, approvedAmount, copayAmount);
-
-        // Note: visit status is NOT auto-set to COMPLETED here.
-        // A visit may have multiple pre-authorizations and claims.
-        // Visit completion is managed by the provider or when all linked items are
-        // settled.
-        log.debug("[PRE-AUTH] Pre-auth {} approved; visit status unchanged (may have other pending items)", id);
-
-        // Log audit trail
-        auditService.logApprove(id, preAuth.getReferenceNumber(), approvedBy,
-                "Approved amount: " + approvedAmount +
-                        ", Copay: " + copayPercentage + "%");
-
-        // Fetch related entities for response
-        Member member = memberRepository.findById(preAuth.getMemberId()).orElse(null);
-        Provider provider = providerRepository.findById(preAuth.getProviderId()).orElse(null);
-
-        return mapToResponseDto(preAuth, member, provider, null);
-    }
+    //
+    // The synchronous approvePreAuthorization() that used to sit here set
+    // APPROVED on the entity without touching the reservation ledger. It had
+    // no controller, no caller and no test; requestApproval() below is the
+    // approval path, and it ends in PreAuthReservationLedgerService.
 
     /**
      * ═══════════════════════════════════════════════════════════════════════════════
@@ -636,8 +571,6 @@ public class PreAuthorizationService {
      * It transitions the pre-auth to APPROVAL_IN_PROGRESS and triggers async
      * processing.
      * 
-     * REPLACES: approvePreAuthorization() for production use (old method kept for
-     * backward compatibility)
      * 
      * FLOW:
      * 1. Validate pre-auth exists and is in valid state
@@ -670,7 +603,7 @@ public class PreAuthorizationService {
         }
 
         // Transition to APPROVAL_IN_PROGRESS
-        preAuth.setStatus(PreAuthStatus.APPROVAL_IN_PROGRESS);
+        PreAuthStateMachine.transition(preAuth, PreAuthStatus.APPROVAL_IN_PROGRESS);
         PreAuthorization savedPreAuth = preAuthorizationRepository.save(preAuth);
 
         log.info("✅ [SPLIT-PHASE] Phase 1 complete: PreAuth {} marked as APPROVAL_IN_PROGRESS", id);
@@ -756,7 +689,7 @@ public class PreAuthorizationService {
             try {
                 PreAuthorization failedPreAuth = preAuthorizationRepository.findById(id).orElse(null);
                 if (failedPreAuth != null && failedPreAuth.getStatus() == PreAuthStatus.APPROVAL_IN_PROGRESS) {
-                    failedPreAuth.setStatus(PreAuthStatus.REJECTED);
+                    PreAuthStateMachine.transition(failedPreAuth, PreAuthStatus.REJECTED);
                     failedPreAuth.setRejectionReason("فشل في المعالجة: " + e.getMessage());
                     failedPreAuth.setReservedAmount(BigDecimal.ZERO);
                     failedPreAuth.setUpdatedBy(approvedBy);
@@ -768,39 +701,6 @@ public class PreAuthorizationService {
                 log.error("❌ Failed to rollback pre-auth {} to REJECTED: {}", id, rollbackError.getMessage());
             }
         }
-    }
-
-    private BigDecimal resolveApprovedAmount(PreAuthorization preAuth, PreAuthorizationApproveDto dto) {
-        if (dto != null && dto.getApprovedAmount() != null) {
-            // No longer enforcing > 0
-            return dto.getApprovedAmount();
-        }
-
-        if (preAuth.getContractPrice() != null) {
-            return preAuth.getContractPrice();
-        }
-
-        return BigDecimal.ZERO;
-    }
-
-    private BigDecimal resolveCopayPercentage(PreAuthorization preAuth, PreAuthorizationApproveDto dto) {
-        BigDecimal resolved;
-
-        if (dto != null && dto.getCopayPercentage() != null) {
-            resolved = dto.getCopayPercentage();
-        } else if (preAuth.getPatientCopayPercentSnapshot() != null) {
-            resolved = BigDecimal.valueOf(preAuth.getPatientCopayPercentSnapshot());
-        } else if (preAuth.getCoveragePercentSnapshot() != null) {
-            resolved = BigDecimal.valueOf(100 - preAuth.getCoveragePercentSnapshot());
-        } else {
-            resolved = BigDecimal.ZERO;
-        }
-
-        if (resolved.compareTo(BigDecimal.ZERO) < 0 || resolved.compareTo(new BigDecimal("100")) > 0) {
-            throw new IllegalStateException("Resolved copay percentage is out of range: " + resolved);
-        }
-
-        return resolved;
     }
 
     // ==================== REJECT ====================
@@ -897,7 +797,7 @@ public class PreAuthorizationService {
 
         // Transition to ACKNOWLEDGED
         PreAuthStatus oldStatus = preAuth.getStatus();
-        preAuth.setStatus(PreAuthStatus.ACKNOWLEDGED);
+        PreAuthStateMachine.transition(preAuth, PreAuthStatus.ACKNOWLEDGED);
         preAuth.setUpdatedBy(acknowledgedBy);
 
         preAuth = preAuthorizationRepository.save(preAuth);
@@ -1229,14 +1129,12 @@ public class PreAuthorizationService {
             throw new IllegalArgumentException("PreAuthorization is not active");
         }
 
-        if (preAuth.getStatus() != PreAuthStatus.PENDING) {
-            throw new IllegalStateException(
-                    "Only PENDING pre-authorizations can be started for review. Current status: "
-                            + preAuth.getStatus());
+        if (!PreAuthStateMachine.AWAITING_REVIEW.contains(preAuth.getStatus())) {
+            throw new BusinessRuleException(ErrorCode.INVALID_PREAUTH_TRANSITION,
+                    "لا يمكن بدء المراجعة من وضع: " + preAuth.getStatus().getArabicLabel());
         }
 
-        // Transition to UNDER_REVIEW
-        preAuth.setStatus(PreAuthStatus.UNDER_REVIEW);
+        PreAuthStateMachine.transition(preAuth, PreAuthStatus.UNDER_REVIEW);
         preAuth.setUpdatedBy(reviewedBy);
 
         preAuth = preAuthorizationRepository.save(preAuth);

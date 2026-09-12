@@ -105,9 +105,6 @@ export default defineConfig(({ mode }) => {
                 return 'excel';
               }
               // Large standalone libs that can be split safely from the core vendor chunk
-              if (is('xlsx')) {
-                return 'xlsx';
-              }
               if (is('pdfjs-dist')) {
                 return 'pdfjs';
               }

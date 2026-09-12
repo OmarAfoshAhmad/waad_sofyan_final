@@ -2,9 +2,22 @@ import PropTypes from 'prop-types';
 import { useState, useEffect } from 'react';
 import { Box, IconButton, Typography, Stack, Paper, CircularProgress, Tooltip, Button } from '@mui/material';
 import { ZoomIn, ZoomOut, NavigateBefore, NavigateNext, Download as DownloadIcon, RotateRight, CloseFullscreen } from '@mui/icons-material';
-import { Document, Page } from 'react-pdf';
+import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
+
+// The worker ships with the app and is served from our own origin. It used to
+// be fetched from a public CDN, which nginx's CSP (worker-src 'self' blob:)
+// blocks -- so the viewer never rendered in production -- and which would have
+// run third-party code with no integrity check if it had. Configured here, in
+// the one module that renders PDFs, so pdfjs is only pulled into the bundle
+// that actually needs it rather than into the login page.
+//
+// package.json pins pdfjs-dist to the exact version react-pdf depends on.
+// pdf.js refuses to talk to a worker from a different build ("API version
+// does not match Worker version"), and a looser range let npm install two
+// copies -- one for react-pdf, one for this URL.
+pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
 
 export default function DocumentPreviewPanel({ fileUrl, fileType, fileName, onClose }) {
   const [numPages, setNumPages] = useState(null);

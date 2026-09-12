@@ -63,7 +63,11 @@ public enum ErrorCode {
     CLAIM_TERMINAL_STATE,
     /** Claim already exists with same details */
     CLAIM_DUPLICATE,
-    
+
+    // === Pre-authorization Errors ===
+    /** Invalid pre-authorization state transition attempted (see PreAuthStateMachine) */
+    INVALID_PREAUTH_TRANSITION,
+
     // === Security & Account Management ===
     /** Account locked due to multiple failed login attempts */
     ACCOUNT_LOCKED,

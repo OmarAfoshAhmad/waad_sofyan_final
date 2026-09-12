@@ -1,6 +1,8 @@
 package com.waad.tba.modules.preauthorization.service;
 
+import com.waad.tba.common.error.ErrorCode;
 import com.waad.tba.common.exception.BusinessRuleException;
+import com.waad.tba.modules.preauthorization.domain.PreAuthStateMachine;
 import com.waad.tba.common.exception.ResourceNotFoundException;
 import com.waad.tba.modules.preauthorization.dto.PreAuthLineDecisionDto;
 import com.waad.tba.modules.preauthorization.entity.PreAuthorization;
@@ -279,7 +281,7 @@ public class PreAuthReviewService {
 
     private PreAuthorization rejectEntirely(PreAuthorization preAuth, List<PreAuthorizationLine> lines,
             String reviewer) {
-        preAuth.setStatus(PreAuthStatus.REJECTED);
+        PreAuthStateMachine.transition(preAuth, PreAuthStatus.REJECTED);
         preAuth.setApprovedAmount(BigDecimal.ZERO);
         preAuth.setApprovedTotalAmount(BigDecimal.ZERO);
         preAuth.setPatientShare(BigDecimal.ZERO);
@@ -340,14 +342,12 @@ public class PreAuthReviewService {
             throw new BusinessRuleException("الموافقة المسبقة غير نشطة");
         }
 
-        if (preAuth.getStatus() != PreAuthStatus.PENDING
-                && preAuth.getStatus() != PreAuthStatus.SUBMITTED
-                && preAuth.getStatus() != PreAuthStatus.RESUBMITTED) {
-            throw new BusinessRuleException(
+        if (!PreAuthStateMachine.AWAITING_REVIEW.contains(preAuth.getStatus())) {
+            throw new BusinessRuleException(ErrorCode.INVALID_PREAUTH_TRANSITION,
                     "لا يمكن بدء المراجعة من وضع: " + preAuth.getStatus().getArabicLabel());
         }
 
-        preAuth.setStatus(PreAuthStatus.UNDER_REVIEW);
+        PreAuthStateMachine.transition(preAuth, PreAuthStatus.UNDER_REVIEW);
         preAuth.setUpdatedBy(reviewer);
         preAuth.setReviewedAt(LocalDateTime.now());
         preAuthRepo.save(preAuth);

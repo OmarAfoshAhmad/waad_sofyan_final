@@ -25,6 +25,7 @@ import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository;
 import com.waad.tba.modules.benefitpolicy.service.BenefitConsumptionEntryWriter;
 import com.waad.tba.modules.benefitpolicy.service.LedgerConstraintTranslator;
 import com.waad.tba.modules.member.repository.MemberRepository;
+import com.waad.tba.modules.preauthorization.domain.PreAuthStateMachine;
 import com.waad.tba.modules.preauthorization.entity.PreAuthorization;
 import com.waad.tba.modules.preauthorization.entity.PreauthDecisionSnapshot;
 import com.waad.tba.modules.preauthorization.entity.PreauthLineLimitSnapshot;
@@ -273,7 +274,7 @@ public class PreAuthReservationLedgerService {
             released++;
         }
 
-        preauth.setStatus(finalStatus);
+        PreAuthStateMachine.transition(preauth, finalStatus);
         preauth.setDecisionNotes(note);
         preauth.setDecisionBy(actor);
         preauth.setDecisionAt(LocalDateTime.now());
@@ -436,9 +437,10 @@ public class PreAuthReservationLedgerService {
         }
 
         LocalDateTime approvedAt = LocalDateTime.now();
-        preauth.setStatus(decision.outcome() == PreAuthorizationDecision.Outcome.PARTIALLY_APPROVED
-                ? PreAuthorization.PreAuthStatus.PARTIALLY_APPROVED
-                : PreAuthorization.PreAuthStatus.APPROVED);
+        PreAuthStateMachine.transition(preauth,
+                decision.outcome() == PreAuthorizationDecision.Outcome.PARTIALLY_APPROVED
+                        ? PreAuthorization.PreAuthStatus.PARTIALLY_APPROVED
+                        : PreAuthorization.PreAuthStatus.APPROVED);
         preauth.setApprovedTotalAmount(decision.companyShareTotal());
         preauth.setApprovedAt(approvedAt);
         preauth.setExpiryDate(approvedAt.toLocalDate().plusDays(configuredValidityDays));

@@ -11,9 +11,6 @@ import { AppProviders } from 'contexts/AppProviders';
 // Production console cleanup
 import { suppressMUIDeprecationWarnings } from 'utils/gridMigration';
 
-// Initialize PDF Worker
-import 'utils/pdfWorker';
-
 // Initialize production console cleanup (handles deprecations and Emotion warnings)
 suppressMUIDeprecationWarnings();
 

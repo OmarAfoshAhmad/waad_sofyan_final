@@ -6,6 +6,9 @@ on:
   workflow_dispatch:
   push:
     branches: [ main ]
+  # A gate that only runs after the merge is a report, not a gate.
+  pull_request:
+    branches: [ main, develop ]
 
 jobs:
   audit:
@@ -29,13 +32,28 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
+      # Blocking. This step used to carry continue-on-error, which is how 17
+      # high-severity advisories (one of them, xlsx, with no upstream fix)
+      # accumulated on main without a single red build.
+      #
+      # Threshold is high: the two advisories left below it are moderate and
+      # accepted -- uuid < 11.1.1 (GHSA-w5hq-g745-h8pq) reached through
+      # exceljs, whose every release depends on uuid 8. The flaw is in
+      # v3/v5/v6 when the caller passes its own buffer; exceljs only calls
+      # v4(). Revisit when exceljs moves off uuid 8 or when a caller of ours
+      # starts using uuid directly.
       - name: npm audit (Frontend)
         run: |
           cd frontend
-          npm audit --audit-level=moderate
-        continue-on-error: true
+          npm ci
+          npm audit --audit-level=high
 
-      - name: Maven dependency check
+      # Advisory only. OWASP dependency-check needs an NVD API key to run
+      # reliably (unauthenticated requests are throttled to the point of
+      # timing out), so it cannot be made blocking until NVD_API_KEY exists
+      # as a repository secret. Until then its output is for reading, not
+      # gating -- and the comment above says so rather than pretending.
+      - name: Maven dependency check (advisory)
         run: |
           cd backend
           mvn org.owasp:dependency-check-maven:check

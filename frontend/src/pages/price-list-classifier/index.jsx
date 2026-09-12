@@ -46,7 +46,7 @@ import { getActiveContractByProvider } from 'services/api/provider-contracts.ser
 import { useSnackbar } from 'notistack';
 import { extractRowsFromWorkbook } from './price-list-workbook.mjs';
 
-const loadXlsx = async () => import('xlsx');
+const loadExcel = async () => import('utils/excelWorkbook');
 const normalizeText = (value) => (value == null ? '' : String(value).trim());
 
 const statusColor = {
@@ -341,7 +341,7 @@ const clearClassificationSession = () => {
 };
 
 const exportRows = async (items) => {
-  const XLSX = await loadXlsx();
+  const { downloadWorkbook } = await loadExcel();
   const data = items.map((item) => ({
     sheet: item.sourceSheet,
     row_number: item.rowNumber,
@@ -360,41 +360,35 @@ const exportRows = async (items) => {
     duplicate_name: item.duplicateName ? 'YES' : 'NO'
   }));
 
-  const workbook = XLSX.utils.book_new();
-  const worksheet = XLSX.utils.json_to_sheet(data);
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'classified_price_list');
-  XLSX.writeFile(workbook, 'تصنيف_قائمة_أسعار_بالقاموس.xlsx');
+  await downloadWorkbook([{ name: 'classified_price_list', rows: data }], 'تصنيف_قائمة_أسعار_بالقاموس.xlsx');
 };
 
-const appendCategoriesLookupSheet = (XLSX, workbook, categories = []) => {
-  const lookup = categories.map((category) => ({
+const categoriesLookupSheet = (categories = []) => ({
+  name: 'التصنيفات المتاحة',
+  rows: categories.map((category) => ({
     medical_category_id: category.id,
     medical_category_code: category.code || '',
     medical_category_name: category.nameAr || category.name || '',
     medical_category_name_en: category.nameEn || ''
-  }));
-  const worksheet = XLSX.utils.json_to_sheet(lookup);
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'التصنيفات المتاحة');
-};
+  }))
+});
 
 const stripInternalContractRowFields = (rows = []) =>
   rows.map(({ sourceKeys, rawStatuses, display_status, display_status_label, confidence, ...row }) => row);
 
 const exportProviderContractReadyRows = async (items, categories = [], mergeDuplicates = true) => {
-  const XLSX = await loadXlsx();
+  const { downloadWorkbook } = await loadExcel();
   const data = stripInternalContractRowFields(mergeDuplicates ? buildContractReadyRows(items) : buildContractRowsWithoutMerge(items));
 
-  const workbook = XLSX.utils.book_new();
-  const worksheet = XLSX.utils.json_to_sheet(data);
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'Pricing_Template');
-  appendCategoriesLookupSheet(XLSX, workbook, categories);
-  XLSX.writeFile(workbook, 'قائمة_أسعار_جاهزة_مبدئياً_لعقد_مقدم_خدمة.xlsx');
+  await downloadWorkbook(
+    [{ name: 'Pricing_Template', rows: data }, categoriesLookupSheet(categories)],
+    'قائمة_أسعار_جاهزة_مبدئياً_لعقد_مقدم_خدمة.xlsx'
+  );
 };
 
 const downloadTemplate = async (categories = []) => {
-  const XLSX = await loadXlsx();
-  const workbook = XLSX.utils.book_new();
-  const worksheet = XLSX.utils.json_to_sheet([
+  const { downloadWorkbook } = await loadExcel();
+  const template = [
     {
       service_name: 'مثال: تحليل CBC',
       service_code: 'SRV-001',
@@ -411,10 +405,11 @@ const downloadTemplate = async (categories = []) => {
       medical_category_name: 'التصوير بالرنين المغناطيسي والمقطعي والطبقي',
       notes: 'اختياري'
     }
-  ]);
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'Pricing_Template');
-  appendCategoriesLookupSheet(XLSX, workbook, categories);
-  XLSX.writeFile(workbook, 'قالب_تنظيم_قائمة_الأسعار.xlsx');
+  ];
+  await downloadWorkbook(
+    [{ name: 'Pricing_Template', rows: template }, categoriesLookupSheet(categories)],
+    'قالب_تنظيم_قائمة_الأسعار.xlsx'
+  );
 };
 
 export default function PriceListClassifierPage() {
@@ -734,10 +729,8 @@ export default function PriceListClassifierPage() {
     setFileName(file.name);
 
     try {
-      const XLSX = await loadXlsx();
-      const buffer = await file.arrayBuffer();
-      const workbook = XLSX.read(buffer, { type: 'array' });
-      const rows = extractRowsFromWorkbook(workbook, XLSX);
+      const { readWorkbookSheets } = await loadExcel();
+      const rows = extractRowsFromWorkbook(await readWorkbookSheets(await file.arrayBuffer()));
       setRawRows(rows);
       saveClassificationSession({
         status: 'READY',
@@ -753,7 +746,7 @@ export default function PriceListClassifierPage() {
         setError('لم أجد خدمات قابلة للتصنيف داخل الملف. تحقق من بنية الأعمدة أو جرّب قالباً أوضح.');
       }
     } catch {
-      setError('تعذر قراءة ملف Excel. تأكد من أن الملف xlsx أو xls صالح.');
+      setError('تعذر قراءة ملف Excel. تأكد من أن الملف بصيغة xlsx صالحة.');
     }
   };
 
@@ -1148,7 +1141,7 @@ export default function PriceListClassifierPage() {
                 </Typography>
                 <Button component="label" variant="contained" startIcon={<CloudUploadIcon />} fullWidth>
                   اختيار ملف Excel
-                  <input hidden type="file" accept=".xlsx,.xls" onChange={handleFile} />
+                  <input hidden type="file" accept=".xlsx" onChange={handleFile} />
                 </Button>
                 <Button
                   sx={{ mt: 1 }}

@@ -25,7 +25,7 @@ import {
 } from '@mui/material';
 
 // third-party
-import * as XLSX from 'xlsx';
+import { downloadWorkbook } from 'utils/excelWorkbook';
 
 // project imports
 import ModernPageHeader from 'components/tba/ModernPageHeader';
@@ -70,7 +70,7 @@ export default function FinancialConsolidationMatrix() {
     return () => clearInterval(intervalId);
   }, [selectedYear]);
 
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     if (data.length === 0) return;
 
     // تحويل البيانات لشكل مناسب للإكسل
@@ -125,12 +125,7 @@ export default function FinancialConsolidationMatrix() {
       }
     });
 
-    const ws = XLSX.utils.json_to_sheet(excelData);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'الخلاصة النهائية');
-
-    // Automatically triggers download in the browser without needing file-saver
-    XLSX.writeFile(wb, `الخلاصة_النهائية_${selectedYear}.xlsx`);
+    await downloadWorkbook([{ name: 'الخلاصة النهائية', rows: excelData }], `الخلاصة_النهائية_${selectedYear}.xlsx`);
   };
 
   return (

@@ -40,24 +40,20 @@ jobs:
           cd frontend
           npm ci
 
-      - name: Type check
-        run: |
-          cd frontend
-          npm run type-check
-        continue-on-error: true
-
+      # Blocking on errors; warnings (currently prettier formatting) still
+      # print but do not fail the job. A "Type check" step used to sit here
+      # calling a script that does not exist in package.json -- it failed on
+      # every run and continue-on-error hid it.
       - name: Lint
         run: |
           cd frontend
           npm run lint
-        continue-on-error: true
 
-      # No continue-on-error, unlike the two steps above: these assert
-      # behaviour rather than style. Among them are the checks that a page of
-      # members costs one ceiling request rather than one per row, and that
-      # the buttons this app draws are gated on the permissions the server
-      # actually requires. A test that guards an invariant and never runs in
-      # the gate is documentation with a green tick next to it.
+      # These assert behaviour rather than style. Among them are the checks
+      # that a page of members costs one ceiling request rather than one per
+      # row, and that the buttons this app draws are gated on the permissions
+      # the server actually requires. A test that guards an invariant and
+      # never runs in the gate is documentation with a green tick next to it.
       - name: Test
         run: |
           cd frontend
