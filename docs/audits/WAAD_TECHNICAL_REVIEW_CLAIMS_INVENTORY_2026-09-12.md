@@ -171,3 +171,11 @@ rg -n "unpkg|setInterval|ROLE_RESOURCE_ACCESS|setStatus\(dto.getStatus\(\)\)|con
 ### الخطوة 2 — `/session/me`
 
 يرجع `permissions` = `effectivePermissionService.resolve(user)` (الدور ± التجاوزات). لا تغيير API. الواجهة تستقبلها وتمرّرها إلى `filterMenuItemsByRole` لكن الدالة تستعملها لـ4 عناصر من 47.
+
+### P1.1 — مُغلق
+
+القوائم تُشتق من صلاحيات الخادم (`/session/me`). الجدول الكامل menu → route → endpoint → `@PreAuthorize` → `requiredPermissions` في `docs/security/MENU_PERMISSION_DERIVATION.md`: 16 عنصراً بالصلاحية، 14 بالدور (endpoints ما زالت `hasAnyRole`)، 1 مخفي.
+
+**قرار مقصود:** الخيار (أ) الصارم؛ التوسّع الناتج موثّق في الملف نفسه (FINANCE_VIEWER كان بشريط فارغ، EMPLOYER_ADMIN بعنصر واحد). **أي تضييق لاحق يكون من `RolePermissionDefaults` أو حرّاس الخادم، لا من الواجهة.**
+
+**المتبقي لإلغاء `ROLE_RESOURCE_ACCESS` نهائياً:** هجرة الـendpoints الدورية الـ14 إلى `@permissionGuard` (بند P2).

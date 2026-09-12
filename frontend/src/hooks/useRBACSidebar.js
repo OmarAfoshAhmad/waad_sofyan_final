@@ -5,8 +5,8 @@ import useSystemConfig from 'hooks/useSystemConfig';
 
 /**
  * useRBACSidebar Hook
- * Filters menu items using static ROLE_RESOURCE_ACCESS map.
- * No can(), no useResourcePermission — pure Role → Resource visibility.
+ * Filters menu items on the effective permission set from /session/me
+ * (role defaults ± overrides). See docs/security/MENU_PERMISSION_DERIVATION.md.
  */
 const useRBACSidebar = () => {
   const { user } = useAuth();

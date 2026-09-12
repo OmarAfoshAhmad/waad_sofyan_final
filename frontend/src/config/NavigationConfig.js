@@ -4,7 +4,8 @@
  * Enterprise Navigation System Configuration
  *
  * ARCHITECTURE:
- * - Static ROLE_RESOURCE_ACCESS map drives menu visibility (see config/roleAccessMap.js)
+ * - Menu visibility follows user.permissions from /session/me; role map only for
+ *   screens the server still gates by role (docs/security/MENU_PERMISSION_DERIVATION.md)
  * - Click-only navigation (NO hover menus)
  * - Desktop-first with responsive collapse
  * - Keyboard navigation support

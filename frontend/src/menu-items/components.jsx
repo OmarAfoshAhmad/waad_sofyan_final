@@ -26,44 +26,62 @@ import {
 } from '@mui/icons-material';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// ROLE-BASED MENU FILTERING — Static ROLE_RESOURCE_ACCESS Map
+// MENU VISIBILITY
 // ═══════════════════════════════════════════════════════════════════════════════
 //
-// ARCHITECTURE (2026-02-18):
-// - Each menu item has: resource (string)
-// - ROLE_RESOURCE_ACCESS maps each role to its allowed resources
-// - SUPER_ADMIN gets '*' → sees everything
-// - No can(), no action-level checks, no permission matrix
+// Two kinds of item, decided by what the SERVER checks on the screen's
+// primary endpoint (docs/security/MENU_PERMISSION_DERIVATION.md):
+//
+//  1. Permission-gated on the server (@permissionGuard.has('X')): the item
+//     declares requiredPermission(s) and is shown iff user.permissions --
+//     the effective set from /session/me, role defaults ± per-user
+//     overrides -- satisfies them. The role map is NOT consulted, so an
+//     override granted in RBAC reveals the screen and a revoked one hides it.
+//
+//  2. Role-gated on the server (hasAnyRole(...)): no permission exists to
+//     derive, so the item stays on ROLE_RESOURCE_ACCESS until the endpoint
+//     migrates. Both gates together would be wrong: a granted override
+//     could never reveal a screen still fenced by role here.
 //
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { ROLE_RESOURCE_ACCESS } from 'config/roleAccessMap';
 
 /**
- * Filter menu items based on static Role → Resource map.
- *
  * @param {Array} items - Menu items to filter
  * @param {string} role - User's canonical role (e.g. 'SUPER_ADMIN')
  * @param {boolean} providerPortalEnabled - Whether the provider portal is enabled
  * @param {boolean} batchClaimsEnabled - Whether legacy/monthly batch intake is enabled
- * @returns {Array} Filtered menu items visible to specified role
+ * @param {string[]} permissions - user.permissions from /session/me (effective set)
+ * @returns {Array} Filtered menu items visible to this user
  */
 export const filterMenuItemsByRole = (items, role, providerPortalEnabled = false, batchClaimsEnabled = true, permissions = []) => {
   const allowedResources = ROLE_RESOURCE_ACCESS[role] || [];
   const effectivePermissions = new Set(permissions || []);
+
+  const declaresPermissions = (item) => Boolean(item?.requiredPermission || item?.requiredPermissions);
+
+  const permissionsSatisfied = (item) => {
+    if (item?.requiredPermission && !effectivePermissions.has(item.requiredPermission)) return false;
+    if (item?.requiredPermissions) {
+      return item.requireAllPermissions === false
+        ? item.requiredPermissions.some((permission) => effectivePermissions.has(permission))
+        : item.requiredPermissions.every((permission) => effectivePermissions.has(permission));
+    }
+    return true;
+  };
 
   const isAllowed = (resource, item) => {
     if (item?.featureFlag === 'BATCH_CLAIMS_ENABLED' && !batchClaimsEnabled) return false;
     if (!resource) return true; // group headers without resource → always visible
     if (resource === 'provider_portal' && !providerPortalEnabled) return false;
     if (resource.startsWith('__hidden_')) return false; // Explicitly hidden items
-    if (item?.requiredPermission && !effectivePermissions.has(item.requiredPermission)) return false;
-    if (item?.requiredPermissions) {
-      const matches = item.requireAllPermissions === false
-        ? item.requiredPermissions.some((permission) => effectivePermissions.has(permission))
-        : item.requiredPermissions.every((permission) => effectivePermissions.has(permission));
-      if (!matches) return false;
-    }
+    // Containers are decided by their children: one that ends up empty is
+    // pruned below. A resource gate on the container itself only ever
+    // subtracted -- it hid a section from a role whose override had just
+    // granted the permission on a screen inside it.
+    if (item?.type === 'group' || item?.type === 'collapse') return true;
+    if (declaresPermissions(item)) return permissionsSatisfied(item);
     if (allowedResources.includes('*')) return true; // SUPER_ADMIN wildcard
     return allowedResources.includes(resource);
   };
@@ -94,9 +112,9 @@ export const filterMenuItemsByRole = (items, role, providerPortalEnabled = false
  *
  * DESIGN PHILOSOPHY:
  * ✅ Professional TPA Industry Standards
- * ✅ Static ROLE_RESOURCE_ACCESS map drives visibility (see config/roleAccessMap.js)
+ * ✅ Visibility derived from server permissions (docs/security/MENU_PERMISSION_DERIVATION.md)
  * ✅ Future-proof structure
- * ✅ No can(), no action-level checks, no permission matrix
+ * ✅ Role map only for screens the server still gates by role
  *
  * NAVIGATION STRUCTURE:
  * 📊 Dashboard          → resource: 'dashboard'
@@ -158,6 +176,9 @@ const menuItem = [
         titleEn: 'Insured List',
         type: 'item',
         url: '/members',
+        // Derived from the server's @PreAuthorize on this screen's primary endpoint
+        // (docs/security/MENU_PERMISSION_DERIVATION.md). Decides visibility on its own.
+        requiredPermissions: ['MEMBER_VIEW'],
         icon: PeopleAltIcon,
         resource: 'members',
         action: 'view',
@@ -298,6 +319,9 @@ const menuItem = [
             titleEn: 'Employers List',
             type: 'item',
             url: '/employers',
+            // Derived from the server's @PreAuthorize on this screen's primary endpoint
+            // (docs/security/MENU_PERMISSION_DERIVATION.md). Decides visibility on its own.
+            requiredPermissions: ['EMPLOYER_VIEW'],
             icon: FormatListBulletedIcon,
             resource: 'employers',
             action: 'view',
@@ -351,6 +375,9 @@ const menuItem = [
             titleEn: 'Providers List',
             type: 'item',
             url: '/providers',
+            // Derived from the server's @PreAuthorize on this screen's primary endpoint
+            // (docs/security/MENU_PERMISSION_DERIVATION.md). Decides visibility on its own.
+            requiredPermissions: ['PROVIDER_VIEW'],
             icon: FormatListBulletedIcon,
             resource: 'providers',
             action: 'view',
@@ -409,6 +436,9 @@ const menuItem = [
             titleEn: 'Claims Batch System',
             type: 'item',
             url: '/claims/batches',
+            // Derived from the server's @PreAuthorize on this screen's primary endpoint
+            // (docs/security/MENU_PERMISSION_DERIVATION.md). Decides visibility on its own.
+            requiredPermissions: ['CLAIM_VIEW'],
             icon: FolderIcon,
             resource: 'claims',
             action: 'view',
@@ -420,6 +450,9 @@ const menuItem = [
             titleEn: 'Pre-Auth Review',
             type: 'item',
             url: '/pre-approvals/inbox',
+            // Derived from the server's @PreAuthorize on this screen's primary endpoint
+            // (docs/security/MENU_PERMISSION_DERIVATION.md). Decides visibility on its own.
+            requiredPermissions: ['PREAUTH_REVIEW'],
             icon: InboxIcon,
             resource: 'pre_auth',
             action: 'view',
@@ -435,6 +468,9 @@ const menuItem = [
             titleEn: 'Claims Report',
             type: 'item',
             url: '/reports/claims',
+            // Derived from the server's @PreAuthorize on this screen's primary endpoint
+            // (docs/security/MENU_PERMISSION_DERIVATION.md). Decides visibility on its own.
+            requiredPermissions: ['CLAIM_VIEW'],
             icon: AssessmentIcon,
             resource: 'claims',
             action: 'view',
@@ -473,6 +509,9 @@ const menuItem = [
             titleEn: 'Provider Settlement Claims',
             type: 'item',
             url: '/settlement/provider-accounts',
+            // Derived from the server's @PreAuthorize on this screen's primary endpoint
+            // (docs/security/MENU_PERMISSION_DERIVATION.md). Decides visibility on its own.
+            requiredPermissions: ['SETTLEMENT_VIEW'],
             icon: BusinessIcon,
             resource: 'provider_accounts',
             action: 'view',
@@ -488,6 +527,9 @@ const menuItem = [
             titleEn: 'Provider Financial Payments',
             type: 'item',
             url: '/settlement/provider-payments',
+            // Derived from the server's @PreAuthorize on this screen's primary endpoint
+            // (docs/security/MENU_PERMISSION_DERIVATION.md). Decides visibility on its own.
+            requiredPermissions: ['SETTLEMENT_VIEW'],
             icon: AccountBalanceWalletIcon,
             resource: 'provider_accounts',
             action: 'view',
@@ -503,6 +545,9 @@ const menuItem = [
             titleEn: 'Payments Management',
             type: 'item',
             url: '/settlement/payments',
+            // Derived from the server's @PreAuthorize on this screen's primary endpoint
+            // (docs/security/MENU_PERMISSION_DERIVATION.md). Decides visibility on its own.
+            requiredPermissions: ['SETTLEMENT_VIEW'],
             icon: AccountBalanceWalletIcon,
             resource: 'provider_accounts',
             action: 'view',
@@ -518,6 +563,9 @@ const menuItem = [
             titleEn: 'Provider Payment Reconciliation (Preview)',
             type: 'item',
             url: '/settlement/reconciliation',
+            // Derived from the server's @PreAuthorize on this screen's primary endpoint
+            // (docs/security/MENU_PERMISSION_DERIVATION.md). Decides visibility on its own.
+            requiredPermissions: ['SETTLEMENT_VIEW'],
             icon: AccountBalanceWalletIcon,
             resource: 'provider_accounts',
             action: 'view',
@@ -603,6 +651,9 @@ const menuItem = [
         titleEn: 'User Management',
         type: 'item',
         url: '/admin/users',
+        // Derived from the server's @PreAuthorize on this screen's primary endpoint
+        // (docs/security/MENU_PERMISSION_DERIVATION.md). Decides visibility on its own.
+        requiredPermissions: ['USER_VIEW'],
         icon: SecurityIcon,
         resource: 'users',
         action: 'view',
@@ -699,6 +750,9 @@ const menuItem = [
         titleEn: 'Beneficiary Kinship Mismatch',
         type: 'item',
         url: '/settings/kinship-mismatch',
+        // Derived from the server's @PreAuthorize on this screen's primary endpoint
+        // (docs/security/MENU_PERMISSION_DERIVATION.md). Decides visibility on its own.
+        requiredPermissions: ['SYSTEM_SETTINGS_VIEW'],
         icon: PeopleAltIcon,
         resource: 'system_settings',
         action: 'view',
@@ -729,6 +783,9 @@ const menuItem = [
         titleEn: 'Member Duplicates Resolver',
         type: 'item',
         url: '/settings/member-duplicates',
+        // Derived from the server's @PreAuthorize on this screen's primary endpoint
+        // (docs/security/MENU_PERMISSION_DERIVATION.md). Decides visibility on its own.
+        requiredPermissions: ['SYSTEM_SETTINGS_VIEW', 'DANGER_ZONE_EXECUTE'],
         icon: PeopleAltIcon,
         resource: 'system_settings',
         action: 'view',
