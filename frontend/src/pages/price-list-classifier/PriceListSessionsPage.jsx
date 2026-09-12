@@ -33,6 +33,7 @@ import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import { useNavigate } from 'react-router-dom';
 import medicalDictionaryService from 'services/api/medical-dictionary.service';
 import { getActiveContractByProvider } from 'services/api/provider-contracts.service';
+import PermissionGuard from 'components/PermissionGuard';
 
 const STATUSES = [
   { value: 'ALL', label: 'كل الجلسات' },
@@ -456,25 +457,32 @@ export default function PriceListSessionsPage() {
                 تم تحديد {selectedIds.length} قائمة — {postEligibleSessions.length} تحتوي خدمات معتمدة قابلة للترحيل. ستبقى بقية الخدمات في
                 قسم المراجعة.
               </Typography>
-              <Button
-                color="error"
-                variant="outlined"
-                startIcon={<DeleteOutlineIcon />}
-                disabled={!deleteEligibleSessions.length}
-                onClick={openBulkDeleteDialog}
-                sx={{ minHeight: 40, minWidth: 135 }}
-              >
-                حذف المحدد
-              </Button>
-              <Button
-                variant="contained"
-                startIcon={<PlaylistAddCheckIcon />}
-                disabled={!postEligibleSessions.length}
-                onClick={openBulkPostDialog}
-                sx={{ minHeight: 40, minWidth: 145 }}
-              >
-                ترحيل المعتمد
-              </Button>
+              {/* This screen opens with PRICE_LIST_IMPORT or PRICE_LIST_POST. Deleting a
+                  session is IMPORT; posting it to a contract is POST -- each button
+                  follows its own endpoint. */}
+              <PermissionGuard requiredPermission="PRICE_LIST_IMPORT">
+                <Button
+                  color="error"
+                  variant="outlined"
+                  startIcon={<DeleteOutlineIcon />}
+                  disabled={!deleteEligibleSessions.length}
+                  onClick={openBulkDeleteDialog}
+                  sx={{ minHeight: 40, minWidth: 135 }}
+                >
+                  حذف المحدد
+                </Button>
+              </PermissionGuard>
+              <PermissionGuard requiredPermission="PRICE_LIST_POST">
+                <Button
+                  variant="contained"
+                  startIcon={<PlaylistAddCheckIcon />}
+                  disabled={!postEligibleSessions.length}
+                  onClick={openBulkPostDialog}
+                  sx={{ minHeight: 40, minWidth: 145 }}
+                >
+                  ترحيل المعتمد
+                </Button>
+              </PermissionGuard>
               <Button variant="text" onClick={() => setSelectedIds([])} sx={{ minHeight: 40 }}>
                 إلغاء التحديد
               </Button>
@@ -579,28 +587,32 @@ export default function PriceListSessionsPage() {
                       </TableCell>
                       <TableCell align="center">
                         <Stack direction="column" spacing={1} alignItems="center">
-                          <Button
-                            size="small"
-                            color="error"
-                            variant="contained"
-                            startIcon={<DeleteOutlineIcon />}
-                            disabled={isPostedSession(session)}
-                            onClick={() => openDeleteDialog(session)}
-                            sx={{ minWidth: 90 }}
-                          >
-                            حذف
-                          </Button>
-                          <Button
-                            size="small"
-                            color="success"
-                            variant="contained"
-                            startIcon={<PlaylistAddCheckIcon />}
-                            disabled={!isPostableSession(session)}
-                            onClick={() => openPostDialog(session)}
-                            sx={{ minWidth: 90 }}
-                          >
-                            {isPostedSession(session) ? 'ترحيل المتبقي' : 'ترحيل المعتمد'}
-                          </Button>
+                          <PermissionGuard requiredPermission="PRICE_LIST_IMPORT">
+                            <Button
+                              size="small"
+                              color="error"
+                              variant="contained"
+                              startIcon={<DeleteOutlineIcon />}
+                              disabled={isPostedSession(session)}
+                              onClick={() => openDeleteDialog(session)}
+                              sx={{ minWidth: 90 }}
+                            >
+                              حذف
+                            </Button>
+                          </PermissionGuard>
+                          <PermissionGuard requiredPermission="PRICE_LIST_POST">
+                            <Button
+                              size="small"
+                              color="success"
+                              variant="contained"
+                              startIcon={<PlaylistAddCheckIcon />}
+                              disabled={!isPostableSession(session)}
+                              onClick={() => openPostDialog(session)}
+                              sx={{ minWidth: 90 }}
+                            >
+                              {isPostedSession(session) ? 'ترحيل المتبقي' : 'ترحيل المعتمد'}
+                            </Button>
+                          </PermissionGuard>
                         </Stack>
                       </TableCell>
                     </TableRow>

@@ -45,6 +45,7 @@ import providersService from 'services/api/providers.service';
 import { getActiveContractByProvider } from 'services/api/provider-contracts.service';
 import { useSnackbar } from 'notistack';
 import { extractRowsFromWorkbook } from './price-list-workbook.mjs';
+import PermissionGuard from 'components/PermissionGuard';
 
 const loadExcel = async () => import('utils/excelWorkbook');
 const normalizeText = (value) => (value == null ? '' : String(value).trim());
@@ -1137,7 +1138,8 @@ export default function PriceListClassifierPage() {
                   1. رفع قائمة الأسعار
                 </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                  ارفع ملف Excel خام بصيغة .xlsx (صيغة .xls القديمة غير مدعومة). سيتم استخراج أسماء الخدمات والأسعار محلياً ثم إرسال النصوص فقط للتصنيف.
+                  ارفع ملف Excel خام بصيغة .xlsx (صيغة .xls القديمة غير مدعومة). سيتم استخراج أسماء الخدمات والأسعار محلياً ثم إرسال النصوص
+                  فقط للتصنيف.
                 </Typography>
                 <Button component="label" variant="contained" startIcon={<CloudUploadIcon />} fullWidth>
                   اختيار ملف Excel (.xlsx)
@@ -1364,15 +1366,18 @@ export default function PriceListClassifierPage() {
                 >
                   تصدير للعقود
                 </Button>
-                <Button
-                  variant="contained"
-                  color="success"
-                  startIcon={postingContract ? <CircularProgress size={18} color="inherit" /> : <PlaylistAddCheckIcon />}
-                  disabled={!selectedDisplayRowCount || postingContract || savingSession}
-                  onClick={postApprovedRowsToSelectedProviderContract}
-                >
-                  ترحيل المحدد للعقد ({selectedDisplayRowCount})
-                </Button>
+                {/* .../post-to-contract -> PRICE_LIST_POST; the screen itself opens with PRICE_LIST_IMPORT */}
+                <PermissionGuard requiredPermission="PRICE_LIST_POST">
+                  <Button
+                    variant="contained"
+                    color="success"
+                    startIcon={postingContract ? <CircularProgress size={18} color="inherit" /> : <PlaylistAddCheckIcon />}
+                    disabled={!selectedDisplayRowCount || postingContract || savingSession}
+                    onClick={postApprovedRowsToSelectedProviderContract}
+                  >
+                    ترحيل المحدد للعقد ({selectedDisplayRowCount})
+                  </Button>
+                </PermissionGuard>
                 <Button
                   variant="contained"
                   color="primary"

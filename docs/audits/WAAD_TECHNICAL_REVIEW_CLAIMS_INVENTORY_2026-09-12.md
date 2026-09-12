@@ -179,3 +179,9 @@ rg -n "unpkg|setInterval|ROLE_RESOURCE_ACCESS|setStatus\(dto.getStatus\(\)\)|con
 **قرار مقصود:** الخيار (أ) الصارم؛ التوسّع الناتج موثّق في الملف نفسه (FINANCE_VIEWER كان بشريط فارغ، EMPLOYER_ADMIN بعنصر واحد). **أي تضييق لاحق يكون من `RolePermissionDefaults` أو حرّاس الخادم، لا من الواجهة.**
 
 **المتبقي لإلغاء `ROLE_RESOURCE_ACCESS` نهائياً:** هجرة الـendpoints الدورية الـ14 إلى `@permissionGuard` (بند P2).
+
+### P1.2 — مُغلق
+
+الجرد الكامل والإغلاق في `docs/security/ACTION_GUARD_DERIVATION.md` (commits `f7359114`, `2741d4b5`, `871aed5b`, `51091aed`, وهذا). كل زر حساس مثبَت في الجرد صار خلف `PermissionGuard` بالصلاحية التي يفحصها الخادم على endpoint الزر، من `user.permissions` فقط؛ الصلاحيات المركبة AND. أُزيلت 3 أغلفة وهمية وقائمتا أدوار (إحداهما بدور غير موجود). الأولويتان 3 و4 كانتا محروستين أصلاً عدا `post-to-contract`.
+
+**خارج P1.2 بقرار:** `SystemSettingsPage`/أعلام الميزات (خادم دوري)، تصدير التقارير (لا endpoint مستقل)، حرّاس المسارات، والاختباران الموروثان (`UnifiedCoverageModalClaimContextArchitecture`، `ClaimBatchEntrySafetyArchitecture`).

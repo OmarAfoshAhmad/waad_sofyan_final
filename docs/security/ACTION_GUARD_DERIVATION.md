@@ -72,7 +72,7 @@
 
 | الصفحة | الإجراء | الـendpoint | صلاحية الخادم | الحارس الحالي | المطلوب |
 |---|---|---|---|---|---|
-| `UsersList` | إنشاء/تعديل/حذف/تبديل حالة/إعادة تعيين كلمة مرور | `POST|PUT|DELETE|PATCH /admin/users/…` | `USER_MANAGE` (إعادة التعيين: `+SESSION_REVOKE`) | لا شيء | `['USER_MANAGE']`؛ إعادة التعيين `['USER_MANAGE','SESSION_REVOKE']` |
+| `UsersList` | إنشاء / تبديل حالة | `POST /admin/users`, `PATCH …/toggle-status` | `USER_MANAGE` | **محروس فعلاً**: علم `canManageUsers = permissions.has('USER_MANAGE')` (الجرد الأولي عدّ `<PermissionGuard>` فقط) | لا عمل. لا يوجد زر إعادة تعيين كلمة مرور في الواجهة (endpoint فقط، `USER_MANAGE`+`SESSION_REVOKE`) |
 | `RolePermissions` | حفظ قالب الدور / تجاوزات المستخدم | `PUT /admin/access-control/roles/{code}/permissions`, `…/users/{id}/permission-overrides` | `ROLE_PERMISSION_MANAGE` | لا شيء | `['ROLE_PERMISSION_MANAGE']` |
 | `KinshipMismatchChecker` | fix / ignore / bulk-* | `POST /system-settings/kinship-mismatches/…` | `DANGER_ZONE_EXECUTE` | لا شيء | `['DANGER_ZONE_EXECUTE']` |
 | `MemberDuplicatesResolver` | merge / reset-kinship | `POST /system-settings/member-duplicates/…` | `DANGER_ZONE_EXECUTE` | الشاشة نفسها تتطلبه (القائمة) | لا عمل — الشاشة لا تُفتح بدونه |
@@ -92,10 +92,22 @@
 | أولوية 2 | 8 + 3 أغلفة وهمية تُزال | **بلا حارس فعلي** |
 | أولوية 3 | 1 (`post-to-contract`) | الباقي محروس |
 | أولوية 4 | 0 | محروس |
-| أولوية 5 | 4 صفحات | بلا حارس؛ `SystemSettingsPage` دوري يُترك |
+| أولوية 5 | 2 صفحتان (`RolePermissions`, `KinshipMismatchChecker`) | بلا حارس؛ `UsersList` محروس بعلم؛ `SystemSettingsPage` دوري يُترك |
 | أولوية 6 | 0 | لا endpoint مستقل محروس بصلاحية |
 
 ## ما لا يدخل في P1.2
 
 - الاختباران الموروثان (`UnifiedCoverageModalClaimContextArchitecture`، `ClaimBatchEntrySafetyArchitecture`) — سببهما منطق مطالبات من `de39dafb` لا حراسة أزرار؛ يُتابعان كبند مستقل.
 - حرّاس المسارات (`isRouteGuard` بلا صلاحية، أو `resource/action`) — نفس المرض، لكن نطاقه المسارات لا الأزرار؛ بند لاحق.
+
+## الإغلاق (2026-09-12)
+
+| الأولوية | commit | ما حُرس |
+|---|---|---|
+| 1 | `2741d4b5` | مراجعة المطالبات (`CLAIM_REVIEW`/`CLAIM_APPROVE`)، تفاصيل الدفعة (`CLAIM_CREATE`/`CLAIM_REVIEW`/`CLAIM_REVERSE`/`DANGER_ZONE_EXECUTE`)، ذيل الإدخال (`CLAIM_CREATE`)، صندوق الموافقات وصفحة مراجعتها (`PREAUTH_REVIEW`/`PREAUTH_APPROVE`) |
+| 2 | `51091aed` | أُزيلت 3 أغلفة وهمية؛ المدفوعات وأقساط المزوّد (`SETTLEMENT_MANAGE`)؛ إعادة الحساب (`SETTLEMENT_MANAGE` **و** `DANGER_ZONE_EXECUTE`)؛ درج التسوية = علم الترحيل **و** `SETTLEMENT_MANAGE` |
+| 3, 5 | هذا الـcommit | جلسات الأسعار (`PRICE_LIST_POST` للترحيل، `PRICE_LIST_IMPORT` للحذف)، المصنّف (`PRICE_LIST_POST`)، قوالب الأدوار (`ROLE_PERMISSION_MANAGE`)، عدم تطابق القرابة (`DANGER_ZONE_EXECUTE`) |
+
+كل حارس بـ`user.permissions` حصراً؛ لا `requiredRole` في أي صفحة مُمسوسة، ويحميه مسح مصدر في اختبارات المطالبات والتسويات. الخادم يبقى الحَكَم.
+
+**لم يُلمس عمداً:** `SystemSettingsPage` وأعلام الميزات (endpoints دورية)، التقارير (لا endpoint تصدير مستقل محروس)، حرّاس المسارات، والاختباران الموروثان.

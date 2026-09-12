@@ -26,6 +26,7 @@ import {
 } from '@mui/material';
 import { Check as CheckIcon, Edit as EditIcon, AutoAwesome as AutoAwesomeIcon, Search as SearchIcon } from '@mui/icons-material';
 import axios from 'utils/axios';
+import PermissionGuard from 'components/PermissionGuard';
 
 const RELATIONSHIP_OPTIONS = [
   { value: 'SON', label: 'ابن (S)' },
@@ -279,18 +280,21 @@ const KinshipMismatchChecker = () => {
         >
           <Typography variant="subtitle1">تم تحديد {selectedRows.length} صفوف</Typography>
           <Box>
-            <Button
-              variant="contained"
-              color="primary"
-              startIcon={<EditIcon />}
-              onClick={() => handleOpenFix(null)}
-              sx={{ mr: 1, bgcolor: 'white', color: 'primary.main', '&:hover': { bgcolor: 'grey.100' } }}
-            >
-              إصلاح شامل
-            </Button>
-            <Button variant="contained" color="success" startIcon={<CheckIcon />} onClick={handleBulkIgnore}>
-              تجاهل الأخطاء
-            </Button>
+            {/* every write on /system-settings/kinship-mismatches is DANGER_ZONE_EXECUTE */}
+            <PermissionGuard requiredPermission="DANGER_ZONE_EXECUTE">
+              <Button
+                variant="contained"
+                color="primary"
+                startIcon={<EditIcon />}
+                onClick={() => handleOpenFix(null)}
+                sx={{ mr: 1, bgcolor: 'white', color: 'primary.main', '&:hover': { bgcolor: 'grey.100' } }}
+              >
+                إصلاح شامل
+              </Button>
+              <Button variant="contained" color="success" startIcon={<CheckIcon />} onClick={handleBulkIgnore}>
+                تجاهل الأخطاء
+              </Button>
+            </PermissionGuard>
           </Box>
         </Paper>
       )}
@@ -353,25 +357,27 @@ const KinshipMismatchChecker = () => {
                       </Typography>
                     </TableCell>
                     <TableCell>
-                      <Button
-                        size="small"
-                        variant="contained"
-                        color="primary"
-                        startIcon={<EditIcon />}
-                        onClick={() => handleOpenFix(row)}
-                        sx={{ mr: 1 }}
-                      >
-                        إصلاح
-                      </Button>
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        color="success"
-                        startIcon={<CheckIcon />}
-                        onClick={() => handleIgnore(row.id)}
-                      >
-                        إبقاء
-                      </Button>
+                      <PermissionGuard requiredPermission="DANGER_ZONE_EXECUTE">
+                        <Button
+                          size="small"
+                          variant="contained"
+                          color="primary"
+                          startIcon={<EditIcon />}
+                          onClick={() => handleOpenFix(row)}
+                          sx={{ mr: 1 }}
+                        >
+                          إصلاح
+                        </Button>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          color="success"
+                          startIcon={<CheckIcon />}
+                          onClick={() => handleIgnore(row.id)}
+                        >
+                          إبقاء
+                        </Button>
+                      </PermissionGuard>
                     </TableCell>
                   </TableRow>
                 ))}
