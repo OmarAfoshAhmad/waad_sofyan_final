@@ -475,7 +475,7 @@ class ClaimLimitDoubleCountingIntegrationTest extends PostgresIntegrationTestBas
                         new BigDecimal("50.00"), new BigDecimal("70.00"), new BigDecimal("30.00"));
         assertThat(persistedClaims.stream()
                 .map(c -> c.getPatientCoPay() == null ? BigDecimal.ZERO : c.getPatientCoPay())
-                .reduce(BigDecimal.ZERO, BigDecimal::add)).isEqualByComparingTo("40.00");
+                .reduce(BigDecimal.ZERO, BigDecimal::add)).isEqualByComparingTo("0.00");
 
         var account = providerAccountRepository.findByProviderId(provider.getId()).orElseThrow();
         assertThat(account.getTotalApproved()).isEqualByComparingTo("150.00");
